@@ -47,6 +47,7 @@ mod rules;
 pub mod receipt;
 pub mod right_size;
 pub mod surface;
+pub mod wake;
 
 #[cfg(test)]
 mod golden_tests;
@@ -228,6 +229,8 @@ pub struct AcpChat {
     lane_note: Mutex<Option<serde_json::Value>>,
     /// This chat was taken from the warm (ready-made) chats instead of started fresh; the receipt says so.
     warm_claimed: AtomicBool,
+    /// The standby seat this chat is the own chat of (`standby::seat_panes`); the tools' answers say a standby took the task.
+    seat: Mutex<Option<String>>,
     /// What the `run_agent` that started this chat asked for and how its turns were checked (`receipt.rs`).
     run_meta: Mutex<receipt::RunMeta>,
     /// The append-only journal of this chat (`journal.rs`): every item is written as it arrives. `None` without a saved conversation.
@@ -326,6 +329,7 @@ pub fn on_pane_closed(pane_id: &str) {
 
 /// `app_ending`: the pane goes because the app ends, not because a person closed it.
 fn on_pane_gone(pane_id: &str, app_ending: bool) {
+    crate::standby::seat_panes::forget(pane_id);
     let chat = CHATS.lock().remove(pane_id);
     if let Some(chat) = chat {
         // Closing the pane ends the conversation (the confirm sheet says so); its record stays, as closed. When the app
@@ -424,6 +428,7 @@ impl AcpChat {
             nested_under: Mutex::new(None),
             lane_note: Mutex::new(None),
             warm_claimed: AtomicBool::new(false),
+            seat: Mutex::new(None),
             run_meta: Mutex::new(receipt::RunMeta::default()),
             journal,
             interrupted: AtomicBool::new(false),
@@ -508,6 +513,16 @@ impl AcpChat {
 
     pub fn warm_claimed(&self) -> bool {
         self.warm_claimed.load(Ordering::SeqCst)
+    }
+
+    /// This chat is standby seat `helper_id`'s own chat.
+    pub fn set_seat(&self, helper_id: Option<&str>) {
+        *self.seat.lock() = helper_id.map(str::to_string);
+    }
+
+    /// The standby seat this chat belongs to.
+    pub fn seat(&self) -> Option<String> {
+        self.seat.lock().clone()
     }
 
     pub fn lane_note(&self) -> Option<serde_json::Value> {
@@ -1106,6 +1121,17 @@ impl AcpChat {
                 Err(send_error(&error))
             }
         }
+    }
+
+    /// Starts a turn with a message from the app itself (`sender`, e.g. a helper's result for the agent that asked for it):
+    /// it shows in the chat marked as the app's, never as a device of the person, and does not change who is driving.
+    pub fn send_from_app(&self, text: &str, sender: &str) -> Result<Sent, SendError> {
+        *self.next_from.lock() = Some(sender.to_string());
+        let sent = self.send_quiet(text, &[]);
+        if sent.is_err() {
+            self.next_from.lock().take();
+        }
+        sent
     }
 
     /// One grey line in the chat for something the person did that could not be acted on.

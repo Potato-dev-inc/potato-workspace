@@ -243,7 +243,8 @@ fn instructions_lead_with_the_five_tool_happy_path_in_order() {
     assert!(text.contains("
 Potato Workspace MCP"));
     // 3200 before the agent browser tools were named here (about 115 characters); 3300 before the standbys line (about 160).
-    assert!(text.len() < 3500, "instructions go out every session: {}", text.len());
+    // 3500 before the seat and start-and-wake lines (about 250 more).
+    assert!(text.len() < 3750, "instructions go out every session: {}", text.len());
     assert!(text.contains("Five tools"));
     assert!(text.contains("SCHEMA_DRIFT"));
     assert!(text.contains("Rebuild or reinstall the Potato Workspace MCP"));

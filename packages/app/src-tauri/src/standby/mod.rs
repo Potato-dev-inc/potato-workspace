@@ -24,6 +24,8 @@ pub mod helpers;
 mod host;
 pub mod key;
 pub mod pool;
+pub mod seat_log;
+pub mod seat_panes;
 mod stillness;
 #[cfg(test)]
 mod tests;

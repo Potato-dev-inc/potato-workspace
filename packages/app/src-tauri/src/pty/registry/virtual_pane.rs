@@ -128,6 +128,7 @@ pub fn insert_virtual_pane(registry: &Mutex<PaneRegistry>, spec: VirtualPaneSpec
         origin: None,
         place: None,
         lane: Some(spec.lane),
+        standby_seat: None,
     };
     let pane = PaneState {
         info,
@@ -189,6 +190,7 @@ mod tests {
             parent_pane_id: None,
             place: None,
             lane: None,
+            standby_seat: None,
         };
         assert!(serde_json::to_value(&info).unwrap().get("lane").is_none());
     }

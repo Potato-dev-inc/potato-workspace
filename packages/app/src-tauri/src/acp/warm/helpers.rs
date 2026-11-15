@@ -1,10 +1,20 @@
 //! Standby helpers inside the warm chat pool: sessions the person asked for by name ("Reviewer · Codex · gpt-5").
 //!
-//! They are ordinary warm slots with two differences. Each has its own key (`WarmKey::slot` = the helper's id), so two
-//! helpers of one agent and folder do not share a slot. And a claim takes only a helper that matches the task: the same
-//! agent, folder and account, and a model that agrees (a task that names no model takes any; one that names a model takes
-//! a helper with that model or with none). A claimed helper is *busy* until its chat has finished a turn (or is gone);
-//! only then is its slot refilled, so a helper is back on standby after its task and never twice at once.
+//! A standby is a **seat** under the agent it was added to (`HelperMeta::home`). The seat is made and removed by the
+//! person only. Everything else is the seat changing state:
+//!
+//! * `Ready`: its session is started and waits, with no tokens spent.
+//! * A task that matches takes the seat (`claim_helper_for`): the task runs **in the seat's own chat**. Nothing else is
+//!   started, and the seat does not move. A chat the person has open on the seat is that same chat: the task runs there.
+//! * While the task runs the seat is `Busy` (the pool starts the seat's next clean session in the background, so the seat
+//!   is ready again the moment the task ends).
+//! * When the task's turn is over the seat is `Ready` again with clean memory. The finished task's chat is closed a little
+//!   later (`RETIRE_GRACE_MS`, so its result can still be read); it stays in the chat history.
+//!
+//! What matches: the same agent type (`agent_family`: "OpenCode", "opencode" and "opencode_native" are one type), the same
+//! folder and account, a model that agrees (a task that names no model takes any; one that names a model takes a seat with
+//! that model or with none), and the seat is the caller's own (or belongs to nobody who is still there). A seat is never
+//! taken while a turn runs in it, the person's or an agent's. Every decision is written to the seat log (`seat_log`).
 
 use std::collections::BTreeMap;
 use std::path::{Path, PathBuf};
@@ -13,6 +23,7 @@ use serde::Serialize;
 
 use super::{Inner, Pool, Slot, State, WarmHost, WarmKey};
 use crate::standby::key::canonical_project;
+use crate::standby::seat_log;
 
 /// What the pool knows about a helper besides its key.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -23,7 +34,7 @@ pub struct HelperMeta {
     pub model: Option<String>,
     /// After one task the helper is removed instead of going back to standby.
     pub close_after_use: bool,
-    /// The agent (pane id) the helper is shown under; a task from that agent takes it before any other free match.
+    /// The agent (pane id) the seat sits under. Only that agent's tasks take it while that agent is there.
     pub home: Option<String>,
 }
 
@@ -48,14 +59,15 @@ pub struct Busy {
     pub since: i64,
     /// An agent's task, or the person using the helper's chat.
     pub by: HelperUser,
-    /// An agent took the helper from the person while they were using it.
-    pub taken_over: bool,
     /// A turn was seen running. Until then the chat may simply not have been sent its task yet.
     pub saw_work: bool,
-    /// An agent took the helper from the person: the person's chat (its turn was stopped; it stays readable as a plain chat).
-    pub person_pane: Option<String>,
-    /// The task's chat is not started yet (`pane` is empty): the helper is not released until `set_helper_task_pane`.
+    /// The task's chat is not started yet: the helper is not released until `set_helper_task_pane`.
     pub awaiting_pane: bool,
+    /// The chat's turn count that means the task's turn has started (`WarmHost::turns`). A task shorter than one look of
+    /// the pool is still seen to be over: the count says a turn ran. `None`: the host does not count turns.
+    pub turns_needed: Option<u64>,
+    /// When the task's turn was seen to be over, while the seat still waits for its next clean session (`CLEAN_HOLD_MS`).
+    pub over_at: Option<i64>,
 }
 
 /// Who has a busy helper.
@@ -73,27 +85,42 @@ pub struct HelperClaim<'a> {
     pub folder: &'a Path,
     pub account: Option<&'a str>,
     pub model: Option<&'a str>,
-    /// The pane of the agent asking (its own helpers go first). `None`: someone else (a routine, the person).
+    /// The pane of the agent asking (its own seats go first, and another agent's seat is never taken). `None`: someone
+    /// else (a routine, the person).
     pub caller: Option<&'a str>,
     /// Asked for by name (`run_agent({ helper })`).
     pub name: Option<&'a str>,
 }
 
-/// A helper a task took. `taken_from` is the chat of the person who was using it (their turn was stopped).
-///
-/// A helper the person has open or is using is never handed over with its session: the task gets `fresh` (no `item`; the start
-/// opens a new session with clean memory) and the person's chat keeps its own session. `person_pane` is that chat.
+/// A seat a task took. The task runs in the seat's own chat: `pane` is that chat when it exists already (the person had the
+/// seat open), otherwise the start makes the chat around `item`, the seat's waiting session.
 #[derive(Debug)]
 pub struct Claimed<T> {
     pub item: Option<T>,
     pub meta: HelperMeta,
-    pub taken_from: Option<String>,
-    pub fresh: bool,
-    pub person_pane: Option<String>,
+    pub pane: Option<String>,
+}
+
+/// A seat that fits a task, found without taking it (`Pool::seat_for`).
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct SeatLook {
+    pub id: String,
+    pub name: String,
+    /// The seat's agent id, as the chat lane knows it.
+    pub agent: String,
 }
 
 /// A chat that never ran a turn is given this long before its helper goes back to standby.
 const IDLE_CLAIM_MS: i64 = 10 * 60_000;
+
+/// After a task the seat says Working for at most this long while its next clean session finishes starting, so the row
+/// goes Ready -> Working -> Ready and never shows "Starting" or "Can't start" in between. A slow agent takes about 20 s
+/// to start, and one whose start failed once (a real OpenCode did, with its own "Internal service failure") is tried
+/// again after 30 s: both fit.
+pub const CLEAN_HOLD_MS: i64 = 90_000;
+
+/// How long a finished task's chat stays open after its seat went back to ready (its answer can still be read).
+pub const RETIRE_GRACE_MS: i64 = 120_000;
 
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize)]
 #[serde(rename_all = "snake_case")]
@@ -119,12 +146,10 @@ pub struct HelperStatus {
     pub pane_id: Option<String>,
     /// Who has it while busy.
     pub used_by: Option<HelperUser>,
-    /// An agent took it over while the person was using it.
-    pub taken_over: bool,
     /// The chat the person has open on this helper, while it is ready or "with you".
     pub open_pane: Option<String>,
-    /// While `taken_over`: the person's chat (its turn was stopped). Cleared when the task ends.
-    pub person_pane: Option<String>,
+    /// Chats of tasks this seat finished that are still open for a moment. They are the seat's, never agents of their own.
+    pub past_panes: Vec<String>,
 }
 
 /// What a task finds among the helpers.
@@ -136,6 +161,23 @@ pub enum HelperMatch {
     Ready,
 }
 
+/// One agent type whatever the spelling or the lane wording: "OpenCode", "opencode", "opencode_native", "opencode-acp" and
+/// "Open Code (terminal)" are all `opencode`. Only spelling is folded; nothing here names an agent.
+pub fn agent_family(agent: &str) -> String {
+    let mut text: String = agent.trim().to_ascii_lowercase().chars().filter(|c| c.is_ascii_alphanumeric()).collect();
+    loop {
+        let before = text.len();
+        for word in ["nonnative", "native", "terminal", "chat", "acp", "cli", "tui"] {
+            if text.len() > word.len() && text.ends_with(word) {
+                text.truncate(text.len() - word.len());
+            }
+        }
+        if text.len() == before {
+            return text;
+        }
+    }
+}
+
 fn model_fits(requested: Option<&str>, helper: &Option<String>) -> bool {
     match (requested.map(str::trim).filter(|m| !m.is_empty()), helper) {
         (None, _) | (Some(_), None) => true,
@@ -144,67 +186,135 @@ fn model_fits(requested: Option<&str>, helper: &Option<String>) -> bool {
 }
 
 struct Wanted {
-    agent: String,
+    family: String,
     project: String,
     account: Option<String>,
 }
 
 impl Wanted {
     fn new(agent: &str, folder: &Path, account: Option<&str>) -> Self {
-        Self {
-            agent: agent.to_ascii_lowercase(),
-            project: canonical_project(&folder.to_string_lossy()),
-            account: account.map(str::trim).filter(|a| !a.is_empty()).map(str::to_string),
+        Self { family: agent_family(agent), project: canonical_project(&folder.to_string_lossy()), account: account.map(str::trim).filter(|a| !a.is_empty()).map(str::to_string) }
+    }
+
+    /// Why the seat is not for this task at all (`None`: it is). Says nothing about whether it is free.
+    fn not_for<T>(&self, key: &WarmKey, slot: &Slot<T>, claim: &HelperClaim, home_alive: impl Fn(&str) -> bool) -> Option<String> {
+        let meta = slot.helper.as_ref()?;
+        if agent_family(&key.agent) != self.family {
+            return Some(format!("it is a {} seat", key.agent));
         }
-    }
-
-    fn fits<T>(&self, key: &WarmKey, slot: &Slot<T>, model: Option<&str>) -> bool {
-        slot.busy.is_none() && self.fits_busy_or_not(key, slot, model, None)
-    }
-
-    /// Whether the helper is for this task, whoever has it right now.
-    fn fits_busy_or_not<T>(&self, key: &WarmKey, slot: &Slot<T>, model: Option<&str>, name: Option<&str>) -> bool {
-        key.slot.is_some()
-            && key.agent == self.agent
-            && key.project == self.project
-            && key.account == self.account
-            && slot.helper.as_ref().is_some_and(|meta| model_fits(model, &meta.model) && name.is_none_or(|n| meta.name.eq_ignore_ascii_case(n.trim())))
+        if key.project != self.project {
+            return Some("it is for another folder".into());
+        }
+        if key.account != self.account {
+            return Some("it is for another account".into());
+        }
+        if !model_fits(claim.model, &meta.model) {
+            return Some(format!("the task asked for model {} and the seat is on {}", claim.model.unwrap_or_default().trim(), meta.model.as_deref().unwrap_or("its default")));
+        }
+        if claim.name.is_some_and(|n| !meta.name.eq_ignore_ascii_case(n.trim())) {
+            return Some("another standby was asked for by name".into());
+        }
+        if let (Some(home), Some(caller)) = (meta.home.as_deref(), claim.caller) {
+            if home != caller && home_alive(home) {
+                return Some("it sits under another agent".into());
+            }
+        }
+        None
     }
 }
 
+fn own_seat(meta: &HelperMeta, claim: &HelperClaim) -> bool {
+    meta.home.as_deref().zip(claim.caller).is_some_and(|(home, caller)| home == caller)
+}
+
 impl<H: WarmHost> Pool<H> {
-    /// Ends the busy state of helpers whose task is over (or whose chat is gone).
+    /// Ends the busy state of helpers whose task is over (or whose chat is gone). A finished agent task's chat is kept for
+    /// `RETIRE_GRACE_MS` and then closed (`retire_due`).
     pub(super) fn release_finished(inner: &mut Inner<H::Item>, host: &H, now: i64) {
-        for slot in inner.slots.values_mut() {
+        for (key, slot) in inner.slots.iter_mut() {
             let Some(busy) = slot.busy.as_mut() else { continue };
             if busy.awaiting_pane {
                 // The task's chat is being started; only a start that never says where it is gives the helper back (in time).
                 if now - busy.since >= IDLE_CLAIM_MS {
                     slot.busy = None;
+                    seat_log::line(&format!("seat {} released: its task never started", key.slot.as_deref().unwrap_or("?")));
                 }
                 continue;
             }
-            let over = match host.working(&busy.pane) {
+            let state = host.working(&busy.pane);
+            let over = match state {
                 None => true,
                 Some(true) => {
                     busy.saw_work = true;
                     false
                 }
-                Some(false) => busy.saw_work || now - busy.since >= IDLE_CLAIM_MS,
+                Some(false) => busy.saw_work || busy.turns_needed.zip(host.turns(&busy.pane)).is_some_and(|(needed, turns)| turns >= needed) || now - busy.since >= IDLE_CLAIM_MS,
             };
-            if over {
-                slot.busy = None;
+            if !over {
+                continue;
+            }
+            // The task is over. The seat is handed back the moment its next clean session is ready (it was started when
+            // the task began); only a session that is still starting is waited for, a short while.
+            let over_at = *busy.over_at.get_or_insert(now);
+            // (A start that failed is tried again when its wait is over: that counts while the try still fits the hold.)
+            let refilling = matches!(slot.state, State::Starting { .. }) || (matches!(slot.state, State::Empty) && !slot.cold && slot.backoff_until - over_at < CLEAN_HOLD_MS);
+            if busy.by == HelperUser::Agent && state.is_some() && refilling && now - over_at < CLEAN_HOLD_MS {
+                continue;
+            }
+            let Some(done) = slot.busy.take() else { continue };
+            let id = key.slot.as_deref().unwrap_or("?");
+            match done.by {
+                HelperUser::Agent => {
+                    if state.is_some() && !done.pane.is_empty() {
+                        slot.retiring.push((done.pane.clone(), now));
+                    }
+                    let next = match slot.state {
+                        State::Ready { .. } => "ready",
+                        State::Starting { .. } => "starting its next clean session",
+                        State::Empty if slot.cold => "asleep (close after one task)",
+                        State::Empty => "starting its next clean session",
+                    };
+                    seat_log::line(&format!("seat {id} returned: task over in chat {}; the seat is {next}; same seat, same owner, nothing else was made", done.pane));
+                }
+                HelperUser::Person => seat_log::line(&format!("seat {id} returned: the person's turn is over")),
             }
         }
     }
 
+    /// The finished task chats to close now: their grace is over and nothing runs in them. `all`: whatever their age.
+    pub(super) fn retire_due(inner: &mut Inner<H::Item>, host: &H, now: i64, all_of: Option<&WarmKey>) -> Vec<String> {
+        let mut close = Vec::new();
+        for (key, slot) in inner.slots.iter_mut() {
+            let every = all_of == Some(key);
+            slot.retiring.retain(|(pane, at)| {
+                match host.working(pane) {
+                    // Closed already (the person did it).
+                    None => false,
+                    // A follow-up turn runs in it: it stays until that is over.
+                    Some(true) => true,
+                    Some(false) if every || now - *at >= RETIRE_GRACE_MS => {
+                        close.push(pane.clone());
+                        false
+                    }
+                    Some(false) => true,
+                }
+            });
+        }
+        close
+    }
+
     /// Whether a helper fits a task, without taking it.
     pub fn helper_match(&self, agent: &str, folder: &Path, account: Option<&str>, model: Option<&str>) -> HelperMatch {
-        let wanted = Wanted::new(agent, folder, account);
+        self.helper_match_for(&HelperClaim { agent, folder, account, model, caller: None, name: None })
+    }
+
+    /// `helper_match` with who asks: only a seat this task may take counts.
+    pub fn helper_match_for(&self, claim: &HelperClaim) -> HelperMatch {
+        let wanted = Wanted::new(claim.agent, claim.folder, claim.account);
         let guard = self.inner.lock();
         let mut found = HelperMatch::None;
         for (key, slot) in &guard.slots {
-            if !wanted.fits(key, slot, model) {
+            if key.slot.is_none() || slot.busy.is_some() || wanted.not_for(key, slot, claim, |home| self.host.working(home).is_some()).is_some() {
                 continue;
             }
             match slot.state {
@@ -216,6 +326,20 @@ impl<H: WarmHost> Pool<H> {
         found
     }
 
+    /// The caller's own seat that would take this task (ready, or still starting), found by agent *type*: the lane wording
+    /// of `agent_type` does not matter. Nothing is taken.
+    pub fn seat_for(&self, claim: &HelperClaim) -> Option<SeatLook> {
+        let wanted = Wanted::new(claim.agent, claim.folder, claim.account);
+        let guard = self.inner.lock();
+        guard
+            .slots
+            .iter()
+            .filter(|(key, slot)| key.slot.is_some() && slot.busy.is_none() && !matches!(slot.state, State::Empty))
+            .filter(|(_, slot)| slot.helper.as_ref().is_some_and(|meta| own_seat(meta, claim)))
+            .find(|(key, slot)| wanted.not_for(key, slot, claim, |_| true).is_none())
+            .and_then(|(key, slot)| Some(SeatLook { id: key.slot.clone()?, name: slot.helper.as_ref()?.name.clone(), agent: key.agent.clone() }))
+    }
+
     /// Takes a ready helper that fits the task. It is busy from now until its chat has finished a turn. A matching helper
     /// that is asleep is woken (it starts again) but this call still misses.
     pub fn claim_helper(&self, agent: &str, folder: &Path, account: Option<&str>, model: Option<&str>, now: i64) -> Option<(H::Item, HelperMeta)> {
@@ -223,25 +347,8 @@ impl<H: WarmHost> Pool<H> {
         Some((claimed.item?, claimed.meta))
     }
 
-    /// The order a task looks in: a free helper before one the person is using, and among those the caller's own first.
-    fn claim_order(inner: &Inner<H::Item>, wanted: &Wanted, claim: &HelperClaim) -> Vec<WarmKey> {
-        let mut keys: Vec<(u8, u8, WarmKey)> = inner
-            .slots
-            .iter()
-            .filter(|(k, s)| wanted.fits_busy_or_not(k, s, claim.model, claim.name))
-            .filter(|(_, s)| s.busy.as_ref().is_none_or(|b| b.by == HelperUser::Person))
-            .map(|(k, s)| {
-                let held = u8::from(s.busy.is_some() || s.opened.is_some());
-                let own = s.helper.as_ref().and_then(|m| m.home.as_deref()).zip(claim.caller).is_some_and(|(home, caller)| home == caller);
-                (held, u8::from(!own), k.clone())
-            })
-            .collect();
-        keys.sort_by(|a, b| (a.0, a.1).cmp(&(b.0, b.1)));
-        keys.into_iter().map(|(_, _, k)| k).collect()
-    }
-
-    /// `claim_helper` with who asks (see `HelperClaim`). A helper the person is using is taken only when no free one fits: the
-    /// person's turn is stopped, and the result says whose chat it was.
+    /// `claim_helper` with who asks (see `HelperClaim`). The caller's own seats go first. A seat with a turn running in it (the
+    /// person's or an agent's) is never taken.
     pub fn claim_helper_for(&self, claim: &HelperClaim, now: i64) -> Option<Claimed<H::Item>> {
         self.claim_helper_inner(claim, now, false)
     }
@@ -250,70 +357,114 @@ impl<H: WarmHost> Pool<H> {
     /// helper is not given back before that (the chat is not registered yet).
     fn claim_helper_inner(&self, claim: &HelperClaim, now: i64, awaiting: bool) -> Option<Claimed<H::Item>> {
         let wanted = Wanted::new(claim.agent, claim.folder, claim.account);
-        let mut dead = None;
-        let hit = {
+        let mut dead = Vec::new();
+        let mut skipped: Vec<String> = Vec::new();
+        let (hit, retire, seats) = {
             let mut guard = self.inner.lock();
             let inner = &mut *guard;
             if inner.shut {
                 return None;
             }
-            let keys = Self::claim_order(inner, &wanted, claim);
+            // The caller's own seats first, then the others; among those a seat nobody has open first; each in a stable order.
+            let mut keys: Vec<(u8, u8, WarmKey)> = inner
+                .slots
+                .iter()
+                .filter(|(key, slot)| key.slot.is_some() && slot.helper.is_some())
+                .map(|(key, slot)| (u8::from(!slot.helper.as_ref().is_some_and(|meta| own_seat(meta, claim))), u8::from(slot.opened.is_some()), key.clone()))
+                .collect();
+            keys.sort();
+            let seats = keys.len();
             let mut hit = None;
-            for key in keys {
+            for (_, _, key) in keys {
                 let Some(slot) = inner.slots.get_mut(&key) else { continue };
-                slot.cold = false;
-                slot.last_use = Some(now);
-                if !matches!(slot.state, State::Ready { .. }) {
+                let Some(meta) = slot.helper.clone() else { continue };
+                let label = format!("\"{}\" ({})", meta.name, meta.id);
+                if let Some(why) = wanted.not_for(&key, slot, claim, |home| self.host.working(home).is_some()) {
+                    skipped.push(format!("{label}: {why}"));
                     continue;
                 }
-                let Some(meta) = slot.helper.clone() else { continue };
-                let State::Ready { item, .. } = std::mem::replace(&mut slot.state, State::Empty) else { continue };
-                if slot.busy.is_some() || slot.opened.is_some() {
-                    // The person has it open or is using it: the task never gets their session. Their chat keeps it (it stays
-                    // readable as a plain chat; an item dropped here is not closed) and the task starts a fresh one.
-                    drop(item);
-                    let taken_from = slot.busy.take().filter(|b| b.by == HelperUser::Person).map(|b| b.pane).filter(|p| !p.is_empty());
-                    let person_pane = slot.opened.take().or_else(|| taken_from.clone());
-                    slot.busy = Some(Busy { pane: String::new(), since: now, by: HelperUser::Agent, taken_over: true, saw_work: false, person_pane: person_pane.clone(), awaiting_pane: true });
-                    slot.cold = meta.close_after_use;
-                    hit = Some(Claimed { item: None, meta, taken_from, fresh: true, person_pane });
-                    break;
+                // It is for this task: asking for it wakes it, whether or not it can be taken now.
+                slot.cold = false;
+                slot.last_use = Some(now);
+                if let Some(busy) = &slot.busy {
+                    skipped.push(format!("{label}: {}", if busy.by == HelperUser::Person { "the person is using it" } else { "it is busy with another task" }));
+                    continue;
                 }
+                if !matches!(slot.state, State::Ready { .. }) {
+                    skipped.push(format!("{label}: it is not ready yet"));
+                    continue;
+                }
+                let State::Ready { item, .. } = std::mem::replace(&mut slot.state, State::Empty) else { continue };
                 if !self.host.alive(&item) {
                     slot.fails += 1;
                     slot.backoff_until = now + super::backoff_ms(slot.fails, false);
-                    dead = Some(item);
+                    slot.opened = None;
+                    dead.push(item);
+                    skipped.push(format!("{label}: its session had stopped"));
                     continue;
                 }
-                slot.busy = Some(Busy { pane: self.host.pane_of(&item).unwrap_or_default(), since: now, by: HelperUser::Agent, taken_over: false, saw_work: false, person_pane: None, awaiting_pane: awaiting });
+                // The chat the person has open on the seat is the seat's chat: the task runs there. Nothing new is made.
+                let open = slot.opened.take().filter(|pane| self.host.working(pane).is_some());
+                let pane = open.clone().or_else(|| self.host.pane_of(&item)).unwrap_or_default();
+                let turns_needed = self.host.turns(&pane).map(|turns| turns + 1);
+                slot.busy = Some(Busy { pane, since: now, by: HelperUser::Agent, saw_work: false, awaiting_pane: awaiting && open.is_none(), turns_needed, over_at: None });
                 // "Close after one task": it is not started again until a task asks for it (or the person presses Start).
                 slot.cold = meta.close_after_use;
-                hit = Some(Claimed { item: Some(item), meta, taken_from: None, fresh: false, person_pane: None });
+                hit = Some((key.clone(), Claimed { item: Some(item), meta, pane: open }));
                 break;
             }
-            hit
+            // The seat's last task chat goes now: the seat has one chat at a time.
+            let retire = match &hit {
+                Some((key, _)) => Self::retire_due(inner, &*self.host, now, Some(key)),
+                None => Vec::new(),
+            };
+            (hit.map(|(_, claimed)| claimed), retire, seats)
         };
-        if let Some(item) = dead {
+        for item in dead {
             self.host.close(item);
         }
-        // The person's turn is stopped outside the lock.
-        if let Some(pane) = hit.as_ref().and_then(|h| h.taken_from.as_deref()) {
-            self.host.cancel_turn(pane);
+        for pane in retire {
+            self.host.retire(&pane);
+        }
+        let asked = format!(
+            "agent {} model {} caller {}{}",
+            claim.agent,
+            claim.model.map(str::trim).filter(|m| !m.is_empty()).unwrap_or("(none named)"),
+            claim.caller.unwrap_or("(unknown)"),
+            claim.name.map(|n| format!(" by name \"{}\"", n.trim())).unwrap_or_default()
+        );
+        match &hit {
+            Some(claimed) => seat_log::line(&format!(
+                "claim MATCHED: {asked} -> seat \"{}\" ({}); the task runs in the seat's own chat{}; nothing new is started{}",
+                claimed.meta.name,
+                claimed.meta.id,
+                if claimed.pane.is_some() { " (the one the person has open)" } else { "" },
+                if skipped.is_empty() { String::new() } else { format!("; passed over: {}", skipped.join("; ")) }
+            )),
+            None if seats == 0 => seat_log::line(&format!("claim SKIPPED: {asked} -> there are no standbys")),
+            None => seat_log::line(&format!("claim SKIPPED: {asked} -> no seat could take it: {}", skipped.join("; "))),
         }
         hit
     }
 
-    /// The person opened helper `helper_id` and is using it like any chat. It stays in the pool (a free match is taken before
-    /// it) and is busy until their turn is over. False: the helper is not ready, or an agent has it.
+    /// The person opened helper `helper_id` and is using it like any chat. It stays in the pool and is busy until their turn
+    /// is over. False: the helper is not ready, or an agent has it.
     pub fn begin_person_use(&self, helper_id: &str, now: i64) -> bool {
+        self.begin_person_use_at(helper_id, now, false)
+    }
+
+    /// `sent`: the person's message is already on its way (its turn is counted), so the turn count says when it is over.
+    fn begin_person_use_at(&self, helper_id: &str, now: i64, sent: bool) -> bool {
         let mut guard = self.inner.lock();
         for (key, slot) in guard.slots.iter_mut() {
             if key.slot.as_deref() != Some(helper_id) || slot.busy.is_some() {
                 continue;
             }
             let State::Ready { item, .. } = &slot.state else { return false };
-            let pane = self.host.pane_of(item).unwrap_or_default();
-            slot.busy = Some(Busy { pane, since: now, by: HelperUser::Person, taken_over: false, saw_work: false, person_pane: None, awaiting_pane: false });
+            let pane = slot.opened.clone().or_else(|| self.host.pane_of(item)).unwrap_or_default();
+            let turns_needed = if sent { self.host.turns(&pane) } else { None };
+            slot.busy = Some(Busy { pane, since: now, by: HelperUser::Person, saw_work: false, awaiting_pane: false, turns_needed, over_at: None });
+            seat_log::line(&format!("seat {helper_id} is with the person (they sent a message in its chat)"));
             return true;
         }
         false
@@ -326,10 +477,10 @@ impl<H: WarmHost> Pool<H> {
             let guard = self.inner.lock();
             guard.slots.iter().find(|(_, slot)| slot.opened.as_deref() == Some(pane_id) && slot.busy.is_none()).and_then(|(key, _)| key.slot.clone())
         };
-        id.is_some_and(|id| self.begin_person_use(&id, now))
+        id.is_some_and(|id| self.begin_person_use_at(&id, now, true))
     }
 
-    /// The task that took helper `helper_id` runs in chat `pane_id` (a fresh start knows its chat only after the claim). The helper
+    /// The task that took helper `helper_id` runs in chat `pane_id` (the start knows its chat only after the claim). The helper
     /// is busy until that chat has finished a turn. An empty `pane_id`: the start failed, so the helper is released at the next pass.
     pub fn set_helper_task_pane(&self, helper_id: &str, pane_id: &str) {
         let mut guard = self.inner.lock();
@@ -341,6 +492,8 @@ impl<H: WarmHost> Pool<H> {
                 busy.pane = pane_id.to_string();
                 busy.awaiting_pane = false;
                 busy.saw_work = false;
+                busy.turns_needed = self.host.turns(pane_id).map(|turns| turns + 1);
+                seat_log::line(&if pane_id.is_empty() { format!("seat {helper_id}: the task did not start; the seat is given back") } else { format!("seat {helper_id} working: its task runs in chat {pane_id}") });
             }
         }
     }
@@ -351,8 +504,6 @@ impl<H: WarmHost> Pool<H> {
         let mut guard = self.inner.lock();
         let (_, slot) = guard.slots.iter_mut().find(|(key, _)| key.slot.as_deref() == Some(helper_id))?;
         let busy = slot.busy.as_mut().filter(|b| b.by == HelperUser::Agent && !b.pane.is_empty())?;
-        busy.taken_over = false;
-        busy.person_pane = None;
         // The turn is being stopped: it is over as soon as the chat is idle again.
         busy.saw_work = true;
         Some(busy.pane.clone())
@@ -378,7 +529,7 @@ impl<H: WarmHost> Pool<H> {
                 HelperUser::Agent => Some(busy.pane.clone()),
                 HelperUser::Person => slot.opened.clone().or_else(|| Some(busy.pane.clone())),
             };
-            return pane.filter(|p| !p.is_empty()).ok_or_else(|| "An agent is starting its task on it. Try again in a moment.".to_string());
+            return pane.filter(|p| !p.is_empty()).ok_or_else(|| "It is starting a task. Try again in a moment.".to_string());
         }
         let ready = matches!(slot.state, State::Ready { .. });
         if !ready {
@@ -410,6 +561,7 @@ impl<H: WarmHost> Pool<H> {
         }
         let pane = build(item, &meta, &key.agent)?;
         slot.opened = Some(pane.clone());
+        seat_log::line(&format!("seat {helper_id} opened by the person as chat {pane}; it stays ready in its place"));
         Ok(pane)
     }
 
@@ -417,12 +569,15 @@ impl<H: WarmHost> Pool<H> {
     pub fn claim_helper_waiting_for(self: &std::sync::Arc<Self>, claim: &HelperClaim, wait: std::time::Duration) -> Option<Claimed<H::Item>> {
         let deadline = std::time::Instant::now() + wait;
         loop {
-            let hit = self.claim_helper_inner(claim, crate::event_log::now_ms(), true);
-            if hit.is_some() || self.helper_match(claim.agent, claim.folder, claim.account, claim.model) != HelperMatch::Starting || std::time::Instant::now() >= deadline {
-                self.tick(crate::event_log::now_ms());
-                return hit;
+            // Only the last look writes to the seat log, so a wait is one line.
+            let last = self.helper_match_for(claim) != HelperMatch::Starting || std::time::Instant::now() >= deadline;
+            if !last {
+                std::thread::sleep(std::time::Duration::from_millis(25));
+                continue;
             }
-            std::thread::sleep(std::time::Duration::from_millis(25));
+            let hit = self.claim_helper_inner(claim, crate::event_log::now_ms(), true);
+            self.tick(crate::event_log::now_ms());
+            return hit;
         }
     }
 
@@ -433,6 +588,7 @@ impl<H: WarmHost> Pool<H> {
             let mut guard = self.inner.lock();
             guard.policy.helpers.retain(|want| want.meta.id != helper_id);
         }
+        seat_log::line(&format!("seat {helper_id} removed by the person"));
         self.tick(now);
     }
 
@@ -453,28 +609,33 @@ impl<H: WarmHost> Pool<H> {
         let mut out = BTreeMap::new();
         for (key, slot) in &guard.slots {
             let Some(id) = &key.slot else { continue };
+            let past_panes: Vec<String> = slot.retiring.iter().map(|(pane, _)| pane.clone()).collect();
             let status = if let Some(busy) = &slot.busy {
                 let by_person = busy.by == HelperUser::Person;
                 HelperStatus {
                     state: HelperState::Busy,
                     pane_id: Some(busy.pane.clone()).filter(|p| !p.is_empty()),
                     used_by: Some(busy.by),
-                    taken_over: busy.taken_over,
                     open_pane: if by_person { slot.opened.clone().or_else(|| Some(busy.pane.clone()).filter(|p| !p.is_empty())) } else { None },
-                    person_pane: if busy.taken_over { busy.person_pane.clone() } else { None },
+                    past_panes,
                     ..Default::default()
                 }
             } else {
                 match &slot.state {
-                    State::Ready { .. } => HelperStatus { state: HelperState::Ready, open_pane: slot.opened.clone(), ..Default::default() },
-                    State::Starting { .. } => HelperStatus { state: HelperState::Starting, ..Default::default() },
-                    State::Empty if slot.cold => HelperStatus { state: HelperState::Asleep, ..Default::default() },
-                    State::Empty if slot.fails > 0 => HelperStatus { state: HelperState::Problem, note: slot.last_error.clone(), ..Default::default() },
-                    State::Empty => HelperStatus { state: HelperState::Starting, ..Default::default() },
+                    State::Ready { .. } => HelperStatus { state: HelperState::Ready, open_pane: slot.opened.clone(), past_panes, ..Default::default() },
+                    State::Starting { .. } => HelperStatus { state: HelperState::Starting, past_panes, ..Default::default() },
+                    State::Empty if slot.cold => HelperStatus { state: HelperState::Asleep, past_panes, ..Default::default() },
+                    State::Empty if slot.fails > 0 => HelperStatus { state: HelperState::Problem, note: slot.last_error.clone(), past_panes, ..Default::default() },
+                    State::Empty => HelperStatus { state: HelperState::Starting, past_panes, ..Default::default() },
                 }
             };
             out.insert(id.clone(), status);
         }
         out
+    }
+
+    /// How many seats the pool holds (the person's number: a task never changes it).
+    pub fn seat_count(&self) -> usize {
+        self.inner.lock().slots.keys().filter(|key| key.slot.is_some()).count()
     }
 }

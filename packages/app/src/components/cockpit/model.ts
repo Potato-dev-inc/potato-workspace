@@ -63,12 +63,18 @@ export function formatElapsed(ms: number): string {
 
 /** Display name per pane: the agent label, numbered when several panes run the same agent. */
 export function paneNames(list: PaneData[], label: (agentId: string) => string): Map<string, string> {
+  // A standby seat's own chat is not another agent: it never takes a number, and never makes the others take one
+  // (an orchestrator "Claude" must not become "Claude 1" because its Claude standby started a task).
   const totals = new Map<string, number>();
-  for (const p of list) totals.set(p.info.agent_type, (totals.get(p.info.agent_type) ?? 0) + 1);
+  for (const p of list) if (!p.info.standby_seat) totals.set(p.info.agent_type, (totals.get(p.info.agent_type) ?? 0) + 1);
   const seen = new Map<string, number>();
   const names = new Map<string, string>();
   for (const p of list) {
     const id = p.info.agent_type;
+    if (p.info.standby_seat) {
+      names.set(p.info.id, label(id));
+      continue;
+    }
     const n = (seen.get(id) ?? 0) + 1;
     seen.set(id, n);
     names.set(p.info.id, (totals.get(id) ?? 0) > 1 ? `${label(id)} ${n}` : label(id));

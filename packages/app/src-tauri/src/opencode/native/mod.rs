@@ -232,6 +232,7 @@ pub fn spawn_native_pane(
         origin: None,
         place: None,
         lane: None,
+        standby_seat: None,
     };
 
     let opencode = OpenCodeLink::new(

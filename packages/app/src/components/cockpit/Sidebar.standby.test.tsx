@@ -41,6 +41,11 @@ const pane = (id: string, status: string, title: string, parent?: string) => ({
   status,
 });
 type P = ReturnType<typeof pane>;
+/** A chat that is a standby seat's own (the pane list says which seat). */
+const seatChat = (id: string, status: string, seat: string, parent?: string): P => {
+  const p = pane(id, status, 'OpenCode', parent);
+  return { ...p, info: { ...p.info, standby_seat: seat } as P['info'] };
+};
 
 const helper = (over: Partial<StandbyHelperEntry> = {}): StandbyHelperEntry => ({
   id: 'sb-1', name: 'Reviewer', agent: 'codex', model: 'gpt-5', project: 'C:/work/shop', after_task: 'wait', state: 'ready', note: null, pane_id: null, home: 'a1',
@@ -120,11 +125,17 @@ describe('standby helpers in the sidebar', () => {
     expect(host.querySelector('[data-pane-row="chat-5"]')).toBeNull();
   });
 
-  it('an agent task already shown as a helper chat is not drawn twice', async () => {
+  it('a seat working for an agent is still its one row under its home; its task chat is never an agent row', async () => {
     const { api } = fakeApi([helper({ state: 'busy', used_by: 'agent', pane_id: 'task-1' })]);
-    await show(cockpit([pane('a1', 'idle', 'Right panel rebuild'), pane('task-1', 'running', 'Reviewer chat', 'a1')]), api);
-    expect(rows()).toHaveLength(0);
-    expect(host.querySelector('[data-pane-row="task-1"]')).not.toBeNull();
+    const c = cockpit([pane('a1', 'idle', 'Right panel rebuild'), seatChat('task-1', 'running', 'sb-1', 'a1')]);
+    await show(c, api);
+    expect(names()).toEqual(['Reviewer']);
+    expect(states()).toEqual(['Working']);
+    expect(rows()[0].closest('.ck-node')!.querySelector('[data-pane-row="a1"]')).not.toBeNull();
+    expect(host.querySelector('[data-pane-row="task-1"]')).toBeNull();
+    // A click on the row opens the chat the task runs in.
+    await act(async () => rows()[0].querySelector<HTMLButtonElement>('.ck-row')!.click());
+    expect(c.select).toHaveBeenCalledWith('task-1');
   });
 
   it('closing the home agent moves the row under the newest agent of the project and says so', async () => {
@@ -227,6 +238,118 @@ describe('standby helpers in the sidebar', () => {
     expect(api.add).toHaveBeenCalledWith({ name: 'Checker', agent: 'codex', model: null, project: 'C:/work/shop', after_task: 'wait', home: 'a1' });
   });
 
+  // The founder's rule: "when an agent wants to create a subagent, if it matches, the standby gets in ... it does not create
+  // anything else". Every render of a whole claim is checked, with the pane list and the helper list arriving in either order.
+  describe('a claim never moves the seat and never adds a row', () => {
+    const A1 = () => pane('a1', 'running', 'Claude');
+    /** What the person sees: the seat rows, where they hang, every agent row, and whether a "taken" banner shows. */
+    const picture = () => ({
+      seats: names(),
+      state: states()[0],
+      underOwner: rows().length === 1 && rows()[0].closest('.ck-node')?.querySelector('[data-pane-row="a1"]') !== null && rows()[0].closest('.ck-helpers') !== null,
+      agentRows: [...host.querySelectorAll('[data-pane-row]')].map((e) => e.getAttribute('data-pane-row')),
+      takeover: document.querySelector('[data-testid="takeover-banner"]') !== null,
+    });
+    const steady = (state: string) => ({ seats: ['OpenCode · deepseek'], state, underOwner: true, agentRows: ['a1'], takeover: false });
+    const seat = (over: Partial<StandbyHelperEntry> = {}) => helper({ id: 'sb-1', name: 'OpenCode · deepseek', agent: 'opencode', model: 'opencode-go/deepseek-v4.1-flash', home: 'a1', ...over });
+    type Step = { panes: P[]; helpers?: StandbyHelperEntry[]; expect: string; why: string };
+
+    async function run(steps: Step[], start: StandbyHelperEntry[] = [seat()], first: P[] = [A1()]) {
+      vi.useFakeTimers({ toFake: ['setInterval', 'clearInterval'] });
+      try {
+        const { api, set } = fakeApi(start);
+        const settle = async () => {
+          await flush();
+          await flush();
+        };
+        const render = async (list: P[]) => {
+          await act(async () => root.render(<Sidebar c={cockpit(list)} onOpenPalette={() => {}} ship={ship} standbyApi={api} />));
+          await settle();
+        };
+        await render(first);
+        expect(picture(), 'before the task').toEqual(steady('Ready'));
+        let checked = 0;
+        for (const step of steps) {
+          // The pane list changes first (an event), exactly as the app sends it; the helper list follows at its next read.
+          await render(step.panes);
+          expect(picture(), `${step.why} (pane list arrived, helper list not read yet)`).toMatchObject({ seats: ['OpenCode · deepseek'], underOwner: true, agentRows: ['a1'], takeover: false });
+          if (step.helpers) set(step.helpers);
+          await act(async () => void vi.advanceTimersByTime(3100));
+          await settle();
+          expect(picture(), step.why).toEqual(steady(step.expect));
+          checked += 1;
+        }
+        expect(checked).toBe(steps.length);
+      } finally {
+        vi.useRealTimers();
+      }
+    }
+
+    it('pane list first: Ready -> Working -> Ready, one row under its owner in every render, nothing else appears', async () => {
+      await run([
+        { why: 'the task chat is listed, not linked to the caller yet', panes: [A1(), seatChat('task-1', 'idle', 'sb-1')], expect: 'Ready' },
+        { why: 'the task chat is linked under the caller', panes: [A1(), seatChat('task-1', 'running', 'sb-1', 'a1')], expect: 'Working' },
+        { why: 'the helper list says busy', panes: [A1(), seatChat('task-1', 'running', 'sb-1', 'a1')], helpers: [seat({ state: 'busy', used_by: 'agent', pane_id: 'task-1' })], expect: 'Working' },
+        { why: 'the task ended; the seat is ready and its finished chat is still open', panes: [A1(), seatChat('task-1', 'idle', 'sb-1', 'a1')], helpers: [seat({ state: 'ready', past_panes: ['task-1'] })], expect: 'Ready' },
+        { why: 'the helper list drops the finished chat before the pane list does', panes: [A1(), seatChat('task-1', 'idle', 'sb-1', 'a1')], helpers: [seat({ state: 'ready', past_panes: [] })], expect: 'Ready' },
+        { why: 'the finished chat was closed', panes: [A1()], helpers: [seat({ state: 'ready', past_panes: [] })], expect: 'Ready' },
+        { why: 'a second task on the same seat', panes: [A1(), seatChat('task-2', 'running', 'sb-1', 'a1')], helpers: [seat({ state: 'busy', used_by: 'agent', pane_id: 'task-2' })], expect: 'Working' },
+        { why: 'and back', panes: [A1()], helpers: [seat({ state: 'ready' })], expect: 'Ready' },
+      ]);
+    });
+
+    it('helper list first: the row says Working before the chat is listed, and still nothing else appears', async () => {
+      await run([
+        { why: 'busy, its chat not listed yet', panes: [A1()], helpers: [seat({ state: 'busy', used_by: 'agent', pane_id: 'task-1' })], expect: 'Working' },
+        { why: 'the chat is listed', panes: [A1(), seatChat('task-1', 'running', 'sb-1', 'a1')], expect: 'Working' },
+        { why: 'the seat is starting its next clean session while the task chat lingers', panes: [A1(), seatChat('task-1', 'idle', 'sb-1', 'a1')], helpers: [seat({ state: 'starting', past_panes: ['task-1'] })], expect: 'Starting' },
+        { why: 'ready again', panes: [A1()], helpers: [seat({ state: 'ready' })], expect: 'Ready' },
+      ]);
+    });
+
+    it('a seat the person has open: the task runs in that same chat, no "taken" banner, no new row', async () => {
+      await run(
+        [
+          { why: 'an agent took the seat: same chat, now linked under the caller', panes: [A1(), seatChat('chat-5', 'running', 'sb-1', 'a1')], helpers: [seat({ state: 'busy', used_by: 'agent', pane_id: 'chat-5' })], expect: 'Working' },
+          { why: 'the task ended', panes: [A1(), seatChat('chat-5', 'idle', 'sb-1', 'a1')], helpers: [seat({ state: 'ready', past_panes: ['chat-5'] })], expect: 'Ready' },
+          { why: 'the chat was closed', panes: [A1()], helpers: [seat({ state: 'ready' })], expect: 'Ready' },
+        ],
+        [seat({ open_pane: 'chat-5' })],
+        [A1(), seatChat('chat-5', 'idle', 'sb-1')],
+      );
+    });
+
+    it('the number of rows is the same before, during and after a task', async () => {
+      vi.useFakeTimers({ toFake: ['setInterval', 'clearInterval'] });
+      try {
+        const { api, set } = fakeApi([seat()]);
+        const count = () => host.querySelectorAll('[data-pane-row], [data-testid="standby-row"]').length;
+        const render = async (list: P[]) => {
+          await act(async () => root.render(<Sidebar c={cockpit(list)} onOpenPalette={() => {}} ship={ship} standbyApi={api} />));
+          await flush();
+          await act(async () => void vi.advanceTimersByTime(3100));
+          await flush();
+          await flush();
+        };
+        await render([A1()]);
+        const before = count();
+        expect(before).toBe(2);
+        set([seat({ state: 'busy', used_by: 'agent', pane_id: 'task-1' })]);
+        await render([A1(), seatChat('task-1', 'running', 'sb-1', 'a1')]);
+        expect(count()).toBe(before);
+        set([seat({ state: 'ready', past_panes: ['task-1'] })]);
+        await render([A1(), seatChat('task-1', 'idle', 'sb-1', 'a1')]);
+        expect(count()).toBe(before);
+        set([seat({ state: 'ready' })]);
+        await render([A1()]);
+        expect(count()).toBe(before);
+      } finally {
+        vi.useRealTimers();
+      }
+    });
+  });
+
+  // (Keep this test last: it renders inside an act() that is already running, and a test after it would render nothing.)
   it('a click on a new standby never moves its row: the chat it opens is not shown as an agent while the list catches up', async () => {
     // The chat exists (the pane list has it) before the helper list says it is the helper's own: the old sidebar drew it as an agent
     // for that moment and the row jumped up. Every render between the click and the end is checked.
@@ -255,4 +378,5 @@ describe('standby helpers in the sidebar', () => {
     await show(cockpit([pane('a1', 'idle', 'Right panel rebuild'), pane('chat-9', 'idle', 'Fresh chat')]), api);
     expect(place()).toEqual({ under: true, topLevel: ['a1'] });
   });
+
 });

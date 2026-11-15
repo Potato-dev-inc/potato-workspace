@@ -164,7 +164,7 @@ impl Probe for LiveProbe {
     fn read(&self, agent: &str) -> Result<Vec<Value>, String> {
         use super::warm::{LiveHost, WarmHost, WarmKey};
         let folder = probe_folder();
-        let host = LiveHost { conversations: super::conversations::global().clone() };
+        let host = LiveHost { conversations: super::conversations::global().clone(), registry: None };
         let chat = host.start(&WarmKey::new(agent, &folder.to_string_lossy(), None), &folder).map_err(|f| f.message)?;
         let options = chat.session.snapshot().config_options.clone();
         host.close(chat);

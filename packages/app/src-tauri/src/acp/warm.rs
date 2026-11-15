@@ -32,7 +32,9 @@ use crate::standby::key::canonical_project;
 use crate::standby::config::{StandbyConfig, MAX_PRELOAD_TOTAL};
 
 mod helpers;
-pub use helpers::{Claimed, HelperClaim, HelperMeta, HelperState, HelperStatus, HelperUser, HelperWant};
+pub use helpers::{Claimed, HelperClaim, HelperMeta, HelperState, HelperStatus, HelperUser, HelperWant, SeatLook};
+#[cfg(test)]
+pub use helpers::{agent_family, CLEAN_HOLD_MS, RETIRE_GRACE_MS};
 
 /// What a warm session is keyed by: everything fixed when its adapter starts.
 #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord)]
@@ -119,8 +121,14 @@ pub trait WarmHost: Send + Sync + 'static {
     fn working(&self, _pane_id: &str) -> Option<bool> {
         None
     }
-    /// Stops the turn the person has running in chat `pane_id` (an agent takes their standby over). The chat is not closed.
+    /// How many turns chat `pane_id` has started so far. `None`: the host does not count them (or the chat is gone).
+    fn turns(&self, _pane_id: &str) -> Option<u64> {
+        None
+    }
+    /// Stops the turn running in chat `pane_id` (the person takes their standby back from a task). The chat is not closed.
     fn cancel_turn(&self, _pane_id: &str) {}
+    /// Closes chat `pane_id`: a standby's finished task chat, once its seat is ready again. It stays in the chat history.
+    fn retire(&self, _pane_id: &str) {}
 }
 
 const BACKOFF_FIRST_MS: i64 = 30_000;
@@ -151,8 +159,11 @@ struct Slot<T> {
     last_use: Option<i64>,
     /// The standby helper this slot belongs to (`key.slot`), as last asked for by the policy.
     helper: Option<helpers::HelperMeta>,
-    /// A claimed helper's task, running: the slot is not refilled until it is over.
+    /// A claimed helper's task, running. An agent's task has taken the session, so the seat's next clean one is started
+    /// meanwhile; the seat stays busy until the task is over.
     busy: Option<helpers::Busy>,
+    /// Chats of tasks this seat finished, with when: closed after a short grace (`helpers::RETIRE_GRACE_MS`).
+    retiring: Vec<(String, i64)>,
     /// Why the last start failed (for the helper's status line).
     last_error: Option<String>,
     /// The visible chat the person opened on this helper's waiting session (it shares that session; see `warm/helpers.rs`).
@@ -161,7 +172,7 @@ struct Slot<T> {
 
 impl<T> Slot<T> {
     fn new(folder: PathBuf) -> Self {
-        Slot { folder, state: State::Empty, fails: 0, backoff_until: 0, cold: false, last_use: None, helper: None, busy: None, last_error: None, opened: None }
+        Slot { folder, state: State::Empty, fails: 0, backoff_until: 0, cold: false, last_use: None, helper: None, busy: None, retiring: Vec::new(), last_error: None, opened: None }
     }
 }
 
@@ -181,6 +192,8 @@ struct Inner<T> {
     policy: Policy,
     generation: u64,
     shut: bool,
+    /// Finished task chats of standbys whose grace is over: `tick` closes them outside the lock.
+    to_retire: Vec<String>,
 }
 
 /// A start the pool decided on. Run it with `Pool::run`.
@@ -197,7 +210,7 @@ pub struct Pool<H: WarmHost> {
 
 impl<H: WarmHost> Pool<H> {
     pub fn new(host: Arc<H>) -> Arc<Self> {
-        Arc::new(Self { host, inner: Mutex::new(Inner { slots: BTreeMap::new(), hints: BTreeMap::new(), policy: Policy::default(), generation: 0, shut: false }) })
+        Arc::new(Self { host, inner: Mutex::new(Inner { slots: BTreeMap::new(), hints: BTreeMap::new(), policy: Policy::default(), generation: 0, shut: false, to_retire: Vec::new() }) })
     }
 
     pub fn set_policy(&self, policy: Policy) {
@@ -268,6 +281,8 @@ impl<H: WarmHost> Pool<H> {
         }
         // A claimed helper whose task is over goes back to standby (its slot is refilled below).
         Self::release_finished(inner, &*self.host, now);
+        let due = Self::retire_due(inner, &*self.host, now, None);
+        inner.to_retire.extend(due);
         inner.hints.retain(|_, hint| hint.until > now);
         let hinted: Vec<(WarmKey, PathBuf)> = inner.hints.iter().map(|(key, hint)| (key.clone(), hint.folder.clone())).collect();
         for (key, folder) in &hinted {
@@ -282,7 +297,8 @@ impl<H: WarmHost> Pool<H> {
             if let State::Ready { item, since } = &slot.state {
                 let dead = !self.host.alive(item);
                 // A session the person has open (or is using) is theirs while they do: never closed for sitting idle.
-                let person_held = slot.opened.is_some() || slot.busy.as_ref().is_some_and(|b| b.by == HelperUser::Person);
+                // (A seat busy with an agent's task holds its next clean session here: that is not idling either.)
+                let person_held = slot.opened.is_some() || slot.busy.is_some();
                 let gone = slot.opened.as_deref().is_some_and(|pane| self.host.working(pane).is_none());
                 let idle = now - *since >= idle_ms && !person_held;
                 if dead || gone || idle || !wanted_now {
@@ -304,7 +320,15 @@ impl<H: WarmHost> Pool<H> {
                 }
             }
         }
-        // A key nobody wants any more is forgotten (one still starting finishes, and `finish` closes what it made).
+        // A key nobody wants any more is forgotten (one still starting finishes, and `finish` closes what it made). Its
+        // finished task chats go with it.
+        let mut orphaned = Vec::new();
+        for (key, slot) in inner.slots.iter_mut() {
+            if !effective.contains(key) && !matches!(slot.state, State::Starting { .. }) {
+                orphaned.extend(slot.retiring.drain(..).map(|(pane, _)| pane));
+            }
+        }
+        inner.to_retire.extend(orphaned);
         inner.slots.retain(|key, slot| matches!(slot.state, State::Starting { .. }) || effective.contains(key));
         let cap = inner.policy.cap.min(MAX_PRELOAD_TOTAL + crate::standby::helpers::MAX_HELPERS);
         let mut taken = Self::taken(inner);
@@ -316,7 +340,9 @@ impl<H: WarmHost> Pool<H> {
                 continue;
             }
             let Some(slot) = inner.slots.get_mut(key) else { continue };
-            if matches!(slot.state, State::Empty) && !slot.cold && slot.busy.is_none() && now >= slot.backoff_until {
+            // A seat whose session an agent's task took gets its next clean session now, so it is ready the moment the task ends.
+            let refill_ok = slot.busy.as_ref().is_none_or(|b| b.by == HelperUser::Agent && !b.awaiting_pane);
+            if matches!(slot.state, State::Empty) && !slot.cold && refill_ok && now >= slot.backoff_until {
                 generation += 1;
                 slot.state = State::Starting { generation };
                 taken += 1;
@@ -438,7 +464,15 @@ impl<H: WarmHost> Pool<H> {
         for item in close {
             self.host.close(item);
         }
+        for pane in self.take_retiring() {
+            self.host.retire(&pane);
+        }
         self.spawn(jobs);
+    }
+
+    /// The finished task chats of standbys that the last `plan` found due (the caller closes them, outside the lock).
+    pub(crate) fn take_retiring(&self) -> Vec<String> {
+        std::mem::take(&mut self.inner.lock().to_retire)
     }
 
     /// Takes the warm session for `key` and starts the refill in the background.
@@ -557,6 +591,8 @@ pub struct WarmChat {
 
 pub struct LiveHost {
     pub conversations: Conversations,
+    /// The pane list, to close a standby's finished task chat (`retire`). `None`: nothing is closed (tests, probes).
+    pub registry: Option<Arc<Mutex<crate::pty::PaneRegistry>>>,
 }
 
 /// The agent's config as a comparable value.
@@ -615,10 +651,23 @@ impl WarmHost for LiveHost {
         Some(chat.state().get("turnInFlight").and_then(|v| v.as_bool()).unwrap_or(false))
     }
 
+    fn turns(&self, pane_id: &str) -> Option<u64> {
+        Some(super::chat::get(pane_id)?.session().snapshot().turn)
+    }
+
     fn cancel_turn(&self, pane_id: &str) {
         if let Some(chat) = super::chat::get(pane_id) {
             let _ = chat.cancel();
         }
+    }
+
+    fn retire(&self, pane_id: &str) {
+        let Some(registry) = &self.registry else { return };
+        // Closed like a chat the person closes: the session stops and the conversation stays in the history.
+        let _ = crate::pty::registry_kill_pane_and_wait(registry, pane_id, Some("the standby finished this task and is ready again"));
+        // The screens drop the chat now, not at their next look.
+        crate::bridge::notify_panes_changed();
+        crate::standby::seat_log::line(&format!("chat {pane_id} closed: its standby is ready again with clean memory (the chat stays in the history)"));
     }
 }
 
@@ -663,20 +712,25 @@ pub fn claim_waiting(cfg: &AgentConfig, folder: &Path, account: Option<&str>, wa
     Some(warm)
 }
 
-/// A standby helper that fits this start, taken for it: the caller's own helpers come first, a helper can be asked for by
-/// name, and a helper the person is using or has open is taken over only when no free one fits (the result is then `fresh`:
-/// no session comes with it, the start opens a new one). Waits for one that is still starting. A session is checked like
-/// `claim`'s: a changed agent definition makes it a miss.
+/// A standby helper that fits this start, taken for it: the caller's own seats come first and a seat can be asked for by
+/// name. The task runs in the seat's own chat (`Claimed::pane` when the person has it open). Waits for one that is still
+/// starting. A session is checked like `claim`'s: a changed agent definition makes it a miss.
 pub fn claim_helper_for(cfg: &AgentConfig, claim: &HelperClaim, wait: Duration) -> Option<Claimed<WarmChat>> {
     let pool = pool()?;
     let mut claimed = pool.claim_helper_waiting_for(claim, wait)?;
     if let Some(item) = claimed.item.take_if(|item| item.config != config_fingerprint(cfg) || item.account.as_deref() != claim.account.map(str::trim).filter(|a| !a.is_empty())) {
         // Nobody starts a chat for it: it is given back at the next pass.
         pool.set_helper_task_pane(&claimed.meta.id, "");
+        crate::standby::seat_log::line(&format!("claim SKIPPED after the match: seat {} was started with an older agent definition; it is restarted", claimed.meta.id));
         pool.host.close(item);
         return None;
     }
     Some(claimed)
+}
+
+/// The caller's own seat that would take a task for `agent_type`, whatever lane wording the caller used (`Pool::seat_for`).
+pub fn seat_for(claim: &HelperClaim) -> Option<SeatLook> {
+    pool()?.seat_for(claim)
 }
 
 /// A message was sent in chat `pane_id`: when it is a standby the person opened, the helper is theirs ("With you") until the
@@ -721,7 +775,7 @@ pub fn init(registry: Arc<Mutex<crate::pty::PaneRegistry>>) {
     if GLOBAL.read().is_some() {
         return;
     }
-    let pool = Pool::new(Arc::new(LiveHost { conversations: super::conversations::global().clone() }));
+    let pool = Pool::new(Arc::new(LiveHost { conversations: super::conversations::global().clone(), registry: Some(registry.clone()) }));
     *GLOBAL.write() = Some(pool.clone());
     LOOP_STOP.store(false, Ordering::SeqCst);
     let started = crate::event_log::now_ms();

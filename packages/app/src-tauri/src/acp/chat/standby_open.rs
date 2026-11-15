@@ -1,6 +1,6 @@
-//! A standby the person opens like any chat. The chat is built around the helper's waiting session; the session stays in the
-//! pool's slot (`warm::Pool::open_helper`), so the helper is still "ready" and a task from an agent can still take it, but then
-//! with a fresh session (see `warm/helpers.rs`): the person's chat keeps this one.
+//! A standby the person opens like any chat. The chat is built around the seat's waiting session; the session stays in the
+//! pool's slot (`warm::Pool::open_helper`), so the seat is still "ready". A task from an agent that takes the seat runs in
+//! this same chat (see `warm/helpers.rs`): the seat has one chat, and nothing else is started.
 
 use std::sync::Arc;
 
@@ -16,7 +16,10 @@ pub fn open_standby_chat(deps: &StartDeps, helper_id: &str) -> Result<String, St
     let pane = pool.open_helper(helper_id, |warm, meta, agent| {
         let cfg = conversations.config_for(agent).map_err(|e| format!("The agent could not start: {e}"))?;
         let view = conversations.adopt_warm(&warm.id, agent, &warm.folder, warm.account.as_deref(), warm.session.clone()).map_err(|e| format!("The agent could not start: {e}"))?;
+        // The chat is the seat's own from before it is listed: it is drawn as the seat's row, never as a new agent.
+        crate::standby::seat_panes::note(&view.id, &meta.id);
         let chat = build_registered_chat(deps, &view.id, &cfg.label, &warm.session, &warm.folder, None, true);
+        chat.set_seat(Some(&meta.id));
         ensure_sweeper();
         let grant = warm.account.as_deref().and_then(|id| id.strip_prefix(crate::capacity_proxy::ACCOUNT_PREFIX));
         show_pane(deps, &chat, &warm.session, agent.to_string(), &warm.folder, grant);

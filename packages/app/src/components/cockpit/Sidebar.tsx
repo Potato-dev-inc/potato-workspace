@@ -204,6 +204,11 @@ export function Sidebar({
   const [openingFrom, setOpeningFrom] = useState<ReadonlySet<string> | null>(null);
   const opening = new Set(openingFrom ? list.filter((p) => !openingFrom.has(p.info.id)).map((p) => p.info.id) : []);
   const placement = placeHelpers(showHelperTree ? standbyView.helpers : [], list, opening);
+  // A chat that is a seat's own came or went (a task started or ended): read the helpers again now, not at the next poll.
+  const seatChats = list.filter((p) => p.info.standby_seat).map((p) => p.info.id).join(' ');
+  useEffect(() => {
+    void standbyApi.get().then(applyStandby).catch(() => {});
+  }, [seatChats]); // eslint-disable-line react-hooks/exhaustive-deps
   // A chat that is a standby's own never counts as an agent row.
   const panes = list.filter((p) => !isCompanionPaneId(p.info.id) && !placement.hiddenPanes.has(p.info.id));
   // The same list the Inbox badge and the Doto counter use, so the three numbers always agree.

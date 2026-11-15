@@ -250,7 +250,8 @@ pub struct HelperEntry {
     pub home: Option<String>,
     /// Who has it while `busy`: `agent` (an agent's task) or `person` (the person is using it).
     pub used_by: Option<HelperUser>,
-    /// An agent took it over while the person was using it.
+    /// Always false: an agent never takes a standby away from the person any more (a seat with a turn running in it is
+    /// never taken). Kept so older screens read the same shape.
     pub taken_over: bool,
     /// `ready`, `busy`, `starting`, `asleep` or `problem`.
     pub state: HelperState,
@@ -260,8 +261,10 @@ pub struct HelperEntry {
     pub pane_id: Option<String>,
     /// The chat the person has open on it, while `ready` or `busy` by `person` (opening it does not take it from the pool).
     pub open_pane: Option<String>,
-    /// While `taken_over`: the person's chat, whose turn was stopped. It stays as a plain chat.
+    /// Always `None` (see `taken_over`).
     pub person_pane: Option<String>,
+    /// Chats of tasks this seat finished that are still open for a moment. They are the seat's, never agents of their own.
+    pub past_panes: Vec<String>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
@@ -293,12 +296,13 @@ pub fn build_view(store: &HelperStore, statuses: &BTreeMap<String, HelperStatus>
                 after_task: h.after_task,
                 home: h.home.clone(),
                 used_by: status.used_by,
-                taken_over: status.taken_over,
+                taken_over: false,
                 state: status.state,
                 note: status.note,
                 pane_id: status.pane_id,
                 open_pane: status.open_pane,
-                person_pane: status.person_pane,
+                person_pane: None,
+                past_panes: status.past_panes,
             }
         })
         .collect();

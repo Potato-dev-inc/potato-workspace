@@ -248,6 +248,17 @@ pub fn view(chat: &AcpChat) -> Value {
     if let Some(note) = chat.lane_note() {
         lanes::merge_note(&mut shown, &note);
     }
+    // A standby seat did (or does) this task: the answer says which one, and that nothing else was started.
+    if let (Some(seat), Some(map)) = (chat.seat(), shown.as_object_mut()) {
+        let name = crate::standby::helpers::file().snapshot().helpers.into_iter().find(|h| h.id == seat).map(|h| h.name);
+        map.insert("standby".into(), json!({
+            "used": true,
+            "id": seat,
+            "name": name,
+            "note": "Your standby took this task in its own place. No new helper was started. When the task is over the standby is ready again with clean memory, so use run_agent (not followup_task) for the next task.",
+        }));
+        map.insert("pane_policy".into(), json!("a_standby_seat_closes_this_chat_shortly_after_the_task"));
+    }
     // The receipt says what the app answered for the caller, so it can be checked afterwards.
     let approved = shown.get("auto_approved").cloned().unwrap_or(Value::Null);
     if let Some(receipt) = shown.get_mut("receipt").and_then(Value::as_object_mut) {
@@ -682,6 +693,9 @@ fn run(body: &[u8], query: &str, deps: &StartDeps, session: Option<&str>, lookup
         }
         return (Some(Ok(view(&chat))), None);
     }
+    // The caller's own standby seat of this agent type takes the task, whatever lane wording the caller used ("opencode",
+    // "opencode_native", lane "terminal"): the seat is a chat, so the run is a chat on the seat's agent.
+    let (value, seat_note) = seat_first(value, session, &deps.registry.lock().project_path.clone(), query);
     // One resolver picks the way (`decide`): what the request needs decides, `lane` is a hint, and a refusal carries the call
     // that works.
     let account = text_of(&value, "account");
@@ -695,6 +709,7 @@ fn run(body: &[u8], query: &str, deps: &StartDeps, session: Option<&str>, lookup
         super::decide::Route::Terminal { reason, adjusted } => return (None, Some(lanes::LaneNote::terminal(&reason).with_adjusted(adjusted))),
         super::decide::Route::Chat { explicit, reason, adjusted } => (explicit, reason, adjusted),
     };
+    let adjusted: Vec<Value> = adjusted.into_iter().chain(seat_note).collect();
     let Some(agent) = agent else {
         return (Some(Err(err("INVALID_ARGUMENT", "agent_type is required with lane: \"acp\"", false))), None);
     };
@@ -816,7 +831,22 @@ fn run(body: &[u8], query: &str, deps: &StartDeps, session: Option<&str>, lookup
     if let Err(error) = chat.send(&task) {
         return (Some(Err(send_failure(error))), None);
     }
+    // Start and wake: a caller that is a chat in this app is not kept inside this call. It gets the handle now and a new
+    // message with the result when the helper finishes, so it can answer the person meanwhile (`wake.rs`).
+    let caller_chat = caller_pane_of(session).and_then(|pane| get(&pane)).filter(|caller| !caller.is_closed() && caller.pane_id() != chat.pane_id());
+    if let Some(caller) = caller_chat.filter(|_| super::wake::wanted(&value, true)) {
+        super::wake::arrange(caller, chat.clone());
+        let mut shown = view(&chat);
+        if let Some(map) = shown.as_object_mut() {
+            map.insert("wake".into(), super::wake::note());
+            map.insert("next".into(), json!(super::wake::NEXT));
+        }
+        return (Some(Ok(shown)), None);
+    }
     let background = value.get("background").and_then(Value::as_bool).unwrap_or(false);
+    if session.is_some() {
+        crate::standby::seat_log::line(&format!("wake not armed for helper {}: {}", chat.pane_id(), if value.get("background").is_some_and(|b| !b.is_null()) { "the caller said background itself" } else { "the caller is not a chat in this app, so it waits in the call" }));
+    }
     if !background {
         let wait_ms = match wait_ms_of(&value, DEFAULT_WAIT_MS) {
             Ok(ms) => ms,
@@ -825,6 +855,44 @@ fn run(body: &[u8], query: &str, deps: &StartDeps, session: Option<&str>, lookup
         wait_status(&chat, &default_until(), wait_ms);
     }
     (Some(Ok(view(&chat))), None)
+}
+
+/// The caller's own standby seat goes first. When the caller (a pane in this app) has a seat of the asked agent *type* that
+/// is ready or starting, the request is turned into a chat run on the seat's agent: `agent_type` becomes the seat's, and a
+/// `lane` that would have missed the seat ("terminal") is dropped. A request that needs what only a terminal run can do
+/// keeps its lane, and the seat log says why the seat was passed over. Returns the request to run and what was changed.
+fn seat_first(value: Value, session: Option<&str>, default_project: &str, query: &str) -> (Value, Option<Value>) {
+    let (Some(agent), Some(caller)) = (text_of(&value, "agent_type"), caller_pane_of(session)) else { return (value, None) };
+    let folder = text_of(&value, "project_path").or_else(|| query.trim_start_matches('?').split('&').find_map(|p| p.strip_prefix("project_path=").map(str::to_string))).unwrap_or_else(|| default_project.to_string());
+    let model = if value.get("model_from_helper_default").and_then(Value::as_bool) == Some(true) { None } else { text_of(&value, "model") };
+    let account = text_of(&value, "account");
+    let name = text_of(&value, "helper");
+    let claim = crate::acp::warm::HelperClaim { agent: &agent, folder: std::path::Path::new(&folder), account: account.as_deref(), model: model.as_deref(), caller: Some(&caller), name: name.as_deref() };
+    let Some(seat) = crate::acp::warm::seat_for(&claim) else { return (value, None) };
+    let needs_terminal = chat_cannot_do(&value);
+    let headless = value.get("headless").and_then(Value::as_bool) == Some(true);
+    if !needs_terminal.is_empty() || headless {
+        let what = if headless { "headless".to_string() } else { needs_terminal.join(", ") };
+        crate::standby::seat_log::line(&format!("claim SKIPPED: agent {agent} caller {caller} -> seat \"{}\" ({}) fits, but the task asks for {what}, which only a terminal run can do", seat.name, seat.id));
+        return (value, None);
+    }
+    let asked_lane = text_of(&value, "lane");
+    let same_agent = seat.agent.eq_ignore_ascii_case(&agent);
+    if same_agent && asked_lane.as_deref() == Some("acp") {
+        return (value, None);
+    }
+    // The seat is a chat: the run is a chat whatever the agent's saved "How to run" says.
+    let mut next = value;
+    let Some(map) = next.as_object_mut() else { return (next, None) };
+    map.insert("agent_type".into(), json!(seat.agent));
+    map.insert("lane".into(), json!("acp"));
+    if same_agent && asked_lane.as_deref() != Some("terminal") {
+        return (next, None);
+    }
+    let asked = if same_agent { format!("lane {}", asked_lane.as_deref().unwrap_or("auto")) } else { agent.clone() };
+    let why = format!("Your standby \"{}\" is the same agent type and was ready, so it took the task. No new helper was started.", seat.name);
+    crate::standby::seat_log::line(&format!("seat first: agent {agent} lane {} caller {caller} -> runs on seat \"{}\" ({}) as {} chat", asked_lane.as_deref().unwrap_or("(none named)"), seat.name, seat.id, seat.agent));
+    (next, Some(super::decide::adjusted("agent_type", &asked, &seat.agent, &why)))
 }
 
 /// The pane of the agent asking, known before its helper starts (the registry's parent link is only written after the start).
@@ -945,6 +1013,12 @@ fn wait(body: &[u8]) -> Option<Reply> {
         std::thread::sleep(POLL);
     }
     let agents: Vec<Value> = chats.iter().map(|c| view(c)).collect();
+    // A result read here is not sent again as a wake (`wake.rs`).
+    for (chat, shown) in chats.iter().zip(&agents) {
+        if shown.get("status").and_then(Value::as_str).is_some_and(is_final) {
+            super::wake::note_collected(chat.pane_id());
+        }
+    }
     Some(Ok(json!({
         "agents": agents,
         "reason": reason,

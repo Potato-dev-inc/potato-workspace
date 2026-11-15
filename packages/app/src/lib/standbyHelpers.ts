@@ -36,6 +36,9 @@ export interface StandbyHelperEntry {
   open_pane: string | null;
   /** While `taken_over`: the person's chat whose turn was stopped. The banner and the draft live there. */
   person_pane: string | null;
+  /** Chats of tasks this seat finished that are still open for a moment (they close by themselves). They are the seat's own,
+   * never agents. */
+  past_panes?: string[];
 }
 
 export interface StandbyHelpersView {

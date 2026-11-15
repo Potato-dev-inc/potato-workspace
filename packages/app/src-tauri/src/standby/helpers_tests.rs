@@ -189,21 +189,23 @@ fn the_policy_hands_the_home_to_the_pool_and_the_view_says_who_has_a_busy_helper
 }
 
 #[test]
-fn an_entry_carries_the_chat_the_person_has_open_and_the_chat_an_agent_took_it_from() {
+fn an_entry_carries_the_seats_own_chats_and_never_a_takeover() {
     let mut store = HelperStore::default();
     store.add(input("Reviewer", "codex"), "sb-1".into()).unwrap();
     store.add(input("Tester", "codex"), "sb-2".into()).unwrap();
     let statuses = BTreeMap::from([
-        ("sb-1".to_string(), HelperStatus { state: HelperState::Ready, open_pane: Some("chat-1".into()), ..Default::default() }),
-        ("sb-2".to_string(), HelperStatus { state: HelperState::Busy, pane_id: Some("chat-2".into()), used_by: Some(HelperUser::Agent), taken_over: true, person_pane: Some("chat-1".into()), ..Default::default() }),
+        ("sb-1".to_string(), HelperStatus { state: HelperState::Ready, open_pane: Some("chat-1".into()), past_panes: vec!["chat-0".into()], ..Default::default() }),
+        ("sb-2".to_string(), HelperStatus { state: HelperState::Busy, pane_id: Some("chat-2".into()), used_by: Some(HelperUser::Agent), ..Default::default() }),
     ]);
     let view = build_view(&store, &statuses, |_| true, |_| true);
-    assert_eq!((view.helpers[0].open_pane.as_deref(), view.helpers[0].person_pane.as_deref()), (Some("chat-1"), None));
-    assert_eq!((view.helpers[1].person_pane.as_deref(), view.helpers[1].pane_id.as_deref(), view.helpers[1].taken_over), (Some("chat-1"), Some("chat-2"), true));
+    assert_eq!((view.helpers[0].open_pane.as_deref(), view.helpers[0].past_panes.clone()), (Some("chat-1"), vec!["chat-0".to_string()]));
+    assert_eq!((view.helpers[1].pane_id.as_deref(), view.helpers[1].used_by), (Some("chat-2"), Some(HelperUser::Agent)));
+    // An agent never takes a standby away from the person: the old fields stay in the shape and are always empty.
     let json = serde_json::to_value(&view.helpers[1]).unwrap();
-    assert_eq!(json["person_pane"], "chat-1");
+    assert_eq!((json["taken_over"].clone(), json["person_pane"].clone()), (serde_json::Value::Bool(false), serde_json::Value::Null));
+    assert_eq!(json["past_panes"], serde_json::json!([]));
     assert_eq!(json["open_pane"], serde_json::Value::Null);
     // A helper with no slot yet: nothing is open.
     let none = build_view(&store, &BTreeMap::new(), |_| true, |_| true);
-    assert_eq!((none.helpers[0].open_pane.clone(), none.helpers[0].person_pane.clone()), (None, None));
+    assert_eq!((none.helpers[0].open_pane.clone(), none.helpers[0].past_panes.len()), (None, 0));
 }

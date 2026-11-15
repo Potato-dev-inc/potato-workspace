@@ -545,6 +545,7 @@ mod tests {
 origin: None,
             place: None,
             lane: None,
+            standby_seat: None,
         }
     }
 

@@ -202,6 +202,7 @@ fn disposable_powershell_registry() -> Arc<Mutex<PaneRegistry>> {
 origin: None,
                 place: None,
                 lane: None,
+                standby_seat: None,
             },
             scrollback: scrollback.clone(),
             screen: screen.clone(),

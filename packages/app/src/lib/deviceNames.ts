@@ -8,6 +8,11 @@ import type { ChatTurn } from './sessionChatModel';
 /** The id the PC gives itself. */
 export const LOCAL_DEVICE = 'local';
 
+/** Senders that are the app itself, not a device of the person (Rust `acp::chat::wake::APP_SENDER`): a helper's result that
+ * the app hands to the agent that asked for it. */
+export const APP_SENDER_PREFIX = 'app:';
+export const isAppSender = (from: string | undefined | null): boolean => !!from && from.startsWith(APP_SENDER_PREFIX);
+
 export type DeviceNameMap = Record<string, { name: string; kind: string }>;
 export type DeviceNamesLoader = () => Promise<DeviceNameMap>;
 
@@ -26,11 +31,13 @@ export function deviceName(id: string | undefined | null, names: DeviceNameMap):
 export function sentFromLines(turns: readonly ChatTurn[], names: DeviceNameMap): Map<string, string> {
   const out = new Map<string, string>();
   const senders = new Set<string>();
-  for (const turn of turns) if (turn.user) senders.add(turn.user.from || LOCAL_DEVICE);
+  // A message the app wrote always says so, and is never counted as a device of the person.
+  for (const turn of turns) if (turn.user && isAppSender(turn.user.from)) out.set(turn.id, t('sentFrom.app'));
+  for (const turn of turns) if (turn.user && !isAppSender(turn.user.from)) senders.add(turn.user.from || LOCAL_DEVICE);
   const mixed = senders.size > 1 || (senders.size === 1 && !senders.has(LOCAL_DEVICE));
   if (!mixed) return out;
   for (const turn of turns) {
-    if (!turn.user) continue;
+    if (!turn.user || isAppSender(turn.user.from)) continue;
     const name = deviceName(turn.user.from, names);
     if (name) out.set(turn.id, t('sentFrom.from', { name }));
   }

@@ -38,6 +38,14 @@ describe('cockpit model', () => {
     expect(names.get('b')).toBe('CLAUDE 2');
     expect(names.get('c')).toBe('CODEX');
   });
+  it('a standby seat own chat takes no number and gives none: the orchestrator stays "Claude" while its Claude standby works', () => {
+    const seatChat = { ...pane('task', 'claude', 'running'), info: { ...pane('task', 'claude', 'running').info, standby_seat: 'sb-1' } };
+    const names = paneNames([pane('orch', 'claude', 'idle'), seatChat, pane('c', 'codex', 'idle')], (id) => id.toUpperCase());
+    expect(names.get('orch')).toBe('CLAUDE');
+    expect(names.get('task')).toBe('CLAUDE');
+    const two = paneNames([pane('a', 'opencode', 'idle'), pane('b', 'opencode', 'idle'), { ...seatChat, info: { ...seatChat.info, agent_type: 'opencode' } }], (id) => id);
+    expect([two.get('a'), two.get('b'), two.get('task')]).toEqual(['opencode 1', 'opencode 2', 'opencode']);
+  });
   it('maps unknown status to exited', () => {
     expect(spinnerStatus('running')).toBe('running');
     expect(spinnerStatus('weird')).toBe('exited');

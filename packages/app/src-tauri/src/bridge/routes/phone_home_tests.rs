@@ -61,7 +61,7 @@ fn helpers_show_the_folder_name_never_the_path() {
             note: None,
             pane_id: None,
             open_pane: None,
-            person_pane: None,
+            person_pane: None, past_panes: Vec::new(),
         }],
         max: 4,
         idle_minutes: 30,
