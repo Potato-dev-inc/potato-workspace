@@ -3,9 +3,11 @@ import { t, useT } from '../../i18n';
 import { teamApi, type MemberView, type TeamApi } from '../../lib/team';
 import { devicesApi, type Device, type DevicesApi } from '../../lib/devices';
 import { useDevices } from '../devices/useDevices';
-import { agentLabel, cleanName, comingSoonAgents, comingSoonText, DEFAULT_SECS, durationProblem, durationWords, errText, lendApi, MAX_REASON, offerable, supportTag, type LendApi, type LendRequest, type LendState, type Offer, type OffersResult } from '../../lib/lend';
+import { agentLabel, cleanName, comingSoonAgents, comingSoonText, DEFAULT_SECS, durationProblem, durationWords, errText, lendApi, MAX_REASON, offerable, refusedSwitch, supportTag, type LendApi, type LendRequest, type LendState, type Offer, type OffersResult, type RefusedSwitch } from '../../lib/lend';
 import { requestNewAgent } from '../../lib/newAgentRequest';
+import { openDeviceAt } from '../../lib/openDevice';
 import { openSettingsAt } from '../../lib/openSettingsAt';
+import { DisabledReason } from '../common/DisabledReason';
 import { DurationField } from './Duration';
 import { LendSheet } from './LendSheet';
 import { useLend, type LendHandle } from './useLend';
@@ -85,8 +87,9 @@ export function RequestUsage({
   const own = useLend(api);
   const handle = lend ?? own;
   const [open, setOpen] = useState(false);
-  if (!handle.enabled || !handle.state) return null;
-  const asks = recentAsks(handle.state, handle.now);
+  // With lending off this stays on screen: the one line below says which switch is off, and opens it here.
+  if (!handle.known) return null;
+  const asks = handle.state ? recentAsks(handle.state, handle.now) : [];
   return (
     <div className="lend-entry" data-lend-entry={variant}>
       <button type="button" className="lend-btn" onClick={() => setOpen(true)}>
@@ -111,6 +114,50 @@ export function RequestUsage({
 
 function RequestSheet({ api, team, devices, lend, onClose }: { api: LendApi; team: TeamApi; devices?: DevicesApi; lend: LendHandle; onClose: () => void }) {
   const t = useT();
+  if (!lend.enabled || !lend.state) {
+    return (
+      <LendSheet title={t('lend.request.title')} labelledBy="lend-ask-t" onClose={onClose}>
+        <SwitchOffLine
+          kind="thisGlobal"
+          onOpen={() => {
+            onClose();
+            openSettingsAt('general', 'lend-labs');
+          }}
+        />
+      </LendSheet>
+    );
+  }
+  return <RequestForm api={api} team={team} devices={devices} lend={lend} onClose={onClose} />;
+}
+
+/**
+ * One plain line: exactly which switch is off and on which PC. When the switch is on THIS PC it has the button
+ * that opens it here; the other PC only ever gets a sentence (nothing is switched on there from here).
+ */
+function SwitchOffLine({ kind, name, onOpen }: { kind: 'thisGlobal' | 'thisDevice' | RefusedSwitch; name?: string; onOpen?: () => void }) {
+  const t = useT();
+  const line =
+    kind === 'thisGlobal'
+      ? t('lend.switch.thisGlobal')
+      : kind === 'thisDevice'
+        ? t('lend.switch.thisDevice', { name: name ?? '' })
+        : kind === 'otherGlobal'
+          ? t('lend.switch.otherGlobal', { name: name ?? '' })
+          : t('lend.switch.otherDevice', { name: name ?? '' });
+  return (
+    <div className="lend-turn-on" data-testid="lend-switch-off" data-switch={kind} data-where={onOpen ? 'this' : 'other'}>
+      <p className="lend-note">{line}</p>
+      {onOpen && (
+        <button type="button" className="lend-btn is-small" onClick={onOpen}>
+          {t('lend.switch.open')}
+        </button>
+      )}
+    </div>
+  );
+}
+
+function RequestForm({ api, team, devices, lend, onClose }: { api: LendApi; team: TeamApi; devices?: DevicesApi; lend: LendHandle; onClose: () => void }) {
+  const t = useT();
   const deviceList = useDevices(devices ?? devicesApi);
   const [members, setMembers] = useState<MemberView[] | null>(null);
   const [loadError, setLoadError] = useState(false);
@@ -120,6 +167,8 @@ function RequestSheet({ api, team, devices, lend, onClose }: { api: LendApi; tea
   const [reason, setReason] = useState('');
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  // A refused ask: the other PC said which of its switches is off. Kept apart from other errors (it is not an error of this form).
+  const [refused, setRefused] = useState<{ kind: RefusedSwitch; name: string } | null>(null);
   const [sent, setSent] = useState<{ id: string; offer: Offer | null } | null>(null);
   // What the picked person's PC offers: null while asking, then what came back.
   const [offered, setOffered] = useState<OffersResult | null>(null);
@@ -149,6 +198,8 @@ function RequestSheet({ api, team, devices, lend, onClose }: { api: LendApi; tea
   useEffect(() => {
     if (!picked) return;
     setOfferKey('');
+    // A new place to ask: whatever the last ask was told about a switch there no longer applies.
+    setRefused(null);
     // One of my own PCs on the device link: there is no offers list to ask for. I pick the agent and that PC chooses the account.
     if (picked.node) {
       setOffered({ answered: false, offers: [] });
@@ -182,11 +233,14 @@ function RequestSheet({ api, team, devices, lend, onClose }: { api: LendApi; tea
   const problem = durationProblem(secs, forOther) ?? (offer && secs > offer.max_secs ? t('lend.dur.mostHere', { time: durationWords(offer.max_secs) }) : null);
   const canAsk = !!picked && !problem && !busy && (offer !== null || (fallback && !!agentId));
   const askedName = picked?.label ?? '';
+  // Why Ask is off, said on screen (not only on hover).
+  const askReason = canAsk || busy ? null : !picked ? t('lend.request.pickFirst') : problem ?? (offered === null ? t('lend.request.asking', { name: askedName }) : null);
 
   const ask = async () => {
     if (!picked) return;
     setBusy(true);
     setError(null);
+    setRefused(null);
     try {
       const r = picked.node
         ? await api.requestOwn!(picked.node, agentId, secs, reason.trim())
@@ -196,7 +250,10 @@ function RequestSheet({ api, team, devices, lend, onClose }: { api: LendApi; tea
       setSent({ id: r.id, offer });
       lend.refresh();
     } catch (err) {
-      setError(errText(err));
+      // The other PC is the only side that can say one of its switches is off; say it in our words, with no button.
+      const kind = picked.node ? refusedSwitch(err) : null;
+      if (kind) setRefused({ kind, name: picked.label });
+      else setError(errText(err));
     } finally {
       setBusy(false);
     }
@@ -270,19 +327,15 @@ function RequestSheet({ api, team, devices, lend, onClose }: { api: LendApi; tea
         </label>
       )}
       {waiting.map((d) => (
-        <div key={d.node} className="lend-turn-on" data-testid="lend-turn-on">
-          <p className="lend-note">{t('lend.request.turnOn', { name: d.name })}</p>
-          <button
-            type="button"
-            className="lend-btn"
-            onClick={() => {
-              onClose();
-              openSettingsAt('devices');
-            }}
-          >
-            {t('lend.request.openDevices')}
-          </button>
-        </div>
+        <SwitchOffLine
+          key={d.node}
+          kind="thisDevice"
+          name={d.name}
+          onOpen={() => {
+            onClose();
+            openDeviceAt(d.node);
+          }}
+        />
       ))}
       {picked && (
         <fieldset className="lend-cards" aria-label={t('lend.request.what')} data-testid="lend-offers">
@@ -356,11 +409,13 @@ function RequestSheet({ api, team, devices, lend, onClose }: { api: LendApi; tea
         </span>
       </label>
       {forOther && picked && <p className="lend-note">{t('lend.request.decides', { name: picked.label })}</p>}
+      {refused && <SwitchOffLine kind={refused.kind} name={refused.name} />}
       {error && (
         <p className="lend-error" role="alert">
           {error}
         </p>
       )}
+      <DisabledReason reason={askReason} />
       <div className="lend-actions">
         <button type="button" className="lend-btn is-plain" onClick={onClose} disabled={busy}>
           {t('lend.cancel')}

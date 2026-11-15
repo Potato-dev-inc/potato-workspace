@@ -9,7 +9,7 @@ export const settingsAgents: Partial<Record<EnglishKey, string>> = {
   'agentsRows.bringHelp': '選一個 AI 助理，查看它最新的對話，再匯入你要的。所有內容都不會離開這台電腦。',
   'agentsRows.bringBtn': '匯入對話',
   'agentsRows.helperToolsLabel': 'AI 助理裡的 Potato Workspace 幫手',
-  'agentsRows.helperToolsHelp': '你在這裡開啟的窗格會取得幫手工具。你的 AI 助理設定檔不會被更動。',
+  'agentsRows.helperToolsHelp': '你在這裡開啟的視窗會取得幫手工具。你的 AI 助理設定檔不會被更動。',
   'keepGoing.loginRemoved': '登入已移除',
   'keepGoing.saveFailed': '無法儲存，請再試一次。',
   'keepGoing.help': '當任務所用的 AI 助理達到使用量上限時，Potato Workspace 會依這個順序提供這些 AI 助理，每次由你挑選。',

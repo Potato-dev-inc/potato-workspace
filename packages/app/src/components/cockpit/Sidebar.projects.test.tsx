@@ -309,9 +309,9 @@ describe('sidebar: footer', () => {
     const item = (label: string) => [...document.querySelectorAll<HTMLElement>('[role^="menuitem"]')].find((b) => b.textContent === label)!;
     const seg = (label: string) => [...document.querySelectorAll<HTMLElement>('[role="menu"] [role="radiogroup"] [role="radio"]')].find((b) => b.textContent === label)!;
     expect(document.querySelector('[role="menu"] [role="radiogroup"]')?.getAttribute('title')).toBe('Each agent gets its own window; the main window hides.');
-    expect(seg('Orchestration').getAttribute('aria-checked')).toBe('true');
-    expect(seg('Individual').getAttribute('aria-checked')).toBe('false');
-    await click(seg('Individual'));
+    expect(seg('One window').getAttribute('aria-checked')).toBe('true');
+    expect(seg('A window per agent').getAttribute('aria-checked')).toBe('false');
+    await click(seg('A window per agent'));
     expect(c.setMode).toHaveBeenCalledWith('individual');
     expect(document.querySelector('[role="menu"]')).toBeNull();
     await click(byLabel('More'));
@@ -320,9 +320,9 @@ describe('sidebar: footer', () => {
     await click(byLabel('More'));
     await click(item('Your plans'));
     expect(onOpenPlans).toHaveBeenCalledTimes(1);
-    // Theme, Project and Set up agents moved into the menu too.
+    // Project and Set up agents are in the menu too (Theme is not: Settings > Look and feel owns it).
     await click(byLabel('More'));
-    expect(['Light, dimmed', 'Project', 'Set up agents'].every((l) => item(l))).toBe(true);
+    expect(['Project', 'Set up agents'].every((l) => item(l))).toBe(true);
   });
 
   it('closes More with Escape', async () => {

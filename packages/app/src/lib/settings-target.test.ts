@@ -35,7 +35,7 @@ describe('deep links to every row', () => {
     expect(resolveSettingsTarget('labs')).toEqual({ page: 'advanced', row: 'labs-index' });
     expect(resolveSettingsTarget('live-updates')).toEqual({ page: 'advanced', row: 'live-updates' });
     expect(resolveSettingsTarget('opencode-automation')).toEqual({ page: 'advanced', row: 'opencode-automation' });
-    expect(resolveSettingsTarget('simple-mode')).toEqual({ page: 'advanced', row: 'simple-mode' });
+    expect(resolveSettingsTarget('simple-mode')).toEqual({ page: 'advanced', row: 'labs-index' });
     expect(resolveSettingsTarget('security-ask-before-control')).toEqual({ page: 'agents', row: 'security-ask-before-control' });
   });
 

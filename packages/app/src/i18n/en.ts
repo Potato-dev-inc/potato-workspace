@@ -2,6 +2,7 @@
 // Plural messages are written as `<key>_one` and `<key>_other` and called as t('<key>', { count }).
 import { common } from './en/common';
 import { timeline } from './en/timeline';
+import { connect } from './en/connect';
 import { sidebar } from './en/sidebar';
 import { whatsnew } from './en/whatsnew';
 import { inbox } from './en/inbox';
@@ -41,6 +42,7 @@ import { settingsTeam } from './en/settingsTeam';
 import { settingsConnect } from './en/settingsConnect';
 import { settingsPhone } from './en/settingsPhone';
 import { workerUpdate } from './en/workerUpdate';
+import { setupStep } from './en/setupStep';
 import { notify } from './en/notify';
 import { board } from './en/board';
 import { routines } from './en/routines';
@@ -112,6 +114,7 @@ export const en = {
   ...settingsConnect,
   ...settingsPhone,
   ...workerUpdate,
+  ...setupStep,
   ...notify,
   ...board,
   ...routines,
@@ -142,6 +145,7 @@ export const en = {
   ...agentRules,
   ...rail,
   ...timeline,
+  ...connect,
 } as const;
 
 export type MessageKey = Exclude<keyof typeof en, `${string}_one` | `${string}_other`> | PluralKey;

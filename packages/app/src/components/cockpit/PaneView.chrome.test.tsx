@@ -120,7 +120,7 @@ describe('pane header: no actions button', () => {
   it('has no "..." button: the pane menu is the right-click menu of its sidebar row', async () => {
     await act(async () => root.render(<PaneView c={cockpit('C:\work\shop', false)} paneId="p1" />));
     await flush();
-    expect(host.querySelector('[aria-label="Pane actions"]')).toBeNull();
+    expect(host.querySelector('[aria-label="Agent actions"]')).toBeNull();
   });
 });
 

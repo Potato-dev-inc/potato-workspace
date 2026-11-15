@@ -6,7 +6,8 @@ import { act } from 'react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { ModelBridgeApi, ModelBridgeList, ModelBridgeService } from '../../../lib/model-bridge';
 import { searchSections, visibleSections } from '../model';
-import { SECTIONS } from '../catalog';
+import { BASE_SECTIONS, SECTIONS } from '../catalog';
+import { LABS_INDEX_ID, collectLabs } from '../arrange';
 import { blur, buttonByText, byLabel, click, hasText, mountRows, pickOption, settle, type as typeInto } from '../test-utils';
 import { ModelBridge, modelBridgeRows } from './ModelBridgeSection';
 
@@ -245,8 +246,9 @@ describe('Model Bridge is reachable in the real Settings', () => {
   it('is found by search, and the Labs switch is in Advanced > Early features (Labs)', () => {
     const hits = searchSections(visibleSections(SECTIONS, { model_bridge_enabled: true }), 'model bridge');
     expect(JSON.stringify(hits)).toContain('model-bridge');
-    const labs = SECTIONS.find((s) => s.id === 'advanced')!.rows.filter((r) => r.labs?.name === 'Another model in Codex');
-    expect(labs.length).toBe(1);
+    // The Labs switch is drawn by the Labs page (one row under Advanced), which search returns for the feature.
+    expect(collectLabs(BASE_SECTIONS).filter((r) => r.labs?.name === 'Another model in Codex')).toHaveLength(1);
+    expect(JSON.stringify(searchSections(SECTIONS, 'model bridge'))).toContain(LABS_INDEX_ID);
   });
 
   it('the real row renders the section, in monochrome rows', async () => {
@@ -259,9 +261,9 @@ describe('Model Bridge is reachable in the real Settings', () => {
   });
 
   it('the Labs toggle patches model_bridge_enabled', async () => {
-    const row = SECTIONS.find((s) => s.id === 'advanced')!.rows.find((r) => r.labs?.name === 'Another model in Codex')!;
-    const m = await mountRows([row]);
-    const toggle = m.host.querySelector('[role="switch"], input[type="checkbox"]') as HTMLElement;
+    const page = SECTIONS.find((s) => s.id === 'advanced')!.rows.find((r) => r.id === LABS_INDEX_ID)!;
+    const m = await mountRows([page]);
+    const toggle = m.host.querySelector('[role="switch"][aria-label="Another model in Codex"]') as HTMLElement;
     await click(toggle);
     expect(m.env.patches).toContainEqual({ model_bridge_enabled: true });
     await m.unmount();

@@ -1,5 +1,5 @@
 // @vitest-environment jsdom
-// Request usage through the real Team page (Usage tab) inside the cockpit's own layers. The founder's bug: the sheet showed but
+// Ask to borrow through the real Team page (Usage tab) inside the cockpit's own layers. The founder's bug: the sheet showed but
 // nothing on it took a click, because it was drawn inside the see-through join-popup layer (`.settings.jl-host`, pointer-events
 // none). jsdom has no layout, so the proof here is where the sheet is drawn, which layer is above it, and that every control
 // does its job when used; the real hit-test (elementFromPoint) runs in the headless browser proof (see the evidence folder).
@@ -60,12 +60,12 @@ async function openSheet() {
   await settle(6);
   await click(host.querySelector('[data-testid="tab-usage"]'));
   await settle(4);
-  await click([...host.querySelectorAll('button')].find((b) => b.textContent === 'Request usage'));
+  await click([...host.querySelectorAll('button')].find((b) => b.textContent === 'Ask to borrow'));
   await settle(6);
   return lend;
 }
 
-describe('Team page > Usage > Request usage takes clicks', () => {
+describe('Team page > Usage > Ask to borrow takes clicks', () => {
   it('draws the sheet in the cockpit, never inside the join popup layer, and the scrim takes the mouse itself', async () => {
     await openSheet();
     const sheet = document.querySelector<HTMLElement>('.lend-sheet')!;

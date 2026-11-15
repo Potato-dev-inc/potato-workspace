@@ -12,6 +12,7 @@ import { useEffect, useState } from 'react';
 import { t } from '../i18n';
 import { loadSettings } from './settings';
 import type { SshHost } from './ssh';
+import type { RoomRow } from './room';
 
 export type RoutePref = 'auto' | 'public' | 'own';
 export type DeviceLevel = 'watch' | 'full';
@@ -49,6 +50,10 @@ export interface Device {
   signed_out: string[];
   /** Prompts only a person at that device can answer. `what` is untrusted text. */
   needs_person: { pane: string; what: string }[];
+  /** Room left per sign-in THERE, as it last said (numbers and labels only). Absent from an older build. */
+  room?: RoomRow[];
+  /** When it said so (unix seconds). */
+  room_at?: number | null;
   /** That device is using THIS PC right now. */
   connected: boolean;
 }
@@ -366,6 +371,21 @@ export function cannotPickWhy(d: Device): string | null {
   if (d.state === 'asleep') return t('devices.asleepShort');
   if (d.state === 'closed') return t('devices.closedShort');
   return t('devices.checkingShort');
+}
+
+/** The four things this PC can allow a paired device to do here (the switches on its page). */
+export function nothingAllowed(d: Pick<Device, 'lets_run' | 'lets_files' | 'lets_lend' | 'agents_may_send'>): boolean {
+  return !d.lets_run && !d.lets_files && !d.lets_lend && !d.agents_may_send;
+}
+
+/**
+ * The one line a device row shows when that device may not do what the person tried: the right that is missing, named
+ * with the words of its own switch, or "nothing is allowed yet" for a freshly paired PC. Null while a right is on and
+ * nothing is refused. The state line next to it still says where that switch lives when the other PC owns it.
+ */
+export function nextStepLine(d: Device): string | null {
+  if (d.state === 'not_allowed') return t('devices.right.agentsOff', { name: clipText(d.name, 40) });
+  return nothingAllowed(d) ? t('devices.next.nothing') : null;
 }
 
 /** One plain notice about a device: a state, a sign-in missing there, or a prompt that needs a person there. */

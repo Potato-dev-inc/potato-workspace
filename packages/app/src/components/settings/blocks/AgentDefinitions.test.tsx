@@ -729,7 +729,7 @@ describe('AgentDefinitions: Remove, Undo and Recently removed', () => {
     expect(text).toContain('kilo/');
     expect(text).toContain('kilo.wizard.json');
     expect(text).toContain('Its approval');
-    expect(text).toContain('Panes already running this agent keep running');
+    expect(text).toContain('Windows already running this agent keep running');
     expect(text).toContain('undo');
     expect(api.remove).not.toHaveBeenCalled();
     await click(dialogButton('Cancel'));

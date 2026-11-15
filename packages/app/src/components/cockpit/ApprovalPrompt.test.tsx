@@ -280,8 +280,8 @@ describe('choiceWords', () => {
     ).toEqual({ a: 'Allow once', b: 'Always allow commands starting with git status', c: 'Deny' });
   });
 
-  it('does not flatten a scope it cannot name: it keeps the agent words (or says "for this session")', () => {
-    expect(words([{ id: 'a', label: 'Yes' }, { id: 'b', label: 'Yes, allow all edits during this session (shift+tab)' }])).toEqual({ a: 'Allow once', b: 'Allow for this session' });
+  it('does not flatten a scope it cannot name: it keeps the agent words (or says "for this agent")', () => {
+    expect(words([{ id: 'a', label: 'Yes' }, { id: 'b', label: 'Yes, allow all edits during this session (shift+tab)' }])).toEqual({ a: 'Allow once', b: 'Allow for this agent' });
     expect(words([{ id: 'a', label: 'Yes' }, { id: 'b', label: 'Yes, and always trust this folder' }, { id: 'c', label: 'Yes, but only the first file' }])).toEqual({
       a: 'Allow once',
       b: 'Yes, and always trust this folder',

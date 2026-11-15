@@ -1,8 +1,6 @@
-// Bugs found in a live run: folder gate, nested folders, the agent count, the connection change sentence.
+// Bugs found in a live run: folder gate, nested folders and the agent count.
 import { describe, expect, it } from 'vitest';
-import { T } from './copy';
 import { refusal, withoutNested } from './StepProject';
-import { updateSentence } from './StepConnect';
 import { usableAgents } from './model';
 import { watchedRows } from './StepAgents';
 
@@ -34,26 +32,5 @@ describe('agent count', () => {
     const all = [row('claude'), row('codex'), row('cursor_agent'), row('opencode'), row('opencode_native')];
     expect(watchedRows(all as never).length).toBe(4);
     expect(usableAgents(watchedRows(all as never))).toHaveLength(4);
-  });
-});
-
-describe('the connection change', () => {
-  it('says where the entry pointed before', () => {
-    const diff = '- command = "D:\\old\\mcp.exe"\n+ command = "D:\\new\\mcp.exe"';
-    expect(updateSentence(diff)).toBe(T.connectPointsTo('D:\\old\\mcp.exe'));
-  });
-  it('a change that only adds a setting is not described as replacing the program', () => {
-    // JSON: the old last line gains a comma, a new line is added. The removed line is not the program.
-    const json = '-   "args": ["x"]\n+   "args": ["x"],\n+   "approve": "always"';
-    expect(updateSentence(json)).toBe(T.connectFixSettings);
-    expect(updateSentence('- }\n+ , "approve": true }')).toBe(T.connectFixSettings);
-    expect(updateSentence('- timeout = 5\n+ approve = "always"')).toBe(T.connectFixSettings);
-  });
-  it('names the old program only when the command really changed', () => {
-    expect(updateSentence('- command = "C:/old/mcp.exe"\n+ command = "C:/new/mcp.exe"')).toBe(T.connectPointsTo('C:/old/mcp.exe'));
-    expect(updateSentence('-   "command": "npx",\n-   "args": ["-y", "gone-pkg"]\n+   "command": "C:/new/mcp.exe"')).toBe(T.connectPointsTo('npx -y gone-pkg'));
-  });
-  it('says missing settings are added when nothing is removed', () => {
-    expect(updateSentence('+ args = ["x"]')).toBe(T.connectFixSettings);
   });
 });

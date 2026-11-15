@@ -73,7 +73,7 @@ const remount = async (paneId: string) => {
   root = createRoot(host);
   await render(paneId);
 };
-const tabs = () => [...host.querySelectorAll<HTMLElement>('[aria-label="Pane view"] [role="tab"]')];
+const tabs = () => [...host.querySelectorAll<HTMLElement>('[aria-label="Agent view"] [role="tab"]')];
 const selected = () => tabs().find((t) => t.getAttribute('aria-selected') === 'true')?.textContent;
 const tabNamed = (name: string) => tabs().find((t) => t.textContent === name)!;
 const moreButton = () => host.querySelector<HTMLButtonElement>('.ck-pane-head button[aria-haspopup="menu"]')!;

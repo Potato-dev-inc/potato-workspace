@@ -27,6 +27,7 @@ import { groupTitle, localizeSections, searchLocalized } from './settings/i18n-l
 import { useT, type MessageKey } from '../i18n';
 import { Btn } from './settings/settings-ui';
 import { readAdvancedOpen, writeAdvancedOpen } from './settings/levels';
+import { LABS_INDEX_ID } from './settings/arrange';
 import {
   findRowSection,
   rowLevel,
@@ -637,6 +638,10 @@ export function SettingsPanel({
             </Fragment>
           ))}
         </nav>
+        {/* Labs: one click from anywhere in Settings. A link, not a page: it opens the Labs page under Advanced. */}
+        <button type="button" className="st-nav-row st-labs-nav" onClick={() => openRow(LABS_INDEX_ID)}>
+          <span>{t('settings.nav.labs')}</span>
+        </button>
       </aside>
 
       <main className="st-main">

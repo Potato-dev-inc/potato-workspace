@@ -174,7 +174,7 @@ describe('Make an invite on a Potato Worker', () => {
     expect(host.querySelector('[data-testid="invite-join-url"]')).toBeNull();
     expect(hasText(host, 'KQ7M-4XPD')).toBe(true);
     const note = host.querySelector('[data-testid="invite-update-worker"]')!;
-    expect(note.querySelector('[data-testid="worker-update-go"]')!.textContent).toBe('Update Worker');
+    expect(note.querySelector('[data-testid="worker-update-go"]')!.textContent).toBe('Update your link');
     expect(note.textContent).not.toMatch(/wrangler|npm run|relay.worker/);
   });
 });
@@ -193,7 +193,7 @@ describe('One Worker for the relay and the phone link', () => {
   it('Start a team offers the phone link Worker when it can be a relay, and fills the address on one click', async () => {
     await openStart({ savedLink: async () => 'https://potato-link.maya.workers.dev', check: withFeatures(['team', 'stable-link']) });
     const offer = host.querySelector('[data-testid="stable-relay-suggestion"]')!;
-    expect(offer.textContent).toContain('Use https://potato-link.maya.workers.dev (your phone link Worker)');
+    expect(offer.textContent).toContain('Use https://potato-link.maya.workers.dev (your phone link)');
     await click(offer.querySelector('button'));
     expect(relayField().value).toBe('https://potato-link.maya.workers.dev');
     expect(host.querySelector('[data-testid="stable-relay-suggestion"]')).toBeNull(); // already in use
@@ -203,8 +203,8 @@ describe('One Worker for the relay and the phone link', () => {
     await openStart({ savedLink: async () => 'https://potato-link.maya.workers.dev', check: withFeatures(['stable-link']) });
     expect(host.querySelector('[data-testid="stable-relay-suggestion"]')).toBeNull();
     const update = host.querySelector('[data-testid="worker-update"]')!;
-    expect(update.textContent).toContain('Update your Worker');
-    expect(update.querySelector('[data-testid="worker-update-go"]')!.textContent).toBe('Update Worker');
+    expect(update.textContent).toContain('Update your link');
+    expect(update.querySelector('[data-testid="worker-update-go"]')!.textContent).toBe('Update your link');
     expect(update.textContent).not.toMatch(/wrangler|npm run|relay.worker/);
     expect(relayField().value).toBe('');
   });
@@ -266,14 +266,17 @@ describe('Team > Invite: an older Worker is updated by one button', () => {
     expect(host.querySelector<HTMLInputElement>('[data-testid="invite-join-url"]')!.value).toBe(LINK);
   });
 
-  it('a step that fails 3 times shows that it was handed over, with no command on screen', async () => {
+  it('a step that fails 3 times says so in plain words, and the note to copy is one press away', async () => {
     const update = stepsApi('login');
     await openInvite(update);
     await click(host.querySelector('[data-testid="invite-update-worker"] [data-testid="worker-update-go"]'));
     await settle(14);
     expect(update.calls.filter((c) => c === 'login')).toHaveLength(3);
     const failed = host.querySelector('[data-testid="worker-update-failed"]')!;
-    expect(failed.textContent).toContain('Signing in to Cloudflare');
+    expect(failed.textContent).toContain('Signing in to Cloudflare did not work.');
+    expect(host.querySelector('[data-testid="worker-update-copy-note"]')).toBeNull();
+    await click(host.querySelector('[data-testid="worker-update-fix"]'));
+    await settle(4);
     expect(host.querySelector('[data-testid="worker-update-copy-note"]')).not.toBeNull();
     expect(host.textContent).not.toMatch(/wrangler|npm run|relay.worker/);
   });

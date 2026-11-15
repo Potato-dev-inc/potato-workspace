@@ -469,6 +469,21 @@ export function otherPersonWarning(agent: string): { head: string; lines: string
 
 export const errText = (err: unknown): string => (errorSentence(err));
 
+/**
+ * Which switch a refused borrow is about, from the other PC's own words: its "Lend an agent" (off there), or
+ * "Borrow my agent sign-ins" for this PC (off there). Null for any other failure. The far side is the only place
+ * these two can be read: nothing is asked of it before the ask, and nothing is changed there from here.
+ */
+export type RefusedSwitch = 'otherGlobal' | 'otherDevice';
+
+export function refusedSwitch(err: unknown): RefusedSwitch | null {
+  const text = errText(err);
+  if (/does not let this PC borrow yet/i.test(text)) return 'otherDevice';
+  if (/lending is off on this pc/i.test(text)) return 'otherGlobal';
+  if (/borrow my agent sign-ins/i.test(text)) return 'otherDevice';
+  return null;
+}
+
 /** A reason from another PC, always shown in quotes. */
 export const quoted = (text: string): string => `“${text}”`;
 

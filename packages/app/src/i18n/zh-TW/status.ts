@@ -21,4 +21,13 @@ export const status: Partial<Record<EnglishKey, string>> = {
   'status.needsYou_one': '{count} 個需要你',
   'status.needsYou_other': '{count} 個需要你',
   'status.sameAccount': '和 {name} 是同一個帳號',
+  'status.room.title': '剩餘額度',
+  'status.room.line': '{place}上的 {agent}：剩 {pct}%，{when} 重設',
+  'status.room.lineNoReset': '{place}上的 {agent}：剩 {pct}%',
+  'status.room.unknown': '{place}上的 {agent}：未知',
+  'status.room.thisPc': '這台電腦',
+  'status.room.lent': '借給你的 {agent}：剩 {pct}%',
+  'status.room.stale': '{time}前的數字',
+  'status.room.suggest': '{place}還有更多額度',
+  'status.room.use': '改用這裡',
 };

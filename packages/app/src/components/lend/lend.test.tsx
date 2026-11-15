@@ -1,5 +1,5 @@
 // @vitest-environment jsdom
-// Share an agent, one component at a time, against the fake `lend_*` API: Request usage, the incoming card, member rows,
+// Share an agent, one component at a time, against the fake `lend_*` API: Ask to borrow, the incoming card, member rows,
 // the time-left chip, the toasts.
 import { act } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
@@ -31,7 +31,7 @@ const team = { configGet: async () => teamConfig({ members: LEND_MEMBERS }) } as
 const dialog = () => document.querySelector<HTMLElement>('.lend-sheet')!;
 const field = (label: string) => dialog().querySelector<HTMLInputElement & HTMLSelectElement & HTMLTextAreaElement>(`[aria-label="${label}"]`)!;
 
-describe('Request usage', () => {
+describe('Ask to borrow', () => {
   it('lists my other PCs first, then teammates', () => {
     const { mine, others } = sourcesOf(LEND_MEMBERS);
     expect(mine.map((s) => s.label)).toEqual(['Leo laptop']);
@@ -44,7 +44,7 @@ describe('Request usage', () => {
   async function open(api = createFakeLendApi()) {
     await act(async () => root.render(<RequestUsage api={api} team={team} />));
     await settle(4);
-    await click(buttonByText(host, 'Request usage'));
+    await click(buttonByText(host, 'Ask to borrow'));
     await settle(4);
     return api;
   }
@@ -95,7 +95,7 @@ describe('Request usage', () => {
     expect(dialog().textContent).toContain("Asking Leo laptop's PC what it can lend…");
     expect(buttonByText(dialog(), 'Ask')!.disabled).toBe(true);
     await act(async () => answer({ answered: true, offers: [] }));
-    expect(dialog().textContent).toContain('Leo laptop has nothing to lend you yet. Ask them to make a lend profile.');
+    expect(dialog().textContent).toContain('Leo laptop has nothing to lend you yet. Ask them to add a borrow rule.');
   });
 
   it('no answer from an older build: it falls back to the agent list, says so, and the tag is beside the name', async () => {
@@ -155,13 +155,20 @@ describe('Request usage', () => {
     const api = createFakeLendApi({ requests_out: [{ ...REQUEST_MAYA, direction: 'out', state: 'accepted' }] });
     await act(async () => root.render(<RequestUsage api={api} team={team} />));
     await settle(4);
-    expect(host.querySelector('[aria-label="Your requests"]')!.textContent).toContain('Ready');
+    expect(host.querySelector('[aria-label="What you asked for"]')!.textContent).toContain('Ready');
   });
 
-  it('draws nothing while Share an agent is off', async () => {
+  it('with lending off here, the entry stays and says which switch is off on this PC', async () => {
     await act(async () => root.render(<RequestUsage api={createFakeLendApi({ enabled: false })} team={team} />));
     await settle(4);
-    expect(host.textContent).toBe('');
+    await click(buttonByText(host, 'Ask to borrow'));
+    await settle(4);
+    const line = dialog().querySelector('[data-testid="lend-switch-off"]')!;
+    expect(line.getAttribute('data-switch')).toBe('thisGlobal');
+    expect(line.textContent).toContain('Lend an agent is off on this PC. Borrowing needs it on.');
+    expect(buttonByText(line as HTMLElement, 'Open the switch')).toBeTruthy();
+    // There is no form to fill: asking cannot work until that switch is on.
+    expect(dialog().querySelector('select')).toBeNull();
   });
 });
 
@@ -242,7 +249,7 @@ describe('Incoming request card', () => {
 
   it('points to Lend settings when no profile fits', async () => {
     await mount(REQUEST_MAYA, { profiles: [] });
-    expect(host.textContent).toContain('No profile lends Claude to teammates yet.');
+    expect(host.textContent).toContain('No borrow rule lets teammates borrow Claude yet.');
     expect(buttonByText(host, 'Lend')!.disabled).toBe(true);
     expect(profilesFor(lendState({ profiles: [] }), REQUEST_MAYA)).toEqual([]);
   });

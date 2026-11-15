@@ -73,13 +73,13 @@ describe('pane header: one row', () => {
     await show(cockpit());
     const head = host.querySelector('.ck-pane-head')!;
     expect(host.querySelector('.ck-tabs-bar')).toBeNull();
-    expect(head.querySelector('[aria-label="Pane view"][role="tablist"]')).not.toBeNull();
+    expect(head.querySelector('[aria-label="Agent view"][role="tablist"]')).not.toBeNull();
     const more = head.querySelector<HTMLButtonElement>('button[aria-haspopup="menu"]')!;
     expect(more.getAttribute('aria-label')).toBe('More');
     expect(more.textContent).toBe('\u22ef');
     expect(head.querySelector('[data-testid="pane-handoff"]')!.textContent).toBe('Hand off');
     // order: name, tabs, then the actions on the right
-    const tabs = head.querySelector('[aria-label="Pane view"]')!;
+    const tabs = head.querySelector('[aria-label="Agent view"]')!;
     expect(head.querySelector('.ck-pane-id')!.compareDocumentPosition(tabs) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
     expect(tabs.compareDocumentPosition(more) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
   });

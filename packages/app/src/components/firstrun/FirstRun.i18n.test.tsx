@@ -1,11 +1,12 @@
 // @vitest-environment jsdom
-// The welcome in Traditional Chinese: every step (agents, connect, project, try it, done) has no English left.
+// The welcome in Traditional Chinese: both screens have no English left.
 import { act } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { CockpitApi } from '../../hooks/useCockpit';
 import type { AgentHealth, AgentHealthApi } from '../../lib/agent-health';
-import type { AgentPackApi, PackAgent, PackReport } from '../../lib/agent-pack';
+import type { AgentPackApi } from '../../lib/agent-pack';
+import type { AcpAddonApi } from '../../lib/acpAddon';
 import { t } from '../../i18n';
 import { useChinese, useEnglish, visibleEnglish } from '../../i18n/test-utils';
 import { FirstRun, type FirstRunDeps } from './FirstRun';
@@ -35,11 +36,6 @@ const tapLast = async () => {
   await act(async () => buttons[buttons.length - 1].click());
   await flush();
 };
-const tapSkip = async () => {
-  const buttons = Array.from(host.querySelectorAll('.fr-foot button')) as HTMLButtonElement[];
-  await act(async () => buttons[1].click());
-  await flush();
-};
 const tapMatching = async (re: RegExp) => {
   const el = Array.from(host.querySelectorAll('button')).find((b) => re.test(b.textContent ?? ''));
   expect(el, `a button ${re}`).toBeTruthy();
@@ -62,15 +58,12 @@ const healthApi: AgentHealthApi = {
   test: vi.fn(),
 } as never;
 
-const packAgent = (id: string, label: string): PackAgent => ({
-  id, label, installed: true,
-  skills: { status: 'ready', path: `C:/a/.${id}/skills`, shared_with: [], files: [{ name: 'delegate', kind: 'add' }], reason: null, written: false },
-  mcp: { status: 'ready', path: `C:/a/.${id}/config.json`, format: 'json', shared_with: [], change: 'add', reason: null, diff: '', written: false, backup: null },
-});
 const pack = {
-  preview: vi.fn(async (): Promise<PackReport> => ({ dry_run: true, agents: [packAgent('claude', 'Claude Code')], unsupported: [], recorded: 0 })),
-  apply: vi.fn(), undo: vi.fn(), inspect: vi.fn(), saveCustom: vi.fn(), forgetCustom: vi.fn(), pickFile: vi.fn(), pickFolder: vi.fn(),
+  preview: vi.fn(), apply: vi.fn(async () => { throw new Error('x'); }), undo: vi.fn(), inspect: vi.fn(), saveCustom: vi.fn(), forgetCustom: vi.fn(), pickFile: vi.fn(), pickFolder: vi.fn(),
 } as unknown as AgentPackApi;
+const addons = {
+  list: vi.fn(async () => ({ labsEnabled: false, addons: [] })), install: vi.fn(), remove: vi.fn(), watch: vi.fn(async () => () => undefined),
+} as unknown as AcpAddonApi;
 
 function deps(): FirstRunDeps {
   return {
@@ -79,14 +72,17 @@ function deps(): FirstRunDeps {
         { path: 'D:/code/shop', name: 'shop', state: 'repo', last_used_ms: 1 },
         { path: 'D:/code/gone', name: 'gone', state: 'missing', last_used_ms: 1 },
       ]),
-      pickFolder: vi.fn(async () => null), forget: vi.fn(async () => undefined), gitInitPlan: vi.fn(), gitInit: vi.fn(),
+      pickFolder: vi.fn(async () => null), forget: vi.fn(async () => undefined),
     },
     simple: { checkFolder: vi.fn(async () => ({ ok: true as const })) },
     patch: vi.fn(async () => ({}) as never),
     load: vi.fn(async () => ({}) as never),
     health: healthApi,
     pack,
-    demo: { start: vi.fn(async () => ({ paneId: 'pane-main', warm: true, mcp: true })) },
+    addons,
+    pauseMs: 0,
+    loadAgents: vi.fn(async () => null),
+    handOff: vi.fn(),
     warm: { status: vi.fn(async () => null), setConfig: vi.fn(async () => null), setProject: vi.fn(async () => true), warmable: () => [] },
   } as never;
 }
@@ -98,58 +94,50 @@ const cockpit = (): CockpitApi =>
     names: new Map(), now: 10_000, statusSince: new Map(), registry: { paneList: [], panes: new Map() },
   }) as unknown as CockpitApi;
 
-async function mount(start: Seed['start'], project: Seed['project'] = null) {
-  const seed: Seed = { start, look: null, project, agentId: null };
+async function mount(start: Seed['start']) {
+  const seed: Seed = { start, look: null, project: null, agentId: null };
   await act(async () => root.render(<FirstRun c={cockpit()} seed={seed} onFinish={vi.fn()} deps={deps()} />));
   await flush();
 }
 
 describe('First run in zh-TW', () => {
-  it('step 1: agents', async () => {
+  it('screen 1: agents, Set up everything and the Finish setup chip', async () => {
     await mount('agents');
     expect(text()).toContain(t('firstRun.agentsTitle'));
     expect(text()).toContain(t('firstRun.agentLogin'));
+    expect(text()).toContain(t('firstRun.setUpEverything'));
+    expect(text()).toContain(t('firstRun.finishSetup'));
     expect(visibleEnglish(host, ALLOW)).toEqual([]);
     await tapMatching(new RegExp(t('firstRun.agentsMore'))); // the folded list is AgentDoctor (another owner), so only the button is checked
     expect(host.querySelector('[aria-expanded="true"]')).toBeTruthy();
   });
 
-  it('step 2: connect', async () => {
-    await mount('connect');
-    expect(text()).toContain(t('firstRun.connectTitle'));
-    expect(text()).toContain(t('firstRun.connectButton', { names: 'Claude Code' }));
+  it('a failed set-up step shows the shared block in Chinese', async () => {
+    await mount('agents');
+    await act(async () => { host.querySelector<HTMLElement>('[data-testid="set-up-everything"]')!.click(); });
+    await flush();
+    expect(host.querySelector('[data-testid="first-run-setup-failed"]')).toBeTruthy();
+    expect(text()).toContain(t('firstRun.step.connect'));
+    expect(text()).toContain(t('setupStep.fix'));
     expect(visibleEnglish(host, ALLOW)).toEqual([]);
   });
 
-  it('step 3: project, with a missing folder', async () => {
+  it('screen 2: project, with a missing folder', async () => {
     await mount('project');
     expect(text()).toContain(t('firstRun.projectTitle'));
     expect(text()).toContain(t('firstRun.hint.missing'));
+    expect(text()).toContain(t('firstRun.skipStep'));
     expect(visibleEnglish(host, ALLOW)).toEqual([]);
     await tapMatching(/shop/);
     expect(text()).toContain(t('firstRun.projectChosen'));
+    expect(text()).toContain(t('firstRun.doneNow'));
     expect(visibleEnglish(host, ALLOW)).toEqual([]);
-  });
-
-  it('step 4: try it, before and after the click', async () => {
-    await mount('task', { path: 'D:/code/shop', name: 'shop', state: 'repo' });
-    expect(text()).toContain(t('firstRun.taskTitle'));
-    expect(visibleEnglish(host, ALLOW)).toEqual([]);
-  });
-
-  it('done screen and its two links', async () => {
-    await mount('done');
-    expect(text()).toContain(t('firstRun.doneTitle'));
-    expect(text()).toContain(t('firstRun.tipInbox'));
-    expect(visibleEnglish(host, ALLOW)).toEqual([]);
-    await tapMatching(new RegExp(t('firstRun.moreOpen') + '$'));
   });
 
   it('the footer buttons are Chinese', async () => {
     await mount('agents');
-    await tapSkip();
-    expect(text()).toContain(t('firstRun.connectTitle'));
     await tapLast();
+    expect(text()).toContain(t('firstRun.projectTitle'));
     expect(visibleEnglish(host, ALLOW)).toEqual([]);
   });
 });

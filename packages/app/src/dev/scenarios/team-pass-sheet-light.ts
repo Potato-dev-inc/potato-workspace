@@ -18,8 +18,9 @@ const s: HarnessScenario = {
       Object.getOwnPropertyDescriptor(proto, 'value')!.set!.call(el, value);
       el.dispatchEvent(new Event('input', { bubbles: true }));
     };
-    await dom.waitFor('[data-testid="side-team"]');
-    await dom.click('[data-testid="side-team"]');
+    await dom.waitFor('[data-testid="side-connect"]');
+    await dom.click('[data-testid="side-connect"]');
+    await dom.click('[data-testid="connect-tab-team"]');
     await dom.waitFor('[data-testid="pass-task-m-maya"]');
     await dom.click('[data-testid="pass-task-m-maya"]');
     await dom.waitFor('[data-testid="pass-title"]');

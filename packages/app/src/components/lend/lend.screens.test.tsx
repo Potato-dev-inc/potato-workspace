@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 // Lend through my PC as whole screens, through the real typed API layers; only the desktop shell (`invoke`) is a mock, and it
-// answers the `lend_*`, `accounts_list` and `team_*` commands in the shape the Rust side sends. Proves: Request usage is
+// answers the `lend_*`, `accounts_list` and `team_*` commands in the shape the Rust side sends. Proves: Ask to borrow is
 // reachable (and sends) in Settings > Team and Inbox > Team; the incoming card renders in the Inbox, counts in Needs you and
 // lends / says no; the Lend page is reachable from the nav and from search ("lend", "borrow", "usage") and has no .pm parts;
 // a borrowed grant is a sign-in in the New agent menu's picker, with its countdown, next to my own; the pane chip shows time,
@@ -97,21 +97,21 @@ const lendIs = (seed: LendScenario | null, own: unknown[] = []) => {
 // expectations match the shape (hours and minutes), not the exact minute.
 // ---- Settings > Team and Inbox > Team ---------------------------------------------------------------------------------
 
-describe('Request usage is reachable from Teams', () => {
-  it('Settings > Team: a Request usage button next to the people, and lends on each member row', async () => {
+describe('Ask to borrow is reachable from Teams', () => {
+  it('Settings > Team: an Ask to borrow button next to the people, and lends on each member row', async () => {
     lendIs(lendState({ grants: [GRANT_OUT, GRANT_IN] }));
-    // Request usage is a lazy chunk here (the Inbox no longer imports it): load it first so the page does not race it.
+    // Ask to borrow is a lazy chunk here (the Inbox no longer imports it): load it first so the page does not race it.
     await import('./RequestUsage');
     await act(async () => root.render(<TeamPage />));
     await settle(8);
     const people = host.querySelector('[aria-label="People"]')!;
-    expect(buttonByText(people.closest('section')!, 'Request usage')).toBeTruthy();
+    expect(buttonByText(people.closest('section')!, 'Ask to borrow')).toBeTruthy();
     expect(host.textContent).toMatch(/Lending Claude to Maya · 2h \d+m left/);
     expect(host.textContent).toMatch(/Borrowing Claude from Sam · \d+m left/);
     expect(buttonByText(host, 'Take back')).toBeTruthy();
     expect(buttonByText(host, 'Give back')).toBeTruthy();
     // It opens the sheet, and my other PC comes first.
-    await click(buttonByText(host, 'Request usage'));
+    await click(buttonByText(host, 'Ask to borrow'));
     await settle(4);
     const sheet = document.querySelector<HTMLElement>('.lend-sheet')!;
     expect([...sheet.querySelectorAll('optgroup')].map((g) => g.label)).toEqual(['My PCs', 'Teammates']);
@@ -129,13 +129,27 @@ describe('Request usage is reachable from Teams', () => {
     expect(document.querySelector('.lend-sheet')!.textContent).toContain('Asked Leo laptop for Work account · Claude · 8 hours');
   });
 
-  it('Settings > Team: nothing of it while Share an agent is off', async () => {
+  it('Settings > Team: with lending off, one line says which switch is off and the button opens it here', async () => {
     lendIs(null);
     await act(async () => root.render(<TeamPage />));
     await settle(8);
     expect(host.textContent).toContain('People');
-    expect(buttonByText(host, 'Request usage')).toBeUndefined();
-    expect(host.querySelector('.lend-lends')).toBeNull();
+    // The way in stays: nobody has to know a switch exists to find out.
+    await click(buttonByText(host, 'Ask to borrow'));
+    await settle(4);
+    const sheet = document.querySelector<HTMLElement>('.lend-sheet')!;
+    const line = sheet.querySelector<HTMLElement>('[data-testid="lend-switch-off"]')!;
+    expect(line.getAttribute('data-switch')).toBe('thisGlobal');
+    expect(line.getAttribute('data-where')).toBe('this');
+    expect(line.textContent).toContain('Lend an agent is off on this PC. Borrowing needs it on.');
+    const opened: string[] = [];
+    const listen = (e: Event) => opened.push((e as CustomEvent<{ tab: string }>).detail.tab);
+    window.addEventListener('pm:open-settings', listen);
+    await click(buttonByText(line, 'Open the switch'));
+    window.removeEventListener('pm:open-settings', listen);
+    // The "Lend an agent" row in Advanced > Early features, not a menu the person has to hunt through.
+    expect(opened).toEqual(['lend-labs']);
+    expect(document.querySelector('.lend-sheet')).toBeNull();
   });
 
   const inbox = async () => {
@@ -166,11 +180,11 @@ describe('Request usage is reachable from Teams', () => {
     await settle(2);
   };
 
-  it('Inbox > Team: no Request usage (it lives on the Team page); a request to borrow is an activity row that opens its card with the warning', async () => {
+  it('Inbox > Team: no Ask to borrow (it lives on the Team page); a request to borrow is an activity row that opens its card with the warning', async () => {
     lendIs(lendState({ requests_in: [REQUEST_MAYA] }));
     await inbox();
     const team = host.querySelector('[data-testid="team-activity"]')!;
-    expect(buttonByText(host, 'Request usage')).toBeUndefined();
+    expect(buttonByText(host, 'Ask to borrow')).toBeUndefined();
     expect(team.querySelector('[data-team-activity="lend:req-in-maya"]')?.textContent).toContain('asked to borrow Claude');
     await answerRow('req-in-maya');
     const card = team.querySelector<HTMLElement>('[data-lend-request="req-in-maya"]')!;
@@ -219,7 +233,7 @@ describe('Request usage is reachable from Teams', () => {
     lendIs(null);
     await inbox();
     expect(host.querySelector('section[aria-label="Team"]')).not.toBeNull();
-    expect(buttonByText(host, 'Request usage')).toBeUndefined();
+    expect(buttonByText(host, 'Ask to borrow')).toBeUndefined();
     expect(host.querySelector('[data-lend-request]')).toBeNull();
   });
 
@@ -255,7 +269,7 @@ describe('Settings > Lend', () => {
       await act(async () => void (await new Promise((r) => setTimeout(r, 25))));
     }
     expect(main().querySelector('h1')!.textContent).toBe('Connect');
-    for (const label of ['Lend profiles', 'Active lends']) {
+    for (const label of ['Who may borrow', 'Active lends']) {
       expect(main().querySelector(`section[aria-label="${label}"]`), label).not.toBeNull();
     }
     // The .pm parts are not part of this mode.
@@ -270,10 +284,49 @@ describe('Settings > Lend', () => {
   /** Opens Settings on the Lend page and waits for it. */
   const openLendPage = async () => {
     await mount(true, { initialTab: 'connect', initialRow: 'lend-page' });
-    for (let i = 0; i < 200 && !main().querySelector('section[aria-label="Lend profiles"]'); i++) {
+    for (let i = 0; i < 200 && !main().querySelector('section[aria-label="Who may borrow"]'); i++) {
       await act(async () => void (await new Promise((r) => setTimeout(r, 25))));
     }
   };
+
+  /** Waits until the Lend page's status row is drawn. */
+  const waitStatus = async () => {
+    for (let i = 0; i < 200 && !main().querySelector('[data-testid="lend-status"]'); i++) {
+      await act(async () => void (await new Promise((r) => setTimeout(r, 25))));
+    }
+    return main().querySelector<HTMLElement>('[data-testid="lend-status"]')!;
+  };
+
+  it('puts the switch at the top: "Lending from this PC: On · Change", and Change opens that switch', async () => {
+    await mount(true, { initialTab: 'connect', initialRow: 'lend-page' });
+    const row = await waitStatus();
+    expect(row.getAttribute('data-state')).toBe('on');
+    expect(row.textContent).toContain('Lending from this PC: On');
+    const opened: string[] = [];
+    const listen = (e: Event) => opened.push((e as CustomEvent<{ tab: string }>).detail.tab);
+    window.addEventListener('pm:open-settings', listen);
+    await click(buttonByText(row, 'Change'));
+    window.removeEventListener('pm:open-settings', listen);
+    expect(opened).toEqual(['lend-labs']);
+  });
+
+  it('says Off, with the same way to the switch, when the backend reports lending off', async () => {
+    lendIs(null);
+    const settings: SettingsApi = {
+      load: async () => ({ ...BASE_SETTINGS, lend_enabled: true }),
+      patch: async () => ({ ...BASE_SETTINGS }),
+      findBridgeUrl: async () => null,
+      subscribe: () => () => {},
+    };
+    await act(async () => root.render(<SettingsPanel open api={settings} initialTab="connect" initialRow="lend-page" />));
+    await settle(6);
+    const row = await waitStatus();
+    expect(row.getAttribute('data-state')).toBe('off');
+    expect(row.textContent).toContain('Lending from this PC: Off');
+    expect(buttonByText(row, 'Change')).toBeTruthy();
+    // No profiles to set up while it is off: one line says what turning it on gives.
+    expect(main().textContent).toContain('Turn it on to lend, and to borrow from another PC.');
+  });
   const sheetEl = () => main().querySelector<HTMLElement>('.lend-sheet') ?? document.querySelector<HTMLElement>('.lend-sheet')!;
   const sheetInput = (label: string) => sheetEl().querySelector<HTMLInputElement>(`input[aria-label="${label}"]`)!;
   const pickClaude = async () => {
@@ -284,7 +337,7 @@ describe('Settings > Lend', () => {
   it('signing in while creating a profile starts the hidden sign-in, opens no pane and stays on Settings', async () => {
     lendIs(lendState({ profiles: [] }));
     await openLendPage();
-    await click(buttonByText(main(), 'New lend profile'));
+    await click(buttonByText(main(), 'New borrow rule'));
     await pickClaude();
     await click(buttonByText(sheetEl(), 'Next'));
     shell.invoked = [];
@@ -308,7 +361,7 @@ describe('Settings > Lend', () => {
     resetDraftForTests();
     lendIs(lendState({ profiles: [] }));
     await openLendPage();
-    await click(buttonByText(main(), 'New lend profile'));
+    await click(buttonByText(main(), 'New borrow rule'));
     await pickClaude();
     await click(buttonByText(sheetEl(), 'Next'));
     await click(buttonByText(sheetEl(), 'Sign in'));
@@ -345,13 +398,6 @@ describe('Settings > Lend', () => {
     expect(main().querySelector('[data-row="lend-page"]')).toBeNull();
   });
 
-  it('has the Labs switch in Advanced', async () => {
-    await mount(false, { initialTab: 'look' });
-    await typeInto(search(), 'share an agent');
-    await settle(6);
-    expect(main().querySelector('[data-row="lend-labs"]')).not.toBeNull();
-    expect(main().querySelector('[data-row="lend-page"]')).toBeNull();
-  });
 });
 
 // ---- the New agent menu ------------------------------------------------------------------------------------------------
@@ -541,12 +587,12 @@ describe('Pane header: time-left chip', () => {
 
 // ---- the borrower picks a profile ---------------------------------------------------------------------------------------------
 
-describe('Request usage: the borrower picks one of the lender\'s profiles', () => {
+describe('Ask to borrow: the borrower picks one of the lender\'s profiles', () => {
   const openSheet = async (offers?: LendScenario['offers']) => {
     lendIs(lendState({ offers }));
     await act(async () => root.render(<TeamPage />));
     await settle(8);
-    await click(buttonByText(host, 'Request usage'));
+    await click(buttonByText(host, 'Ask to borrow'));
     await settle(6);
     return document.querySelector<HTMLElement>('.lend-sheet')!;
   };
@@ -578,7 +624,7 @@ describe('Request usage: the borrower picks one of the lender\'s profiles', () =
 
   it('nothing for me: it says so and Ask stays off', async () => {
     const sheet = await openSheet({ 'm-leo': [] });
-    expect(sheet.textContent).toContain('Leo laptop has nothing to lend you yet. Ask them to make a lend profile.');
+    expect(sheet.textContent).toContain('Leo laptop has nothing to lend you yet. Ask them to add a borrow rule.');
     expect(buttonByText(sheet, 'Ask')!.disabled).toBe(true);
   });
 });

@@ -15,12 +15,17 @@ export interface FirstRunScenario {
   agent?: string;
   /** Potato Workspace is already in the agents' config files. */
   connected?: boolean;
+  /** "Set up everything": adding Potato Workspace to the agents fails every time (shows the failure block). */
+  connectFails?: boolean;
 }
 
 const KNOWN = cases.known as KnownDirs;
 const now = Date.now();
 /** Whether the mocked agent pack has been applied (the welcome's Connect step). */
 let connected = false;
+/** Agents whose chat add-on the mocked app has installed. */
+const addonsDone = new Set<string>();
+const addon = (agent: string, label: string) => ({ agent, label, state: addonsDone.has(agent) ? 'installed' : 'not_installed', version: addonsDone.has(agent) ? '0.74.0' : null, pinned_version: '0.74.0', detail: '', size_mb: 38, lines: [], signin_hint: '' });
 
 /** Recent projects with one folder the guard refuses (Documents). */
 export const FIRST_RUN_RECENT: RecentProject[] = [
@@ -80,7 +85,15 @@ export function firstRunMock(sc: FirstRunScenario | undefined, cmd: string, a: R
       return yes({ agents: AGENTS });
     case 'agent_pack_preview':
       return yes(packReport(connected || !!sc.connected, connected ? 2 : 0));
+    case 'acp_addon_status':
+      return yes({ labs_enabled: true, addons: [addon('claude', 'Claude'), addon('codex', 'Codex')] });
+    case 'acp_addon_install':
+      addonsDone.add(String(a.agentId));
+      return yes(addon(String(a.agentId), String(a.agentId) === 'claude' ? 'Claude' : 'Codex'));
+    case 'agent_lane_get':
+      return yes({ labs_enabled: true, agents: [{ id: 'claude', label: 'Claude', lane: 'acp', effective_lane: 'acp', addon_installed: true, disabled: false, disabled_note: null }], can_add_chat: [], terminal_chat: [] });
     case 'agent_pack_apply':
+      if (sc.connectFails) return { handled: true, value: Promise.reject(new Error('The settings file of an agent is locked by another program.')) };
       connected = true;
       return yes(packReport(true, 2));
     case 'agent_pack_undo':

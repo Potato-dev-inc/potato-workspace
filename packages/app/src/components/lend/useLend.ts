@@ -9,8 +9,10 @@ const TICK_MS = 15_000;
 export interface LendHandle {
   /** Null until the first answer, when Share an agent is off, or when the backend has no such command. */
   state: LendState | null;
-  /** The Labs switch, as the backend reports it. Every lend screen draws nothing while it is false. */
+  /** The Labs switch, as the backend reports it. Most lend screens draw nothing while it is false; the borrow entry and the Lend page say which switch it is instead. */
   enabled: boolean;
+  /** A state answer arrived (even "off"): the switch can be shown as On or Off, not guessed. */
+  known: boolean;
   now: number;
   refresh: () => void;
 }
@@ -25,12 +27,20 @@ function sane(value: unknown): LendState | null {
 /** Share an agent's state, kept current: on `lend://changed`, every few seconds, and the clock for "time left". */
 export function useLend(api: LendApi = lendApi): LendHandle {
   const [state, setState] = useState<LendState | null>(null);
+  const [known, setKnown] = useState(false);
   const [now, setNow] = useState(() => Date.now());
   const refresh = useCallback(() => {
     api
       .state()
-      .then((s) => setState(sane(s)))
-      .catch(() => setState(null));
+      .then((s) => {
+        const saneState = sane(s);
+        setState(saneState);
+        setKnown(saneState !== null);
+      })
+      .catch(() => {
+        setState(null);
+        setKnown(false);
+      });
   }, [api]);
   useEffect(() => {
     refresh();
@@ -49,5 +59,5 @@ export function useLend(api: LendApi = lendApi): LendHandle {
       window.clearInterval(tick);
     };
   }, [api, refresh]);
-  return { state: state?.enabled ? state : null, enabled: state?.enabled === true, now, refresh };
+  return { state: state?.enabled ? state : null, enabled: state?.enabled === true, known, now, refresh };
 }

@@ -229,7 +229,7 @@ function ModeSwitchRow({ env }: { env: SettingsEnv }) {
   );
 }
 
-const LAYOUT_HINT = 'Where windows go in Individual: side by side in rows, or Cascade.';
+const LAYOUT_HINT = 'Where windows go when each agent has its own window: side by side in rows, or Cascade.';
 
 function WindowLayoutRow({ env }: { env: SettingsEnv }) {
   const t = useT();
@@ -247,7 +247,7 @@ function WindowLayoutRow({ env }: { env: SettingsEnv }) {
 
 export const generalRows: RowDef[] = [
   ...comfortRows,
-  { id: 'project-folder', label: 'Default project folder', hint: 'Where new panes and agents start.', keywords: 'workspace directory browse path my editor open in editor vscode vs code cursor zed sublime notepad', group: 'Project', render: (env) => (
+  { id: 'project-folder', label: 'Default project folder', hint: 'Where new windows and agents start.', keywords: 'workspace directory browse path my editor open in editor vscode vs code cursor zed sublime notepad', group: 'Project', render: (env) => (
       <>
         <ProjectFolder env={env} />
         {/* "My editor": the program that opens a file from Open in editor. Part of this row so the settings layout stays as it is. */}
@@ -335,7 +335,7 @@ export const generalRows: RowDef[] = [
   },
   {
     id: 'individual-window-layout',
-    label: 'Window layout in Individual',
+    label: 'Window layout (a window per agent)',
     hint: LAYOUT_HINT,
     keywords: 'windows side by side snap grid cascade tile layout individual pop-out arrange',
     group: 'Appearance',
@@ -372,7 +372,7 @@ export const generalRows: RowDef[] = [
   {
     id: 'confirm-close',
     label: 'Ask before closing a working agent',
-    hint: 'Asks first when you close a pane or quit from the tray while an agent works.',
+    hint: 'Asks first when you close a window or quit from the tray while an agent works.',
     keywords: 'confirm quit close pane running',
     group: 'While agents work',
     render: (env) => (
@@ -518,7 +518,7 @@ export const generalRows: RowDef[] = [
   {
     id: 'storage',
     label: 'Task and activity data',
-    hint: 'Tasks, file locks and what happened in each pane are kept per project.',
+    hint: 'Tasks, file locks and what happened in each window are kept per project.',
     keywords: 'coordination storage tasks locks events pane events log directory folder refresh',
     group: 'Storage',
     render: (env) => <StorageInfo env={env} />,
@@ -797,7 +797,7 @@ export const generalRows: RowDef[] = [
       />
     ),
   },
-  { id: 'live-room', label: 'Live Room', hint: 'Let people with a link watch a chat. Pick the relay address, how long and how many.', keywords: 'live room share stream watch link relay viewers broadcast default length', group: 'Live Room', render: (env) => <LiveRoomRow onSaved={env.markSaved} /> },
+  { id: 'live-room', label: 'Live Room', hint: 'Let people with a link watch a chat. Pick the link address, how long and how many.', keywords: 'live room share stream watch link relay viewers broadcast default length', group: 'Live Room', render: (env) => <LiveRoomRow onSaved={env.markSaved} /> },
   { id: 'version', label: 'Version', hint: 'Check for updates and download the installer.', keywords: 'app version update release download install', group: 'About', render: () => <VersionRow /> },
   {
     id: 'early-versions',

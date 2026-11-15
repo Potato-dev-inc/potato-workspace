@@ -87,7 +87,7 @@ const ship = {
 } as unknown as ShipApi;
 
 async function render(c: CockpitApi = fakeApi()) {
-  await act(async () => root.render(<Sidebar c={c} onOpenPalette={() => {}} ship={ship} />));
+  await act(async () => root.render(<Sidebar c={c} onOpenPalette={() => {}} onOpenDoctor={() => {}} ship={ship} />));
   await act(async () => {});
 }
 const q = <T extends Element = HTMLElement>(sel: string) => host.querySelector<T>(sel);
@@ -128,7 +128,9 @@ describe('sidebar in Traditional Chinese', () => {
     await act(async () => {});
     const more = document.querySelector<HTMLElement>('[role="menu"][aria-label="' + t('pane.more') + '"]');
     expect(more).not.toBeNull();
-    expect(more!.textContent).toContain(t('sidebar.theme'));
+    expect(more!.textContent).toContain(t('sidebar.groupGoTo'));
+    expect(more!.textContent).toContain(t('sidebar.browser'));
+    expect(more!.textContent).toContain(t('sidebar.groupTools'));
     expect(more!.textContent).toContain(t('sidebar.modeOrchestration'));
     expect(more!.textContent).toContain(t('sidebar.modeIndividual'));
     expect(visibleEnglish(more!)).toEqual([]);

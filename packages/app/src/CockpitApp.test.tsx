@@ -255,7 +255,7 @@ vi.mock('./components/cockpit/Sidebar', async () => {
     onOpenReview?: () => void;
     onOpenMorning?: () => void;
     onOpenRoutines?: () => void;
-    onOpenTeam?: () => void;
+    onOpenConnect?: () => void;
     onOpenStore?: () => void;
     onOpenToSide?: (id: string) => void;
     onOpenPlaced?: (id: string, where: 'left' | 'down') => void;
@@ -266,7 +266,7 @@ vi.mock('./components/cockpit/Sidebar', async () => {
     onNewCompanion?: () => void;
   };
   return {
-    Sidebar: ({ c, onOpenDoctor, onOpenMemory, onOpenScores, onOpenToday, onOpenReview, onOpenMorning, onOpenRoutines, onOpenTeam, onOpenStore, onOpenToSide, onOpenPlaced, onOpenNewAgent, newAgentOpen, companions, onOpenCompanion, onNewCompanion }: Props) =>
+    Sidebar: ({ c, onOpenDoctor, onOpenMemory, onOpenScores, onOpenToday, onOpenReview, onOpenMorning, onOpenRoutines, onOpenConnect, onOpenStore, onOpenToSide, onOpenPlaced, onOpenNewAgent, newAgentOpen, companions, onOpenCompanion, onNewCompanion }: Props) =>
       h(
         'div',
         null,
@@ -283,7 +283,8 @@ vi.mock('./components/cockpit/Sidebar', async () => {
         h('button', { type: 'button', onClick: onOpenReview }, 'Review'),
         h('button', { type: 'button', onClick: onOpenMorning }, 'Night Shift chip'),
         h('button', { type: 'button', onClick: onOpenRoutines }, 'Routines row'),
-        h('button', { type: 'button', onClick: onOpenTeam }, 'Team row'),
+        h('button', { type: 'button', onClick: onOpenConnect }, 'Connect row'),
+        h('button', { type: 'button', onClick: () => void c.openSettings('lend-page') }, 'Old lend link'),
         // The "More agents…" row of the "+" menu (its own wiring is tested in NewAgentMenu.test.tsx).
         h('button', { type: 'button', onClick: onOpenStore }, 'More agents…'),
         h('button', { type: 'button', onClick: () => void c.openSettings() }, 'Settings'),
@@ -316,9 +317,9 @@ vi.mock('./components/cockpit/routines/RoutinesPage', async () => {
   const { createElement: h } = await import('react');
   return { RoutinesPage: ({ onClose }: { onClose: () => void }) => h('div', null, 'ROUTINES VIEW', h('button', { type: 'button', onClick: onClose }, 'Close routines')) };
 });
-vi.mock('./components/team-page/TeamHost', async () => {
+vi.mock('./components/connect/ConnectPage', async () => {
   const { createElement: h } = await import('react');
-  return { TeamHost: () => h('div', null, 'TEAM VIEW') };
+  return { ConnectPage: ({ tab }: { tab: string }) => h('div', null, `CONNECT VIEW ${tab}`) };
 });
 vi.mock('./components/cockpit/night/MorningPage', async () => {
   const { createElement: h } = await import('react');
@@ -681,11 +682,17 @@ describe('CockpitApp main view precedence', () => {
     expect(mainText()).toBe('PANE VIEW p1');
   });
 
-  it('Team: the sidebar row opens the page over the pane and the next pane click leaves it', () => {
-    clickButton('Team row');
-    expect(mainText()).toBe('TEAM VIEW');
+  it('Connect: the sidebar row opens the page over the pane and the next pane click leaves it', () => {
+    clickButton('Connect row');
+    expect(mainText()).toBe('CONNECT VIEW phone');
     clickButton('pane p2');
     expect(mainText()).toBe('PANE VIEW p2');
+  });
+
+  it('Connect: an old Settings link for Lend opens the Lending tab, not Settings', () => {
+    clickButton('Old lend link');
+    expect(mainText()).toBe('CONNECT VIEW lending');
+    expect(cockpit.openSettings).not.toHaveBeenCalled();
   });
 
   it('Morning: the last click wins over Project memory', () => {
@@ -1854,7 +1861,7 @@ describe('CockpitApp: the Join popup', () => {
   const LINK = 'https://pm-relay.maya.workers.dev/join/ABCDEFGH23456789';
   const popup = () => host.querySelector('[data-testid="join-popup"]');
 
-  it('a delivered invite link shows "Join?" on whatever screen is open, not only on the Team page', async () => {
+  it('a delivered invite link shows "Join?" on whatever screen is open, not only on Connect › Team', async () => {
     expect(mainText()).toBe('PANE VIEW p1');
     expect(popup()).toBeNull();
     await act(async () => void window.dispatchEvent(new CustomEvent('pm:join-link', { detail: LINK })));

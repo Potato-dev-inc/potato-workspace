@@ -8,7 +8,7 @@ export const risk = {
   'risk.choice.deny': 'Deny',
   'risk.choice.alwaysAllowStarting': 'Always allow commands starting with',
   'risk.choice.alwaysAllow': 'Always allow',
-  'risk.choice.allowSession': 'Allow for this session',
+  'risk.choice.allowSession': 'Allow for this agent',
   'risk.choice.allowOnce': 'Allow once',
 
   'risk.ask.anAgent': 'an agent',
@@ -23,7 +23,7 @@ export const risk = {
   'risk.signIn.needed': 'Needs sign in',
   'risk.signIn.group': 'Sign in',
   'risk.signIn.rowLabel': 'Sign in',
-  'risk.signIn.rowHint': 'Sign in to the same agent more than once, and pick one per pane.',
+  'risk.signIn.rowHint': 'Sign in to the same agent more than once, and pick one per agent.',
   'risk.signIn.addAnother': 'Add another sign-in',
   'risk.signIn.openWindow': 'Open sign-in window',
   'risk.signIn.useAnother': 'Use another sign-in',

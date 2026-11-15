@@ -65,4 +65,5 @@ export const deskReview: Partial<Record<EnglishKey, string>> = {
   'done.cancel': '取消',
   'done.reset': '改回預設的兩項',
   'done.listLabel': '這個專案的完成標準',
+  'review.openAgent': '開啟 AI 助理',
 };

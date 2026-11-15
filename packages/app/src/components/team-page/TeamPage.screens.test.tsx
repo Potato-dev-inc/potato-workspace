@@ -7,6 +7,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { GRANT_IN, GRANT_OUT, LendBackend, REQUEST_MAYA, type LendScenario } from '../../dev/lend-fixtures';
 import { teamConfig, teamState } from '../../dev/team-fixtures';
 import type { LendApi } from '../../lib/lend';
+import { openSettingsAt } from '../../lib/openSettingsAt';
 import type { PresenceView, ShareView, TeamApi, TeamConfigView, TeamState } from '../../lib/team';
 import { resetRememberedTab } from './TeamPage';
 import { TeamHost } from './TeamHost';
@@ -101,7 +102,7 @@ describe('Team page: header and People', () => {
     expect(text).toContain('Acme');
     expect(text).toContain('Connected');
     expect(text).toContain('3 people · 2 here now');
-    for (const name of ['People', 'Usage', 'Tasks', 'Shelf', 'Feed', 'Setup']) expect(tab(name.toLowerCase()).textContent).toContain(name);
+    for (const name of ['People', 'Usage', 'Tasks', 'Shared tools', 'Feed', 'Setup']) expect(tab(name.toLowerCase().replace('shared tools', 'shelf')).textContent).toContain(name);
     const people = [...host.querySelectorAll('.tpg-person')].map((el) => el.getAttribute('data-testid'));
     expect(people).toEqual(['person-m-leo', 'person-m-maya', 'person-m-sam']);
     expect(host.querySelector('[data-testid="person-m-maya"]')!.textContent).toContain('Working on potato-workspace · "Fix the sheet"');
@@ -164,6 +165,28 @@ describe('Team page: header and People', () => {
     expect(host.textContent).not.toContain('wants to join');
     expect(host.querySelector('[data-testid="team-invite"]')).toBeNull();
   });
+
+  it('with no teammates: one block says so and its Invite a teammate button makes the link', async () => {
+    const me = teamConfig().members[0]!;
+    const team = {
+      ...teamFake({ config: { members: [me] } }),
+      invite: async () => ({ link: 'pm://old', code: 'AAAA-BBBB', expiresAtMs: NOW + 86_400_000, joinUrl: 'https://pm-relay.acme.workers.dev/join/alone' }),
+    } as unknown as TeamApi;
+    await show(team, lendFake(null).api);
+    const block = host.querySelector('[data-testid="team-people-empty"]')!;
+    expect(block.querySelector('.ck-empty-title')!.textContent).toBe('It is just you for now');
+    expect(host.querySelectorAll('.tpg-person')).toHaveLength(1);
+    await click('Invite a teammate');
+    expect(host.querySelector<HTMLInputElement>('[data-testid="invite-sheet-link"]')!.value).toBe('https://pm-relay.acme.workers.dev/join/alone');
+  });
+
+  it('with no teammates and no admin, the block says so and has no button', async () => {
+    const me = { ...teamConfig().members[0]!, admin: false, roles: ['watch' as const] };
+    await show(teamFake({ config: { admin: false, members: [me] } }), lendFake(null).api);
+    const block = host.querySelector('[data-testid="team-people-empty"]')!;
+    expect(block.textContent).toContain('It is just you for now');
+    expect(block.querySelector('button')).toBeNull();
+  });
 });
 
 describe('Team page: Usage', () => {
@@ -204,16 +227,20 @@ describe('Team page: Usage', () => {
     expect(lend.b.calls.some((c) => c.startsWith('answer(') && c.includes('true'))).toBe(true);
   });
 
-  it('Request usage lives here (the button is on the Usage tab)', async () => {
+  it('Ask to borrow lives here (the button is on the Usage tab)', async () => {
     await show(teamFake(), lendFake({}).api);
     await open('usage');
-    expect([...host.querySelectorAll('button')].some((b) => /request usage|ask for usage/i.test(b.textContent ?? ''))).toBe(true);
+    expect([...host.querySelectorAll('button')].some((b) => /ask to borrow/i.test(b.textContent ?? ''))).toBe(true);
   });
 
-  it('with lending off the tab is one card, and no sign-in words leak', async () => {
+  it('with lending off the tab is one card that names the switch and opens it, and no sign-in words leak', async () => {
     await show(teamFake(), lendFake(null).api);
     await open('usage');
-    expect(host.querySelector('[data-testid="usage-off"]')!.textContent).toContain('Lending is off.');
+    const card = host.querySelector('[data-testid="usage-off"]')!;
+    expect(card.textContent).toContain('Lending is off on this PC.');
+    expect(card.textContent).toContain('Turn on Lend an agent');
+    await click('Open the switch');
+    expect(openSettingsAt).toHaveBeenCalledWith('general', 'lend-labs');
     expect(host.textContent).not.toMatch(/token|password|api key/i);
   });
 });

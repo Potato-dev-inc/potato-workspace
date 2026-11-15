@@ -526,7 +526,7 @@ describe('long press on a message', () => {
   });
 
   it('Share shows only where the phone can share', async () => {
-    vi.stubGlobal('navigator', { ...navigator, share: vi.fn(async () => undefined) });
+    vi.stubGlobal('navigator', { ...navigator, userAgent: navigator.userAgent, maxTouchPoints: navigator.maxTouchPoints, share: vi.fn(async () => undefined) });
     await open('c1');
     await flush();
     await act(async () => { press(host.querySelector('.ph-agent-text')!, 'pointerdown'); await vi.advanceTimersByTimeAsync(600); });

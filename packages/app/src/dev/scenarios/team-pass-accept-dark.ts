@@ -12,8 +12,9 @@ const s: HarnessScenario = {
   lend: teamPageLend(),
   tasks: tasksView(),
   after: async (dom) => {
-    await dom.waitFor('[data-testid="side-team"]');
-    await dom.click('[data-testid="side-team"]');
+    await dom.waitFor('[data-testid="side-connect"]');
+    await dom.click('[data-testid="side-connect"]');
+    await dom.click('[data-testid="connect-tab-team"]');
     await dom.waitFor('[data-testid="tab-tasks"]');
     await dom.click('[data-testid="tab-tasks"]');
     await dom.waitFor('[data-testid="task-r1"]');

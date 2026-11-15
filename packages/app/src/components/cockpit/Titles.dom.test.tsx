@@ -191,11 +191,11 @@ describe('RenameTitle', () => {
     expect(props.onSave).not.toHaveBeenCalled();
   });
 
-  it('shows an input labelled "Pane name" holding the current title while editing', () => {
+  it('shows an input labelled "Agent name" holding the current title while editing', () => {
     render(baseProps({ editing: true }));
     const input = host.querySelector('input') as HTMLInputElement;
     expect(input).not.toBeNull();
-    expect(input.getAttribute('aria-label')).toBe('Pane name');
+    expect(input.getAttribute('aria-label')).toBe('Agent name');
     expect(input.value).toBe('auth refactor');
   });
 

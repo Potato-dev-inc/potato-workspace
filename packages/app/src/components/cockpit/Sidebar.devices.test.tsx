@@ -211,7 +211,7 @@ describe('sidebar: device groups', () => {
     await mount(fake);
     await act(async () => fake.setDevice(NODE_MAC, { state: 'not_allowed', path: null }));
     await flush();
-    expect(group()!.textContent).toContain('Mac mini does not let this PC run agents. Turn it on there: Settings › Devices.');
+    expect(group()!.textContent).toContain('Mac mini does not let this PC run agents. Turn it on there: Connect › My PCs.');
   });
 
   it('draws nothing of it while the Labs switch is off', async () => {

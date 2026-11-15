@@ -69,7 +69,7 @@ export const inbox = {
   'inbox.chatFor': 'Chat for {agent}',
   'inbox.installAddon': 'Install chat add-on',
   'inbox.installAddonSize': 'Install chat add-on ({mb} MB)',
-  'inbox.useAdapter': 'Use adapter',
+  'inbox.useAdapter': 'Use its built-in chat',
   'inbox.addChat': 'Add chat…',
   'inbox.useTerminal': 'Use terminal',
   'inbox.checking': 'Checking…',

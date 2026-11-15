@@ -213,7 +213,7 @@ describe('People card -> Pass a task', () => {
     await click(q('pass-pick'));
     expect(tasks.calls).toContain('repoCheck(/work/potato)');
     expect(q<HTMLInputElement>('pass-repo')!.disabled).toBe(false);
-    expect(host.textContent).toContain('through the team relay, sealed so only their PC can read it. The most is 2 MB.');
+    expect(host.textContent).toContain('through your team connection, sealed so only their PC can read it. The most is 2 MB.');
     await click(q('pass-repo'));
     expect(q('repo-risk')!.textContent).toContain("You are sending a copy of your code to another person's PC. You cannot take it back.");
     expect(host.textContent).toContain('Only the latest files');

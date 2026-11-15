@@ -19,4 +19,13 @@ export const status = {
   'status.needsYou_one': '{count} needs you',
   'status.needsYou_other': '{count} need you',
   'status.sameAccount': 'Same account as {name}',
+  'status.room.title': 'Room left',
+  'status.room.line': '{agent} on {place}: {pct}% left, resets {when}',
+  'status.room.lineNoReset': '{agent} on {place}: {pct}% left',
+  'status.room.unknown': '{agent} on {place}: unknown',
+  'status.room.thisPc': 'this PC',
+  'status.room.lent': '{agent} lent to you: {pct}% left',
+  'status.room.stale': 'last known {time} ago',
+  'status.room.suggest': 'More room on {place}',
+  'status.room.use': 'Use it',
 } as const;

@@ -9,7 +9,10 @@ import { cannotPickWhy, devicesApi, runtimesOf, stateSentence, type Device, type
 import { makeRemoteClient } from '../../lib/runtime/remote';
 import { sshApi, type SshApi, type SshHost } from '../../lib/ssh';
 import { tauriWslApi, type WslApi } from '../../lib/wsl';
+import { suggestion, useRoomPlaces } from '../../lib/room';
+import type { UsageApi } from '../../lib/usage';
 import { PhoneNewChat } from '../mobile/PhoneNewChat';
+import { DisabledReason } from '../common/DisabledReason';
 import { SshPanel, WslPanel } from './PlacePanels';
 import '../../styles/devices.css';
 import { useDismissable } from '../../hooks/useDismissable';
@@ -26,6 +29,8 @@ export interface WhereProps {
   /** The SSH and Linux command layers (tests give fakes). */
   ssh?: SshApi;
   wsl?: WslApi;
+  /** Where this PC's usage comes from (tests give a fake). */
+  usage?: UsageApi;
 }
 
 const STORE_KEY = 'pm.newAgent.where';
@@ -92,6 +97,7 @@ export function NewAgentWhere({ where, children, remember }: { where?: WhereProp
       live = false;
     };
   }, [enabled, open, wslLayer, sshLayer]);
+  const places = useRoomPlaces(enabled, where?.view ?? null, where?.usage);
   const runtimes = useMemo(() => runtimesOf(where?.view ?? null, distros, hosts), [where?.view, distros, hosts]);
   // A remembered device that is offline now cannot be used: This PC shows, and the memory is kept for next time.
   const picked = where?.view?.devices.find((d) => d.node === pick && cannotPickWhy(d) === null) ?? null;
@@ -106,6 +112,17 @@ export function NewAgentWhere({ where, children, remember }: { where?: WhereProp
   const inline = typeof children === 'function';
   const body = (pill: ReactNode): ReactNode => (typeof children === 'function' ? children(pill) : children);
   if (!enabled) return <>{body(null)}</>;
+  // "More room on Laptop · Use it": only while This PC is picked, for a PC that can be picked now.
+  const better = pick === null ? suggestion(places) : null;
+  const betterDevice = better ? where?.view?.devices.find((d) => d.node === better.node && cannotPickWhy(d) === null) : undefined;
+  const suggest = better && betterDevice ? (
+    <p className="ck-room-suggest" data-testid="room-suggest">
+      <span>{t('status.room.suggest', { place: betterDevice.name })}</span>
+      <button type="button" className="ck-usage-link" data-testid="room-use" onClick={() => setPick(betterDevice.node)}>
+        {t('status.room.use')}
+      </button>
+    </p>
+  ) : null;
   const here = picked ? picked.name : pickedWsl ? pickedWsl.label : pickedSsh ? pickedSsh.label : t('devices.thisPc');
   const startedHere = (paneId: string) => {
     setPickRaw(null);
@@ -130,7 +147,6 @@ export function NewAgentWhere({ where, children, remember }: { where?: WhereProp
                   role="menuitem"
                   className={`dev-where-row${on ? ' is-on' : ''}`}
                   disabled={!pickable}
-                  title={r.kind === 'device' && r.why ? t('devices.cannotPick', { why: r.why }) : undefined}
                   data-testid={`where-${r.id}`}
                   onClick={() => {
                     setPick(r.kind === 'this' ? null : r.id);
@@ -139,6 +155,7 @@ export function NewAgentWhere({ where, children, remember }: { where?: WhereProp
                 >
                   <span>{r.label}</span>
                   <small>{sub}</small>
+                  {!pickable && r.kind === 'device' && r.why ? <DisabledReason as="span" reason={t('devices.cannotPick', { why: r.why })} /> : null}
                 </button>
               );
             })}
@@ -152,6 +169,7 @@ export function NewAgentWhere({ where, children, remember }: { where?: WhereProp
   return (
     <>
       {!inline && pill}
+      {!picked && !pickedWsl && !pickedSsh && suggest}
       {picked && bridge ? (
         // The phone screens are styled under `.ph` (tokens and layout): the wrapper brings them to the desktop page.
         <div className="ph dev-ph-embed" data-testid="where-body">

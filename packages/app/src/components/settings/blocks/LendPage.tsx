@@ -25,11 +25,13 @@ import {
   type LendProfile,
 } from '../../../lib/lend';
 import { blankDraft, clearDraft, draftFor, draftHasWork, getDraft, setDraft, STEPS, useLendDraft } from '../../../lib/lendDraft';
+import { openSettingsAt } from '../../../lib/openSettingsAt';
 import { teamApi, type MemberView, type TeamApi } from '../../../lib/team';
 import { LendProfileSheet } from '../../lend/LendProfileSheet';
 import { TakeBack } from '../../lend/TakeBack';
 import { TestLink } from '../../lend/TestLink';
 import { useLend } from '../../lend/useLend';
+import { EmptyState } from '../../common/EmptyState';
 import '../../../styles/lend.css';
 
 export const PASTE_KEY = 'Paste an API key';
@@ -74,12 +76,34 @@ export function LendPage({
     };
   }, [accountsApi, team]);
 
-  if (!lend.enabled || !lend.state) return null;
+  if (!lend.known) return null;
   return (
     <section className="lend-page" aria-label={t('lend.page.aria')}>
-      <Profiles api={api} accountsApi={accountsApi} lend={lend} accounts={accounts} members={members} me={me} onSaved={onSaved} onAccounts={loadAccounts} />
-      <ActiveLends api={api} lend={lend} />
+      <LendStatusRow on={lend.enabled} />
+      {lend.enabled && lend.state ? (
+        <>
+          <Profiles api={api} accountsApi={accountsApi} lend={lend} accounts={accounts} members={members} me={me} onSaved={onSaved} onAccounts={loadAccounts} />
+          <ActiveLends api={api} lend={lend} />
+        </>
+      ) : (
+        <p className="lend-note">{t('lend.status.offHelp')}</p>
+      )}
     </section>
+  );
+}
+
+/** "Lending from this PC: On/Off · Change": the switch this PC needs for both lending and borrowing, at the top of the page. */
+function LendStatusRow({ on }: { on: boolean }) {
+  const t = useT();
+  return (
+    <div className="lend-switch-row" data-testid="lend-status" data-state={on ? 'on' : 'off'}>
+      <span className="lend-switch-dot" aria-hidden="true" />
+      <span>{on ? t('lend.status.on') : t('lend.status.off')}</span>
+      <span aria-hidden="true">·</span>
+      <button type="button" className="lend-btn is-small is-plain" onClick={() => openSettingsAt('general', 'lend-labs')}>
+        {t('lend.status.change')}
+      </button>
+    </div>
   );
 }
 
@@ -175,7 +199,14 @@ function Profiles({
     <section className="lend-block" aria-label={t('lend.profiles')}>
       <h3>{t('lend.profiles')}</h3>
       <p className="lend-muted">{t('lend.profilesHelp')}</p>
-      {state.profiles.length === 0 && !draft && <p className="lend-muted">{t('lend.noProfiles')}</p>}
+      {state.profiles.length === 0 && !draft && (
+        <EmptyState
+          testId="lend-empty"
+          title={t('lend.emptyTitle')}
+          line={t('lend.emptyLine')}
+          action={{ label: t('lend.newLendProfile'), onClick: start }}
+        />
+      )}
       <ul className="lend-list">
         {showDraft && (
           <li className="lend-draft" data-testid="lend-draft-row">
@@ -283,7 +314,7 @@ function Profiles({
           {error}
         </p>
       )}
-      {!open && !showDraft && (
+      {!open && !showDraft && state.profiles.length > 0 && (
         <div>
           <button type="button" className="lend-btn" onClick={start}>
             {t('lend.newLendProfile')}

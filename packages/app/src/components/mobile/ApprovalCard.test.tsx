@@ -134,7 +134,7 @@ describe('the answer', () => {
     expect(state()).toBe('failed');
     expect(status()).toBe("Couldn't send your answer to Codex. Nothing was typed.");
     expect(button('Try again')).toBeDefined();
-    expect(button('Open pane')).toBeDefined();
+    expect(button('Open agent')).toBeDefined();
   });
 });
 

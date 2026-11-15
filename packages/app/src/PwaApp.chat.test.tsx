@@ -152,7 +152,7 @@ describe('PwaApp conversation and terminal peek', () => {
     expect(h.paneChat).toHaveBeenCalledWith('a1', undefined);
     const terminal = host.querySelector('[data-testid="terminal"]')!;
     expect(terminal.parentElement!.className).toContain('invisible');
-    expect(host.querySelector('[aria-label="Pane view"]')).toBeNull();
+    expect(host.querySelector('[aria-label="Agent view"]')).toBeNull();
   });
 
   it('a shell has no chat: its terminal shows and the name offers no switch', async () => {

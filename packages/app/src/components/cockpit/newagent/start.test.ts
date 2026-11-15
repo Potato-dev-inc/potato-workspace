@@ -50,7 +50,7 @@ describe('runStart', () => {
     const d = deps();
     expect(await runStart(req({ runAs: 'chat', folder: undefined }), d)).toBeNull();
     expect(d.startChat).not.toHaveBeenCalled();
-    expect(d.notify).toHaveBeenCalledWith('Pick a folder for a chat session.');
+    expect(d.notify).toHaveBeenCalledWith('Pick a folder for the chat.');
   });
 
   it('a chat that cannot start tells the person and sends nothing', async () => {

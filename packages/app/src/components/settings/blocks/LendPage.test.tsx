@@ -69,7 +69,7 @@ async function stepOne(name = 'Work account', agent = 'Claude') {
 }
 /** Walks to step 3 on the sign-in that is already signed in. */
 async function toStepThree(name = 'Work account') {
-  await click(buttonByText(host, 'New lend profile'));
+  await click(buttonByText(host, 'New borrow rule'));
   await stepOne(name);
   await next();
   await click(card('Use a sign-in I already added'));
@@ -78,11 +78,11 @@ async function toStepThree(name = 'Work account') {
   await next();
 }
 
-describe('Lend profiles', () => {
+describe('Who may borrow', () => {
   it('step 2 lists existing sign-ins by profile name and account, never by an internal "Lend Claude" label', async () => {
     const { api } = await mount({ profiles: [MY_PROFILE] });
     api.backend.setSignIn('acct-spare', { state: 'signed_in', identity: 'sam@example.com' });
-    await click(buttonByText(host, 'New lend profile'));
+    await click(buttonByText(host, 'New borrow rule'));
     await stepOne('Weekend');
     await next();
     await click(card('Use a sign-in I already added'));
@@ -90,21 +90,32 @@ describe('Lend profiles', () => {
     const options = [...input(sheet(), 'Lend sign-in').querySelectorAll('option')].map((o) => o.textContent);
     expect(options.join('|')).not.toContain('Lend Claude');
     expect(options).toContain(`${MY_PROFILE.name} · ren@example.com`);
-    expect(options).toContain('Not used by a profile yet · sam@example.com');
+    expect(options).toContain('Not used by a rule yet · sam@example.com');
     expect(sheet().textContent).not.toContain('Lend Claude');
   });
 
   it('lists the profiles with who, how long, whether it asks first and its limits', async () => {
     await mount({ profiles: [MY_PROFILE, KEY_PROFILE] });
-    const text = section('Lend profiles').textContent!;
+    const text = section('Who may borrow').textContent!;
     expect(text).toContain('My other PCs');
     expect(text).toContain('up to 24 hours');
     expect(text).toContain('Up to 200 requests and 500,000 tokens');
   });
 
-  it('draws nothing while the switch is off', async () => {
+  it('with no profiles: one block explains what a profile is for, and its button starts one', async () => {
+    await mount({ profiles: [] });
+    const block = host.querySelector('[data-testid="lend-empty"]')!;
+    expect(block.querySelector('.ck-empty-title')!.textContent).toBe('No lend profiles yet');
+    expect(block.querySelector('.ck-empty-line')!.textContent).toContain('who may ask');
+    await click(buttonByText(block, 'New borrow rule'));
+    expect(stepText()).toContain('Step 1 of 4');
+  });
+
+  it('while the switch is off it shows only the status line and the one note, no profiles', async () => {
     await mount({ enabled: false });
-    expect(host.textContent).toBe('');
+    expect(host.querySelector('[data-testid="lend-status"]')!.getAttribute('data-state')).toBe('off');
+    expect(host.textContent).toBe('Lending from this PC: Off·ChangeTurn it on to lend, and to borrow from another PC.');
+    expect(host.querySelector('[data-testid="lend-empty"]')).toBeNull();
   });
 
   it('hides the .pm parts: no Save as .pm file, no Open .pm file', async () => {
@@ -115,9 +126,9 @@ describe('Lend profiles', () => {
     expect(api.calls.some((c) => /Pm\(/.test(c))).toBe(false);
   });
 
-  it('New lend profile opens the sheet on step 1; Next is blocked without a name and an agent, and says why next to the field', async () => {
+  it('New borrow rule opens the sheet on step 1; Next is blocked without a name and an agent, and says why next to the field', async () => {
     await mount({ profiles: [] });
-    await click(buttonByText(host, 'New lend profile'));
+    await click(buttonByText(host, 'New borrow rule'));
     expect(stepText()).toContain('Step 1 of 4');
     expect(sheet().getAttribute('data-size')).toBe('wide');
     await next();
@@ -134,7 +145,7 @@ describe('Lend profiles', () => {
 
   it('the agents are one choice each, with small tags: Early test, and API key only for Codex and Gemini', async () => {
     await mount({ profiles: [] });
-    await click(buttonByText(host, 'New lend profile'));
+    await click(buttonByText(host, 'New borrow rule'));
     const rows = [...sheet().querySelectorAll('fieldset.lend-cards label')].map((l) => l.textContent);
     expect(rows).toEqual(['ClaudeEarly test', 'CodexAPI key onlyEarly test', 'Gemini CLIAPI key onlyEarly test']);
     expect(sheet().textContent).not.toContain('Main sign-in');
@@ -144,7 +155,7 @@ describe('Lend profiles', () => {
 
   it('Sign in happens INSIDE the sheet: it starts the hidden sign-in, never opens a pane, and the sheet and the name stay', async () => {
     const { api } = await mount({ profiles: [] });
-    await click(buttonByText(host, 'New lend profile'));
+    await click(buttonByText(host, 'New borrow rule'));
     await stepOne();
     await next();
     await click(buttonByText(sheet(), 'Sign in'));
@@ -164,7 +175,7 @@ describe('Lend profiles', () => {
 
   it('when the sign-in turns signed in, the step says who and Next goes on; before that Next is refused', async () => {
     const { api } = await mount({ profiles: [] });
-    await click(buttonByText(host, 'New lend profile'));
+    await click(buttonByText(host, 'New borrow rule'));
     await stepOne();
     await next();
     await click(buttonByText(sheet(), 'Sign in'));
@@ -184,7 +195,7 @@ describe('Lend profiles', () => {
 
   it('a failed sign-in says so and offers Try again and a key; Cancel sign-in stops it, forgets the empty account and goes back to the choices', async () => {
     const { api } = await mount({ profiles: [] });
-    await click(buttonByText(host, 'New lend profile'));
+    await click(buttonByText(host, 'New borrow rule'));
     await stepOne();
     await next();
     await click(buttonByText(sheet(), 'Sign in'));
@@ -209,7 +220,7 @@ describe('Lend profiles', () => {
 
   it('closing the sheet on step 2 leaves a "Finish setting up" row; Continue reopens on step 2 with the same values and the same account', async () => {
     const { api } = await mount({ profiles: [] });
-    await click(buttonByText(host, 'New lend profile'));
+    await click(buttonByText(host, 'New borrow rule'));
     await stepOne();
     await next();
     await click(buttonByText(sheet(), 'Sign in'));
@@ -221,7 +232,7 @@ describe('Lend profiles', () => {
     expect(api.calls).toContain('signInStop("acct-1",false)');
     const row = host.querySelector('[data-testid="lend-draft-row"]')!;
     expect(row.textContent).toContain('Finish setting up "Work account" · Step 2 of 4');
-    expect(buttonByText(host, 'New lend profile')).toBeUndefined();
+    expect(buttonByText(host, 'New borrow rule')).toBeUndefined();
     const adds = api.calls.filter((c) => c.startsWith('accountAdd(')).length;
     await click(buttonByText(row as HTMLElement, 'Continue'));
     await settle(3);
@@ -241,7 +252,7 @@ describe('Lend profiles', () => {
     const remove = vi.fn(async () => true);
     const { api } = await mount({ profiles: [] });
     (accountsApi as unknown as { remove: typeof remove }).remove = remove;
-    await click(buttonByText(host, 'New lend profile'));
+    await click(buttonByText(host, 'New borrow rule'));
     await stepOne();
     await next();
     await click(buttonByText(sheet(), 'Sign in'));
@@ -255,13 +266,13 @@ describe('Lend profiles', () => {
     await settle(3);
     expect(remove).toHaveBeenCalledWith('acct-1', true);
     expect(host.querySelector('[data-testid="lend-draft-row"]')).toBeNull();
-    expect(buttonByText(host, 'New lend profile')).toBeDefined();
+    expect(buttonByText(host, 'New borrow rule')).toBeDefined();
     expect(api.calls.filter((c) => c.startsWith('profileSave(')).length).toBe(0);
   });
 
   it('the draft survives a reload of the page (sessionStorage), but never the API key', async () => {
     await mount({ profiles: [] });
-    await click(buttonByText(host, 'New lend profile'));
+    await click(buttonByText(host, 'New borrow rule'));
     await stepOne('Key loans', 'Codex');
     await next();
     await typeInto(input(sheet(), 'API key'), 'sk-FAKE-OPENAI');
@@ -293,7 +304,7 @@ describe('Lend profiles', () => {
     expect(sheet().textContent).toContain('My other PCs · 8 hours each time · asks me first');
     expect(sheet().textContent).toContain('This PC stays awake while lending');
     expect(sheet().textContent).toContain('Nothing is lent yet.');
-    await click(buttonByText(sheet(), 'Save profile'));
+    await click(buttonByText(sheet(), 'Save rule'));
     await settle(4);
     const saves = api.calls.filter((c) => c.startsWith('profileSave('));
     expect(saves).toHaveLength(1);
@@ -304,7 +315,7 @@ describe('Lend profiles', () => {
     expect(api.calls.some((c) => c.startsWith('keySet('))).toBe(false);
     expect(onSaved).toHaveBeenCalled();
     expect(host.querySelector('.lend-sheet')).toBeNull();
-    expect(section('Lend profiles').textContent).toContain('Short loans');
+    expect(section('Who may borrow').textContent).toContain('Short loans');
     expect(host.querySelector('[data-testid="lend-saved"]')!.textContent).toBe('"Short loans" is ready to lend.');
     expect(host.querySelector('[data-testid="lend-draft-row"]')).toBeNull();
     expect(window.sessionStorage.getItem('pm.lend.draft.v1')).toBeNull();
@@ -330,7 +341,7 @@ describe('Lend profiles', () => {
 
   it('Codex and Gemini can only be lent with a key: the sign-in choices are off and say why in plain words', async () => {
     const { api } = await mount({ profiles: [] });
-    await click(buttonByText(host, 'New lend profile'));
+    await click(buttonByText(host, 'New borrow rule'));
     await stepOne('Codex loans', 'Codex');
     await next();
     expect(sheet().querySelector('[data-testid="lend-signin-not-yet"]')!.textContent).toBe('Codex signed in with ChatGPT is not supported yet. Only an OpenAI API key can be lent.');
@@ -342,7 +353,7 @@ describe('Lend profiles', () => {
     await next();
     await next();
     expect(sheet().textContent).toContain('API key saved on this PC');
-    await click(buttonByText(sheet(), 'Save profile'));
+    await click(buttonByText(sheet(), 'Save rule'));
     await settle(4);
     const save = api.calls.find((c) => c.startsWith('profileSave('))!;
     expect(save).toContain('"agent_ids":["codex"]');
@@ -353,7 +364,7 @@ describe('Lend profiles', () => {
 
   it('picking another agent starts the sign-in step fresh (a sign-in belongs to one agent)', async () => {
     await mount({ profiles: [] });
-    await click(buttonByText(host, 'New lend profile'));
+    await click(buttonByText(host, 'New borrow rule'));
     await stepOne();
     await click(card('Gemini'));
     await next();
@@ -402,7 +413,7 @@ describe('Lend profiles', () => {
     await click(row);
     await next();
     expect(sheet().textContent).toContain('This PC may sleep while lending');
-    await click(buttonByText(sheet(), 'Save profile'));
+    await click(buttonByText(sheet(), 'Save rule'));
     await settle(3);
     expect(api.calls.find((c) => c.startsWith('profileSave('))).toContain('"keep_awake":false');
   });
@@ -410,9 +421,9 @@ describe('Lend profiles', () => {
   it('Edit opens the same sheet on the review step; Delete asks first when the profile is lent right now', async () => {
     const lent = { ...GRANT_OUT, profile_name: MY_PROFILE.name, profile_id: MY_PROFILE.id };
     const { api } = await mount({ grants: [lent] });
-    await click(buttonByText(section('Lend profiles'), 'Edit'));
+    await click(buttonByText(section('Who may borrow'), 'Edit'));
     expect(stepText()).toContain('Step 4 of 4');
-    expect(sheet().textContent).toContain('Edit lend profile');
+    expect(sheet().textContent).toContain('Edit borrow rule');
     await click(sheet().querySelector('button[aria-label^="Change: My other PCs"]'));
     await settle(2);
     expect(stepText()).toContain('Step 1 of 4');
@@ -420,20 +431,20 @@ describe('Lend profiles', () => {
     await next();
     await next();
     await next();
-    await click(buttonByText(sheet(), 'Save profile'));
+    await click(buttonByText(sheet(), 'Save rule'));
     await settle(3);
     expect(api.calls.find((c) => c.startsWith('profileSave('))).toContain('"id":"prof-mine"');
     await click(host.querySelector('button[aria-label="Delete Renamed"]'));
-    expect(section('Lend profiles').textContent).toContain('"Renamed" is lent to Maya right now. Deleting it takes it back.');
+    expect(section('Who may borrow').textContent).toContain('"Renamed" is lent to Maya right now. Deleting it takes it back.');
     expect(api.calls.some((c) => c.startsWith('profileDelete('))).toBe(false);
-    await click(buttonByText(section('Lend profiles'), 'Delete'));
+    await click(buttonByText(section('Who may borrow'), 'Delete'));
     await settle(3);
     expect(api.calls).toContain('profileDelete("prof-mine")');
   });
 
   it('a profile that is not lent is deleted at once; closing an edit leaves no draft row', async () => {
     const { api } = await mount();
-    await click(buttonByText(section('Lend profiles'), 'Edit'));
+    await click(buttonByText(section('Who may borrow'), 'Edit'));
     await click(host.querySelector('button[aria-label="Close"]'));
     await settle(2);
     expect(host.querySelector('[data-testid="lend-draft-row"]')).toBeNull();
@@ -444,7 +455,7 @@ describe('Lend profiles', () => {
 
   it('a profile that keeps a key says so, and can drop it by switching to a sign-in', async () => {
     const { api } = await mount({ profiles: [KEY_PROFILE] });
-    await click(buttonByText(section('Lend profiles'), 'Edit'));
+    await click(buttonByText(section('Who may borrow'), 'Edit'));
     expect(sheet().querySelector('[data-testid="lend-review-signin"]')!.textContent).toContain('API key saved on this PC');
     await click(sheet().querySelector('button[aria-label^="Change: Claude"]'));
     expect(input(sheet(), 'API key').placeholder).toContain('A key is saved');
@@ -453,7 +464,7 @@ describe('Lend profiles', () => {
     await settle(3);
     await next();
     await next();
-    await click(buttonByText(sheet(), 'Save profile'));
+    await click(buttonByText(sheet(), 'Save rule'));
     await settle(3);
     expect(api.calls).toContain('keySet("prof-key","")');
   });
@@ -486,7 +497,7 @@ describe('Active lends', () => {
 describe('Show usage in the usage bar (per lend profile)', () => {
   it('is a checkbox on a sign-in profile, off by default, and saving it turns show_usage on; a key profile has none', async () => {
     const { api } = await mount({ profiles: [MY_PROFILE, KEY_PROFILE] });
-    const rows = [...section('Lend profiles').querySelectorAll('li')];
+    const rows = [...section('Who may borrow').querySelectorAll('li')];
     const mine = rows.find((r) => r.textContent?.includes('My other PCs'))!;
     const key = rows.find((r) => r.textContent?.includes('Work key'))!;
     const box = mine.querySelector<HTMLInputElement>('.lend-showusage input')!;
@@ -497,7 +508,7 @@ describe('Show usage in the usage bar (per lend profile)', () => {
     await settle(3);
     const saved = api.backend.get().profiles.find((p) => p.id === MY_PROFILE.id)!;
     expect(saved.show_usage).toBe(true);
-    expect(section('Lend profiles').querySelector<HTMLInputElement>('.lend-showusage input')!.checked).toBe(true);
+    expect(section('Who may borrow').querySelector<HTMLInputElement>('.lend-showusage input')!.checked).toBe(true);
   });
 });
 

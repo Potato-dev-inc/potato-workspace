@@ -71,7 +71,7 @@ export const inbox: Partial<Record<EnglishKey, string>> = {
   'inbox.chatFor': '{agent} 的對話',
   'inbox.installAddon': '安裝對話附加元件',
   'inbox.installAddonSize': '安裝對話附加元件（{mb} MB）',
-  'inbox.useAdapter': '使用轉接器',
+  'inbox.useAdapter': '使用內建對話',
   'inbox.addChat': '新增對話…',
   'inbox.useTerminal': '使用終端機',
   'inbox.checking': '檢查中…',

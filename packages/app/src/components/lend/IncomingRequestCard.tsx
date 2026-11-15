@@ -3,6 +3,7 @@ import { useT } from '../../i18n';
 import { agentLabel, capFor, durationProblem, errText, lendApi, quoted, requestTitle, type LendApi, type LendProfile, type LendRequest, type LendState } from '../../lib/lend';
 import { openSettingsAt } from '../../lib/openSettingsAt';
 import { CardButton, InboxCard } from '../cockpit/InboxCard';
+import { DisabledReason } from '../common/DisabledReason';
 import { DurationField } from './Duration';
 import { LendWarning } from './OwnRiskBox';
 import '../../styles/lend.css';
@@ -49,6 +50,8 @@ export function IncomingRequestCard({
   const cap = Math.min(capFor(request.for_other_person), profile?.max_secs ?? Infinity);
   const timeProblem = durationProblem(secs, request.for_other_person) ?? (secs > cap ? t('lend.incoming.tooLong') : null);
   const canLend = !!profile && !busy && !timeProblem && (!request.for_other_person || understood);
+  // Why Lend is off, said on screen (not only on hover).
+  const lendReason = canLend || busy ? null : !profile ? t('lend.incoming.pickProfile') : timeProblem ?? (request.for_other_person && !understood ? t('lend.tickFirst') : null);
 
   const run = async (what: () => Promise<unknown>) => {
     setBusy(true);
@@ -107,6 +110,7 @@ export function IncomingRequestCard({
           <CardButton tone="secondary" disabled={!canLend} onClick={() => void run(() => api.answer(request.id, true, profile!.id, secs === request.secs ? null : secs))}>
             {profiles.length > 1 && profile ? t('lend.incoming.lendWithName', { name: profile.name }) : t('lend.incoming.lend')}
           </CardButton>
+          <DisabledReason reason={lendReason} />
           <CardButton tone="plain" disabled={busy} aria-expanded={changing} onClick={() => setChanging((v) => !v)}>
             {t('lend.incoming.changeTime')}
           </CardButton>

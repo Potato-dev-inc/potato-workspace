@@ -76,7 +76,7 @@ afterEach(async () => {
 describe('ToolbeltGroup', () => {
   it('lists the servers with their scope and what they run, and says where secrets go', async () => {
     await render(mockApi());
-    const rows = host.querySelectorAll('[aria-label="Servers"] li');
+    const rows = host.querySelectorAll('[aria-label="Tools"] li');
     expect(rows).toHaveLength(4);
     expect(rows[0].textContent).toContain('Browser');
     expect(rows[0].textContent).toContain('npx -y @playwright/mcp');
@@ -90,7 +90,7 @@ describe('ToolbeltGroup', () => {
 
   it('shows a plain empty state', async () => {
     await render(mockApi({ list: vi.fn(async () => ({ ...TOOLBELT_LISTING, servers: [] })) }));
-    expect(host.textContent).toContain('No servers yet');
+    expect(host.textContent).toContain('No tools yet');
   });
 
   it('flips the enable switch through update, keeping the rest of the server', async () => {
@@ -103,7 +103,7 @@ describe('ToolbeltGroup', () => {
   it('adds a command server from the form', async () => {
     const api = mockApi();
     await render(api);
-    await click(button('Add server'));
+    await click(button('Add a tool'));
     await type(labelled('Name'), 'Files');
     await type(labelled('Command'), 'npx');
     await type(labelled('Arguments'), '-y "my pkg" --flag');
@@ -127,7 +127,7 @@ describe('ToolbeltGroup', () => {
       add: vi.fn(async () => Promise.reject(new Error('Enter the server address, starting with http:// or https://.'))) as never,
     });
     await render(api);
-    await click(button('Add server'));
+    await click(button('Add a tool'));
     await click(button('Web address'));
     await type(labelled('Name'), 'Docs');
     await type(labelled('Address'), 'nope');
@@ -214,11 +214,11 @@ describe('Import sheet', () => {
     expect(boxes).toHaveLength(2);
     expect(boxes[0].checked).toBe(true);
     expect(boxes[1].disabled).toBe(true);
-    expect(dialog.textContent).toContain('Already in your toolbelt');
+    expect(dialog.textContent).toContain('Already shared with your agents');
     expect(dialog.textContent).toContain('Found in Claude, Codex');
-    await click(button('Add to toolbelt', dialog));
+    await click(button('Add to shared tools', dialog));
     expect(api.importApply).toHaveBeenCalledWith(['global|claude|github'], 'C:/work/app');
-    expect(host.textContent).toContain('Added 1 server to your toolbelt.');
+    expect(host.textContent).toContain('Added 1 tool to your shared tools.');
   });
 });
 

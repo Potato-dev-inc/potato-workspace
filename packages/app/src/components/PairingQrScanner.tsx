@@ -118,7 +118,7 @@ export function PairingQrScanner({ open, onClose, onScan, onScanInvite }: Props)
 
       <div className="flex-1 flex flex-col items-center justify-center p-4 gap-3 min-h-0">
         <p className="text-xs text-pm-muted text-center max-w-xs">
-          Point your camera at the QR in desktop Settings → Mobile pairing.
+          Point your camera at the QR in desktop Connect › Phone › Pair a phone.
         </p>
         <div
           id={readerId}

@@ -74,7 +74,7 @@ describe('cards that cannot be answered here', () => {
     const v = view(ITEM_NO_PROMPT);
     expect(v.state).toBe('no_prompt');
     expect(v.title).toBe('Codex is waiting for you');
-    expect(v.status).toBe("Potato Workspace can't read this question. Open the pane to answer it.");
+    expect(v.status).toBe("Potato Workspace can't read this question. Open the agent to answer it.");
     expect(v.buttons).toEqual([]);
     expect(v.openPane).toBe(true);
   });
@@ -89,7 +89,7 @@ describe('cards that cannot be answered here', () => {
     expect(v.state).toBe('watch_only');
     expect(v.buttons).toEqual([]);
     expect(v.glyph).toBe('waiting_input');
-    expect(v.status).toBe('This phone can watch only. To answer here, allow it on your PC: Settings › Phone.');
+    expect(v.status).toBe('This phone can watch only. To answer here, allow it on your PC: Connect › Phone.');
     // The risk and the command stay readable.
     expect(v.riskWord).toBe('Low risk');
     expect(v.summary).toContain('npm test');

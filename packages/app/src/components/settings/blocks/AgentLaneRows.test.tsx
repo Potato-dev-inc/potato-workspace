@@ -5,7 +5,8 @@ import { act } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { AcpLaneAgent, AcpLaneView } from '../../../lib/acpChat';
-import { SECTIONS } from '../catalog';
+import { BASE_SECTIONS, SECTIONS } from '../catalog';
+import { collectLabs } from '../arrange';
 import { visibleSections } from '../model';
 import { AgentLaneRows } from './AgentLaneRows';
 
@@ -56,7 +57,7 @@ describe('How to run', () => {
   it('shows the saved choice over the default', async () => {
     await render({ laneGet: async () => ({ labs_enabled: true, agents: [agent({ saved: true, lane: 'terminal', helper_lane: 'terminal' })] }), laneSet: vi.fn() });
     expect(popup()?.value).toBe('terminal');
-    expect(host.textContent).toContain('Helpers and new sessions run in a terminal.');
+    expect(host.textContent).toContain('Helpers and new agents run in a terminal.');
   });
 
   it('shows nothing while the Labs switch is off', async () => {
@@ -152,7 +153,7 @@ describe('Remove chat', () => {
     expect([...host.querySelectorAll('button')].filter((b) => b.textContent === 'Remove chat').length).toBe(2);
     await act(async () => host.querySelector<HTMLButtonElement>('[aria-label="Remove chat for Codex"]')!.click());
     expect(dialog()?.textContent).toContain('Remove chat for Codex?');
-    expect(dialog()?.textContent).toContain('New sessions will start in a terminal. Your saved chats stay.');
+    expect(dialog()?.textContent).toContain('New agents will start in a terminal. Your saved chats stay.');
     expect(dialog()?.textContent).not.toContain('add-on');
     await act(async () => dbtn('Cancel')!.click());
     expect(dialog()).toBeNull();
@@ -227,10 +228,11 @@ describe('the settings rows', () => {
   });
 
   it('the Labs switch row is named in plain words', () => {
-    const row = SECTIONS.flatMap((s) => s.rows).find((r) => r.id === 'acp-chat-labs')!;
+    const row = collectLabs(BASE_SECTIONS).find((r) => r.id === 'acp-chat-labs')!;
     expect(row.labs?.name).toBe('Chat view');
     expect(row.labs?.about).toBe('Use an agent as a chat instead of a terminal.');
-    expect(row.group).toBe('Early features (Labs)');
+    // It is listed on the Labs page, not as a row of its own.
+    expect(SECTIONS.flatMap((s) => s.rows).some((r) => r.id === 'acp-chat-labs')).toBe(false);
   });
 });
 

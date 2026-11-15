@@ -27,6 +27,7 @@ pub(super) fn handle(cx: &Ctx) -> Option<RouteResult> {
         ("GET", ["events", "recent"]) => events_recent(cx),
         ("GET", ["agent-contexts"]) => agent_contexts(),
         ("GET", ["settings"]) => settings_get(cx),
+        ("GET", ["settings", "catalog"]) => Ok((200, settings_store::read_catalog(cx.app))),
         ("PATCH" | "POST", ["settings"]) => settings_patch(cx),
         ("POST", ["project-path"]) => project_path(cx),
         _ => return None,

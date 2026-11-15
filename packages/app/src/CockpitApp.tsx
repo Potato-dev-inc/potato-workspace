@@ -65,6 +65,7 @@ import { TellTeamToast } from './components/cockpit/team/TellTeam';
 import { SimpleCockpit } from './components/simple/SimpleCockpit';
 import { FirstRun } from './components/firstrun/FirstRun';
 import { useFirstRun } from './components/firstrun/useFirstRun';
+import { FinishSetupChip } from './components/firstrun/FinishSetupChip';
 import { useSimpleMode } from './lib/simple-mode';
 import { projectOfCwd } from './lib/ship-model';
 import { useModeSwitch } from './lib/mode-switch/useModeSwitch';
@@ -129,7 +130,8 @@ import { useTimelineEnabled } from './lib/timeline';
 import { AgentBoard } from './components/cockpit/board/AgentBoard';
 import { useSpacesEnabled } from './lib/spaces';
 import { useLend } from './components/lend/useLend';
-import { TeamHost } from './components/team-page/TeamHost';
+import { ConnectPage } from './components/connect/ConnectPage';
+import { registerConnectOpener, connectTabFor, type ConnectTab } from './lib/openConnect';
 import { CockpitJoinLink } from './components/team-page/CockpitJoinLink';
 import { PassTaskHost } from './components/team-page/PassTaskHost';
 import { useTeamPresenceReport } from './components/team-page/useTeamPresenceReport';
@@ -169,7 +171,7 @@ export default function CockpitApp() {
   const where: WhereProps | undefined = deviceGroups.enabled
     ? {
         view: deviceGroups.view,
-        onAddDevice: () => void c.openSettings('devices'),
+        onAddDevice: () => openConnectPage('pcs'),
         onStartedHere: (paneId: string) => c.select(paneId),
         onStarted: (device: Device, paneId: string, chat: boolean) => {
           deviceGroups.refresh();
@@ -252,6 +254,12 @@ export default function CockpitApp() {
     setView('review');
   };
   const closeOverlay = () => setView(homeView(c.spawn !== null, c.selectedId));
+  // Connect: the phone, other PCs, the team and lending. It opens on the tab last used.
+  const [connectTab, setConnectTab] = useState<ConnectTab>('phone');
+  const openConnectPage = (tab?: ConnectTab) => {
+    if (tab) setConnectTab(tab);
+    setView('connect');
+  };
   // The Agent Store: opened from the "+" menu, the palette, Set up agents and Settings > Agents. Back returns to the resting view.
   const openStore = () => setView('store');
   // Settings is a main view in Orchestration mode; in Individual mode `open` asks for the Settings window.
@@ -343,9 +351,20 @@ export default function CockpitApp() {
   }, []);
   // Cards and buttons that say "Open Settings" on a row (openSettingsAt) open it through here: a row id is a valid tab.
   useEffect(() => {
-    registerSettingsOpener((tab) => void settings.open(tab));
+    // Phone, Devices, Team and Lend moved to the Connect page: an old target for one of them opens its tab.
+    registerSettingsOpener((tab) => {
+      const to = connectTabFor(tab);
+      if (to) openConnectPage(to);
+      else void settings.open(tab);
+    });
     return () => registerSettingsOpener(null);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [settings.open]);
+  useEffect(() => {
+    registerConnectOpener((tab) => openConnectPage(tab));
+    return () => registerConnectOpener(null);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
   // A ready lend says "Start a chat": the New agent page (no project picked).
   useEffect(() => {
     registerNewAgentOpener(() => {
@@ -358,7 +377,11 @@ export default function CockpitApp() {
   // "Set up agents" and "Project memory" views.
   const nav: typeof c = {
     ...c,
-    openSettings: async (tab) => settings.open(tab),
+    openSettings: async (tab) => {
+      const to = connectTabFor(tab);
+      if (to) openConnectPage(to);
+      else settings.open(tab);
+    },
     select: (id) => {
       setView(viewAfterSelect(c.spawn, id));
       setSplit((s) => splitAfterSelect(s, c.selectedId, id));
@@ -889,8 +912,8 @@ export default function CockpitApp() {
         onOpenPlans={() => setView('plans')}
         onOpenMorning={() => setView('morning')}
         onOpenRoutines={() => setView('routines')}
-        team={{ open: view === 'team', waiting: teamWaiting }}
-        onOpenTeam={() => setView('team')}
+        connect={{ open: view === 'connect', waiting: teamWaiting }}
+        onOpenConnect={() => openConnectPage()}
         canPassTask={!!team.state?.active}
         onOpenScores={() => setView('scores')}
         onOpenToday={todayOn ? () => setView('today') : undefined}
@@ -972,8 +995,8 @@ export default function CockpitApp() {
           <div className="wn-page">
             <FeatureGuide notify={c.notify} />
           </div>
-        ) : view === 'team' ? (
-          <TeamHost team={team} lend={lend} paneNames={c.names} />
+        ) : view === 'connect' ? (
+          <ConnectPage tab={connectTab} onTab={setConnectTab} team={team} lend={lend} paneNames={c.names} />
         ) : view === 'routines' ? (
           <RoutinesPage onClose={closeOverlay} defaultProject={c.selectedId ? projectOfCwd(c.registry.panes.get(c.selectedId)?.info.cwd)?.path : undefined} />
         ) : view === 'scores' ? (
@@ -1114,7 +1137,7 @@ export default function CockpitApp() {
           onOpenPlans={() => setView('plans')}
           onOpenMorning={() => setView('morning')}
           onOpenScores={() => setView('scores')}
-          onOpenTeam={() => setView('team')}
+          onOpenTeam={() => openConnectPage('team')}
           onOpenReview={() => openReview()}
           onReviewRiskiest={() => openReview(true)}
           onOpenStore={openStore}
@@ -1183,6 +1206,7 @@ export default function CockpitApp() {
         />
       )}
       {welcome.open && c.mode !== 'individual' && <FirstRun key={welcome.openKey} c={nav} seed={welcome.seed} onFinish={welcome.finish} />}
+      {!welcome.open && welcome.pending && c.mode !== 'individual' && <FinishSetupChip onOpen={welcome.reopen} />}
       {c.mode !== 'individual' && <TellTeamToast />}
       <ImportHost c={nav} />
       <AddAgentActionHost c={nav} />

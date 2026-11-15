@@ -3,6 +3,7 @@ import { useT } from '../../i18n';
 import { errorSentence } from '../../lib/sayError';
 import type { ShareView, TeamApi, TeamConfigView } from '../../lib/team';
 import { initials, personHue } from './person-color';
+import { EmptyState } from '../common/EmptyState';
 import { ShareSheet } from './ShareSheet';
 import { busyLine, presenceWords, shareLine, workingLine, type Person } from './team-page-model';
 
@@ -22,6 +23,7 @@ export function PeopleTab({
   onAskUsage,
   onPassTask,
   onChanged,
+  onInvite,
 }: {
   people: Person[];
   config: TeamConfigView;
@@ -33,6 +35,8 @@ export function PeopleTab({
   /** Opens the Pass a task sheet with this person chosen. */
   onPassTask: (memberId: string) => void;
   onChanged: () => void;
+  /** "Invite a teammate" in the empty block; absent: no button. */
+  onInvite?: () => void;
 }) {
   const t = useT();
   const [sharing, setSharing] = useState(false);
@@ -76,6 +80,15 @@ export function PeopleTab({
             </li>
           ))}
         </ul>
+      )}
+      {!people.some((p) => !p.member.me) && (
+        <EmptyState
+          testId="team-people-empty"
+          className="tpg-empty-block"
+          title={t('teamHub.people.aloneTitle')}
+          line={t('teamHub.people.aloneLine')}
+          action={config.admin && onInvite ? { label: t('teamHub.inviteTeammate'), onClick: onInvite } : null}
+        />
       )}
       <ul className="tpg-cards" aria-label={t('teamHub.people.list')}>
         {people.map((p) => {

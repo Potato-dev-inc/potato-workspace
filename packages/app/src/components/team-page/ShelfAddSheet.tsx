@@ -3,6 +3,7 @@ import { useT } from '../../i18n';
 import { errorSentence } from '../../lib/sayError';
 import type { ShelfApi, ShelfApplied, ShelfPreview, ShelfTarget } from '../../lib/shelf';
 import { AgentLogo } from '../common/AgentLogo';
+import { DisabledReason } from '../common/DisabledReason';
 import { defaultAgents, listWords, statusWords, targetsFor, type AddSubject } from './shelf-model';
 
 /** How long Undo stays on screen after an add. */
@@ -214,6 +215,7 @@ export function ShelfAddSheet({ subject, targets, api, onClose, onChanged }: { s
         <button type="button" className="ck-btn ck-btn--primary" disabled={!canAdd} onClick={() => void add()}>
           {t('teamHub.shelf.addToAgents')}
         </button>
+        <DisabledReason reason={!canAdd && !busy && !!preview?.canAdd && agents.length > 0 && needsTrust && !trusted ? t('teamHub.shelf.tickFirst') : null} />
         <button type="button" className="ck-btn ck-btn--plain" onClick={onClose}>
           {t('teamHub.shelf.cancel')}
         </button>

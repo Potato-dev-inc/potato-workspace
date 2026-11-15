@@ -104,10 +104,10 @@ describe('session rail in the pane view', () => {
   it('hides with the header button and remembers it', async () => {
     const c = cockpit([mk('p', 'Refactor auth')], 'p');
     await act(async () => root.render(<PaneView c={c} paneId="p" />));
-    expect(toggle().getAttribute('aria-label')).toBe('Hide session details');
+    expect(toggle().getAttribute('aria-label')).toBe('Hide chat details');
     await act(async () => toggle().click());
     expect(rail()).toBeNull();
-    expect(toggle().getAttribute('aria-label')).toBe('Show session details');
+    expect(toggle().getAttribute('aria-label')).toBe('Show chat details');
     expect(window.localStorage.getItem('pm.sessionRail.open')).toBe('0');
   });
 

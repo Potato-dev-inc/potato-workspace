@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { MAC_MINI, NODE_MAC, WORK_LAPTOP } from '../dev/devices-fixtures';
-import { activityLine, cannotPickWhy, chipText, clockText, deviceNotices, devicesEnabled, isRemoteId, lastSeenText, parseRemoteId, remoteId, requestError, runtimesOf, sortActivity, stateSentence, stateWord, type DevicesView } from './devices';
+import { activityLine, cannotPickWhy, chipText, clockText, deviceNotices, devicesEnabled, isRemoteId, lastSeenText, nextStepLine, nothingAllowed, parseRemoteId, remoteId, requestError, runtimesOf, sortActivity, stateSentence, stateWord, type DevicesView } from './devices';
 
 const view = (devices = [MAC_MINI, WORK_LAPTOP], enabled = true): DevicesView => ({
   enabled,
@@ -41,7 +41,7 @@ describe('devices rules', () => {
     expect(stateWord(WORK_LAPTOP)).toBe('offline');
     expect(stateWord({ state: 'not_allowed' })).toBe('not allowed');
     expect(stateSentence(MAC_MINI)).toBe('Online · same network');
-    expect(stateSentence({ ...MAC_MINI, path: 'relay' })).toBe('Online · through relay (slower)');
+    expect(stateSentence({ ...MAC_MINI, path: 'relay' })).toBe('Online · through the public link (slower)');
     expect(stateSentence({ ...WORK_LAPTOP, last_seen: null })).toBe('Not seen yet');
     expect(stateSentence({ ...MAC_MINI, state: 'not_allowed' })).toContain('does not let this PC run agents');
     expect(lastSeenText({ last_seen: null })).toBe('Not seen yet');
@@ -50,7 +50,7 @@ describe('devices rules', () => {
 
   it('shows the route chip only for a live link', () => {
     expect(chipText({ state: 'online', path: 'direct' })).toBe('Direct');
-    expect(chipText({ state: 'online', path: 'relay' })).toBe('Relay');
+    expect(chipText({ state: 'online', path: 'relay' })).toBe('Public link');
     expect(chipText({ state: 'online', path: 'own' })).toBe('Your link');
     expect(chipText({ state: 'offline', path: null })).toBeNull();
     expect(chipText({ state: 'online', path: null })).toBeNull();
@@ -73,10 +73,26 @@ describe('devices rules', () => {
   });
 
   it('turns a refused call into the plain sentence', () => {
-    expect(requestError('Mac mini', { status: 403, body: { error: 'not_allowed' } })).toBe('Mac mini does not let this PC run agents. Turn it on there: Settings › Devices.');
+    expect(requestError('Mac mini', { status: 403, body: { error: 'not_allowed' } })).toBe('Mac mini does not let this PC run agents. Turn it on there: Connect › My PCs.');
     expect(requestError('Mac mini', { status: 400, body: { hint: 'Pick a folder.' } })).toBe('Pick a folder.');
     expect(requestError('Mac mini', { status: 500, body: {} })).toBe('HTTP 500');
     expect(requestError('Mac mini', new Error('That device is offline.'))).toBe('That device is offline.');
+  });
+
+  it('gives a device that may do nothing here one next step, and names the right when one is refused', () => {
+    // A freshly paired PC: every switch off -> one line, no dead end.
+    expect(nothingAllowed(MAC_MINI)).toBe(true);
+    expect(nextStepLine(MAC_MINI)).toBe('Nothing is allowed for it on this PC yet.');
+    // Any one right is enough: the device is no longer "nothing".
+    for (const right of [{ lets_run: true }, { lets_files: true }, { lets_lend: true }, { agents_may_send: true }]) {
+      expect(nothingAllowed({ ...MAC_MINI, ...right })).toBe(false);
+      expect(nextStepLine({ ...MAC_MINI, ...right })).toBeNull();
+    }
+    // Refused by the other PC: the line names that right by the words of its own switch.
+    const refused = { ...MAC_MINI, state: 'not_allowed' as const };
+    expect(nextStepLine(refused)).toBe('Run agents and terminals here is still off for Mac mini.');
+    // A name from another device is text only, capped.
+    expect(nextStepLine({ ...refused, name: 'x'.repeat(80) })).toContain('x'.repeat(40));
   });
 });
 
@@ -116,7 +132,7 @@ describe('device states and notices', () => {
     expect(t('offline').map((n) => [n.text, n.retry])).toEqual([['Offline. Last seen 14:02.', true]]);
     expect(t('asleep').map((n) => [n.text, n.retry])).toEqual([['Asleep or off.', true]]);
     expect(t('closed').map((n) => [n.text, n.retry])).toEqual([['Potato Workspace is closed on Mac mini.', false]]);
-    expect(t('not_allowed')[0]!.text).toBe('Mac mini does not let this PC run agents. Turn it on there: Settings › Devices.');
+    expect(t('not_allowed')[0]!.text).toBe('Mac mini does not let this PC run agents. Turn it on there: Connect › My PCs.');
     expect(deviceNotices({ ...MAC_MINI, too_old: true })[0]!.text).toContain('older Potato Workspace');
   });
 

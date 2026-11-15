@@ -673,3 +673,10 @@
     background: var(--bg);
   }
 }
+
+/* The shared empty block inside a tab (People with no teammates, an empty Shelf): one block, a little below the top. */
+.cockpit .ck-empty.tpg-empty-block {
+  margin: 20px auto 12px;
+  max-width: 480px;
+}
+

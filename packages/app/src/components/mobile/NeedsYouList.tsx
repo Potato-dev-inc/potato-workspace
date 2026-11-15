@@ -52,6 +52,7 @@ export function NeedsYouList({
   onOpenPane,
   onRefresh,
   showEmpty = false,
+  emptyText,
 }: {
   snapshot: AttentionSnapshot;
   bridge: BridgeClient;
@@ -65,6 +66,8 @@ export function NeedsYouList({
   onRefresh?: () => void;
   /** Draw "Nothing needs you" when the queue is empty. */
   showEmpty?: boolean;
+  /** The empty state in other words (the phone home says "Nothing needs you right now."). */
+  emptyText?: string;
 }) {
   const [now, setNow] = useState(() => Date.now());
   // Answers this phone gave (item id -> when): the tombstone of such a card leaves 3 s later.
@@ -81,10 +84,16 @@ export function NeedsYouList({
 
   if (queue.length === 0) {
     return showEmpty ? (
-      <div className="ph-queue-empty">
-        <b>{COPY.empty.title}</b>
-        {COPY.empty.body}
-      </div>
+      emptyText ? (
+        <div className="ph-queue-empty" data-testid="needs-you-empty">
+          <b>{emptyText}</b>
+        </div>
+      ) : (
+        <div className="ph-queue-empty">
+          <b>{COPY.empty.title}</b>
+          {COPY.empty.body}
+        </div>
+      )
     ) : null;
   }
 

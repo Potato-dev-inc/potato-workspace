@@ -133,7 +133,8 @@ describe('palette commands for features that hide', () => {
     act(() => root.render(<Palette c={c} onClose={vi.fn()} />));
     act(() => rowFor('Missions…')!.click());
     expect(c.openSettings).toHaveBeenCalledWith('missions');
-    expect(resolveSettingsTarget('missions')).toEqual({ page: 'advanced', row: 'missions' });
+    // Missions is a plain switch: it is on the Labs page, which is the row the link opens.
+    expect(resolveSettingsTarget('missions')).toEqual({ page: 'advanced', row: 'labs-index' });
     const heard: (string | null)[] = [];
     const off = onOpenStartMission((p) => heard.push(p));
     const on = settingsShortcuts(c, { missionsOn: true, projectPath: 'C:\work\shop' });

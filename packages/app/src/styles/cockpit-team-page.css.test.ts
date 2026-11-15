@@ -44,7 +44,7 @@ describe('team page styles', () => {
       .filter((s) => !s.startsWith('@'))
       .flatMap((s) => s.split(',').map((part) => part.trim()));
     expect(selectors.length).toBeGreaterThan(0);
-    for (const selector of selectors) expect(selector, selector).toMatch(/^\.cockpit \.tpg/);
+    for (const selector of selectors) expect(selector, selector).toMatch(/^\.cockpit (?:\.tpg|\.ck-empty\.tpg)/);
   });
 
   it('the page is the scroll area of the main column: it grows, may shrink to the window, scrolls, and its rows keep their height', () => {

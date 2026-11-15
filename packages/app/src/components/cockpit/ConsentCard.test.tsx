@@ -24,7 +24,7 @@ const takeOver: Question = {
   id: 'c1',
   agent: 'Claude',
   question: 'Allow Claude to control Codex?',
-  context: 'It would type into the pane and answer its questions. It did not start this pane.',
+  context: 'It would type into the pane and answer its questions. It did not start this window.',
   choices: [
     { id: 'allow_once', label: 'Allow once' },
     { id: 'always', label: 'Always allow here' },
@@ -59,7 +59,7 @@ describe('ConsentCard', () => {
     expect(button('Deny')?.className).toContain('ck-btn--primary');
     expect(button('Allow once')?.className).toContain('ck-btn--secondary');
     expect(button('Always allow here')?.className).toContain('ck-btn--plain');
-    expect(host.textContent).toContain('It did not start this pane.');
+    expect(host.textContent).toContain('It did not start this window.');
     // Deny first, and no number key may answer a consent
     expect(Array.from(host.querySelectorAll('[data-ib="answer"]')).map((b) => b.textContent)).toEqual(['Deny', 'Allow once', 'Always allow here']);
     expect(host.querySelector('[data-ib-card]')?.hasAttribute('data-guard')).toBe(true);
@@ -128,7 +128,7 @@ describe('ConsentCard: answering a risky prompt', () => {
     id: 'c2',
     agent: requester,
     question: 'x',
-    context: 'Delete a folder outside this project. It did not start this pane.',
+    context: 'Delete a folder outside this project. It did not start this window.',
     choices: [
       { id: 'allow_once', label: 'Allow once' },
       { id: 'deny', label: 'Deny' },
@@ -138,7 +138,7 @@ describe('ConsentCard: answering a risky prompt', () => {
 
   it('quotes what it wants to answer, names the asker and marks the risk', () => {
     render(answerRisky('Codex'));
-    expect(host.querySelector('.ib-reason')?.textContent).toBe('It wants to answer: "Delete a folder outside this project".\nIt did not start this pane.');
+    expect(host.querySelector('.ib-reason')?.textContent).toBe('It wants to answer: "Delete a folder outside this project".\nIt did not start this agent.');
     expect(host.querySelector('.ib-meta')?.textContent).toBe('Codex');
     expect(host.querySelector('.ib-status')?.textContent).toBe('High risk');
     expect(host.querySelector('[data-ib-card]')?.getAttribute('data-risk')).toBe('high');

@@ -22,7 +22,7 @@ describe('connectionLine', () => {
   });
 
   it('describes a socket and its reconnects in plain words', () => {
-    expect(connectionLine(link({ reconnects: 2 }), null)).toBe('Connected · 42 ms round trip · reconnected 2 times');
+    expect(connectionLine(link({ reconnects: 2 }), null)).toBe('Connected · 42 ms · reconnected 2 times');
     expect(connectionLine(link({ reconnects: 1 }), null)).toContain('reconnected once');
   });
 

@@ -71,14 +71,14 @@ describe('groupTargets', () => {
       target({ paneId: 'c', sameFolder: false }),
       target({ paneId: 'd', sameFolder: true }),
     ]);
-    expect(groups.map((g) => g.label)).toEqual(['Same folder', 'Other panes']);
+    expect(groups.map((g) => g.label)).toEqual(['Same folder', 'Other agents']);
     expect(groups[0].items.map((t) => t.paneId)).toEqual(['b', 'd']);
     expect(groups[1].items.map((t) => t.paneId)).toEqual(['a', 'c']);
   });
 
   it('leaves out an empty group', () => {
     expect(groupTargets([target({ sameFolder: true })]).map((g) => g.label)).toEqual(['Same folder']);
-    expect(groupTargets([target({ sameFolder: false })]).map((g) => g.label)).toEqual(['Other panes']);
+    expect(groupTargets([target({ sameFolder: false })]).map((g) => g.label)).toEqual(['Other agents']);
   });
 
   it('returns no groups for no targets', () => {

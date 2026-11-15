@@ -24,7 +24,7 @@ export function UsageTab({ lend, api = lendApi, team = teamApi }: { lend: LendHa
         <section className="tpg-card">
           <h3 className="tpg-h">{t('teamHub.usage.off')}</h3>
           <p className="tpg-sub">{t('teamHub.usage.offHelp')}</p>
-          <button type="button" className="ck-btn ck-btn--secondary" onClick={() => openSettingsAt('general')}>
+          <button type="button" className="ck-btn ck-btn--secondary" onClick={() => openSettingsAt('general', 'lend-labs')}>
             {t('teamHub.usage.offButton')}
           </button>
         </section>

@@ -140,11 +140,11 @@ describe('start a team', () => {
     expect(how[2]).toContain('Paste the token here');
     const link = [...sheet()!.querySelectorAll('a')].find((a) => a.textContent === 'Create a Cloudflare token') as HTMLAnchorElement;
     expect(link.getAttribute('href')).toBe(CLOUDFLARE_TOKENS_URL);
-    expect(sheetButton('Create relay').disabled).toBe(true);
+    expect(sheetButton('Create team link').disabled).toBe(true);
     const token = sheet()!.querySelector<HTMLInputElement>('input[aria-label="Cloudflare token"]')!;
     expect(token.type).toBe('password');
     await typeInto(token, 'cf-token');
-    await click(sheetButton('Create relay'));
+    await click(sheetButton('Create team link'));
     await settle(5);
     expect(api.calls).toContain('deployRelay("cf-token",null)');
     expect(api.calls.find((c) => c.startsWith('create'))).toBe('create({"teamName":"Acme","name":"Pat","relay":"https://pm-relay.maya.workers.dev","folder":""})');
@@ -167,12 +167,12 @@ describe('start a team', () => {
     await typeInto(field('Team name'), 'Acme');
     await click(buttonByText(host, 'Create team relay'));
     await typeInto(sheet()!.querySelector<HTMLInputElement>('input[aria-label="Cloudflare token"]')!, 'cf-token');
-    await click(sheetButton('Create relay'));
+    await click(sheetButton('Create team link'));
     await settle(5);
     const steps = [...sheet()!.querySelectorAll('.st-relay-steps li')].map((li) => `${li.textContent}:${li.getAttribute('data-state')}`);
     expect(steps).toEqual([
       'Checking your token:done',
-      'Putting the relay in your account:failed',
+      "Putting your team's link in your account:failed",
       'Turning on its free address:later',
       'Waiting for it to start:later',
       'Done:later',
@@ -206,10 +206,10 @@ describe('start a team', () => {
     await click(buttonByText(host, 'Create team relay'));
     expect(sheet()!.querySelector('[aria-label="Cloudflare account"]')).toBeNull();
     await typeInto(sheet()!.querySelector<HTMLInputElement>('input[aria-label="Cloudflare token"]')!, 'cf-token');
-    await click(sheetButton('Create relay'));
+    await click(sheetButton('Create team link'));
     await settle(5);
     expect(sheet()!.querySelector('[aria-label="Cloudflare account"]')).not.toBeNull();
-    await click(sheetButton('Create relay'));
+    await click(sheetButton('Create team link'));
     await settle(5);
     expect(api.calls.filter((c) => c.startsWith('deployRelay'))).toEqual(['deployRelay("cf-token",null)', 'deployRelay("cf-token","a1")']);
     expect(api.calls.find((c) => c.startsWith('create'))).toContain('"relay":"https://pm-relay.work.workers.dev"');

@@ -2,10 +2,11 @@
 // The page is loaded when it is opened: an early feature does not weigh on the main bundle.
 import { lazy, Suspense } from 'react';
 import type { RowDef } from '../model';
+import { movedToConnect } from '../../connect/movedRow';
 
 const DevicesPage = lazy(() => import('../../devices/DevicesPage').then((m) => ({ default: m.DevicesPage })));
 
-export const devicesRows: RowDef[] = [
+export const devicesRowsOriginal: RowDef[] = [
   {
     id: 'devices-page',
     group: 'Devices',
@@ -20,3 +21,6 @@ export const devicesRows: RowDef[] = [
     ),
   },
 ];
+
+/** In the cockpit other PCs live on Connect > My PCs; this row links there. */
+export const devicesRows: RowDef[] = movedToConnect(devicesRowsOriginal, ['devices-page'], 'pcs');

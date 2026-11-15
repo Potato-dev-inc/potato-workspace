@@ -364,6 +364,26 @@
   align-items: flex-start;
   gap: 6px;
 }
+/* "Lending from this PC: On · Change", at the top of the Lend page. */
+.lend-switch-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+  color: var(--label-2);
+}
+.lend-switch-dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--label-3);
+}
+.lend-switch-row[data-state='on'] .lend-switch-dot {
+  background: var(--live);
+}
+.lend-switch-row .lend-btn {
+  margin-left: 2px;
+}
 .lend-note {
   color: var(--label-3, #999);
   font-size: 12px;

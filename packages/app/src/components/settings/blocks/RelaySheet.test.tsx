@@ -60,7 +60,7 @@ describe('RelaySheet under StrictMode', () => {
     await mountSheet(api, onDone);
 
     await typeInto(host.querySelector<HTMLInputElement>('input[aria-label="Cloudflare token"]')!, 'cf-test-token');
-    await click(buttonByText(host, 'Create relay'));
+    await click(buttonByText(host, 'Create team link'));
     await settle();
 
     expect(api.deployRelay).toHaveBeenCalledTimes(1);
@@ -76,7 +76,7 @@ describe('RelaySheet under StrictMode', () => {
     await mountSheet(api, onDone);
 
     await typeInto(host.querySelector<HTMLInputElement>('input[aria-label="Cloudflare token"]')!, 'cf-test-token');
-    await click(buttonByText(host, 'Create relay'));
+    await click(buttonByText(host, 'Create team link'));
     await settle();
 
     expect(hasText(host, 'Cloudflare rejected the token')).toBe(true);

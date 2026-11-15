@@ -518,3 +518,25 @@ fn a_phone_never_has_the_lend_right() {
     assert!(!Caps::all().satisfies(route_need("POST", &["lend", "item"])));
     assert!(Caps::all().with(Cap::Lend, true).satisfies(route_need("POST", &["lend", "item"])));
 }
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 4)]
+async fn a_paired_pc_tells_its_room_left_in_hello_and_only_numbers_and_labels_arrive() {
+    let net = MemoryNet::new();
+    let mut opts = Options::memory();
+    // B's usage as the app would hand it over, plus a token-shaped extra that must never be forwarded by the client.
+    opts.room = Arc::new(|| json!([{ "agent_id": "claude", "agent_label": "Claude", "account_label": "Work", "percent_left": 62, "resets_at_ms": 1_800_000_000_000u64, "observed_at_ms": 5, "token": "sk-secret" }]));
+    let a = instance("alpha", net.factory(), false);
+    let b = instance_with("beta", net.factory(), false, Arc::new(SystemClock), Arc::new(real_now), opts);
+    pair(&b, &a).await;
+    b.link.set_permission(&a.node(), true, Some("watch")).unwrap();
+    a.link.probe_all().await;
+    until("the room arrives", || !a.link.view()["devices"][0]["room"].as_array().unwrap().is_empty()).await;
+    let device = &a.link.view()["devices"][0];
+    let row = device["room"][0].as_object().unwrap();
+    let mut keys: Vec<&str> = row.keys().map(|k| k.as_str()).collect();
+    keys.sort();
+    assert_eq!(keys, ["account_label", "agent_id", "agent_label", "observed_at_ms", "percent_left", "resets_at_ms"]);
+    assert_eq!(row["percent_left"], 62);
+    assert!(device["room_at"].as_u64().is_some());
+    assert!(!device.to_string().contains("sk-secret"));
+}

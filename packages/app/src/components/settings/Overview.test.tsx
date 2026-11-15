@@ -44,7 +44,7 @@ describe('Overview cards', () => {
     expect(card('signed-in').textContent).toContain('Claude and Codex are signed in');
     expect(card('phone').textContent).toContain('1 phone paired');
     expect(card('updates').textContent).toContain('Up to date (1.0.19)');
-    expect(card('helpers').textContent).toContain('Helpers show in a pane and stay open');
+    expect(card('helpers').textContent).toContain('Helpers open in a window and stay open');
     for (const id of ['agents', 'signed-in', 'phone', 'updates', 'helpers']) expect(glyph(id)).toBe('✓');
   });
 

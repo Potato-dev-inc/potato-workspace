@@ -120,6 +120,13 @@ pub fn app_health() -> Value {
     serde_json::json!({ "signed_out": signed_out, "needs_person": needs_person })
 }
 
+/// Room left on this PC's own sign-ins, for a device that asks "who are you": numbers and labels from the last usage
+/// read (the cache only: this never asks an agent or a provider).
+pub fn app_room() -> Value {
+    let rooms = crate::usage::cached().map(|s| crate::usage::room::rooms_of(&s)).unwrap_or_default();
+    crate::usage::room::payload(&rooms)
+}
+
 /// The OS credential store, as the one `SecretBackend` the web route keeps its addresses and tokens in.
 struct GlobalSecrets;
 
@@ -286,6 +293,7 @@ pub fn app_service() -> Result<Arc<DeviceLink>, String> {
         web_call: Arc::new(AppWebCall),
         web_address: Arc::new(web_address),
         health: Arc::new(app_health),
+        room: Arc::new(app_room),
         send_work_store: store("send-work.json"),
         folders_store: store("files-folders.json"),
         project_folders: Arc::new(project_folders),

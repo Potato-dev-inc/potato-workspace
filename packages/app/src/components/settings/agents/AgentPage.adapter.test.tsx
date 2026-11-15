@@ -41,11 +41,11 @@ async function show(row: AgentRow, apis: AgentPageApis) {
 const adapter = () => host.querySelector<HTMLElement>('[data-testid="chat-adapter-agy"]');
 const button = (label: string) => host.querySelector<HTMLButtonElement>(`button[aria-label="${label}"]`);
 
-describe('Agent page: Chat adapter', () => {
+describe('Agent page: Chat', () => {
   it('a wizard-added agent with no chat shows None and a way to add one', async () => {
     await show(wizardRow, apisFor({ labs_enabled: true, agents: [], can_add_chat: [{ id: 'agy', label: 'Agy', reason: 'not found on this PC' }] }));
     expect(adapter()?.textContent).toBe('None');
-    expect(host.textContent).toContain('Chat adapter');
+    expect(host.textContent).toContain('Chat');
     expect(button('Add chat for Agy')).not.toBeNull();
     expect(button('Add chat for Agy')?.disabled).toBe(false);
     expect(button('Remove chat for Agy')).toBeNull();
@@ -65,7 +65,7 @@ describe('Agent page: Chat adapter', () => {
     );
     expect(adapter()?.getAttribute('data-current')).toBe('Agy');
     expect(host.textContent).toContain('Added by you');
-    expect(button('Change the chat adapter of Agy')).not.toBeNull();
+    expect(button('Change how Agy chats')).not.toBeNull();
     // Only one Remove chat button on the page (the how-it-opens block leaves it to this row).
     expect(host.querySelectorAll('button[aria-label="Remove chat for Agy"]')).toHaveLength(1);
     await act(async () => button('Remove chat for Agy')!.click());

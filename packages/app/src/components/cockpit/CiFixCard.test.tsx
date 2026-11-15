@@ -169,7 +169,7 @@ describe('CiFixCard: the fix card', () => {
     expect(text.textContent).toContain('<a href="https://evil.example">x</a>');
     expect(text.textContent).toContain('[click](https://evil.example)');
     expect(host.querySelector('a')).toBeNull();
-    expect(host.textContent).toContain('Snapshot 1a2b3c4d');
+    expect(host.textContent).toContain('From a saved copy of your files');
     // shutting and opening the log again does not read it a second time
     act(() => byText('Hide log').click());
     expect(host.querySelector('.ib-ci-log')).toBeNull();

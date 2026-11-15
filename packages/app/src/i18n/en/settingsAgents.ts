@@ -7,7 +7,7 @@ export const settingsAgents = {
   "agentsRows.bringHelp": "Pick an agent, see its newest chats and bring the ones you want. Nothing leaves this computer.",
   "agentsRows.bringBtn": "Bring chats",
   "agentsRows.helperToolsLabel": "Potato Workspace helpers inside agents",
-  "agentsRows.helperToolsHelp": "Panes you open here get the helper tools. Your agent settings files are not changed.",
+  "agentsRows.helperToolsHelp": "Windows you open here get the helper tools. Your agent settings files are not changed.",
   "keepGoing.loginRemoved": "login removed",
   "keepGoing.saveFailed": "Couldn't save. Try again.",
   "keepGoing.help": "Potato Workspace offers these agents, in this order, when the agent a task runs on hits its usage limit. You pick one each time.",

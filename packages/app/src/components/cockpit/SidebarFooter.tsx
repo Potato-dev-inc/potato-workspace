@@ -1,10 +1,11 @@
-// The bottom of the sidebar: one row (Settings, Review with its count, and a ... menu). The menu holds everything else:
-// Spaces, Project, Set up agents, Plans, Scores, Theme and the Orchestration | Individual mode.
+// The bottom of the sidebar: one row (Settings, Review with its count, and a ... menu). The menu is three short
+// labelled groups, most used first: Go to (Browser, the pages), Tools (Set up agents) and Mode (Orchestration |
+// Individual). Theme is not here: it lives in Settings > Look and feel > Appearance, so the menu does not repeat it.
 // One status line sits above the row and only exists when there is something to say: the lost connection, else the
 // background jobs, else a Night Shift run (plan usage is the bottom bar, UsageBar.tsx).
 import { useRef, useState } from 'react';
 import { FloatingMenu } from './FloatingMenu';
-import { IconChart, IconCheck, IconClock, IconGlobe, IconMoon, IconMore, IconNote, IconSun, IconTerminal } from './Icons';
+import { IconChart, IconCheck, IconClock, IconGlobe, IconLayers, IconMore, IconNote, IconTerminal } from './Icons';
 import { JobsChip } from './rail/JobsChip';
 import type { HelperRow } from './rail/BackgroundSection';
 import { NightChip } from './night/NightChip';
@@ -12,18 +13,10 @@ import { HelpMenu } from '../whatsnew/HelpMenu';
 import '../../styles/individual-mode.css';
 import '../../styles/sidebar-footer.css';
 import { useT } from '../../i18n';
-import { isDarkTheme, type ThemeChoice } from '../../lib/theme-tone';
-
-const THEME_CHOICES = [
-  ['dark', 'lookFeel.theme.dark'],
-  ['light', 'lookFeel.theme.light'],
-  ['dim', 'lookFeel.theme.dim'],
-  ['auto', 'lookFeel.theme.auto'],
-] as const;
 
 type Mode = 'orchestration' | 'individual';
 
-/** A gear, so Settings does not look like the Sun of the theme button. */
+/** A gear, so Settings does not look like a theme switch. */
 function GearIcon() {
   return (
     <svg width={16} height={16} viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
@@ -45,10 +38,8 @@ export interface SidebarFooterProps {
   onOpenPane: (id: string) => void;
   mode: Mode;
   onMode: (mode: Mode) => void;
-  theme: ThemeChoice;
-  onToggleTheme: () => void;
-  /** Pick a theme by name: the "Theme" menu item. Without it the item is the old dark/light switch. */
-  onSetTheme?: (next: ThemeChoice) => void;
+  /** Opens the browser window (the globe in a chat header). Absent: no Browser row. */
+  onOpenBrowser?: () => void;
   /** The helpers a pane started, shown in the background tasks list. */
   helpersOf?: (paneId: string) => readonly HelperRow[];
   onStopHelper?: (id: string) => Promise<void> | void;
@@ -132,93 +123,91 @@ export function SidebarFooter(p: SidebarFooterProps) {
           </button>
           {moreOpen && (
             <FloatingMenu anchorRef={moreBtn} prefer="up" align="start" label={t('sidebar.more')} onClose={(back) => { setMoreOpen(false); if (back) moreBtn.current?.focus(); }}>
-              {p.spacesEnabled && p.onOpenSpaces && (
-                <button type="button" role="menuitem" className={`ck-menu-item${p.spacesOpen ? ' is-active' : ''}`} aria-current={p.spacesOpen ? 'page' : undefined} onClick={pick(p.onOpenSpaces)}>
-                  <span className="ck-menu-ic">
-                    <IconGlobe />
-                  </span>
-                  {t('sidebar.spaces')}
-                </button>
-              )}
-              {p.onOpenMemory && (
-                <button type="button" role="menuitem" className="ck-menu-item" onClick={pick(p.onOpenMemory)}>
-                  <span className="ck-menu-ic">
-                    <IconNote />
-                  </span>
-                  {t('sidebar.project')}
-                </button>
-              )}
+              <div className="ck-menu-group" role="group" aria-label={t('sidebar.groupGoTo')} data-testid="more-group-go-to">
+                <div className="ck-menu-cap" aria-hidden="true">
+                  {t('sidebar.groupGoTo')}
+                </div>
+                {p.onOpenBrowser && (
+                  <button type="button" role="menuitem" className="ck-menu-item" title={t('sidebar.browserTip')} onClick={pick(p.onOpenBrowser)}>
+                    <span className="ck-menu-ic">
+                      <IconGlobe />
+                    </span>
+                    {t('sidebar.browser')}
+                  </button>
+                )}
+                {p.onOpenPlans && (
+                  <button type="button" role="menuitem" className="ck-menu-item" onClick={pick(p.onOpenPlans)}>
+                    <span className="ck-menu-ic">
+                      <IconChart />
+                    </span>
+                    {t('sidebar.yourPlans')}
+                  </button>
+                )}
+                {p.onOpenRoutines && (
+                  <button type="button" role="menuitem" className="ck-menu-item" onClick={pick(p.onOpenRoutines)}>
+                    <span className="ck-menu-ic">
+                      <IconClock />
+                    </span>
+                    {t('sidebar.routines')}
+                  </button>
+                )}
+                {p.onOpenScores && (
+                  <button type="button" role="menuitem" className="ck-menu-item" onClick={pick(p.onOpenScores)}>
+                    <span className="ck-menu-ic">
+                      <IconChart />
+                    </span>
+                    {t('sidebar.scores')}
+                  </button>
+                )}
+                {p.onOpenMemory && (
+                  <button type="button" role="menuitem" className="ck-menu-item" onClick={pick(p.onOpenMemory)}>
+                    <span className="ck-menu-ic">
+                      <IconNote />
+                    </span>
+                    {t('sidebar.project')}
+                  </button>
+                )}
+                {p.spacesEnabled && p.onOpenSpaces && (
+                  <button type="button" role="menuitem" className={`ck-menu-item${p.spacesOpen ? ' is-active' : ''}`} aria-current={p.spacesOpen ? 'page' : undefined} onClick={pick(p.onOpenSpaces)}>
+                    <span className="ck-menu-ic">
+                      <IconLayers />
+                    </span>
+                    {t('sidebar.spaces')}
+                  </button>
+                )}
+              </div>
               {p.onOpenDoctor && (
-                <button type="button" role="menuitem" className="ck-menu-item" onClick={pick(p.onOpenDoctor)}>
-                  <span className="ck-menu-ic">
-                    <IconTerminal />
-                  </span>
-                  {t('sidebar.setUpAgents')}
-                </button>
+                <div className="ck-menu-group" role="group" aria-label={t('sidebar.groupTools')} data-testid="more-group-tools">
+                  <div className="ck-menu-cap" aria-hidden="true">
+                    {t('sidebar.groupTools')}
+                  </div>
+                  <button type="button" role="menuitem" className="ck-menu-item" onClick={pick(p.onOpenDoctor)}>
+                    <span className="ck-menu-ic">
+                      <IconTerminal />
+                    </span>
+                    {t('sidebar.setUpAgents')}
+                  </button>
+                </div>
               )}
-              {p.onOpenPlans && (
-                <button type="button" role="menuitem" className="ck-menu-item" onClick={pick(p.onOpenPlans)}>
-                  <span className="ck-menu-ic">
-                    <IconChart />
-                  </span>
-                  {t('sidebar.yourPlans')}
-                </button>
-              )}
-              {p.onOpenScores && (
-                <button type="button" role="menuitem" className="ck-menu-item" onClick={pick(p.onOpenScores)}>
-                  <span className="ck-menu-ic">
-                    <IconChart />
-                  </span>
-                  {t('sidebar.scores')}
-                </button>
-              )}
-              {p.onOpenRoutines && (
-                <button type="button" role="menuitem" className="ck-menu-item" onClick={pick(p.onOpenRoutines)}>
-                  <span className="ck-menu-ic">
-                    <IconClock />
-                  </span>
-                  {t('sidebar.routines')}
-                </button>
-              )}
-              {p.onSetTheme ? (
-                <>
-                  <div className="ck-menu-cap">{t('sidebar.theme')}</div>
-                  {THEME_CHOICES.map(([value, key]) => (
+              <div className="ck-menu-group" role="group" aria-label={t('sidebar.mode')} data-testid="more-group-mode">
+                <div className="ck-menu-cap" aria-hidden="true">
+                  {t('sidebar.mode')}
+                </div>
+                <div className="ck-seg" role="radiogroup" aria-label={t('sidebar.mode')} title={t('sidebar.modeTip')}>
+                  {(['orchestration', 'individual'] as const).map((m) => (
                     <button
-                      key={value}
+                      key={m}
                       type="button"
-                      role="menuitemradio"
-                      aria-checked={p.theme === value}
-                      className={`ck-menu-item${p.theme === value ? ' is-active' : ''}`}
-                      onClick={pick(() => p.theme !== value && p.onSetTheme?.(value))}
+                      role="radio"
+                      aria-checked={p.mode === m}
+                      className={`ck-seg-opt${p.mode === m ? ' is-on' : ''}`}
+                      title={m === 'individual' ? t('sidebar.modeTip') : t('sidebar.modeEveryAgent')}
+                      onClick={pick(() => p.mode !== m && p.onMode(m))}
                     >
-                      <span className="ck-menu-ic">{p.theme === value ? <IconCheck /> : value === 'dark' ? <IconMoon /> : <IconSun />}</span>
-                      {t(key)}
+                      {m === 'orchestration' ? t('sidebar.modeOrchestration') : t('sidebar.modeIndividual')}
                     </button>
                   ))}
-                </>
-              ) : (
-                <button type="button" role="menuitem" className="ck-menu-item" onClick={pick(p.onToggleTheme)}>
-                  <span className="ck-menu-ic">{isDarkTheme(p.theme) ? <IconSun /> : <IconMoon />}</span>
-                  {isDarkTheme(p.theme) ? t('sidebar.switchToLight') : t('sidebar.switchToDark')}
-                </button>
-              )}
-              <div className="ck-menu-sep" role="separator" />
-              <div className="ck-menu-cap">{t('sidebar.mode')}</div>
-              <div className="ck-seg" role="radiogroup" aria-label={t('sidebar.mode')} title={t('sidebar.modeTip')}>
-                {(['orchestration', 'individual'] as const).map((m) => (
-                  <button
-                    key={m}
-                    type="button"
-                    role="radio"
-                    aria-checked={p.mode === m}
-                    className={`ck-seg-opt${p.mode === m ? ' is-on' : ''}`}
-                    title={m === 'individual' ? t('sidebar.modeTip') : t('sidebar.modeEveryAgent')}
-                    onClick={pick(() => p.mode !== m && p.onMode(m))}
-                  >
-                    {m === 'orchestration' ? t('sidebar.modeOrchestration') : t('sidebar.modeIndividual')}
-                  </button>
-                ))}
+                </div>
               </div>
             </FloatingMenu>
           )}

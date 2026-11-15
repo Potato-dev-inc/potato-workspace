@@ -46,6 +46,7 @@ import {
   type StartRequest,
 } from './model';
 import { AgentLogo } from '../../common/AgentLogo';
+import { DisabledReason } from '../../common/DisabledReason';
 import { ModelPicker } from '../../common/ModelPicker';
 import { readPickedModel, tauriAgentDefaultsApi, presetOnly, tauriModelOptionsApi, useAgentDefaults, useModelOptions, writePickedModel, type AgentDefaultsApi, type ModelOptionsApi } from '../../../lib/modelOptions';
 import { isStartBlock } from './start';
@@ -685,7 +686,7 @@ export function NewAgentPage({ agents, panes, needs, selectedCwd = null, project
           )}
 
           <p className="ck-na-hint" role={error ? 'alert' : undefined}>
-            {error ?? (prompt.trim() && block ? block : '')}
+            {error ?? <DisabledReason as="span" reason={block ?? (lendNoChat && chatLane && !chatFirst ? t('newAgent.lentNoChatTerminal') : null)} />}
           </p>
 
           {!prompt && (

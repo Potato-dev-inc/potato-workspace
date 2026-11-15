@@ -16,7 +16,8 @@ const UNKNOWN = 'Another agent';
 /** "another agent" inside a sentence, a name as it is. */
 const inSentence = (name: string): string => (name === UNKNOWN ? t('inboxCards.consent.anotherAgent') : name);
 
-const NOT_STARTED = 'It did not start this pane.';
+// Rust writes this sentence (agent_authority/consent.rs); the noun has changed over time, so match any.
+const NOT_STARTED = /\s*It did not start this (?:pane|window|agent|chat)\./;
 
 /** Who is asking, for the line next to the title: the name, or one plain phrase when Potato cannot name it. */
 export function askerName(q: Question): string {

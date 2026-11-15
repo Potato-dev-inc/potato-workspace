@@ -28,7 +28,7 @@ const stable = (link: 'waiting' | 'linking' | 'linked' | 'failed', error: string
 describe('stable link model', () => {
   it('needs a Worker address, and a typed secret must be long enough', () => {
     const draft = { ...draftFromConfig(quick.config), mode: 'stable' as const };
-    expect(draftProblem(draft, quick.config)).toMatch(/Worker address/);
+    expect(draftProblem(draft, quick.config)).toMatch(/link address/);
     expect(draftProblem({ ...draft, workerUrl: WORKER }, quick.config)).toBeNull();
     expect(draftProblem({ ...draft, workerUrl: WORKER, secret: 'short' }, quick.config)).toMatch(/16 characters/);
   });
@@ -90,14 +90,14 @@ describe('TunnelSection: stable link', () => {
     await flush();
     const select = host.querySelector('select')!;
     expect([...select.options].map((o) => o.value)).toEqual(['quick', 'named', 'custom', 'stable']);
-    expect([...select.options].at(-1)!.textContent).toBe('Stable link (your own Cloudflare Worker)');
+    expect([...select.options].at(-1)!.textContent).toBe('One fixed address (your own Cloudflare link)');
 
     act(() => setValue(select, 'stable'));
     expect(host.textContent).toContain('Set it up once with one button');
     expect(host.textContent).not.toMatch(/npm |wrangler|README/);
     expect(host.textContent).toContain('pair once again');
     expect(button('Save and restart')!.disabled).toBe(true); // no address yet
-    act(() => setValue(host.querySelector('input[aria-label="Worker address"]')!, WORKER));
+    act(() => setValue(host.querySelector('input[aria-label="Link address"]')!, WORKER));
     expect(button('Save and restart')!.disabled).toBe(false);
     await act(async () => button('Save and restart')!.click());
     expect(api.save).toHaveBeenCalledWith({ mode: 'stable', worker_url: WORKER, secret: null, secret_action: 'keep' });
@@ -118,7 +118,7 @@ describe('TunnelSection: stable link', () => {
     await act(async () => root.render(<TunnelSection api={api} />));
     await flush();
     act(() => setValue(host.querySelector('select')!, 'stable'));
-    act(() => setValue(host.querySelector('input[aria-label="Worker address"]')!, WORKER));
+    act(() => setValue(host.querySelector('input[aria-label="Link address"]')!, WORKER));
     await act(async () => button('Save and restart')!.click());
     await flush();
     await act(async () => button('Copy')!.click());
@@ -132,7 +132,7 @@ describe('TunnelSection: stable link', () => {
     await flush();
     expect(host.querySelector('[data-testid="tunnel-status"]')?.textContent).toBe(`Stable link: ${WORKER} → linked`);
     expect(host.textContent).not.toContain('SHOWN-ON-REQUEST');
-    expect((host.querySelector('input[aria-label="Worker address"]') as HTMLInputElement).value).toBe(WORKER);
+    expect((host.querySelector('input[aria-label="Link address"]') as HTMLInputElement).value).toBe(WORKER);
 
     await act(async () => button('Show secret')!.click());
     expect(api.save).toHaveBeenLastCalledWith({ mode: 'stable', worker_url: WORKER, secret_action: 'show' });

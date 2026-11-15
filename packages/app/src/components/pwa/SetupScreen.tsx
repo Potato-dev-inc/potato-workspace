@@ -118,7 +118,7 @@ export function SetupScreen({ onConnect }: { onConnect: (url: string) => void })
       <h1 className="text-lg font-semibold">Potato Workspace</h1>
       <p className="text-pm-muted text-center text-xs max-w-xs">
         {shouldUseSameOriginBridgeProxy(window.location)
-          ? 'On desktop: Settings → Mobile pairing. Scan the QR with your phone camera — it opens this app and signs you in.'
+          ? 'On desktop: Connect › Phone › Pair a phone. Scan the QR with your phone camera — it opens this app and signs you in.'
           : 'Pair with the desktop QR code first. Direct localhost works without pairing on this machine.'}
       </p>
       {devInfo?.tunnelUrl && !shouldUseSameOriginBridgeProxy(window.location) && (
@@ -192,7 +192,7 @@ export function SetupScreen({ onConnect }: { onConnect: (url: string) => void })
       {mode === 'pair' ? (
         <div className="w-full max-w-xs space-y-2">
           <div className="rounded border border-pm-border bg-pm-raised/30 p-3 text-xs text-pm-muted space-y-1">
-            <p>1. Open <strong className="text-zinc-200">Settings → Mobile pairing</strong> on desktop.</p>
+            <p>1. Open <strong className="text-zinc-200">Connect › Phone › Pair a phone</strong> on desktop.</p>
             <p>2. Scan the QR with your phone <strong className="text-zinc-200">Camera</strong> app.</p>
             <p>3. Tap the link — Potato Workspace opens and connects.</p>
           </div>

@@ -17,7 +17,7 @@ const REQUIRED = [
   'team-page-start',
   'team-page-relay',
   'team-page-offline',
-  'first-run-project-git',
+  'first-run-project-picked',
   'settings-whats-new',
   'settings-search',
 ];

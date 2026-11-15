@@ -6,6 +6,8 @@ import { createRoot, type Root } from 'react-dom/client';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { PaneInfo } from '@potato-workspace/shared';
 import type { BridgeClient } from '../../lib/bridge';
+import type { AttentionSnapshot } from '../../lib/attention';
+import { ITEM_LOW } from '../../dev/attention-fixtures';
 import { PHONE_PANES } from '../../dev/phone-fixtures';
 import { PHONE_HELPERS, phoneDoneReply } from '../../dev/phone-home-fixtures';
 import { phoneTeamReply } from '../../dev/phone-team-fixtures';
@@ -45,6 +47,70 @@ async function overview(bridge: BridgeClient, onOpen: (id: string) => void = () 
   });
   for (let i = 0; i < 4; i++) await act(async () => {});
 }
+
+describe('phone home: place line, setup chip and Needs you', () => {
+  const snapshot = (items: AttentionSnapshot['items']): AttentionSnapshot => ({
+    v: 1,
+    rev: 3,
+    counts: { blocking: items.length, ready: 0 },
+    items,
+    device: { can_answer: true, can_type: true, can_control: true },
+  });
+
+  const home = async (bridge: BridgeClient, attention: AttentionSnapshot, setup: { done: number; onOpen: () => void }) => {
+    await act(async () => {
+      root.render(
+        <AgentsOverview
+          bridge={bridge}
+          bridgeReady
+          panes={panes}
+          labels={labels}
+          onOpen={() => undefined}
+          onNew={() => undefined}
+          questionsRevision={1}
+          attention={attention}
+          setup={{ done: setup.done, total: 3, onOpen: setup.onOpen }}
+        />,
+      );
+    });
+    for (let i = 0; i < 4; i++) await act(async () => {});
+  };
+
+  it('puts Needs you first: the waiting ask, its answer buttons, and one small setup chip', async () => {
+    const answerAttention = vi.fn(async () => ({ outcome: 'answered' as const, choice_label: 'Allow once', at_ms: Date.now() }));
+    const onOpenSetup = vi.fn();
+    const attention = snapshot([ITEM_LOW]);
+    await home(bridgeWith({ answerAttention }), attention, { done: 2, onOpen: onOpenSetup });
+
+    // The PC this phone is connected to, as plain text.
+    expect(host.querySelector('[data-testid="phone-place"]')?.textContent).toBe('Main PC');
+
+    // Needs you comes before the other lists, with the waiting ask and its big buttons.
+    const needs = host.querySelector('[data-testid="phone-needs-you"]')!;
+    expect(needs.querySelector('h2')?.textContent).toBe('Needs you');
+    expect(needs.textContent).toContain('Run tests');
+    const choices = Array.from(needs.querySelectorAll('[data-choice]')).map((b) => b.textContent);
+    expect(choices).toEqual(['Allow once', 'Deny']);
+    expect(needs.compareDocumentPosition(host.querySelector('.ph-group')!) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+
+    // The answer goes through the same path the phone already uses.
+    await act(async () => (needs.querySelector('[data-choice="allow_once"]') as HTMLButtonElement).click());
+    expect(answerAttention).toHaveBeenCalledWith('a7Kp2xQ9', expect.objectContaining({ choice: 'allow_once' }), expect.anything());
+
+    // Setup is one chip that opens the existing steps, not a whole screen.
+    const chip = host.querySelector('[data-testid="phone-setup-chip"]') as HTMLButtonElement;
+    expect(chip.textContent).toBe('Setup 2 of 3 done');
+    await act(async () => chip.click());
+    expect(onOpenSetup).toHaveBeenCalledTimes(1);
+  });
+
+  it('says nothing needs you, and hides the setup chip once all three steps are done', async () => {
+    await home(bridgeWith({}), snapshot([]), { done: 3, onOpen: () => undefined });
+    expect(host.querySelector('[data-testid="phone-needs-you"]')?.textContent).toContain('Nothing needs you right now.');
+    expect(host.querySelector('[data-testid="phone-setup-chip"]')).toBeNull();
+    expect(host.querySelector('[data-testid="phone-place"]')?.textContent).toBe('Main PC');
+  });
+});
 
 describe('phone Inbox part on the Agents screen', () => {
   it('lists what finished today, newest first, with the numbers, and a row opens its chat', async () => {

@@ -67,4 +67,5 @@ export const deskReview = {
   'done.cancel': 'Cancel',
   'done.reset': 'Use the usual two',
   'done.listLabel': 'What done means for this project',
+  'review.openAgent': 'Open agent',
 } as const;

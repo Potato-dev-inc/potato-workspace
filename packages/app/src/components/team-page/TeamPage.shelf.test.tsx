@@ -90,6 +90,19 @@ describe('Team page: Shelf', () => {
     expect($('[data-testid="tab-shelf"] .tpg-count').textContent).toBe('2');
   });
 
+  it('with nothing on the shelf: one block, and its Invite a teammate button is the real invite (Setup here)', async () => {
+    await show(fakeShelfApi(shelfState({ mine: [], suggested: [], recommended: [] })));
+    const block = host.querySelector('[data-testid="shelf-empty"]')!;
+    expect(block.querySelector('.ck-empty-title')!.textContent).toBe('Nothing on the shelf yet');
+    expect(host.querySelector('[data-testid="shelf-block-mine"]')).toBeNull();
+    expect(host.querySelector('[data-testid="shelf-block-suggested"]')).toBeNull();
+    const invite = btns('Invite a teammate');
+    expect(invite).toHaveLength(1);
+    await click(invite[0]);
+    // This fake team has no invite link: the real fallback is the Setup tab, not a dead button.
+    expect(host.querySelector<HTMLButtonElement>('[data-testid="tab-setup"]')!.getAttribute('aria-selected')).toBe('true');
+  });
+
   it('filters by Skills and Tools', async () => {
     await show(fakeShelfApi());
     await click(btns('Skills')[0]);
@@ -131,9 +144,9 @@ describe('Team page: Shelf', () => {
     const row = $('[data-testid="shelf-mine-tool-postgres"]');
     expect(row.textContent).toContain('The password is inside the command');
     const b = row.querySelector<HTMLButtonElement>('button')!;
-    // Not a dead button: it is marked off, says why on hover, and a click answers with the reason.
+    // Not a dead button: it is marked off, the reason is on screen (no tooltip), and a click answers with the reason.
     expect(b.getAttribute('aria-disabled')).toBe('true');
-    expect(b.title).toContain('The password is inside the command');
+    expect(b.title).toBe('');
     await click(b);
     expect(host.querySelector('[data-testid="shelf-suggest-sheet"]')).toBeNull();
     expect(row.querySelector('[role="alert"]')?.textContent).toContain('Cannot suggest this one: The password is inside the command');

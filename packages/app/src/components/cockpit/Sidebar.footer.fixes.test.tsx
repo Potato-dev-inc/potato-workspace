@@ -1,6 +1,7 @@
 // @vitest-environment jsdom
-// Sidebar footer, through the real Sidebar: the ... menu has a Theme item with Dark / Light / Light, dimmed / Auto, and the
-// "background tasks" chip opens the list (jobs and helpers, with time and Stop) over the whole app, not inside the footer.
+// Sidebar footer, through the real Sidebar: the ... menu's Mode group switches the app, and Theme is no longer there
+// (it lives in Settings > Look and feel). The "background tasks" chip opens the list (jobs and helpers, with time and
+// Stop) over the whole app, not inside the footer.
 import { act } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
@@ -47,6 +48,7 @@ function cockpit(withPane: boolean) {
     readyAgents: new Set<string>(),
     mode: 'orchestration',
     theme: 'dark',
+    setMode: vi.fn(async () => {}),
     setThemeChoice: vi.fn(async () => {}),
     toggleTheme: vi.fn(async () => {}),
     interrupt: vi.fn(async () => {}),
@@ -77,18 +79,24 @@ async function openMore() {
   await act(async () => {});
 }
 
-describe('Theme item in the footer menu', () => {
-  it('lists Dark, Light, Light dimmed and Auto, marks the current one, and picks by name', async () => {
+describe('the ... menu after the clean-up', () => {
+  it('has no Theme rows: theme lives in Settings > Look and feel', async () => {
     const c = cockpit(true);
     await mount(c);
     await openMore();
-    const items = [...document.querySelectorAll<HTMLElement>('[role="menuitemradio"]')];
-    expect(items.map((i) => i.textContent?.trim())).toEqual(['Dark', 'Light', 'Light, dimmed', 'Auto']);
-    expect(items.map((i) => i.getAttribute('aria-checked'))).toEqual(['true', 'false', 'false', 'false']);
-    expect(document.querySelector('[role="menu"]')!.textContent).toContain('Theme');
-    expect(document.querySelector('[role="menu"]')!.textContent).not.toContain('Switch to light');
-    await act(async () => items[2].click());
-    expect(c.setThemeChoice).toHaveBeenCalledWith('dim');
+    const menu = document.querySelector<HTMLElement>('[role="menu"]')!;
+    expect(menu.textContent).not.toContain('Theme');
+    expect(menu.querySelectorAll('[role="menuitemradio"]')).toHaveLength(0);
+    expect(c.setThemeChoice).not.toHaveBeenCalled();
+  });
+
+  it('the Mode group still switches to Individual, and the menu closes', async () => {
+    const c = cockpit(true);
+    await mount(c);
+    await openMore();
+    const individual = [...document.querySelectorAll<HTMLElement>('[role="radio"]')].find((r) => r.textContent?.trim() === 'A window per agent')!;
+    await act(async () => individual.click());
+    expect(c.setMode).toHaveBeenCalledWith('individual');
     expect(document.querySelector('[role="menu"]')).toBeNull();
   });
 });

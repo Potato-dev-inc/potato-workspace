@@ -27,6 +27,8 @@ import {
   type UsageRow,
 } from '../../lib/usage';
 import { AgentLogo } from '../common/AgentLogo';
+import { RoomMeters } from './RoomMeters';
+import type { DevicesApi } from '../../lib/devices';
 import { useT } from '../../i18n';
 import { problemsFromUsage, syncProblems } from '../../lib/problems-feed';
 import type { ReactNode } from 'react';
@@ -235,7 +237,7 @@ const PLUS_WIDTH = 34;
  * that do not fit become "+N". Clicking a chip or "+N" opens the Usage popover above the bar. The cockpit root
  * leaves room for it only while it is shown (cockpit-statusbar.css, `:has`).
  */
-export function UsageBar({ api = usageApi, working = 0, needsYou = 0, trailing = null }: { api?: UsageApi; working?: number; needsYou?: number; /** The Problems chip: sits with the counts, or floats alone when the bar itself is not shown. */ trailing?: ReactNode }) {
+export function UsageBar({ api = usageApi, devices, working = 0, needsYou = 0, trailing = null }: { api?: UsageApi; /** The device link (tests give a fake). */ devices?: DevicesApi; working?: number; needsYou?: number; /** The Problems chip: sits with the counts, or floats alone when the bar itself is not shown. */ trailing?: ReactNode }) {
   const t = useT();
   const { on, loginReads } = useUsageBarOn();
   const { snap, busy, refresh } = useUsage(api, on === true, loginReads);
@@ -425,6 +427,7 @@ export function UsageBar({ api = usageApi, working = 0, needsYou = 0, trailing =
                 <PopRow key={key(r)} row={r} now={now} api={api} picked={flash === key(r)} />
               ))}
             </ul>
+            <RoomMeters rows={rows} now={now} api={devices} />
           </div>,
           document.querySelector('.cockpit') ?? document.body,
         )}

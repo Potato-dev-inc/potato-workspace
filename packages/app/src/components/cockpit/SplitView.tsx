@@ -98,9 +98,9 @@ export function SplitView({
     <button
       type="button"
       className="ck-icon-btn"
-      aria-label={rail.open ? 'Hide session details' : 'Show session details'}
+      aria-label={rail.open ? t('pane.railHide') : t('pane.railShow')}
       aria-pressed={rail.open}
-      title={`${rail.open ? 'Hide' : 'Show'} session details ( ] )`}
+      title={rail.open ? t('pane.railHideTip') : t('pane.railShowTip')}
       onClick={rail.toggle}
     >
       <IconRail />

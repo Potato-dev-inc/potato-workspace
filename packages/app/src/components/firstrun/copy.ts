@@ -173,11 +173,22 @@ export const T = {
   get doneButton() { return t('firstRun.doneButton'); },
   stepNames: {
     get agents() { return t('firstRun.stepNames.agents'); },
-    get connect() { return t('firstRun.stepNames.connect'); },
     get project() { return t('firstRun.stepNames.project'); },
-    get task() { return t('firstRun.stepNames.task'); },
-    get done() { return t('firstRun.stepNames.done'); },
   } satisfies Record<StepId, string>,
+
+  // Set up everything, Finish setup
+  get setUpEverything() { return t('firstRun.setUpEverything'); },
+  get setUpWorking() { return t('firstRun.setUpWorking'); },
+  get setUpLead() { return t('firstRun.setUpLead'); },
+  get setUpDone() { return t('firstRun.setUpDone'); },
+  get stepAddons() { return t('firstRun.step.addons'); },
+  get stepConnect() { return t('firstRun.step.connect'); },
+  get stepReady() { return t('firstRun.step.ready'); },
+  handedOver: (agent: string) => t('firstRun.handedOver', { agent }),
+  get noAgentToFix() { return t('firstRun.noAgentToFix'); },
+  get finishSetup() { return t('firstRun.finishSetup'); },
+  get finishSetupHint() { return t('firstRun.finishSetupHint'); },
+  get doneNow() { return t('firstRun.doneNow'); },
 
   // Palette and Settings
   get paletteTitle() { return t('firstRun.paletteTitle'); },

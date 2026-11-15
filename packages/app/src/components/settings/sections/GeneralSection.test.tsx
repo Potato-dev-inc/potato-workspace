@@ -149,21 +149,21 @@ describe('General: each control saves a partial patch', () => {
     expect(m.env.patches).toEqual([{ mode_switch_animation: 'ink' }, { mode_switch_animation: 'off' }, { mode_switch_animation: 'domino' }]);
   });
 
-  it('Window layout in Individual defaults to Side by side and saves only {individual_window_layout}', async () => {
+  it('Window layout (a window per agent) defaults to Side by side and saves only {individual_window_layout}', async () => {
     await mount();
-    expect(radio('Window layout in Individual', 'Side by side').getAttribute('aria-checked')).toBe('true');
-    expect([...m.host.querySelectorAll('[aria-label="Window layout in Individual"] [role="radio"]')].map((o) => o.textContent)).toEqual(['Side by side', 'Cascade']);
-    await click(radio('Window layout in Individual', 'Cascade'));
+    expect(radio('Window layout (a window per agent)', 'Side by side').getAttribute('aria-checked')).toBe('true');
+    expect([...m.host.querySelectorAll('[aria-label="Window layout (a window per agent)"] [role="radio"]')].map((o) => o.textContent)).toEqual(['Side by side', 'Cascade']);
+    await click(radio('Window layout (a window per agent)', 'Cascade'));
     await m.rerender();
-    await click(radio('Window layout in Individual', 'Side by side'));
+    await click(radio('Window layout (a window per agent)', 'Side by side'));
     expect(m.env.patches).toEqual([{ individual_window_layout: 'cascade' }, { individual_window_layout: 'side_by_side' }]);
   });
 
-  it('Window layout in Individual shows the saved choice and sits right after Mode switch animation', async () => {
+  it('Window layout (a window per agent) shows the saved choice and sits right after Mode switch animation', async () => {
     await mount({ settings: { ...makeEnv().settings, individual_window_layout: 'cascade' } });
-    expect(radio('Window layout in Individual', 'Cascade').getAttribute('aria-checked')).toBe('true');
+    expect(radio('Window layout (a window per agent)', 'Cascade').getAttribute('aria-checked')).toBe('true');
     const text = m.host.textContent ?? '';
-    expect(text.indexOf('Mode switch animation')).toBeLessThan(text.indexOf('Window layout in Individual'));
+    expect(text.indexOf('Mode switch animation')).toBeLessThan(text.indexOf('Window layout (a window per agent)'));
   });
 
   it('Mode switch animation shows the saved choice and has one Play: the picture', async () => {
@@ -288,7 +288,7 @@ describe('General: Live Room', () => {
   it('is its own group with the relay field and the privacy line, and saves the relay on blur', async () => {
     await mount();
     expect([...m.host.querySelectorAll('section.st-group')].some((s) => s.textContent?.includes('Relay address'))).toBe(true);
-    expect(hasText(m.host, 'Rooms are end-to-end encrypted. The relay sees only sizes and times.')).toBe(true);
+    expect(hasText(m.host, 'Rooms are end-to-end encrypted. The link sees only sizes and times.')).toBe(true);
     const relay = byLabel<HTMLInputElement>(m.host, 'Relay address')!;
     await typeInto(relay, 'https://relay.example.test');
     await blur(relay);

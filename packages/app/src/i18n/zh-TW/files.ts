@@ -93,4 +93,6 @@ export const files: Partial<Record<EnglishKey, string>> = {
   'tabwin.putBackTip': '關閉視窗，並在這裡再次顯示',
   'tabwin.gone': '這個代理程式已經不在執行了。',
   'tabwin.barLabel': '視窗控制',
+  'files.emptyTitle': '還沒有檔案',
+  'files.emptyLine': '這個專案資料夾是空的。請 AI 助理建立檔案，或自己放入一個。',
 };

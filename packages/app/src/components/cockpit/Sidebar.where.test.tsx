@@ -86,7 +86,9 @@ describe('New agent: Where', () => {
     expect(q('[data-testid="where-pill"]')!.textContent).toContain('This PC');
     await click(q('[data-testid="where-pill"]'));
     const menu = q('.dev-where-menu')!;
-    expect([...menu.querySelectorAll('.dev-where-row > span')].map((s) => s.textContent)).toEqual(['This PC', 'Mac mini', 'Work laptop', 'Add a device…']);
+    expect([...menu.querySelectorAll('.dev-where-row > span:not(.dis-reason)')].map((s) => s.textContent)).toEqual(['This PC', 'Mac mini', 'Work laptop', 'Add a device…']);
+    // The offline device says why on screen, not only in a tooltip.
+    expect(q<HTMLButtonElement>(`[data-testid="where-${WORK_LAPTOP.node}"]`)!.querySelector('.dis-reason')?.textContent).toBe('Cannot pick: offline');
     expect(q<HTMLButtonElement>(`[data-testid="where-${NODE_MAC}"]`)!.disabled).toBe(false);
     const laptop = q<HTMLButtonElement>(`[data-testid="where-${WORK_LAPTOP.node}"]`)!;
     expect(laptop.disabled).toBe(true);

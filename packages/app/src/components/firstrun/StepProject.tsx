@@ -1,16 +1,16 @@
-// Step 3: the folder of the first project. Recent first, then the system picker. Every folder passes
-// Simple mode's broad-folder guard (`plain_check_folder`, Rust) before it counts; a folder without Git
-// is offered "Set up Git here" with the exact commands shown first, like the "+" menu.
+// Screen 2: the folder of the first project. Recent first, then the system picker. Every folder passes
+// Simple mode's broad-folder guard (`plain_check_folder`, Rust) before it counts. Git is not asked for here
+// (it is asked for only when a task needs it), and the footer's "Skip for now" leaves this screen empty.
 import { errorSentence } from '../../lib/sayError';
 import { useCallback, useEffect, useState } from 'react';
-import type { GitInitPlan, RecentProject, ShipApi } from '../../lib/ship-api';
+import type { RecentProject, ShipApi } from '../../lib/ship-api';
 import { stateHint as rawStateHint } from '../../lib/ship-model';
 import { t, useT } from '../../i18n';
 import type { SimpleApi } from '../simple/simple-api';
 import { T } from './copy';
 import type { ProjectPick } from './model';
 
-type Ship = Pick<ShipApi, 'recent' | 'pickFolder' | 'forget' | 'gitInitPlan' | 'gitInit'>;
+type Ship = Pick<ShipApi, 'recent' | 'pickFolder' | 'forget'>;
 
 /** The hint under a recent folder, in the current language. */
 const stateHint = (state: RecentProject['state']): string => (rawStateHint(state) ? t(`firstRun.hint.${state}` as 'firstRun.hint.missing') : '');
@@ -60,8 +60,6 @@ export function StepProject({
   /** Folders the guard refuses, by path (so a row says so before it is clicked). */
   const [broad, setBroad] = useState<Record<string, string>>({});
   const [problem, setProblem] = useState<string | null>(null);
-  const [plan, setPlan] = useState<GitInitPlan | null>(null);
-  const [busy, setBusy] = useState(false);
 
   const load = useCallback(() => {
     ship
@@ -85,17 +83,8 @@ export function StepProject({
 
   useEffect(load, [load]);
 
-  // A folder chosen earlier (a restart) that lacks Git shows its plan again.
-  useEffect(() => {
-    if (project && project.state !== 'repo' && project.state !== 'missing') {
-      ship.gitInitPlan(project.path).then(setPlan).catch(() => undefined);
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
-
   const choose = async (found: RecentProject) => {
     setProblem(null);
-    setPlan(null);
     if (found.state === 'missing') return;
     try {
       const check = await simple.checkFolder(found.path);
@@ -111,9 +100,6 @@ export function StepProject({
       return;
     }
     onProject({ path: found.path, name: found.name, state: found.state });
-    if (found.state !== 'repo') {
-      ship.gitInitPlan(found.path).then(setPlan).catch((err) => setProblem(errText(err)));
-    }
   };
 
   const pick = async () => {
@@ -129,22 +115,6 @@ export function StepProject({
     }
   };
 
-  const setUpGit = async () => {
-    if (!project) return;
-    setBusy(true);
-    setProblem(null);
-    try {
-      await ship.gitInit(project.path);
-      onProject({ ...project, state: 'repo' });
-      setPlan(null);
-      load();
-    } catch (err) {
-      setProblem(errText(err));
-    } finally {
-      setBusy(false);
-    }
-  };
-
   const forget = (found: RecentProject) => {
     ship
       .forget(found.path)
@@ -154,7 +124,6 @@ export function StepProject({
 
   return (
     <section className="fr-step" aria-labelledby="fr-project-t">
-      <div className="ck-doto fr-num" aria-hidden="true">03</div>
       <h1 className="ck-title" id="fr-project-t">{T.projectTitle}</h1>
       <p className="fr-lead">{T.projectLead}</p>
 
@@ -162,33 +131,7 @@ export function StepProject({
         <div className="fr-picked" data-testid="picked-project">
           <span className="fr-picked-name">{project.name}</span>
           <span className="fr-path" title={project.path}>{project.path}</span>
-          {project.state === 'repo' && <span className="fr-picked-ok">{T.projectChosen}</span>}
-        </div>
-      )}
-
-      {project && project.state !== 'repo' && project.state !== 'missing' && (
-        <div className="fr-git" data-testid="git-step">
-          <h2 className="ck-section">{T.needsGitTitle}</h2>
-          <p className="fr-hint">{T.needsGitBody}</p>
-          {plan ? (
-            <>
-              <ul className="fr-cmds" aria-label={t('firstRun.whatWillRun')}>
-                {plan.commands.map((cmd) => (
-                  <li key={cmd}>
-                    <code>{cmd}</code>
-                  </li>
-                ))}
-              </ul>
-              <p className="fr-hint">{plan.too_big ? T.gitTooBig : T.gitFiles(plan.files)}</p>
-            </>
-          ) : (
-            !problem && <p className="fr-hint">{T.checking}</p>
-          )}
-          <div className="fr-actions">
-            <button type="button" className="ck-btn ck-btn--primary" disabled={!plan || plan.too_big || busy} onClick={() => void setUpGit()}>
-              {busy ? T.gitWorking : T.setUpGit}
-            </button>
-          </div>
+          <span className="fr-picked-ok">{T.projectChosen}</span>
         </div>
       )}
 

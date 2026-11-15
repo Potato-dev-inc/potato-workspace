@@ -1,6 +1,7 @@
 // The one empty page: a title, one line, one button, then up to three quiet "or" rows. It sits a third of the way
-// down the panel (not in the top-left corner) so every empty screen reads the same. Used by the Inbox, the welcome
-// and the add-chat prompt. Panels with nothing to show are hidden, not explained: they do not use this.
+// down the panel (not in the top-left corner) so every empty screen reads the same. Used by the Inbox, the welcome,
+// the add-chat prompt, Devices, Files, the Team page (people and shelf) and Lend. Panels with nothing to show are
+// hidden, not explained: they do not use this.
 import type { ReactNode } from 'react';
 import { useT } from '../../i18n';
 import { PotatoMark } from '../cockpit/Icons';
@@ -9,6 +10,8 @@ export interface EmptyAction {
   label: string;
   onClick: () => void;
   disabled?: boolean;
+  /** A small button, for a one-line strip (the Inbox's calm line). */
+  small?: boolean;
 }
 
 export interface EmptyStateProps {
@@ -23,21 +26,26 @@ export interface EmptyStateProps {
   page?: boolean;
   /** The title is plain text, not a heading (inside a small menu). */
   plain?: boolean;
+  /** Draws this before the title instead of the quiet Potato mark (the Inbox's tick). */
+  icon?: ReactNode;
   /** Extra content under the buttons (a status line, a progress bar). */
   children?: ReactNode;
   className?: string;
+  /** `role` on the block itself (the Inbox's line is a status). */
+  role?: string;
+  testId?: string;
 }
 
-export function EmptyState({ title, line, action, alternatives = [], page = false, plain = false, children, className }: EmptyStateProps) {
+export function EmptyState({ title, line, action, alternatives = [], page = false, plain = false, icon, children, className, role, testId }: EmptyStateProps) {
   const t = useT();
   const Heading = plain ? 'div' : page ? 'h1' : 'h2';
   return (
-    <div className={`ck-empty${className ? ` ${className}` : ''}`} data-empty-state="">
-      {plain ? null : <PotatoMark size={28} className="ck-potato ck-potato--quiet" />}
+    <div className={`ck-empty${className ? ` ${className}` : ''}`} data-empty-state="" role={role} data-testid={testId}>
+      {icon ?? (plain ? null : <PotatoMark size={28} className="ck-potato ck-potato--quiet" />)}
       <Heading className="ck-empty-title">{title}</Heading>
       {line ? <p className="ck-empty-line">{line}</p> : null}
       {action ? (
-        <button type="button" className="ck-btn ck-btn--primary" disabled={action.disabled} onClick={action.onClick}>
+        <button type="button" className={`ck-btn ck-btn--primary${action.small ? ' ck-btn--sm' : ''}`} disabled={action.disabled} onClick={action.onClick}>
           {action.label}
         </button>
       ) : null}

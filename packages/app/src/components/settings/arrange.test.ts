@@ -2,6 +2,7 @@
 import { describe, expect, it } from 'vitest';
 import { ADVANCED_CLOSED_GROUPS, LABS_GROUP, LABS_INDEX_ID, LAYOUT, OTHER_GROUP, arrangeSections, collectLabs, layoutRowIds, unplacedRowIds } from './arrange';
 import { BASE_SECTIONS, SECTIONS } from './catalog';
+import { LABS_SWITCH_KEYS } from './labs-areas';
 import { SECTION_IDS, groupRows, type BaseSectionDef, type RowDef } from './model';
 
 const section = (id: string) => SECTIONS.find((s) => s.id === id)!;
@@ -22,8 +23,11 @@ describe('the layout names real rows', () => {
     expect(SECTIONS.flatMap((s) => s.rows).filter((r) => r.group === OTHER_GROUP).map((r) => r.id)).toEqual([]);
   });
 
-  it('arranging loses no row and adds only the Labs overview', () => {
-    const before = BASE_SECTIONS.flatMap((s) => s.rows.map((r) => r.id)).sort();
+  it('arranging loses no row: a plain-switch early feature lives on the Labs page, and only the Labs overview is added', () => {
+    const features = new Set(collectLabs(BASE_SECTIONS).filter((r) => LABS_SWITCH_KEYS[r.id]).map((r) => r.id));
+    const before = BASE_SECTIONS.flatMap((s) => s.rows.map((r) => r.id))
+      .filter((id) => !features.has(id))
+      .sort();
     const after = SECTIONS.flatMap((s) => s.rows)
       .filter((r) => r.id !== LABS_INDEX_ID)
       .map((r) => r.id)
@@ -97,9 +101,11 @@ describe('groups inside the pages', () => {
 describe('Advanced > Early features (Labs)', () => {
   const labsRows = () => section('advanced').rows.filter((r) => r.group === LABS_GROUP);
 
-  it('Labs rows from every file are collected under Advanced > Early features (Labs)', () => {
-    expect(labsRows().map((r) => r.id)).toEqual([
-      LABS_INDEX_ID, 'ask-bar', 'simple-mode', 'live-updates', 'opencode-automation', 'missions', 'assign-issue', 'night-shift',
+  it('under Advanced > Early features (Labs): the Labs page, then each feature that is more than a switch (its Open button lands there)', () => {
+    expect(labsRows().map((r) => r.id)).toEqual([LABS_INDEX_ID, 'ask-bar', 'live-updates', 'opencode-automation', 'assign-issue', 'red-to-green', 'telegram']);
+    expect(labsRows().filter((r) => LABS_SWITCH_KEYS[r.id])).toEqual([]);
+    expect(collectLabs(BASE_SECTIONS).map((r) => r.id)).toEqual([
+      'ask-bar', 'simple-mode', 'live-updates', 'opencode-automation', 'missions', 'assign-issue', 'night-shift',
       'red-to-green', 'acp-chat-labs', 'model-bridge-labs', 'spaces-labs', 'lend-labs', 'devices-labs', 'desktop-potato-labs', 'agent-browser-labs', 'companion-vault-labs', 'discord-bot-labs', 'timeline-labs', 'project-guide-labs', 'markup-bar-labs', 'smaller-updates-labs', 'telegram',
     ]);
     // They were defined in different files: Agents, Keys, Phone, General, Models.
@@ -131,7 +137,8 @@ describe('Advanced > Early features (Labs)', () => {
     };
     const base: BaseSectionDef[] = BASE_SECTIONS.map((s) => (s.id === 'phone' ? { ...s, rows: [...s.rows, extra] } : s));
     const arranged = arrangeSections(base);
-    const labs = arranged.find((s) => s.id === 'advanced')!.rows.filter((r) => r.group === LABS_GROUP).map((r) => r.id);
+    expect(arranged.find((s) => s.id === 'advanced')!.rows.filter((r) => r.group === LABS_GROUP).map((r) => r.id)).toEqual([LABS_INDEX_ID, 'ask-bar', 'live-updates', 'opencode-automation', 'assign-issue', 'red-to-green', 'telegram', 'later-feature']);
+    const labs = collectLabs(base).map((r) => r.id);
     expect(labs.slice(-16)).toEqual(['red-to-green', 'acp-chat-labs', 'model-bridge-labs', 'spaces-labs', 'lend-labs', 'devices-labs', 'desktop-potato-labs', 'agent-browser-labs', 'companion-vault-labs', 'discord-bot-labs', 'timeline-labs', 'project-guide-labs', 'markup-bar-labs', 'smaller-updates-labs', 'telegram', 'later-feature']);
     expect(arranged.find((s) => s.id === 'connect')!.rows.some((r) => r.id === 'later-feature')).toBe(false);
   });

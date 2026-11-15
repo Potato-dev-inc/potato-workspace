@@ -11,8 +11,9 @@ const s: HarnessScenario = {
   lend: teamPageLend(),
   worker: { inviteLink: true },
   after: async (dom) => {
-    await dom.waitFor('[data-testid="side-team"]');
-    await dom.click('[data-testid="side-team"]');
+    await dom.waitFor('[data-testid="side-connect"]');
+    await dom.click('[data-testid="side-connect"]');
+    await dom.click('[data-testid="connect-tab-team"]');
     await dom.waitFor('[data-testid="team-invite"]');
     await dom.click('[data-testid="team-invite"]');
     await dom.waitFor('[data-testid="invite-sheet"]');

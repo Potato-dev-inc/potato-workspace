@@ -19,6 +19,8 @@ import { launchWorkerTerminal } from './launch-worker.js';
 import { runWatch } from './watch.js';
 import { WATCH_USAGE, validateWatchFlags } from './watch-args.js';
 import { runPairLink } from './pair-link.js';
+import { CONFIG_COMMANDS } from './args.js';
+import { runConfigCli, terminalIo } from './config-cli.js';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 
@@ -72,6 +74,14 @@ Usage:
                                 Waits out bridge restarts; --timeout-ms N sets the deadline (default 3600000).
   potato-workspace pair-link       Print a fresh phone pairing link (needs the running app and its public tunnel).
                                 Prints the link on stdout; the expiry goes to stderr.
+  potato-workspace status          Is the app running? Version and bridge port.
+  potato-workspace settings ...    list | get KEY | set KEY VALUE ... | reset KEY (a change needs --yes)
+  potato-workspace labs ...        list | on KEY | off KEY (a change needs --yes)
+  potato-workspace agents list     The agents the app knows.
+  potato-workspace models list AGENT   The models one agent offers.
+  potato-workspace projects list   Folders with an open window.
+                                Config flags: --json --yes --dry-run --wait-ms N. Exit 5 = needs --yes.
+                                From an agent window a change raises an Allow card the person answers in the app.
   potato-workspace version         Print version
   potato-workspace --help          Show this help
 
@@ -83,14 +93,18 @@ Worker examples:
 `);
 }
 
-function printVersion(): void {
+function readVersion(): string {
   try {
     const pkgPath = join(__dirname, '..', 'package.json');
     const pkg = JSON.parse(readFileSync(pkgPath, 'utf-8'));
-    console.log(pkg.version);
+    return String(pkg.version);
   } catch {
-    console.log('0.0.0');
+    return '0.0.0';
   }
+}
+
+function printVersion(): void {
+  console.log(readVersion());
 }
 
 /**
@@ -135,6 +149,11 @@ async function runMcp(): Promise<void> {
 
 async function main(): Promise<void> {
   const { command, positional, flags } = parseArgs(process.argv);
+
+  // Config commands parse their own flags (--yes must not swallow the next word).
+  if (CONFIG_COMMANDS.has(command)) {
+    process.exit(await runConfigCli(process.argv.slice(2), terminalIo(), readVersion()));
+  }
 
   if (flags.help || flags.h) {
     printHelp();

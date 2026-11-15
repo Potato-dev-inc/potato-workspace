@@ -68,7 +68,7 @@ describe('MiniBar', () => {
     act(() => root.render(createElement(MiniBar, { panes: [], toast: false, onFocusPane: () => {}, onNew: () => {}, onBack: () => {}, onUndo: () => {} })));
     expect(host.textContent).toContain('No agents yet');
     expect(button('Start one')).toBeTruthy();
-    expect(button('Back to Orchestration')).toBeTruthy();
+    expect(button('Back to one window')).toBeTruthy();
   });
 });
 
@@ -117,11 +117,11 @@ describe('MiniBarApp (the real window content)', () => {
     expect(host.querySelector('.mb-chip')).toBeTruthy();
   });
 
-  it('Back to Orchestration switches the mode', async () => {
+  it('Back to one window switches the mode', async () => {
     api.panes = [pane('a1', 'claude', '/p')];
     act(() => root.render(createElement(MiniBarApp)));
     await flush();
-    act(() => button('Back to Orchestration')!.click());
+    act(() => button('Back to one window')!.click());
     expect(api.setUiMode).toHaveBeenCalledWith('orchestration');
   });
 });
@@ -163,12 +163,12 @@ describe('MiniBar with many agents', () => {
     expect(wrap.classList.contains('mb-fade-end')).toBe(true);
   });
 
-  it('keeps + New and Back to Orchestration outside the scrolling strip', async () => {
+  it('keeps + New and Back to one window outside the scrolling strip', async () => {
     api.panes = many();
     act(() => root.render(createElement(MiniBarApp)));
     await flush();
     expect(strip().contains(button('+ New')!)).toBe(false);
-    expect(strip().contains(button('Back to Orchestration')!)).toBe(false);
+    expect(strip().contains(button('Back to one window')!)).toBe(false);
   });
 
   it('asks the window for the width the chips need', async () => {

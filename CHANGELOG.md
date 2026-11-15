@@ -1,5 +1,29 @@
 # Changelog
 
+## 1.1.4
+
+This is a beta.
+
+- New: one Connect page.
+  - Phone, My PCs, Team and Lending are now tabs on one page instead of seven screens.
+  - Each tab starts with what is connected and one main button.
+  - Pairing a PC ends with "What may it do?".
+- New: first run is two screens.
+  - "Your agents" has one Set up everything button. If a step fails, "Let Claude fix it" (named after your agent).
+  - Then pick a folder, or skip. No Git needed, no locked buttons. "Finish setup" stays as a chip until you're done.
+- New: Room left. See how much usage each sign-in has left on this PC, your other PCs and anything lent to you. New agent suggests the place with more room.
+- New: the phone home starts with "Needs you" and big answer buttons. Setup is one small "2 of 3 done" chip.
+- New: command line settings. `potato-workspace settings`, `labs`, `agents`, `models` and `status`. Every change shows what will change first and needs `--yes`. If an agent runs it, you get an Allow card.
+- Easier:
+  - Greyed buttons say why.
+  - Empty screens offer a real next step.
+  - A newly paired PC says what it may do and how to change it.
+  - Borrowing says which switch is off and on which PC.
+  - Setup steps show plain words with the error tucked under Details.
+- Labs is one page, grouped and searchable, one click from Settings.
+- Plain words: internal names like "pane", "session", "relay" and "Shelf" are replaced across the app. For example, "Shared tools", "One window" and "A window per agent".
+- The sidebar ⋯ menu is tidied into groups, with a Browser entry.
+
 ## 1.1.3
 
 This is a beta.

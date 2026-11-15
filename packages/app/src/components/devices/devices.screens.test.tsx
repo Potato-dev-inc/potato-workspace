@@ -1,11 +1,13 @@
 // @vitest-environment jsdom
 // Settings > Devices as a whole screen, through the real components; only the devices command layer is the fake
-// (`DevicesFake`). Proves: Add a device -> a code -> both people confirm -> the device page with every switch off;
-// Show a code; the route setting; the device chip; Remove; and with the Labs switch off nothing renders.
+// (`DevicesFake`). Proves: Add a device -> a code -> both people confirm -> the next step with the button to its rights
+// choice -> the device page with every switch off; Show a code; the route setting; the device chip; Remove; and with the
+// Labs switch off nothing renders.
 import { act } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
-import { DevicesFake, MAC_MINI, NODE_MAC, WORK_LAPTOP } from '../../dev/devices-fixtures';
+import { DevicesFake, MAC_MINI, NODE_LAPTOP, NODE_MAC, WORK_LAPTOP } from '../../dev/devices-fixtures';
+import { openDeviceAt } from '../../lib/openDevice';
 import { SECTIONS } from '../settings/catalog';
 import { visibleSections } from '../settings/model';
 import { click, settle, type as typeInto } from '../settings/test-utils';
@@ -34,10 +36,22 @@ async function mount(fake: DevicesFake) {
 }
 
 describe('Settings > Devices', () => {
+  it('with no other PC: one block, one plain sentence and a button that opens Add a device', async () => {
+    const fake = new DevicesFake({ enabled: true });
+    await mount(fake);
+    const block = q('[data-testid="devices-empty"]')!;
+    expect(block.querySelector('.ck-empty-title')!.textContent).toBe('No other PC yet');
+    expect(block.querySelector('.ck-empty-line')!.textContent).toContain('Add another PC to run an agent or a terminal there');
+    const add = [...block.querySelectorAll<HTMLButtonElement>('button')].find((b) => b.textContent?.trim() === 'Add another PC')!;
+    expect(add.className).toContain('ck-btn--primary');
+    await click(add);
+    expect(q('[data-testid="add-device-sheet"]')).not.toBeNull();
+  });
+
   it('walks Add a device -> code -> both confirm -> the device page with the switch off', async () => {
     const fake = new DevicesFake({ enabled: true });
     await mount(fake);
-    expect(q('[data-testid="devices-empty"]')!.textContent).toContain('No devices yet');
+    expect(q('[data-testid="devices-empty"]')!.textContent).toContain('No other PC yet');
     await click(q('[data-testid="add-device"]'));
     expect(q('[data-testid="add-device-sheet"]')).not.toBeNull();
     // Nearby has nothing to show; far away works; SSH is not available yet.
@@ -57,12 +71,18 @@ describe('Settings > Devices', () => {
     await settle(8);
     expect(q('[data-testid="pair-confirm"]')).toBeNull();
     expect(q('[data-testid="add-device-sheet"]')).toBeNull();
-    // The device is in the list, with nothing turned on.
+    // The pairing line is ours now: a confirmation, then the device's own next step with the button to its rights.
+    expect(q('[data-testid="devices-message"]')!.textContent).toBe('Paired with Studio PC.');
+    expect(document.body.textContent).not.toContain('Nothing is shared yet');
     const item = document.querySelector<HTMLElement>('.dev-item')!;
     expect(item.textContent).toContain('Studio PC');
     expect(fake.view.devices[0]!.lets_run).toBe(false);
-    await click(item);
+    const nextStep = document.querySelector<HTMLElement>('[data-testid^="device-next-"]')!;
+    expect(nextStep.textContent).toContain('Nothing is allowed for it on this PC yet.');
+    // The one button opens that device's rights choice.
+    await click(document.querySelector('[data-testid^="device-choose-"]'));
     expect(q('[data-testid="device-page"]')).not.toBeNull();
+    expect(q('[data-testid="device-rights"]')).not.toBeNull();
     expect(q<HTMLInputElement>('[data-testid="perm-agents"]')!.checked).toBe(false);
     expect(q('[data-testid="level-watch"]')).toBeNull();
     // Turning the switch on shows the level, and the level is Watch and answer or Full control.
@@ -72,6 +92,38 @@ describe('Settings > Devices', () => {
     await click(q('[data-testid="level-full"]'));
     await settle(4);
     expect(fake.view.devices[0]!.level).toBe('full');
+  });
+
+  it('a device that may do nothing here says what it may do and the button opens its rights choice', async () => {
+    const fake = new DevicesFake({ enabled: true, devices: [MAC_MINI] });
+    await mount(fake);
+    // The row keeps its state line and gains one next step: nothing yet, one button.
+    expect(q(`[data-testid="device-${NODE_MAC}"]`)!.textContent).toContain('Online · same network');
+    const nextStep = q(`[data-testid="device-next-${NODE_MAC}"]`)!;
+    expect(nextStep.textContent).toContain('Nothing is allowed for it on this PC yet.');
+    expect(nextStep.querySelector('button')!.textContent).toBe('Choose what it may do');
+    await click(q(`[data-testid="device-choose-${NODE_MAC}"]`));
+    expect(q('[data-testid="device-page"]')).not.toBeNull();
+    expect(q('[data-testid="device-rights"]')!.textContent).toContain('Run agents and terminals here');
+    expect(q<HTMLInputElement>('[data-testid="perm-agents"]')!.checked).toBe(false);
+    // Once a right is on, the next step is gone again.
+    await click(q('[data-testid="perm-files"]'));
+    await settle(6);
+    await click(q('[data-testid="device-back"]'));
+    await settle(4);
+    expect(q(`[data-testid="device-next-${NODE_MAC}"]`)).toBeNull();
+  });
+
+  it('a device the other PC refuses names the right that is off and offers the same button', async () => {
+    const fake = new DevicesFake({ enabled: true, devices: [{ ...MAC_MINI, state: 'not_allowed' }] });
+    await mount(fake);
+    const nextStep = q(`[data-testid="device-next-${NODE_MAC}"]`)!;
+    expect(nextStep.textContent).toContain('Run agents and terminals here is still off for Mac mini.');
+    await click(q(`[data-testid="device-choose-${NODE_MAC}"]`));
+    // The device page carries the same line, and its rights choice is right below.
+    expect(q('[data-testid="device-page"]')!.textContent).toContain('Run agents and terminals here is still off for Mac mini.');
+    expect(q(`[data-testid="device-next-${NODE_MAC}"]`)).not.toBeNull();
+    expect(q('[data-testid="device-rights"]')).not.toBeNull();
   });
 
   it('the other device typing my code opens the same confirm sheet, and No pairs nothing', async () => {
@@ -99,10 +151,24 @@ describe('Settings > Devices', () => {
     expect(items[1]).toContain('offline');
     await act(async () => fake.setDevice(NODE_MAC, { path: 'relay' }));
     await settle(4);
-    expect(document.querySelector('.dev-item')!.textContent).toContain('Relay');
+    expect(document.querySelector('.dev-item')!.textContent).toContain('Public link');
     await act(async () => fake.setDevice(NODE_MAC, { path: 'own' }));
     await settle(4);
     expect(document.querySelector('.dev-item')!.textContent).toContain('Your link');
+  });
+
+  it('a lend screen can open one device page straight away, from the list or while it is already open', async () => {
+    const fake = new DevicesFake({ enabled: true, devices: [MAC_MINI, WORK_LAPTOP] });
+    // Asked for before the page mounts (a borrow form's "Open the switch"): it lands on that device.
+    openDeviceAt(NODE_MAC);
+    await mount(fake);
+    expect(q('[data-testid="device-page"]')).not.toBeNull();
+    expect(q('[data-testid="device-page"]')!.getAttribute('aria-label')).toBe('Mac mini');
+    expect(q<HTMLInputElement>('[data-testid="perm-lend"]')!.checked).toBe(false);
+    // The page is open on Mac mini: a second ask for the other PC switches to it at once.
+    await act(async () => openDeviceAt(NODE_LAPTOP));
+    await settle(4);
+    expect(q('[data-testid="device-page"]')!.getAttribute('aria-label')).toBe('Work laptop');
   });
 
   it('How far-away devices connect: three choices, one chosen, saved through the command', async () => {

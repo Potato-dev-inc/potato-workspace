@@ -36,6 +36,33 @@ export function markSetupDone(): void {
   }
 }
 
+const LS_TEST_SENT = 'pm.phone.setup.test';
+
+/** The person saw the test notification (step 3): remembered so the home's setup chip can count it. */
+export function markTestSent(): void {
+  try {
+    localStorage.setItem(LS_TEST_SENT, '1');
+  } catch {
+    /* private mode: the chip counts the other steps */
+  }
+}
+
+export function testSent(): boolean {
+  try {
+    return localStorage.getItem(LS_TEST_SENT) === '1';
+  } catch {
+    return false;
+  }
+}
+
+/** How many setup steps the phone has: Add to Home Screen, notifications, a test. */
+export const SETUP_STEPS = 3;
+
+/** How many of the three are done, for the home's one small chip. */
+export function setupDoneCount(steps: { home: boolean; notifications: boolean; test: boolean }): number {
+  return (steps.home ? 1 : 0) + (steps.notifications ? 1 : 0) + (steps.test ? 1 : 0);
+}
+
 export type TestResult = 'sent' | 'no-permission' | 'unsupported' | 'failed';
 
 /**

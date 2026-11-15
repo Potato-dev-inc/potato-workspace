@@ -31,7 +31,7 @@ describe('ShortcutsSheet', () => {
     const headings = [...host.querySelectorAll('.ck-shortcuts-group h3')].map((h) => h.textContent);
     expect(headings).toEqual([...SHORTCUT_GROUPS]);
     expect(host.querySelectorAll('.ck-shortcuts-row').length).toBeGreaterThan(10);
-    expect(host.textContent).toContain('Split the view with the next pane');
+    expect(host.textContent).toContain('Split the view with the next chat');
   });
 
   it('lists focus mode and the split swap with their keys', () => {

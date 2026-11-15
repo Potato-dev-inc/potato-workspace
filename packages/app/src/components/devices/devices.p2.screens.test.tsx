@@ -155,7 +155,7 @@ describe('Settings > Devices > a device', () => {
     const fake = new DevicesFake({ enabled: true, devices: [MAC_MINI] });
     await open(fake);
     const select = q<HTMLSelectElement>('[data-testid="device-route"]')!;
-    expect([...select.options].map((o) => o.textContent)).toEqual(['Same as this PC', 'Automatic', 'Public relay only', 'My own route only']);
+    expect([...select.options].map((o) => o.textContent)).toEqual(['Same as this PC', 'Automatic', 'Public link only', 'My own address only']);
     expect(select.value).toBe('same');
     await pickOption(select, 'own');
     await settle(4);
@@ -260,7 +260,7 @@ describe('Settings > Devices: routes and phones', () => {
     await settle(6);
     const text = q('[data-testid="route-setting"]')!.textContent!;
     expect(text).toContain('Direct on the same network, otherwise through your own web address');
-    expect(q('[data-testid="route-own-setup"]')!.textContent).toContain('Settings › Phone › Public address');
+    expect(q('[data-testid="route-own-setup"]')!.textContent).toContain('Connect › Phone › Keep one address');
     await act(async () => root.unmount());
     root = createRoot(host);
     await act(async () => root.render(<DevicesPage api={new DevicesFake({ enabled: true, route_pref: 'own', own_route_ready: true })} />));

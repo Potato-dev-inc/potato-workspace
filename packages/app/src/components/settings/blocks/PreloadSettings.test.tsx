@@ -133,7 +133,7 @@ describe('PreloadSettings', () => {
     await act(async () => {
       await Promise.resolve();
     });
-    expect(host.querySelector('[data-testid="preload-following"]')?.textContent).toBe('following: D:\\new-app — the pane you opened');
+    expect(host.querySelector('[data-testid="preload-following"]')?.textContent).toBe('following: D:\\new-app — the window you opened');
     const cold = host.querySelector('[data-testid="preload-not-warmed-claude"]');
     expect(cold?.textContent).toContain('not warmed: D:\\new-app needs trust once for Claude');
   });

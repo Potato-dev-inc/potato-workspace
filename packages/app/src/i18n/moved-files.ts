@@ -19,8 +19,8 @@ export const MOVED_FILES: readonly string[] = [
   // Add an agent box, first run
   'components/settings/blocks/AddAgent.tsx', 'components/settings/blocks/AddAgentAdvanced.tsx', 'components/settings/blocks/AddAgentFound.tsx',
   'components/settings/blocks/AddAgentParts.tsx', `${C}AddAgentActionHost.tsx`,
-  'components/firstrun/FirstRun.tsx', 'components/firstrun/StepAgents.tsx', 'components/firstrun/StepConnect.tsx', 'components/firstrun/StepProject.tsx',
-  'components/firstrun/StepTask.tsx', 'components/firstrun/StepsSmall.tsx',
+  'components/firstrun/FirstRun.tsx', 'components/firstrun/StepAgents.tsx', 'components/firstrun/StepProject.tsx',
+  'components/firstrun/FinishSetupChip.tsx',
   // settings shell and Look and feel
   'components/SettingsPanel.tsx', `${C}SettingsView.tsx`, 'components/settings/SectionView.tsx', 'components/settings/Overview.tsx',
   'components/settings/SettingsDamagedBanner.tsx', 'components/settings/settings-ui.tsx', 'components/settings/row-meta.tsx',

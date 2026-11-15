@@ -97,6 +97,8 @@ pub struct Options {
     pub web_address: Arc<dyn Fn() -> Option<String> + Send + Sync>,
     /// What only the person at this PC can fix: `{ signed_out, needs_person }`.
     pub health: Arc<dyn Fn() -> Value + Send + Sync>,
+    /// Room left per sign-in on this PC, told to a paired device that asks "who are you" (numbers and labels only).
+    pub room: Arc<dyn Fn() -> Value + Send + Sync>,
     /// Which paired devices agents on this PC may send work to (a JSON list of node hex; off for every device by default).
     pub send_work_store: Arc<dyn PrefsStore>,
     /// The folders the person chose to share with each device, besides the project folders.
@@ -121,6 +123,7 @@ impl Options {
             web_call: Arc::new(NoWebCall),
             web_address: Arc::new(|| None),
             health: Arc::new(|| json!({ "signed_out": [], "needs_person": [] })),
+            room: Arc::new(|| json!([])),
             send_work_store: route::MemoryPrefs::new(),
             folders_store: route::MemoryPrefs::new(),
             project_folders: Arc::new(Vec::new),
@@ -153,6 +156,7 @@ struct Info {
     p2p: Arc<P2p>,
     name: String,
     health: Arc<dyn Fn() -> Value + Send + Sync>,
+    room: Arc<dyn Fn() -> Value + Send + Sync>,
 }
 
 impl SelfInfo for Info {
@@ -167,6 +171,9 @@ impl SelfInfo for Info {
     }
     fn health(&self) -> Value {
         (self.health)()
+    }
+    fn room(&self) -> Value {
+        (self.room)()
     }
 }
 
@@ -244,7 +251,7 @@ impl DeviceLink {
         };
         let handler = AgentsHandler {
             bridge: deps.bridge,
-            info: Arc::new(Info { p2p: p2p.clone(), name: deps.name.clone(), health: deps.options.health.clone() }),
+            info: Arc::new(Info { p2p: p2p.clone(), name: deps.name.clone(), health: deps.options.health.clone(), room: deps.options.room.clone() }),
             live: live.clone(),
             still_allowed: still,
             now: deps.now_secs.clone(),
@@ -566,6 +573,7 @@ impl DeviceLink {
                 let level = self.trust.remote_level(&d.node);
                 let name = observe_identity(&d.node.to_hex(), &d.name);
                 let health = self.client.health(&d.node);
+                let (room, room_at) = self.client.room(&d.node);
                 json!({
                     "node": d.node.to_hex(),
                     "name": name,
@@ -593,6 +601,8 @@ impl DeviceLink {
                     "agents_may_send": self.agents_may_send(&d.node.to_hex()),
                     "web_ready": self.client.web_ready(&d.node),
                     "route_override": self.client.device_route(&d.node).map(|p| p.as_str()),
+                    "room": crate::usage::room::payload(&room),
+                    "room_at": room_at,
                     "signed_out": health.signed_out,
                     "needs_person": health.needs_person.iter().map(|(pane, what)| json!({ "pane": pane, "what": what })).collect::<Vec<_>>(),
                     "connected": level.is_some() && self.live.in_use(&d.node, now),

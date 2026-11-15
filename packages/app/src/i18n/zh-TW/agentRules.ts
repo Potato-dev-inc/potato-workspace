@@ -6,7 +6,7 @@ export const agentRules: Partial<Record<EnglishKey, string>> = {
   'settings.row.agent-rules.hint': '強制同意、圍欄，以及新代理的起始設定。',
   'forceYes.chip': '強制同意',
   'forceYes.chipOn': '強制同意已開',
-  'forceYes.chipOffTip': '強制同意目前關閉。按一下看它做什麼，並為這個窗格開啟。',
+  'forceYes.chipOffTip': '強制同意目前關閉。按一下看它做什麼，並為這個 AI 助理開啟。',
   'forceYes.chipOnTip': '強制同意已開。一般的詢問會替你回答「同意」，有風險的仍會交給你。按一下即可關閉。',
   'forceYes.warnTitle': '要開啟強制同意嗎？',
   'forceYes.warnBody':
@@ -17,7 +17,7 @@ export const agentRules: Partial<Record<EnglishKey, string>> = {
   'rules.title': '代理規則',
   'rules.blurb': '強制同意、圍欄，以及新代理的起始設定。',
   'rules.forceYesTitle': '強制同意',
-  'rules.forceYesHelp': '給什麼都要問的代理用。你勾選的代理，之後開的聊天與窗格會替你回答一般的詢問。有風險的詢問和密碼仍會交給你。',
+  'rules.forceYesHelp': '給什麼都要問的代理用。你勾選的代理，之後開的聊天與終端機會替你回答一般的詢問。有風險的詢問和密碼仍會交給你。',
   'rules.forceYesAgent': '{agent} 使用強制同意',
   'rules.forceYesWarn': '強制同意會替你回答。開啟前請先讀清楚它做什麼。',
   'rules.noAgents': '還沒有安裝任何代理。',

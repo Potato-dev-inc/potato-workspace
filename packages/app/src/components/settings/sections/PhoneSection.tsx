@@ -15,6 +15,7 @@ import { TunnelSection } from '../TunnelSection';
 import { PairedDevices } from '../blocks/PairedDevices';
 import { PhoneActivity } from '../blocks/PhoneActivity';
 import { TelegramSetup } from '../blocks/TelegramSetup';
+import { movedToConnect } from '../../connect/movedRow';
 
 type PairedDevice = Awaited<ReturnType<typeof tauri.listPairedMobileDevices>>[number];
 
@@ -87,7 +88,7 @@ function PhoneAlerts({ sendTest }: { sendTest?: () => Promise<TestResult> }) {
 const NOTIFICATIONS =
   'Turn on in the phone app. Lock-screen previews can show commands; turn them off if needed.';
 
-export const phoneRows: RowDef[] = [
+export const phoneRowsOriginal: RowDef[] = [
   {
     id: 'tunnel',
     label: 'Public address',
@@ -201,3 +202,6 @@ export const phoneRows: RowDef[] = [
     render: (env) => <TelegramSetup env={env} />,
   },
 ];
+
+/** In the cockpit, pairing, paired phones, alerts, the public address and "Revoke all" live on Connect > Phone; these rows link there. */
+export const phoneRows: RowDef[] = movedToConnect(phoneRowsOriginal, ['pairing', 'paired-devices', 'phone-notifications', 'tunnel', 'revoke-all-devices'], 'phone');

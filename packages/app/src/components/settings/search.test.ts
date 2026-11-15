@@ -1,7 +1,7 @@
 // Settings search over the real pages: labels with their "Page > Group" path, synonyms, page names, every level, Labs flags.
 import { describe, expect, it } from 'vitest';
-import { SECTIONS } from './catalog';
-import { LABS_INDEX_ID } from './arrange';
+import { BASE_SECTIONS, SECTIONS } from './catalog';
+import { LABS_INDEX_ID, collectLabs } from './arrange';
 import { visibleSections } from './model';
 import { levelTag, rowPath, searchAll } from './search';
 
@@ -36,7 +36,7 @@ describe('settings search', () => {
       backup: 'checkpoints',
       marketplace: 'definitions',
       rules: 'loop-guard',
-      automation: 'night-shift',
+      automation: LABS_INDEX_ID, // Night shift is an early feature: it is listed on the Labs page, which search returns
       observability: 'diagnostic-file',
     };
     for (const [word, id] of Object.entries(expected)) {
@@ -44,6 +44,10 @@ describe('settings search', () => {
       expect(found.length, word).toBeGreaterThan(0);
       expect(found, word).toContain(id);
     }
+  });
+
+  it('every early feature is found by its own name, and the hit is the Labs page that lists it', () => {
+    for (const row of collectLabs(BASE_SECTIONS)) expect(ids(row.label), row.id).toContain(LABS_INDEX_ID);
   });
 
   it('a page name is a hit: "helpers" lists the Helpers page first', () => {
@@ -67,9 +71,9 @@ describe('settings search', () => {
   it('a row hidden by a Labs flag is not listed, and its Labs switch is', () => {
     const off = visibleSections(SECTIONS, { acp_chat_enabled: false, model_bridge_enabled: false, lend_enabled: false });
     expect(ids('lend an agent', off)).not.toContain('lend-page');
-    expect(ids('lend', off)).toContain('lend-labs');
+    expect(ids('lend', off)).toContain(LABS_INDEX_ID);
     expect(ids('model bridge', off)).not.toContain('model-bridge');
-    expect(ids('model bridge', off)).toContain('model-bridge-labs');
+    expect(ids('model bridge', off)).toContain(LABS_INDEX_ID);
     const on = visibleSections(SECTIONS, { acp_chat_enabled: true, model_bridge_enabled: true, lend_enabled: true });
     expect(ids('lend an agent', on)).toContain('lend-page');
     expect(ids('labs', off)).toContain(LABS_INDEX_ID);

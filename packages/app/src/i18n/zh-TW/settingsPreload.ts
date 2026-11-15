@@ -3,9 +3,9 @@ import type { EnglishKey } from '../en';
 
 export const settingsPreload: Partial<Record<EnglishKey, string>> = {
   'preload.label': '預先載入 AI 助理',
-  'preload.help': '預設為關閉。每個準備好的 AI 助理會在背景保持開啟，這會佔用記憶體，有些服務商還會把它算成一個開啟中的工作階段。關閉這個功能會把它們全部關掉。',
+  'preload.help': '預設為關閉。每個準備好的 AI 助理會在背景保持開啟，這會佔用記憶體，有些服務商還會把它算成一個開啟中的對話。關閉這個功能會把它們全部關掉。',
   'preload.agentsLabel': '要保持待命的 AI 助理',
-  'preload.agentsHelp': '待命的 AI 助理會在你正在工作的資料夾啟動：也就是你上次執行或你開啟的窗格所屬的專案（在那之前則用你的專案資料夾設定）。開啟其他資料夾的窗格會照常啟動。它們絕不會回答信任或登入提示：出現提示的 AI 助理會被丟掉（請先自己開啟一次）。',
+  'preload.agentsHelp': '待命的 AI 助理會在你正在工作的資料夾啟動：也就是你上次執行或你開啟的視窗所屬的專案（在那之前則用你的專案資料夾設定）。開啟其他資料夾的視窗會照常啟動。它們絕不會回答信任或登入提示：出現提示的 AI 助理會被丟掉（請先自己開啟一次）。',
   'preload.keepWarm': '讓 {label} 保持待命',
   'preload.experimentalTip': '這個 AI 助理沒有自己的就緒畫面。只有在畫面靜止兩秒、而且沒有對話框時，才會使用待命中的。',
   'preload.experimental': '（實驗性）',
@@ -59,7 +59,7 @@ export const settingsPreload: Partial<Record<EnglishKey, string>> = {
   'preload.comma': '、',
   'preload.inProject': '{parts}，位於 {project}',
   'preload.why.run': '你上次的執行',
-  'preload.why.focus': '你開啟的窗格',
+  'preload.why.focus': '你開啟的視窗',
   'preload.why.setting': '你的專案資料夾設定',
   'preload.why.registry': '目前的專案',
   'loopGuard.help': '當 AI 助理重複同樣的錯誤或步驟，或工作很久卻沒有新進展時，會顯示一張卡片。',

@@ -193,6 +193,17 @@ describe('Files card', () => {
     });
   });
 
+  it('an empty project folder is one block with a sentence and a button that opens the folder', async () => {
+    const api = fakeApi({ list: vi.fn(async () => ({ truncated: false, entries: [] })) });
+    await show(api);
+    const block = host.querySelector('[data-testid="files-empty"]')!;
+    expect(block.querySelector('.ck-empty-title')!.textContent).toBe('No files yet');
+    expect(block.querySelector('.ck-empty-line')!.textContent).toContain('This project folder is empty');
+    const open = [...block.querySelectorAll<HTMLButtonElement>('button')].find((b) => b.textContent?.trim() === 'Show in folder')!;
+    await act(async () => open.click());
+    expect(api.reveal).toHaveBeenCalledWith('p1', '');
+  });
+
   it('says why when the folder cannot be read', async () => {
     await show(fakeApi({ list: vi.fn(async () => Promise.reject(new Error('FILES_NO_ROOT: The project folder is not there.'))) }));
     expect(host.querySelector('[role="alert"]')?.textContent).toBeTruthy();

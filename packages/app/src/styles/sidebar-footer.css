@@ -21,6 +21,12 @@
 .cockpit .ck-menu--up .ck-menu-item.is-active {
   background: var(--fill-active);
 }
+/* The ... menu: short labelled groups, most used first. Each group's caption names it; a hairline keeps them apart. */
+.cockpit .ck-menu-group + .ck-menu-group {
+  margin-top: 4px;
+  padding-top: 4px;
+  border-top: 1px solid var(--sep);
+}
 /* Sidebar footer: text beside each icon once the window is wide enough (900px). Below that, icons only. */
 .cockpit .ck-foot-label {
   display: none;

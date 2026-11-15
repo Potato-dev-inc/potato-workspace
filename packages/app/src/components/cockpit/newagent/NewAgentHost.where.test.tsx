@@ -9,6 +9,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { DevicesFake, MAC_MINI, NODE_MAC, WORK_LAPTOP } from '../../../dev/devices-fixtures';
 import { BUILD_BOX, SshFake } from '../../../dev/ssh-fixtures';
 import type { CockpitApi } from '../../../hooks/useCockpit';
+import type { UsageApi } from '../../../lib/usage';
 import type { WslApi } from '../../../lib/wsl';
 import { click, settle, type as typeInto } from '../../settings/test-utils';
 import type { WhereProps } from '../../devices/NewAgentWhere';
@@ -85,6 +86,33 @@ async function open(where: WhereProps | undefined, project: { path: string; name
 }
 
 describe('New agent page: Where', () => {
+  const usageOf = (usedPct: number): UsageApi => ({
+    snapshot: async () => ({ refreshed_at_ms: 1, rows: [{ agent_id: 'claude', label: 'Claude', account_id: null, account_label: null, state: 'ok' as const, reason: null, windows: [{ name: '5-hour', used_percent: usedPct, reset_since: false }], plan: null, observed_at_ms: 1, limited_until_ms: null, page: null }] }),
+    openPage: async () => {},
+    onChanged: async () => () => {},
+  });
+  const roomOf = (pct: number) => [{ agent_id: 'claude', agent_label: 'Claude', account_label: null, percent_left: pct, resets_at_ms: null, observed_at_ms: 1 }];
+
+  it('suggests the PC with more room in one line, and Use it picks that PC', async () => {
+    const fake = new DevicesFake({ enabled: true, devices: [{ ...MAC_MINI, room: roomOf(85), room_at: 1 }] });
+    await open(whereOf(fake, { usage: usageOf(80) }));
+    expect(q('[data-testid="room-suggest"]')!.textContent).toBe('More room on Mac miniUse it');
+    await click(q('[data-testid="room-use"]'));
+    await settle(8);
+    expect(q('[data-testid="where-pill"]')!.textContent).toContain('Mac mini');
+    expect(q('[data-testid="phone-new-chat"]')).not.toBeNull();
+    expect(q('[data-testid="room-suggest"]')).toBeNull();
+  });
+
+  it('says nothing when this PC has room, or the other PC is offline', async () => {
+    await open(whereOf(new DevicesFake({ enabled: true, devices: [{ ...MAC_MINI, room: roomOf(99), room_at: 1 }] }), { usage: usageOf(20) }));
+    expect(q('[data-testid="room-suggest"]')).toBeNull();
+    await act(async () => root.unmount());
+    root = createRoot(host);
+    await open(whereOf(new DevicesFake({ enabled: true, devices: [{ ...WORK_LAPTOP, room: roomOf(99), room_at: 1 }] }), { usage: usageOf(90) }));
+    expect(q('[data-testid="room-suggest"]')).toBeNull();
+  });
+
   it('draws the pill in the composer row, before the project pill, listing This PC, the devices and the SSH machines', async () => {
     await open(whereOf(new DevicesFake({ enabled: true, devices: [MAC_MINI, WORK_LAPTOP] })));
     const row = q('.ck-na-row')!;
@@ -96,7 +124,7 @@ describe('New agent page: Where', () => {
     expect(document.querySelectorAll('[data-testid="where-pill"]')).toHaveLength(1);
     await click(pill);
     await settle(4);
-    expect([...q('.dev-where-menu')!.querySelectorAll('.dev-where-row > span')].map((s) => s.textContent)).toEqual(['This PC', 'Ubuntu-Test', 'Mac mini', 'Work laptop', 'Build box', 'Add a device…']);
+    expect([...q('.dev-where-menu')!.querySelectorAll('.dev-where-row > span:not(.dis-reason)')].map((s) => s.textContent)).toEqual(['This PC', 'Ubuntu-Test', 'Mac mini', 'Work laptop', 'Build box', 'Add a device…']);
   });
 
   it('an offline device is listed with its state and cannot be picked', async () => {

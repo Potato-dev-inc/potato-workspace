@@ -117,6 +117,9 @@ describe('Inbox page: nothing needs you', () => {
     const strip = host.querySelector('[role="status"].ib-clear');
     expect(strip?.textContent).toContain('Nothing needs you');
     expect(strip?.textContent).toContain('Agents that stop to ask show up here.');
+    // It is the one shared empty block, drawn as a strip (components/common/EmptyState.tsx).
+    expect(strip?.classList.contains('ck-empty')).toBe(true);
+    expect(strip?.querySelector('.ck-empty-title')).not.toBeNull();
     expect(host.querySelector('h1')?.textContent).toBe('Inbox');
     expect(host.textContent).not.toContain('Request usage');
     // The strip comes before Done today and Team activity (the page does not jump when a card arrives).

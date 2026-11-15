@@ -32,7 +32,7 @@ vi.mock('../../../lib/agent-authority-api', async (importOriginal) => {
 
 import { agentAuthorityApi } from '../../../lib/agent-authority-api';
 
-const ASK = "Ask me before an agent controls a pane it didn't start";
+const ASK = "Ask me before an agent controls a window it didn't start";
 const MERGE = 'Let agents merge separate copies';
 const switchFor = (host: HTMLElement, label: string) => host.querySelector<HTMLElement>(`[aria-label="${label}"]`);
 

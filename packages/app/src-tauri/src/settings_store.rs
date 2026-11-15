@@ -232,6 +232,50 @@ pub fn read_public_settings(app: &AppHandle) -> Value {
     with_dev_labs(&stored_public_settings(app), dev_labs_override_active())
 }
 
+/// What the CLI may list and set: every patchable key with its type, default, saved value and the value the app
+/// acts on, the Labs keys, and the keys a patch never writes. Pure; `stored` and `effective` come from the mirror.
+pub fn catalog_from(stored: &Value, effective: &Value, override_active: bool) -> Value {
+    let defaults = default_public_settings();
+    let settings: Vec<Value> = PATCHABLE_KEYS
+        .iter()
+        .map(|key| {
+            let default = defaults.get(*key).cloned().unwrap_or(Value::Null);
+            let kind = match &default {
+                Value::Bool(_) => "boolean",
+                Value::Number(_) => "number",
+                Value::String(_) => "string",
+                Value::Object(_) => "object",
+                Value::Array(_) => "array",
+                Value::Null => "any",
+            };
+            json!({
+                "key": key,
+                "type": kind,
+                "default": default,
+                "saved": stored.get(*key).cloned().unwrap_or(Value::Null),
+                "effective": effective.get(*key).cloned().unwrap_or(Value::Null),
+                "labs": DEV_LABS_KEYS.contains(key),
+            })
+        })
+        .collect();
+    let mut refused: Vec<&str> = crate::settings_patch::OWNED_ELSEWHERE.to_vec();
+    refused.extend_from_slice(crate::settings_patch::SECRET_KEYS);
+    json!({
+        "settings": settings,
+        "labs": DEV_LABS_KEYS,
+        "dev_labs_override": override_active,
+        "refused": refused,
+    })
+}
+
+/// `GET /settings/catalog`.
+pub fn read_catalog(app: &AppHandle) -> Value {
+    let stored = stored_public_settings(app);
+    let active = dev_labs_override_active();
+    let effective = with_dev_labs(&stored, active);
+    catalog_from(&stored, &effective, active)
+}
+
 /// Tells the bridge SSE and each Labs owner the settings. Always called with the effective settings, so the
 /// override reaches every subsystem.
 fn apply_public_settings(effective: &Value) {
@@ -383,6 +427,30 @@ mod tests {
         assert_eq!(on["handoff_fixed_notes"], "Be brief.");
         // Not a Labs switch: a development build does not turn it on.
         assert_eq!(with_dev_labs(&defaults, true)["handoff_mode"], "new_agent");
+    }
+
+    #[test]
+    fn catalog_lists_every_patchable_and_labs_key_and_no_secret() {
+        let stored = default_public_settings();
+        let effective = with_dev_labs(&stored, true);
+        let catalog = catalog_from(&stored, &effective, true);
+        let keys: Vec<&str> = catalog["settings"].as_array().unwrap().iter().map(|e| e["key"].as_str().unwrap()).collect();
+        for key in PATCHABLE_KEYS {
+            assert!(keys.contains(key), "{key} missing");
+        }
+        for key in crate::settings_patch::SECRET_KEYS {
+            assert!(!keys.contains(key), "{key} must not be listed");
+        }
+        assert!(!keys.contains(&"ui_mode"));
+        assert_eq!(catalog["labs"].as_array().unwrap().len(), DEV_LABS_KEYS.len());
+        assert_eq!(catalog["dev_labs_override"], true);
+        let lend = catalog["settings"].as_array().unwrap().iter().find(|e| e["key"] == "lend_enabled").unwrap();
+        // Saved says off, in effect says on: the override must not look like a saved value.
+        assert_eq!(lend["saved"], false);
+        assert_eq!(lend["effective"], true);
+        assert_eq!(lend["labs"], true);
+        assert_eq!(lend["type"], "boolean");
+        assert!(catalog["refused"].as_array().unwrap().iter().any(|k| k == "ui_mode"));
     }
 
     #[test]

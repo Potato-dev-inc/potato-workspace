@@ -1,6 +1,6 @@
 import type { HarnessScenario } from '../types';
 
-// "Set up stable link" in Settings > Connect: one button, steps with status, and the hand-off note after 3 tries.
+// "Set up stable link" in Settings > Connect: one button, steps with status, then one plain sentence and "Let Claude fix it" after 3 tries.
 const s: HarnessScenario = {
   name: 'worker-update-failed-dark',
   route: 'settings',

@@ -367,33 +367,21 @@ export function Inbox({
         {nextCard.next !== null && t('inbox.next', { name: nextCard.next })}
       </p>
       {!firstRun && count === 0 && (
-        <div className="ib-clear" role="status" data-empty-state="">
-          <span className="ib-clear-ok" aria-hidden="true">
-            <IconTick size={12} />
-          </span>
-          <span className="ck-empty-title ib-clear-t">{t('inbox.nothingNeedsYou')}</span>
-          <small className="ck-empty-line ib-clear-s">{t('inbox.nothingNeedsYouLine')}</small>
-          {noPanes && (onStartAgent || setUp) && (
-            <span className="ib-clear-acts">
-              {onStartAgent ? (
-                <>
-                  <button type="button" className="ck-btn ck-btn--sm ck-btn--primary" onClick={onStartAgent}>
-                    {t('inbox.startAgent')}
-                  </button>
-                  {setUp && (
-                    <button type="button" className="ck-btn ck-btn--sm ck-btn--plain ck-empty-alt" onClick={setUp}>
-                      {t('inbox.setUpAgents')}
-                    </button>
-                  )}
-                </>
-              ) : (
-                <button type="button" className="ck-btn ck-btn--sm ck-btn--primary" onClick={setUp!}>
-                  {t('inbox.setUpAgents')}
-                </button>
-              )}
+        <EmptyState
+          plain
+          role="status"
+          testId="inbox-clear"
+          className="ib-clear"
+          icon={
+            <span className="ib-clear-ok" aria-hidden="true">
+              <IconTick size={12} />
             </span>
-          )}
-        </div>
+          }
+          title={t('inbox.nothingNeedsYou')}
+          line={t('inbox.nothingNeedsYouLine')}
+          action={noPanes && onStartAgent ? { label: t('inbox.startAgent'), onClick: onStartAgent, small: true } : noPanes && setUp ? { label: t('inbox.setUpAgents'), onClick: setUp, small: true } : null}
+          alternatives={noPanes && onStartAgent && setUp ? [{ label: t('inbox.setUpAgents'), onClick: setUp }] : []}
+        />
       )}
 
       {entries.length > 0 && (

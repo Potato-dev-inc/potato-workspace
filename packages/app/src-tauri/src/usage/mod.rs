@@ -12,6 +12,7 @@
 
 pub mod oauth;
 pub mod readers;
+pub mod room;
 pub mod source;
 pub mod sqlite;
 #[cfg(test)]

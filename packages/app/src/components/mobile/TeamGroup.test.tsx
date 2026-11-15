@@ -52,7 +52,7 @@ async function click(el: Element) {
   });
 }
 
-const WATCH_LINE = 'This phone can see team updates but not act on them. Change it on your PC: Settings › Phone.';
+const WATCH_LINE = 'This phone can see team updates but not act on them. Change it on your PC: Connect › Phone.';
 
 describe('phone TeamGroup', () => {
   it('renders nothing when Team is off', async () => {

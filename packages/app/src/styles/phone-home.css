@@ -1,0 +1,34 @@
+/* The phone home's top line and the setup chip (components/mobile/PhoneHomeTop.tsx).
+   Colour tokens only; the chip stays quiet until the person taps it. */
+.ph .ph-home-top {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  min-height: 32px;
+  padding: 8px 16px 0;
+}
+
+.ph .ph-place {
+  margin: 0;
+  min-width: 0;
+  overflow: hidden;
+  font: 600 13px/1.3 var(--font-ui);
+  color: var(--label-2);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.ph .ph-setup-chip {
+  flex: none;
+  min-height: 32px;
+  padding: 0 12px;
+  border: 1px solid var(--sep);
+  border-radius: 999px;
+  background: var(--fill);
+  font: 500 13px/1.3 var(--font-ui);
+  color: var(--label);
+}
+.ph .ph-setup-chip:active {
+  background: var(--fill-active);
+}

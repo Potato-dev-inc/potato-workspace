@@ -6,6 +6,7 @@ import { blockOf, type ChatBlock } from '../../../lib/acpAddon';
 import { configChips, tauriAcpChatApi, type AcpChatApi } from '../../../lib/acpChat';
 import { sendPaneMessage } from '../../../lib/paneOutbox';
 import { markChat } from '../../../lib/chatTiming';
+import { t } from '../../../i18n';
 import type { StartRequest } from './model';
 
 export interface StartDeps {
@@ -89,7 +90,7 @@ export async function runStart(req: StartRequest, deps: StartDeps): Promise<stri
   try {
     if (req.runAs === 'chat') {
       if (!req.folder) {
-        deps.notify('Pick a folder for a chat session.');
+        deps.notify(t('newAgent.blockFolder'));
         return null;
       }
       // "Work on a copy" reaches the backend only when it is on, so a start without it is called as before.

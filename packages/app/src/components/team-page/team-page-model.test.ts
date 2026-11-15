@@ -65,7 +65,7 @@ describe('link words', () => {
     expect(w('connecting')).toBe('Connecting…');
     expect(w(null)).toBe('Connecting…');
     expect(w('offline')).toBe('Not connected. Trying again.');
-    expect(w('denied')).toBe("This team's relay said no. Open Setup.");
+    expect(w('denied')).toBe("This team's connection said no. Open Setup.");
     expect(linkWords(teamState({ enabled: false }))).toBe('Team is paused on this computer');
   });
 });

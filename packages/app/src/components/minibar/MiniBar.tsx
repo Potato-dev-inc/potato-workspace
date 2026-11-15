@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useLayoutEffect, useRef, useState, type KeyboardEvent, type WheelEvent } from 'react';
 import type { PaneInfo } from '../../lib/tauri-types';
+import { useT } from '../../i18n';
 import '../../styles/individual-mode.css';
 
 export interface MiniBarProps {
@@ -36,6 +37,7 @@ export function needsYouFirst(panes: PaneInfo[]): PaneInfo[] {
 
 /** The strip that stays on screen in Individual mode: a chip per agent, New, Back, and the 8 s Undo. */
 export function MiniBar({ panes, toast, onFocusPane, onClosePane, onWantWidth, onNew, onBack, onUndo, labelOf = agentName }: MiniBarProps) {
+  const t = useT();
   const barRef = useRef<HTMLDivElement>(null);
   const stripRef = useRef<HTMLDivElement>(null);
   const [fade, setFade] = useState({ start: false, end: false });
@@ -144,7 +146,7 @@ export function MiniBar({ panes, toast, onFocusPane, onClosePane, onWantWidth, o
         </>
       )}
       <button type="button" className="mb-btn" onClick={onBack}>
-        Back to Orchestration
+        {t('lookFeel.backToWindow')}
       </button>
     </div>
   );

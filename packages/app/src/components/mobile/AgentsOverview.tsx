@@ -14,6 +14,7 @@ import { QuestionsView, useQuestionPolling } from './QuestionsList';
 import { NeedsYouList } from './NeedsYouList';
 import { TeamGroup } from './TeamGroup';
 import { PhoneInboxHome } from './PhoneInboxHome';
+import { PhoneHomeTop } from './PhoneHomeTop';
 import { PhoneQuiet } from './PhoneQuiet';
 import { useT } from '../../i18n';
 
@@ -62,6 +63,7 @@ export function AgentsOverview({
   canAnswer = true,
   onRefreshAttention,
   night,
+  setup,
 }: {
   bridge: BridgeClient;
   bridgeReady: boolean;
@@ -90,6 +92,8 @@ export function AgentsOverview({
   onRefreshAttention?: () => void;
   /** Drawn under the Agents title, inside the scrolling list (the Night Shift card). */
   night?: ReactNode;
+  /** The home's top line: how many setup steps are done, and what opens them. The chip hides when all are done. */
+  setup?: { done: number; total: number; onOpen: () => void };
 }) {
   const t = useT();
   const { questions, refresh } = useQuestionPolling(bridge, bridgeReady && questionsRevision !== undefined, questionsRevision ?? 0);
@@ -151,19 +155,30 @@ export function AgentsOverview({
     ? String(blockingCount(attention)).padStart(2, '0')
     : waitingCount(panes, { questions: liveQuestions, stuckPaneIds: stuck ? [...stuck.keys()] : [] });
   // With the PC's list the cards ARE that list, in its order; an older PC keeps the question cards alone.
-  const cards = attention ? (
-    <NeedsYouList
-      snapshot={attention}
-      bridge={bridge}
-      canAnswer={canAnswer}
-      questions={liveQuestions}
-      refreshQuestions={refresh}
-      labels={labels}
-      onOpenPane={onOpen}
-      onRefresh={onRefreshAttention}
-    />
-  ) : questionsRevision === undefined ? null : (
-    <QuestionsView bridge={bridge} questions={questions} refresh={refresh} labels={labels} />
+  const needsYou = (
+    <section className="ph-needs" data-testid="phone-needs-you">
+      <h2 className="ph-queue-sec">{t('phone.needsYou')}</h2>
+      {attention ? (
+        <NeedsYouList
+          snapshot={attention}
+          bridge={bridge}
+          canAnswer={canAnswer}
+          questions={liveQuestions}
+          refreshQuestions={refresh}
+          labels={labels}
+          onOpenPane={onOpen}
+          onRefresh={onRefreshAttention}
+          showEmpty
+          emptyText={t('phone.needsYou.empty')}
+        />
+      ) : liveQuestions.length > 0 ? (
+        <QuestionsView bridge={bridge} questions={liveQuestions} refresh={refresh} labels={labels} />
+      ) : (
+        <div className="ph-queue-empty" data-testid="phone-needs-you-empty">
+          <b>{t('phone.needsYou.empty')}</b>
+        </div>
+      )}
+    </section>
   );
   const title = (
     <header className="ph-large">
@@ -178,10 +193,11 @@ export function AgentsOverview({
   if (panes.length === 0) {
     return (
       <div className="ph-scroll">
+        <PhoneHomeTop setup={setup} />
         {title}
+        {needsYou}
         {night}
         {header}
-        {cards}
         <PhoneInboxHome bridge={bridge} bridgeReady={bridgeReady} labels={labels} onOpen={onOpen} />
         <TeamGroup bridge={bridge} bridgeReady={bridgeReady} />
         <DigestCard bridge={bridge} bridgeReady={bridgeReady} onOpen={onOpen} />
@@ -196,11 +212,11 @@ export function AgentsOverview({
 
   return (
     <div className="ph-scroll">
+      <PhoneHomeTop setup={setup} />
       {title}
+      {needsYou}
       {night}
       {header}
-      {cards}
-      {Number(waiting) === 0 && <PhoneQuiet kind="done" compact />}
       <PhoneInboxHome bridge={bridge} bridgeReady={bridgeReady} labels={labels} onOpen={onOpen} />
       <TeamGroup bridge={bridge} bridgeReady={bridgeReady} />
       <DigestCard bridge={bridge} bridgeReady={bridgeReady} onOpen={onOpen} />

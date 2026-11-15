@@ -35,7 +35,7 @@ export function groupTargets(ts: Target[]): { key: 'same' | 'other'; label: stri
   const other = ts.filter((t) => !t.sameFolder);
   const groups: { key: 'same' | 'other'; label: string; items: Target[] }[] = [];
   if (same.length > 0) groups.push({ key: 'same', label: 'Same folder', items: same });
-  if (other.length > 0) groups.push({ key: 'other', label: 'Other panes', items: other });
+  if (other.length > 0) groups.push({ key: 'other', label: 'Other agents', items: other });
   return groups;
 }
 

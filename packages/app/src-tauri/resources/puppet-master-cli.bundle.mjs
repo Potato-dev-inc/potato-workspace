@@ -4127,6 +4127,7 @@ var BRIDGE_PORT_FILE_ENV = "POTATO_WORKSPACE_BRIDGE_PORT_FILE";
 var DEFAULT_BRIDGE_PORT_FILE = "potato-workspace.bridge.port";
 var BRIDGE_LOCAL_SECRET_FILE = "potato-workspace.bridge.secret";
 var BRIDGE_LOCAL_SECRET_HEADER = "X-Potato-Workspace-Local-Secret";
+var BRIDGE_PANE_HEADER = "X-Potato-Workspace-Pane";
 var BRIDGE_HTTP_PORT_RANGE = { min: 17421, max: 17499 };
 
 // packages/shared/dist/schemas.js
@@ -4153,7 +4154,7 @@ var SettingsSchema = external_exports.object({
   /** Orchestrator sidebar width in the workspace (px). */
   sidebar_width: external_exports.number().int().min(300).max(800).default(360),
   /** Desktop UI chrome theme. */
-  theme: external_exports.enum(["dark", "light"]).default("dark"),
+  theme: external_exports.enum(["dark", "light", "dim", "auto"]).default("dark"),
   /** Where panes are shown: one cockpit window (orchestration) or a pop-out per pane (individual). Owned by Rust (set_ui_mode). */
   ui_mode: external_exports.enum(["orchestration", "individual"]).default("orchestration"),
   /** Ask before closing a pane window, a cockpit pane or the app while an agent is working. */
@@ -4178,6 +4179,8 @@ var SettingsSchema = external_exports.object({
   budget_default_turns: external_exports.number().int().min(0).max(1e4).default(0),
   /** Same, in wall-clock minutes; 0 = no limit. */
   budget_default_minutes: external_exports.number().int().min(0).max(10080).default(0),
+  /** After a turn, a quiet line may say a cheaper or stronger model would fit better. On unless false. Rust: acp::chat::right_size. */
+  right_size_suggest: external_exports.boolean().optional(),
   /** Live updates from agents (Claude, Codex): off, or watch only for now. Owned by Rust (settings_store). */
   agent_hooks_mode: external_exports.enum(["off", "shadow", "evidence"]).optional(),
   /** Per-agent override of agent_hooks_mode, keyed by agent id. */
@@ -4196,12 +4199,39 @@ var SettingsSchema = external_exports.object({
   acp_chat_enabled: external_exports.boolean().optional(),
   /** What the "+" menu starts: a chat or a terminal. Absent: chat. Shown only while Chat is on. */
   new_agent_start: external_exports.enum(["chat", "terminal"]).optional(),
+  /** Show terminals (Settings > General): off = every agent starts as a chat and terminal-only controls are hidden. Absent: off. Open terminals keep working. Rust: show_terminals. */
+  show_terminals: external_exports.boolean().optional(),
   /** Model Bridge (Settings › General › Labs): connect a model service with a key and add it to Codex. Off unless chosen. Rust: model_bridge. */
   model_bridge_enabled: external_exports.boolean().optional(),
   /** Spaces (Settings › General › Labs): chat with friends in small groups, computer to computer. Off unless chosen. Rust: spaces. */
   spaces_enabled: external_exports.boolean().optional(),
   /** Share an agent (Settings > General > Labs): lend an agent sign-in to another PC, or borrow one. Off unless chosen. Rust: lend. */
   lend_enabled: external_exports.boolean().optional(),
+  /** Devices (Settings > General > Labs): pair two Workspaces and run a chat or terminal on the other one. Off unless chosen. Rust: device_link. */
+  devices_enabled: external_exports.boolean().optional(),
+  /** Desktop Potato (Settings > General > Labs): a small pet window on the desktop. Off unless chosen. Rust: pet. */
+  desktop_pet_enabled: external_exports.boolean().optional(),
+  agent_browser_enabled: external_exports.boolean().optional(),
+  /** Companion memory and mood (Settings > General > Labs): daily journal, diary and mood per companion. Off unless chosen. */
+  companion_vault_enabled: external_exports.boolean().optional(),
+  /** Discord bot (Settings > General > Labs): a companion answers in chosen Discord channels with the person's own bot. Off unless chosen. */
+  discord_bot_enabled: external_exports.boolean().optional(),
+  /** Project guide (Settings > General > Labs): the person's agent writes a short guide to a project when asked. Off unless chosen. Rust: project_guide. */
+  project_guide_enabled: external_exports.boolean().optional(),
+  /** Mark-up bar (Settings > General > Labs): draw, pick and send marks of a page to the chat that made it; Open in agent browser. Off unless chosen. */
+  markup_bar_enabled: external_exports.boolean().optional(),
+  /** The Today page (Settings > General > Labs): one line for the whole day, and a way back to any point on it. Off unless chosen. Rust: timeline. */
+  timeline_day_enabled: external_exports.boolean().optional(),
+  /** Desktop Potato: size 'small' | 'medium' | 'large', hidden-until (epoch ms), quiet. Rust: pet. */
+  desktop_pet_size: external_exports.enum(["small", "medium", "large"]).optional(),
+  desktop_pet_quiet: external_exports.boolean().optional(),
+  desktop_pet_hidden_until_ms: external_exports.number().optional(),
+  /** Get early versions (beta): the updater also reads the beta address and takes the newer version. Off unless chosen. Rust: commands/update_channel. */
+  early_versions_enabled: external_exports.boolean().optional(),
+  /** Smaller updates (Labs): an update may take the app-only package and leave the built-in tools alone. Off unless chosen. Rust: commands/update_plan. */
+  smaller_updates_enabled: external_exports.boolean().optional(),
+  /** The version whose small update failed (written by the app); that version takes the full package. */
+  app_only_failed_for: external_exports.string().optional(),
   /** The first-switch sheet for Individual mode was shown and (with "Don't show again") dismissed for good. Absent: show it. */
   individual_explained: external_exports.boolean().optional(),
   /** How the windows move when the mode switches between Orchestration and Individual: Domino (default), Ink, or Off (a quick fade). Rust reads it (switch_anim). */
@@ -4214,6 +4244,8 @@ var SettingsSchema = external_exports.object({
   show_developer_settings: external_exports.boolean().optional(),
   /** How the New agent page greets you ("What's up next, <name>?"). Empty or absent: no name. Never derived from the computer. */
   display_name: external_exports.string().max(60).optional(),
+  /** App language: follow the system (the default when absent), English or Traditional Chinese. App: i18n/. */
+  ui_language: external_exports.enum(["auto", "en", "zh-TW"]).optional(),
   /** The cards pinned on the New agent page, in order. Absent: none. */
   home_cards: external_exports.array(external_exports.object({ id: external_exports.string().max(40), kind: external_exports.enum(["recent", "running", "needs", "prompt"]), text: external_exports.string().max(2e3).optional() })).max(12).optional(),
   /** First-run welcome: absent = never decided (shown once on a fresh profile), true = finished or skipped, false = show it again. Rust reads it (first_run). */
@@ -4231,7 +4263,9 @@ var SettingsSchema = external_exports.object({
   /** Default OpenCode model for opencode_native API prompts (write_terminal_input). */
   opencode_model_id: external_exports.string().optional(),
   /** Settings > Agents > Helper agents: the model a helper runs on per agent id when the request names none. Absent: none. Rust reads it (agent_run_mode::helper_model). */
-  helper_default_models: external_exports.record(external_exports.string().max(120)).optional()
+  helper_default_models: external_exports.record(external_exports.string().max(120)).optional(),
+  /** Settings > Agents > Default model: the model each agent starts on per agent id when nothing names one. Absent: none. Rust reads it (agent_run_mode::agent_model). */
+  agent_default_models: external_exports.record(external_exports.string().max(120)).optional()
 });
 
 // packages/shared/dist/mobile-pairing.js
@@ -4383,6 +4417,10 @@ async function readBridgePort(filePath) {
   throw new Error(`Potato Workspace bridge port file not found (tried: ${candidates.map((p) => `"${p}"`).join(", ")}). Start Potato Workspace first (\`npx potato-workspace\`).`);
 }
 async function readLocalSecretHeaders(filePath) {
+  const pane = (process.env.POTATO_WORKSPACE_PANE_ID ?? "").trim();
+  return { ...await readSecretHeader(filePath), ...pane ? { [BRIDGE_PANE_HEADER]: pane.slice(0, 64) } : {} };
+}
+async function readSecretHeader(filePath) {
   for (const candidate of [...new Set(bridgePortCandidates(filePath))]) {
     try {
       if (!(await stat(candidate)).isFile())
@@ -4916,6 +4954,518 @@ async function runPairLink() {
   }
 }
 
+// packages/cli/src/args.ts
+var CONFIG_COMMANDS = /* @__PURE__ */ new Set(["settings", "labs", "status", "agents", "models", "projects"]);
+var CONFIG_USAGE = `usage:
+  potato-workspace status
+  potato-workspace settings list | get KEY | set KEY VALUE [KEY VALUE ...] | reset KEY
+  potato-workspace labs list | on KEY | off KEY
+  potato-workspace agents list
+  potato-workspace models list AGENT
+  potato-workspace projects list
+flags: --json  --yes (apply a change)  --dry-run (show only)  --wait-ms N (wait for the Allow card)
+exit codes: 0 ok, 1 failed, 4 app not reachable, 5 needs --yes (nothing changed), 6 refused`;
+var KNOWN = /* @__PURE__ */ new Set(["json", "yes", "y", "dry-run", "help", "h", "wait-ms"]);
+function parseConfigArgs(argv) {
+  const [command = "", ...rest] = argv;
+  const out = { command, positional: [], json: false, yes: false, dryRun: false, help: false };
+  for (let i = 0; i < rest.length; i++) {
+    const a = rest[i];
+    if (!a.startsWith("--") && !(a.startsWith("-") && /^-[a-z]/i.test(a))) {
+      out.positional.push(a);
+      continue;
+    }
+    const key = a.replace(/^-+/, "");
+    if (!KNOWN.has(key)) return { problem: `unknown flag ${a}` };
+    switch (key) {
+      case "json":
+        out.json = true;
+        break;
+      case "yes":
+      case "y":
+        out.yes = true;
+        break;
+      case "dry-run":
+        out.dryRun = true;
+        break;
+      case "help":
+      case "h":
+        out.help = true;
+        break;
+      case "wait-ms": {
+        const n = Number(rest[++i]);
+        if (!Number.isFinite(n) || n < 0) return { problem: "--wait-ms needs a number of milliseconds" };
+        out.waitMs = n;
+        break;
+      }
+    }
+  }
+  return out;
+}
+function isKeyName(text) {
+  return /^[a-z][a-z0-9_]{0,63}$/.test(text);
+}
+
+// packages/cli/src/config-cli.ts
+import { createInterface } from "node:readline/promises";
+
+// packages/cli/src/bridge.ts
+var EXIT = {
+  ok: 0,
+  failed: 1,
+  unreachable: 4,
+  needsConfirmation: 5,
+  refused: 6
+};
+var CliError = class extends Error {
+  constructor(exitCode, message) {
+    super(message);
+    this.exitCode = exitCode;
+  }
+  exitCode;
+};
+var DEFAULT_CONSENT_WAIT_MS = 3e5;
+var MIN_RETRY_MS = 1;
+var MAX_RETRY_MS = 15e3;
+var DEFAULT_RETRY_MS = 5e3;
+function retryDelay(body) {
+  const asked = typeof body.retry_after_ms === "number" ? body.retry_after_ms : DEFAULT_RETRY_MS;
+  return Math.min(Math.max(asked, MIN_RETRY_MS), MAX_RETRY_MS);
+}
+function createBridge(options) {
+  const sleep2 = options.sleep ?? ((ms) => new Promise((resolve3) => setTimeout(resolve3, ms)));
+  const now = options.now ?? Date.now;
+  async function once(method, path, body) {
+    let host;
+    let port;
+    try {
+      ({ host, port } = await readBridgePort());
+    } catch {
+      throw new CliError(EXIT.unreachable, "Potato Workspace is not running (no bridge port file). Start the app first.");
+    }
+    let response;
+    try {
+      response = await fetch(new URL(path, `http://${host}:${port}`), {
+        method,
+        headers: { ...await readLocalSecretHeaders(), "Content-Type": "application/json" },
+        body: body === void 0 ? void 0 : JSON.stringify(body),
+        signal: AbortSignal.timeout(3e4)
+      });
+    } catch {
+      throw new CliError(EXIT.unreachable, "Potato Workspace did not answer on its bridge. Is the app running?");
+    }
+    const text = await response.text();
+    let json = null;
+    try {
+      json = text ? JSON.parse(text) : null;
+    } catch {
+      json = { error: text.slice(0, 200) };
+    }
+    return { status: response.status, json };
+  }
+  async function call(method, path, body) {
+    const deadline = now() + options.consentWaitMs;
+    let told = false;
+    for (; ; ) {
+      const { status, json } = await once(method, path, body);
+      if (status >= 200 && status < 300) return json;
+      const err = json ?? {};
+      if (err.code === "CONSENT_PENDING") {
+        if (!told) {
+          options.note(
+            "Waiting for the person: an Allow card is open in the Potato Workspace app (Inbox). Answer it there. Nothing has changed yet."
+          );
+          told = true;
+        }
+        if (now() >= deadline) {
+          throw new CliError(
+            EXIT.failed,
+            "The person has not answered the Allow card yet. Nothing was changed. Run the same command again after they answer."
+          );
+        }
+        await sleep2(retryDelay(err));
+        continue;
+      }
+      if (err.code === "CONSENT_DENIED") {
+        throw new CliError(EXIT.refused, "The person said no on the Allow card. Nothing was changed.");
+      }
+      throw new CliError(
+        EXIT.failed,
+        `The app refused (HTTP ${status}${err.code ? `, ${err.code}` : ""}): ${err.message ?? err.error ?? "no detail"}`
+      );
+    }
+  }
+  return {
+    get: (path) => call("GET", path),
+    patch: (path, body) => call("PATCH", path, body)
+  };
+}
+
+// packages/cli/src/output.ts
+var SECRETISH = /(secret|token|password|passwd|api_?key|credential|private_?key)/i;
+function looksSecret(key) {
+  return SECRETISH.test(key);
+}
+function show(key, value) {
+  if (looksSecret(key)) return "[hidden]";
+  if (value === void 0) return "(not set)";
+  return JSON.stringify(value);
+}
+function isNoChange(change) {
+  return JSON.stringify(change.from) === JSON.stringify(change.to);
+}
+function diffLines(changes) {
+  return changes.map(
+    (c) => isNoChange(c) ? `${c.key}: ${show(c.key, c.to)} (no change)` : `${c.key}: ${show(c.key, c.from)} -> ${show(c.key, c.to)}`
+  );
+}
+function table(rows) {
+  if (rows.length === 0) return [];
+  const widths = rows[0].map((_, col) => Math.max(...rows.map((r) => (r[col] ?? "").length)));
+  return rows.map((r) => r.map((cell, col) => col === r.length - 1 ? cell : cell.padEnd(widths[col])).join("  ").trimEnd());
+}
+
+// packages/cli/src/commands/settings.ts
+async function loadCatalog(bridge) {
+  return bridge.get("/settings/catalog");
+}
+function entryFor(catalog, key) {
+  if (!isKeyName(key) || catalog.refused.includes(key) || looksSecret(key)) {
+    throw new CliError(EXIT.refused, `"${key}" cannot be read or changed from the command line.`);
+  }
+  const entry = catalog.settings.find((e) => e.key === key);
+  if (!entry) {
+    throw new CliError(EXIT.refused, `"${key}" is not a setting the command line may change. Run "settings list" to see them.`);
+  }
+  return entry;
+}
+function parseValue(entry, raw) {
+  const bad = (want) => new CliError(EXIT.failed, `${entry.key} takes ${want}, got ${JSON.stringify(raw)}.`);
+  const text = raw.trim();
+  switch (entry.type) {
+    case "boolean": {
+      if (/^(true|on|yes)$/i.test(text)) return true;
+      if (/^(false|off|no)$/i.test(text)) return false;
+      throw bad("true or false");
+    }
+    case "number": {
+      const n = Number(text);
+      if (text === "" || !Number.isFinite(n)) throw bad("a number");
+      return n;
+    }
+    case "string": {
+      if (text.startsWith('"')) {
+        try {
+          const parsed = JSON.parse(text);
+          if (typeof parsed === "string") return parsed;
+        } catch {
+        }
+      }
+      return raw;
+    }
+    case "object":
+    case "array": {
+      let parsed;
+      try {
+        parsed = JSON.parse(text);
+      } catch {
+        throw bad(`JSON (${entry.type === "object" ? '{"agent":"model"}' : "[...]"})`);
+      }
+      const isObject = typeof parsed === "object" && parsed !== null && !Array.isArray(parsed);
+      if (entry.type === "object" ? !isObject : !Array.isArray(parsed)) throw bad(`a JSON ${entry.type}`);
+      return parsed;
+    }
+    default: {
+      try {
+        return JSON.parse(text);
+      } catch {
+        return raw;
+      }
+    }
+  }
+}
+function usage(message) {
+  throw new CliError(EXIT.failed, message);
+}
+async function applyChanges(ctx, changes, patch) {
+  const { io, args, bridge } = ctx;
+  const effective = changes.filter((c) => !isNoChange(c));
+  if (!args.json) for (const line of diffLines(changes)) io.out(line);
+  if (effective.length === 0) {
+    if (args.json) io.out(JSON.stringify({ changes, applied: false, reason: "no change" }));
+    else io.out("Nothing to change.");
+    return EXIT.ok;
+  }
+  if (args.dryRun) {
+    if (args.json) io.out(JSON.stringify({ changes, applied: false, reason: "dry run" }));
+    else io.out("Dry run: nothing was changed.");
+    return EXIT.ok;
+  }
+  if (!args.yes) {
+    if (io.interactive && !args.json) {
+      if (!await io.confirm("Apply this change? [y/N] ")) {
+        io.out("Nothing was changed.");
+        return EXIT.needsConfirmation;
+      }
+    } else {
+      if (args.json) io.out(JSON.stringify({ changes, applied: false, reason: "needs --yes" }));
+      io.err("Nothing was changed. Run the same command again with --yes to apply it.");
+      return EXIT.needsConfirmation;
+    }
+  }
+  await bridge.patch("/settings", patch);
+  if (args.json) io.out(JSON.stringify({ changes, applied: true }));
+  else io.out("Done.");
+  return EXIT.ok;
+}
+function patchAndChanges(assignments) {
+  const changes = [];
+  const patch = {};
+  for (const [entry, value] of assignments) {
+    changes.push({ key: entry.key, from: entry.saved, to: value });
+    patch[entry.key] = value;
+  }
+  return { changes, patch };
+}
+async function runSettings(ctx) {
+  const { bridge, io, args } = ctx;
+  const [sub, ...rest] = args.positional;
+  const catalog = await loadCatalog(bridge);
+  switch (sub) {
+    case "list": {
+      if (args.json) {
+        io.out(JSON.stringify(catalog.settings.map(({ key, type, default: d, saved, effective, labs }) => ({ key, type, default: d, saved, effective, labs }))));
+        return EXIT.ok;
+      }
+      const rows = catalog.settings.map((e) => [e.key, e.type, show(e.key, e.effective), e.labs ? "labs" : ""]);
+      for (const line of table(rows)) io.out(line);
+      return EXIT.ok;
+    }
+    case "get": {
+      if (rest.length !== 1) usage("usage: potato-workspace settings get KEY");
+      const entry = entryFor(catalog, rest[0]);
+      if (args.json) {
+        io.out(JSON.stringify({ key: entry.key, type: entry.type, default: entry.default, saved: entry.saved, effective: entry.effective }));
+        return EXIT.ok;
+      }
+      io.out(`${entry.key}: ${show(entry.key, entry.effective)}`);
+      if (JSON.stringify(entry.saved) !== JSON.stringify(entry.effective)) {
+        io.out(`saved: ${show(entry.key, entry.saved)} (a development build shows every Labs switch as on)`);
+      }
+      return EXIT.ok;
+    }
+    case "set": {
+      if (rest.length === 0 || rest.length % 2 !== 0) usage("usage: potato-workspace settings set KEY VALUE [KEY VALUE ...]");
+      const assignments = [];
+      const seen = /* @__PURE__ */ new Set();
+      for (let i = 0; i < rest.length; i += 2) {
+        const entry = entryFor(catalog, rest[i]);
+        if (seen.has(entry.key)) usage(`${entry.key} is given twice.`);
+        seen.add(entry.key);
+        assignments.push([entry, parseValue(entry, rest[i + 1])]);
+      }
+      const { changes, patch } = patchAndChanges(assignments);
+      return applyChanges(ctx, changes, patch);
+    }
+    case "reset": {
+      if (rest.length !== 1) usage("usage: potato-workspace settings reset KEY");
+      const entry = entryFor(catalog, rest[0]);
+      const changes = [{ key: entry.key, from: entry.saved, to: entry.default }];
+      return applyChanges(ctx, changes, { [entry.key]: null });
+    }
+    default:
+      return usage("usage: potato-workspace settings list | get KEY | set KEY VALUE [KEY VALUE ...] | reset KEY");
+  }
+}
+async function runLabs(ctx) {
+  const { bridge, io, args } = ctx;
+  const [sub, ...rest] = args.positional;
+  const catalog = await loadCatalog(bridge);
+  const labs = catalog.settings.filter((e) => catalog.labs.includes(e.key));
+  switch (sub) {
+    case "list": {
+      if (args.json) {
+        io.out(JSON.stringify({ dev_labs_override: catalog.dev_labs_override, labs: labs.map((e) => ({ key: e.key, saved: e.saved, in_effect: e.effective })) }));
+        return EXIT.ok;
+      }
+      const rows = [["KEY", "SAVED", "IN EFFECT"], ...labs.map((e) => [e.key, show(e.key, e.saved), show(e.key, e.effective)])];
+      for (const line of table(rows)) io.out(line);
+      if (catalog.dev_labs_override) io.out("This is a development build: every Labs switch is in effect no matter what is saved.");
+      return EXIT.ok;
+    }
+    case "on":
+    case "off": {
+      if (rest.length !== 1) usage(`usage: potato-workspace labs ${sub} KEY`);
+      const entry = entryFor(catalog, rest[0]);
+      if (!catalog.labs.includes(entry.key)) {
+        throw new CliError(EXIT.refused, `"${entry.key}" is not a Labs switch. Run "labs list" to see them.`);
+      }
+      const want = sub === "on";
+      const code = await applyChanges(ctx, [{ key: entry.key, from: entry.saved, to: want }], { [entry.key]: want });
+      if (code === EXIT.ok && !want && catalog.dev_labs_override && !args.dryRun) {
+        io.err("Note: this is a development build, so the switch still shows as on in the app.");
+      }
+      return code;
+    }
+    default:
+      return usage("usage: potato-workspace labs list | on KEY | off KEY");
+  }
+}
+
+// packages/cli/src/commands/read.ts
+async function runStatus(ctx) {
+  const { bridge, io, args, cliVersion } = ctx;
+  const health = await bridge.get("/health");
+  const { port } = await readBridgePort().catch(() => ({ port: 0 }));
+  const view = {
+    running: health.ok === true,
+    app_version: health.version ?? null,
+    build_id: health.build_id ?? null,
+    build_kind: health.build_kind ?? null,
+    profile: health.profile ?? null,
+    tool_count: health.tool_count ?? null,
+    catalog_hash: health.catalog_hash ?? null,
+    bridge_port: port || null,
+    cli_version: cliVersion
+  };
+  if (args.json) {
+    io.out(JSON.stringify(view));
+    return EXIT.ok;
+  }
+  io.out(`app: running, version ${view.app_version ?? "?"} (${view.build_kind ?? "unknown build"})`);
+  if (view.profile) io.out(`profile: ${view.profile}`);
+  io.out(`bridge port: ${view.bridge_port ?? "?"}`);
+  io.out(`tools: ${view.tool_count ?? "?"}`);
+  io.out(`cli version: ${cliVersion}`);
+  return EXIT.ok;
+}
+async function runAgents(ctx) {
+  const { bridge, io, args } = ctx;
+  if (args.positional[0] !== "list" || args.positional.length !== 1) {
+    throw new CliError(EXIT.failed, "usage: potato-workspace agents list");
+  }
+  const listing = await bridge.get("/agents/types");
+  const agents = (listing.agents ?? []).map((a) => ({
+    id: a.id,
+    name: a.label ?? a.id,
+    installed: a.installed === true,
+    dispatchable: a.dispatchable === true,
+    experimental: a.experimental === true,
+    source: a.source ?? null
+  }));
+  if (args.json) {
+    io.out(JSON.stringify(agents));
+    return EXIT.ok;
+  }
+  const rows = [
+    ["ID", "NAME", "INSTALLED", "CAN RUN"],
+    ...agents.map((a) => [a.id, a.name, a.installed ? "yes" : "no", a.dispatchable ? "yes" : "no"])
+  ];
+  for (const line of table(rows)) io.out(line);
+  return EXIT.ok;
+}
+async function runModels(ctx) {
+  const { bridge, io, args } = ctx;
+  const [sub, agent] = args.positional;
+  if (sub !== "list" || !agent || args.positional.length !== 2 || !isKeyName(agent.replace(/-/g, "_"))) {
+    throw new CliError(EXIT.failed, "usage: potato-workspace models list AGENT");
+  }
+  const options = await bridge.get(
+    `/phone/new-chat/models?agent=${encodeURIComponent(agent)}`
+  );
+  const models = options.models ?? [];
+  if (args.json) {
+    io.out(JSON.stringify({ agent, default_model: options.default_model ?? null, models, live_failed: options.live_failed === true }));
+    return EXIT.ok;
+  }
+  if (options.default_model) io.out(`default: ${options.default_model}`);
+  for (const model of models) io.out(model);
+  if (models.length === 0) io.out("This agent did not list models. You can still type a model id.");
+  if (options.live_failed) io.err("The agent could not be asked for its models just now; this list may be short.");
+  return EXIT.ok;
+}
+async function runProjects(ctx) {
+  const { bridge, io, args } = ctx;
+  if (args.positional[0] !== "list" || args.positional.length !== 1) {
+    throw new CliError(EXIT.failed, "usage: potato-workspace projects list");
+  }
+  const state = await bridge.get("/workspace/state");
+  const counts = /* @__PURE__ */ new Map();
+  for (const pane of state.panes ?? []) {
+    if (pane.killed || !pane.cwd) continue;
+    counts.set(pane.cwd, (counts.get(pane.cwd) ?? 0) + 1);
+  }
+  const projects = [...counts.entries()].map(([path, windows]) => ({ path, windows }));
+  if (args.json) {
+    io.out(JSON.stringify(projects));
+    return EXIT.ok;
+  }
+  if (projects.length === 0) io.out("No folder has an open window.");
+  for (const line of table(projects.map((p) => [String(p.windows), p.path]))) io.out(line);
+  return EXIT.ok;
+}
+
+// packages/cli/src/config-cli.ts
+function terminalIo() {
+  const inAgentWindow = Boolean((process.env.POTATO_WORKSPACE_PANE_ID ?? "").trim());
+  return {
+    out: (line) => console.log(line),
+    err: (line) => console.error(line),
+    interactive: Boolean(process.stdin.isTTY && process.stdout.isTTY) && !inAgentWindow,
+    async confirm(question) {
+      const rl = createInterface({ input: process.stdin, output: process.stdout });
+      try {
+        return /^y(es)?$/i.test((await rl.question(question)).trim());
+      } finally {
+        rl.close();
+      }
+    }
+  };
+}
+async function runConfigCli(argv, io, cliVersion, makeBridge = createBridge) {
+  const args = parseConfigArgs(argv);
+  if ("problem" in args) {
+    io.err(`potato-workspace: ${args.problem}`);
+    io.err(CONFIG_USAGE);
+    return EXIT.failed;
+  }
+  if (args.help) {
+    io.out(CONFIG_USAGE);
+    return EXIT.ok;
+  }
+  const bridge = makeBridge({
+    consentWaitMs: args.waitMs ?? DEFAULT_CONSENT_WAIT_MS,
+    note: (line) => io.err(line)
+  });
+  const ctx = { bridge, io, args, cliVersion };
+  try {
+    switch (args.command) {
+      case "settings":
+        return await runSettings(ctx);
+      case "labs":
+        return await runLabs(ctx);
+      case "status":
+        return await runStatus(ctx);
+      case "agents":
+        return await runAgents(ctx);
+      case "models":
+        return await runModels(ctx);
+      case "projects":
+        return await runProjects(ctx);
+      default:
+        io.err(CONFIG_USAGE);
+        return EXIT.failed;
+    }
+  } catch (err) {
+    if (err instanceof CliError) {
+      io.err(`potato-workspace ${args.command}: ${err.message}`);
+      return err.exitCode;
+    }
+    io.err(`potato-workspace ${args.command}: ${err.message}`);
+    return EXIT.failed;
+  }
+}
+
 // packages/cli/src/index.ts
 var __dirname2 = dirname3(fileURLToPath2(import.meta.url));
 var BOOLEAN_FLAGS = /* @__PURE__ */ new Set(["help", "h", "version", "v", "force-new", "new", "force_new", "stream"]);
@@ -4960,6 +5510,14 @@ Usage:
                                 Waits out bridge restarts; --timeout-ms N sets the deadline (default 3600000).
   potato-workspace pair-link       Print a fresh phone pairing link (needs the running app and its public tunnel).
                                 Prints the link on stdout; the expiry goes to stderr.
+  potato-workspace status          Is the app running? Version and bridge port.
+  potato-workspace settings ...    list | get KEY | set KEY VALUE ... | reset KEY (a change needs --yes)
+  potato-workspace labs ...        list | on KEY | off KEY (a change needs --yes)
+  potato-workspace agents list     The agents the app knows.
+  potato-workspace models list AGENT   The models one agent offers.
+  potato-workspace projects list   Folders with an open window.
+                                Config flags: --json --yes --dry-run --wait-ms N. Exit 5 = needs --yes.
+                                From an agent window a change raises an Allow card the person answers in the app.
   potato-workspace version         Print version
   potato-workspace --help          Show this help
 
@@ -4970,14 +5528,17 @@ Worker examples:
   potato-workspace worker powershell --force-new  # same as --new
 `);
 }
-function printVersion() {
+function readVersion() {
   try {
     const pkgPath = join3(__dirname2, "..", "package.json");
     const pkg = JSON.parse(readFileSync(pkgPath, "utf-8"));
-    console.log(pkg.version);
+    return String(pkg.version);
   } catch {
-    console.log("0.0.0");
+    return "0.0.0";
   }
+}
+function printVersion() {
+  console.log(readVersion());
 }
 async function launchGui(projectPath) {
   const repoRoot2 = resolve2(__dirname2, "..", "..", "..");
@@ -5012,6 +5573,9 @@ async function runMcp() {
 }
 async function main() {
   const { command, positional, flags } = parseArgs(process.argv);
+  if (CONFIG_COMMANDS.has(command)) {
+    process.exit(await runConfigCli(process.argv.slice(2), terminalIo(), readVersion()));
+  }
   if (flags.help || flags.h) {
     printHelp();
     return;

@@ -20,7 +20,7 @@ export const bridgeRows: RowDef[] = [
   {
     id: 'toolbelt',
     label: 'Tools for every agent',
-    hint: "Add a tool server once. It is written into each agent's settings.",
+    hint: "Add a tool once. It is written into each agent's settings.",
     keywords: 'toolbelt mcp servers apply to all agents import secrets scope',
     render: (env) => <ToolbeltGroup projectPath={installPathOf(env) || null} />,
   },

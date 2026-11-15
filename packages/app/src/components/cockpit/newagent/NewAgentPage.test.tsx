@@ -355,11 +355,11 @@ describe('Terminal | Chat', () => {
     expect(onStart.mock.calls[0][0].runAs).toBe('terminal');
   });
 
-  it('a chat session needs a folder', async () => {
+  it('a chat needs a folder', async () => {
     await mount(rig({ lanes: lanes(true, 'acp'), recent: [] }));
     await type(input(), 'go');
     expect(send().disabled).toBe(true);
-    expect(host.textContent).toContain('Pick a folder for a chat session.');
+    expect(host.textContent).toContain('Pick a folder for the chat.');
   });
 });
 

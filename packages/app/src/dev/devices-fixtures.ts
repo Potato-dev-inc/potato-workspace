@@ -196,7 +196,9 @@ export class DevicesFake implements DevicesApi {
   private addDevice(name: string): void {
     const node = (this.view.devices.length % 2 === 0 ? 'd4' : 'e5').repeat(32);
     this.view.devices = [...this.view.devices, { ...quiet(), node, name, added_at: NOW, state: 'online', path: 'direct', last_seen: NOW, lets_run: false, level: 'watch' }];
-    this.view.message = `Paired with ${name}. It cannot do anything yet.`;
+    // The words the backend sends (src-tauri/src/p2p/pairing.rs). The screen replaces this line with its own next step
+    // for the device that just appeared.
+    this.view.message = `Paired with ${name}. Nothing is shared yet: turn on what you want below.`;
   }
 
   emitEvent(e: DeviceEvent): void {

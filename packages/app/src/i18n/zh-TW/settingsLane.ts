@@ -2,8 +2,8 @@
 import type { EnglishKey } from '../en';
 
 export const settingsLane: Partial<Record<EnglishKey, string>> = {
-  'lane.noteChat': '幫手和新的工作階段會以對話方式執行。',
-  'lane.noteTerminal': '幫手和新的工作階段會在終端機中執行。',
+  'lane.noteChat': '幫手和新的 AI 助理會以對話方式執行。',
+  'lane.noteTerminal': '幫手和新的 AI 助理會在終端機中執行。',
   'lane.helperChat': '這個 AI 助理啟動的幫手，能用對話就用對話。選「終端機」就一律用終端機。',
   'lane.helperNoAddon': '這個 AI 助理啟動的幫手會先在終端機中執行，直到安裝它的對話附加元件。',
   'lane.helperTerminal': '這個 AI 助理啟動的幫手會在終端機中執行。',
@@ -14,13 +14,13 @@ export const settingsLane: Partial<Record<EnglishKey, string>> = {
   'lane.removeFor': '移除 {label} 的對話功能',
   'lane.removeChat': '移除對話功能',
   'lane.howRuns': '{label} 的執行方式',
-  'lane.newSessions': '新的工作階段會在終端機中啟動，除非你選「{word}」。',
+  'lane.newSessions': '新的 AI 助理會在終端機中啟動，除非你選「{word}」。',
   'lane.noChatYet': '還沒有對話功能。加入後就能用對話方式執行這個 AI 助理。',
   'lane.add': '加入對話功能',
   'lane.addFor': '為 {label} {add}',
   'lane.added': '已為 {label} 加入對話功能。',
   'lane.removeTitle': '移除 {label} 的對話功能？',
-  'lane.removeBody': '新的工作階段會改在終端機中啟動，你已儲存的對話會保留。',
+  'lane.removeBody': '新的 AI 助理會改在終端機中啟動，你已儲存的對話會保留。',
   'lane.alsoDelete': '同時刪除對話附加元件（{mb} MB）',
   'addon.note': '每個 AI 助理以對話方式執行所需的小元件，使用的登入和該 AI 助理的終端機相同。',
   'addon.rowLabel': '{label} 對話附加元件',

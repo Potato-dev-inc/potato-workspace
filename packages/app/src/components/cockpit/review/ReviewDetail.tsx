@@ -16,6 +16,7 @@ import {
 import { lineKind, plural, splitPatch, statusMark } from '../diff';
 import { KeepSheet, type ReviewKeepApi } from './KeepSheet';
 import { FixSheet, type ReviewFixSheetApi } from './FixSheet';
+import { useT } from '../../../i18n';
 import '../../../styles/review-detail.css';
 
 /** The calls this view makes: the detail, Keep (also "Looks good") and Ask to fix. */
@@ -81,6 +82,7 @@ function offReasons(item: ReviewItem): string[] {
 }
 
 export function ReviewDetail({ item, api = reviewDeskApi, onOpenPane, onKeep, onKept, onThrow }: ReviewDetailProps) {
+  const t = useT();
   const [detail, setDetail] = useState<ReviewDetailView | null>(null);
   const [loadError, setLoadError] = useState<string | null>(null);
   const [picked, setPicked] = useState<string | null>(null);
@@ -295,7 +297,7 @@ export function ReviewDetail({ item, api = reviewDeskApi, onOpenPane, onKeep, on
           title={openOff ? NO_PANE_TEXT : undefined}
           onClick={() => item.paneId && onOpenPane?.(item.paneId)}
         >
-          Open pane
+          {t('review.openAgent')}
           <kbd className="ck-rd-detail-key">P</kbd>
         </button>
       </div>

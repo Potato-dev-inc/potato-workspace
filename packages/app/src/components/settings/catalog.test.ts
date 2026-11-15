@@ -1,6 +1,8 @@
 // The pages hold every live control of the old Settings, once, under unique ids, on the page and group the 2026-11-13 spec names.
 import { describe, expect, it } from 'vitest';
 import { BASE_SECTIONS, SECTIONS } from './catalog';
+import { collectLabs } from './arrange';
+import { LABS_SWITCH_KEYS } from './labs-areas';
 import { SECTION_IDS, groupRows, rowLevel, rowMatches, rowScore, searchSections } from './model';
 
 const allRows = SECTIONS.flatMap((s) => s.rows.map((r) => ({ section: s.id, row: r })));
@@ -64,7 +66,7 @@ const PLACEMENT: [string, string, string[]][] = [
   [
     'advanced',
     'Early features (Labs)',
-    ['labs-index', 'simple-mode', 'ask-bar', 'live-updates', 'opencode-automation', 'missions', 'assign-issue', 'night-shift', 'red-to-green', 'acp-chat-labs', 'model-bridge-labs', 'spaces-labs', 'lend-labs', 'devices-labs', 'desktop-potato-labs', 'agent-browser-labs', 'companion-vault-labs', 'discord-bot-labs', 'timeline-labs', 'project-guide-labs', 'markup-bar-labs', 'smaller-updates-labs', 'telegram'],
+    ['labs-index'],
   ],
   ['advanced', 'App and files', ['storage', 'settings-file', 'diagnostic-file', 'chat-search-index', 'early-versions', 'settings-recovery', 'bring-old-chats']],
   ['advanced', 'Developer', ['show-developer-settings']],
@@ -83,7 +85,9 @@ describe('settings catalog', () => {
   });
 
   it('every row id that existed before the move still exists exactly once', () => {
-    const ids = allRows.map((r) => r.row.id).filter((id) => id !== 'labs-index');
+    // A plain-switch early feature is not a row on the pages: it is drawn by the Labs page (labs-index).
+    // One with more than a switch keeps its own row.
+    const ids = [...allRows.map((r) => r.row.id).filter((id) => id !== 'labs-index'), ...collectLabs(BASE_SECTIONS).filter((r) => LABS_SWITCH_KEYS[r.id]).map((r) => r.id)];
     expect(new Set(ids).size).toBe(ids.length);
     expect([...ids].sort()).toEqual([...PINNED_IDS].sort());
     expect(BASE_SECTIONS.flatMap((s) => s.rows).map((r) => r.id).sort()).toEqual([...PINNED_IDS].sort());
@@ -251,15 +255,18 @@ describe('search ranking and coverage', () => {
 
   it('a link left where a row moved is never a search hit (the real row is)', () => {
     const everything = searchSections(SECTIONS, 'live updates').flatMap((h) => h.rows);
+    // Live updates is an early feature with its own settings: both the Labs page and the real row are found, once each.
+    expect(everything.filter((r) => r.id === 'labs-index')).toHaveLength(1);
     expect(everything.filter((r) => r.id === 'live-updates')).toHaveLength(1);
     expect(everything.some((r) => r.pointer)).toBe(false);
   });
 
   it('Labs: "labs", "early" and each feature name find the right row', () => {
     const hit = (q: string) => searchSections(SECTIONS, q).flatMap((h) => h.rows.map((r) => r.id));
-    expect(hit('labs')).toEqual(expect.arrayContaining(['labs-index', 'ask-bar', 'simple-mode', 'live-updates', 'opencode-automation']));
-    expect(hit('hook lane')).toContain('live-updates');
-    expect(hit('simple')).toContain('simple-mode');
+    // The features are listed on the Labs page, so a search for one of them lands there.
+    expect(hit('labs')).toEqual(expect.arrayContaining(['labs-index']));
+    expect(hit('hook lane')).toContain('labs-index');
+    expect(hit('simple')).toContain('labs-index');
   });
 });
 

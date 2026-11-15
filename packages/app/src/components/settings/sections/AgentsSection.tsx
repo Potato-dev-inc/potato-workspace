@@ -197,7 +197,7 @@ export const agentsRows: RowDef[] = [
   {
     id: 'preload',
     label: 'Keep agents ready',
-    hint: 'Keep an agent started and waiting, so opening a pane feels instant.',
+    hint: 'Keep an agent started and waiting, so opening a window feels instant.',
     keywords: 'preload warm standby idle timeout status agents to keep warm',
     group: 'Speed',
     render: (env) => <PreloadSettings onSaved={env.markSaved} />,
@@ -259,7 +259,7 @@ export const agentsRows: RowDef[] = [
   {
     id: 'helper-agents',
     label: 'Helper agents',
-    hint: 'Choose whether helpers an agent starts are shown in a pane or run in the background.',
+    hint: 'Choose whether helpers an agent starts are shown in a window or run in the background.',
     keywords: 'hidden helper helpers headless background invisible no window pane subagent sub-agent agent hide show visible watch inbox always show choose',
     group: 'Helpers',
     render: (env) => <HelperAgentsChoice onSaved={env.markSaved} />,

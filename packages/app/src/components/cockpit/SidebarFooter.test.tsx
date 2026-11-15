@@ -31,8 +31,7 @@ const mount = () =>
         onOpenPane={() => {}}
         mode="orchestration"
         onMode={() => {}}
-        theme="dark"
-        onToggleTheme={() => {}}
+        onOpenBrowser={() => {}}
         onOpenSettings={() => {}}
         onOpenDoctor={() => {}}
         onOpenMemory={() => {}}
@@ -50,12 +49,26 @@ describe('SidebarFooter', () => {
     expect(host.querySelectorAll('.ck-foot-icons').length).toBe(1);
   });
 
-  it('Theme, Project and Set up agents live in the More menu', () => {
+  it('the More menu is three labelled groups, most used first: Go to, Tools, Mode', () => {
     mount();
     expect(host.querySelector('button[aria-label="Toggle theme"]')).toBeNull();
     act(() => host.querySelector<HTMLButtonElement>('button[aria-label="More"]')!.click());
-    const items = [...document.querySelectorAll('[role="menuitem"]')].map((i) => i.textContent?.trim());
-    expect(items).toEqual(expect.arrayContaining(['Project', 'Set up agents', 'Switch to light']));
+    const groups = [...document.querySelectorAll<HTMLElement>('[data-testid^="more-group-"]')];
+    expect(groups.map((g) => g.getAttribute('aria-label'))).toEqual(['Go to', 'Tools', 'Mode']);
+    const caption = (g: HTMLElement) => g.querySelector('.ck-menu-cap')?.textContent?.trim();
+    expect(groups.map(caption)).toEqual(['Go to', 'Tools', 'Mode']);
+    // Browser comes first (the globe had no home), then the pages that have one.
+    expect([...groups[0].querySelectorAll('[role="menuitem"]')].map((i) => i.textContent?.trim())).toEqual(['Browser', 'Project']);
+    expect([...groups[1].querySelectorAll('[role="menuitem"]')].map((i) => i.textContent?.trim())).toEqual(['Set up agents']);
+    expect([...groups[2].querySelectorAll('[role="radio"]')].map((r) => r.textContent?.trim())).toEqual(['One window', 'A window per agent']);
+  });
+
+  it('no longer repeats Theme: it lives in Settings > Look and feel', () => {
+    mount();
+    act(() => host.querySelector<HTMLButtonElement>('button[aria-label="More"]')!.click());
+    const menu = document.querySelector<HTMLElement>('[role="menu"]')!;
+    expect(menu.textContent).not.toContain('Theme');
+    expect(menu.querySelectorAll('[role="menuitemradio"]')).toHaveLength(0);
   });
 
   it('shows no status line when there is nothing to say, and the lost connection when it is real', () => {
@@ -63,7 +76,7 @@ describe('SidebarFooter', () => {
     expect(host.querySelector('.ck-foot-status')!.children.length).toBe(0);
     act(() =>
       root.render(
-        <SidebarFooter names={new Map()} onOpenPane={() => {}} mode="orchestration" onMode={() => {}} theme="dark" onToggleTheme={() => {}} onOpenSettings={() => {}} reviewCount={0} bridgeLine="x" />,
+        <SidebarFooter names={new Map()} onOpenPane={() => {}} mode="orchestration" onMode={() => {}} onOpenBrowser={() => {}} onOpenSettings={() => {}} reviewCount={0} bridgeLine="x" />,
       ),
     );
     expect(host.querySelector('.ck-foot-status .ck-bridge')?.textContent).toContain('Connection lost');
@@ -96,8 +109,7 @@ describe('SidebarFooter: the Review count as text', () => {
           onOpenPane={() => {}}
           mode="orchestration"
           onMode={() => {}}
-          theme="dark"
-          onToggleTheme={() => {}}
+          onOpenBrowser={() => {}}
           onOpenSettings={() => {}}
           onOpenReview={() => {}}
           reviewCount={reviewCount}
@@ -124,7 +136,7 @@ describe('SidebarFooter: the Review count as text', () => {
     const onOpenRoutines = vi.fn();
     act(() =>
       root.render(
-        <SidebarFooter names={new Map()} onOpenPane={() => {}} mode="orchestration" onMode={() => {}} theme="dark" onToggleTheme={() => {}} onOpenSettings={() => {}} onOpenRoutines={onOpenRoutines} reviewCount={0} />,
+        <SidebarFooter names={new Map()} onOpenPane={() => {}} mode="orchestration" onMode={() => {}} onOpenBrowser={() => {}} onOpenSettings={() => {}} onOpenRoutines={onOpenRoutines} reviewCount={0} />,
       ),
     );
     act(() => host.querySelector<HTMLButtonElement>('button[aria-label="More"]')!.click());

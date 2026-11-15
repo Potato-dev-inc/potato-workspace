@@ -3,7 +3,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useT } from '../../i18n';
 import { browserDeps, enable, initialState, readEnv, type PushDeps, type PushEnv, type ToggleState } from '../../lib/push-client';
-import { platformOf, sendLocalTestNotification, type TestResult } from '../../lib/phone-setup';
+import { markTestSent, platformOf, sendLocalTestNotification, type TestResult } from '../../lib/phone-setup';
 import { Sheet } from './MobileSheet';
 import '../../styles/phone-link.css';
 
@@ -96,7 +96,17 @@ export function PhoneSetupSteps({
         <li data-done={test === 'sent' || undefined}>
           <h3>{t('phone.setup.testTitle')}</h3>
           <p>{t('phone.setup.testBody')}</p>
-          <button type="button" className="ph-step-btn" onClick={() => void sendTest(t('phone.setup.testNotifTitle'), t('phone.setup.testNotifBody')).then(setTest)}>
+          <button
+            type="button"
+            className="ph-step-btn"
+            onClick={() =>
+              void sendTest(t('phone.setup.testNotifTitle'), t('phone.setup.testNotifBody')).then((result) => {
+                // The home's setup chip counts a test that was seen, so remember it.
+                if (result === 'sent') markTestSent();
+                setTest(result);
+              })
+            }
+          >
             {t('phone.setup.testButton')}
           </button>
           {testNote && (

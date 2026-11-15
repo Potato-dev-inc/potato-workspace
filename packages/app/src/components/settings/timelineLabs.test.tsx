@@ -5,8 +5,8 @@ import { afterEach, describe, expect, it } from 'vitest';
 import { DEV_LABS_KEYS, setDevLabsOverrideForTests, withDevLabs } from '../../lib/dev-labs';
 import { en } from '../../i18n/en';
 import { zhTW } from '../../i18n/zh-TW';
-import { SECTIONS } from './catalog';
-import { LABS_GROUP } from './arrange';
+import { BASE_SECTIONS, SECTIONS } from './catalog';
+import { LABS_GROUP, LABS_INDEX_ID, collectLabs } from './arrange';
 import { BASE_SETTINGS, click, mountRows, settle, type Mounted } from './test-utils';
 
 let m: Mounted | undefined;
@@ -16,7 +16,7 @@ afterEach(async () => {
   setDevLabsOverrideForTests(false);
 });
 
-const row = () => SECTIONS.find((s) => s.id === 'advanced')!.rows.find((r) => r.id === 'timeline-labs')!;
+const row = () => collectLabs(BASE_SECTIONS).find((r) => r.id === 'timeline-labs')!;
 
 describe('the Today page Labs switch', () => {
   it('joins the development Labs keys once', () => {
@@ -24,7 +24,10 @@ describe('the Today page Labs switch', () => {
   });
 
   it('is on the Early features page with a short name and one plain line', () => {
-    expect(row().group).toBe(LABS_GROUP);
+    // Early features are listed once, on the Labs page (the Labs row under Advanced), not as their own rows.
+    const advanced = SECTIONS.find((s) => s.id === 'advanced')!.rows;
+    expect(advanced.some((r) => r.id === LABS_INDEX_ID && r.group === LABS_GROUP)).toBe(true);
+    expect(advanced.some((r) => r.id === row().id)).toBe(false);
     expect(row().labs!.name).toBe('Today page');
     expect(row().labs!.about.split('. ')).toHaveLength(1);
     expect(row().labs!.about.length).toBeLessThanOrEqual(90);
@@ -54,7 +57,7 @@ describe('the Today page Labs switch', () => {
 
   it('every message of the row exists in both languages, and the Chinese keeps the same shape', () => {
     const keys = Object.keys(en).filter((k) => k.includes('timeline-labs'));
-    expect(keys.sort()).toEqual(['labs.timeline-labs.about', 'labs.timeline-labs.name', 'settings.row.timeline-labs.hint', 'settings.row.timeline-labs.label']);
+    expect(keys.sort()).toEqual(['labs.timeline-labs.about', 'labs.timeline-labs.name', 'labsPage.line.timeline-labs', 'settings.row.timeline-labs.hint', 'settings.row.timeline-labs.label']);
     for (const key of keys) {
       const zh = (zhTW as Record<string, string | undefined>)[key];
       expect(zh, key).toBeTruthy();

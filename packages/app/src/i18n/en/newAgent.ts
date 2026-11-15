@@ -52,7 +52,7 @@ export const newAgent = {
   "newAgent.blockNotReady": "{name} is {hint}.",
   "newAgent.blockStarting": "Starting…",
   "newAgent.blockNoAgent": "No agent is ready. Pick one or set one up.",
-  "newAgent.blockFolder": "Pick a folder for a chat session.",
+  "newAgent.blockFolder": "Pick a folder for the chat.",
   "newAgent.blockWrite": "Write what the agent should do.",
   "newAgent.cardRecent": "Recent projects",
   "newAgent.cardRecentHint": "Your last folders, one click to use.",

@@ -130,6 +130,8 @@ struct Slot {
     files: tokio::sync::Mutex<Option<Arc<dyn Link>>>,
     status: Mutex<Status>,
     health: Mutex<Health>,
+    /// The device's room left from its last `hello`, and when (unix seconds) it was told.
+    room: Mutex<(Vec<crate::usage::room::Room>, Option<u64>)>,
 }
 
 #[derive(Default)]
@@ -241,6 +243,24 @@ impl Client {
 
     pub fn health(&self, node: &NodeId) -> Health {
         self.slot(node).health.lock().unwrap_or_else(|p| p.into_inner()).clone()
+    }
+
+    /// What the device last said about its room left, and when (unix seconds). Kept while it is offline.
+    pub fn room(&self, node: &NodeId) -> (Vec<crate::usage::room::Room>, Option<u64>) {
+        self.slot(node).room.lock().unwrap_or_else(|p| p.into_inner()).clone()
+    }
+
+    fn set_room(&self, node: &NodeId, rooms: Vec<crate::usage::room::Room>) {
+        let slot = self.slot(node);
+        let changed = {
+            let mut r = slot.room.lock().unwrap_or_else(|p| p.into_inner());
+            let changed = r.0 != rooms;
+            *r = (rooms, Some((self.now)()));
+            changed
+        };
+        if changed {
+            self.notify();
+        }
     }
 
     fn notify(&self) {
@@ -527,6 +547,7 @@ impl Client {
                         self.p2p.addrs().remember_relay(*node, relay);
                     }
                     self.set_health(node, Health::from_hello(&value));
+                    self.set_room(node, crate::usage::room::parse(&value["room"]));
                     self.fetch_web(node).await;
                 }
                 Ok(value)

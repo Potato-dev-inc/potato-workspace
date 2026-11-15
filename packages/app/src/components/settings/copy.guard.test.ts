@@ -1,15 +1,17 @@
 // The words and the saved keys of the rows: the copy table for Bridge, Models and Labs is applied, no developer
 // word shows outside the Advanced page, and every row that saves a value says which keys it owns.
 import { describe, expect, it } from 'vitest';
-import { SECTIONS } from './catalog';
+import { BASE_SECTIONS, SECTIONS } from './catalog';
 import { ROW_META } from './row-meta';
 
 const rows = SECTIONS.flatMap((s) => s.rows.map((row) => ({ page: s.id, row })));
-const byId = (id: string) => rows.find((r) => r.row.id === id)?.row;
+// An early feature is listed on the Labs page, not as a row on a page, so its copy is read from its own section file.
+const baseRows = BASE_SECTIONS.flatMap((s) => s.rows.map((row) => ({ page: s.id, row })));
+const byId = (id: string) => (rows.find((r) => r.row.id === id) ?? baseRows.find((r) => r.row.id === id))?.row;
 
 /** Section 6 of the settings spec: the label and hint each row now carries. */
 const COPY: Record<string, [string, string]> = {
-  toolbelt: ['Tools for every agent', "Add a tool server once. It is written into each agent's settings."],
+  toolbelt: ['Tools for every agent', "Add a tool once. It is written into each agent's settings."],
   'agent-pack': ['Let agents ask each other for help', 'Teaches each agent when to ask another. Review first; Undo puts it back.'],
   'helper-tools': ['Helper tools in every agent', 'Agents you open here get the helper tools with no setup.'],
   'bridge-endpoint': ['Local address', 'Where other tools reach this app on this computer. Found by itself.'],
@@ -23,7 +25,7 @@ const COPY: Record<string, [string, string]> = {
   'opencode-provider': ['OpenCode: model service', 'Used when you start OpenCode without naming a model.'],
   'opencode-model': ['OpenCode: model', 'The model used with the service above.'],
   'model-bridge': ['Another model in Codex', 'Connect a model service with a key, then add it to Codex. A backup is kept.'],
-  'labs-index': ['Early features', 'Tap one to jump to its switch.'],
+  'labs-index': ['Early features', 'Turn each early feature on or off, and read what it does.'],
   'simple-mode': ['Simple look', 'A calmer screen with fewer buttons and plain words.'],
   'ask-bar': ['Ask bar', 'Ask a quick question from a small bar anywhere in Windows.'],
   'live-updates': ['Live updates', 'Claude and Codex tell the app when they start, ask and finish.'],

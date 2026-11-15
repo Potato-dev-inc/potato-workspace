@@ -66,6 +66,8 @@ export function TeamPage({
   const [passFor, setPassFor] = useState<string | null | undefined>(undefined);
   const shelf = useShelf(shelfClient, api);
   const counts = tabCounts(state, config, lend.state, waitingCount(tasks.view), shelf.state?.waiting ?? 0);
+  // The header's Invite, and the "Invite a teammate" button in the People and Shelf empty blocks: one action.
+  const openInvite = () => void inviteSlot({ api, show: setInvite, openSetup: () => setTab('setup') });
 
   return (
     <div className="tpg" data-testid="team-page">
@@ -87,7 +89,7 @@ export function TeamPage({
           )}
         </div>
         {config.admin && (
-          <button type="button" className="ck-btn ck-btn--secondary" data-testid="team-invite" onClick={() => void inviteSlot({ api, show: setInvite, openSetup: () => setTab('setup') })}>
+          <button type="button" className="ck-btn ck-btn--secondary" data-testid="team-invite" onClick={openInvite}>
             {t('teamHub.invite')}
           </button>
         )}
@@ -103,10 +105,10 @@ export function TeamPage({
         ))}
       </div>
       <div className="tpg-panel" role="tabpanel" id="tpg-panel" aria-labelledby={`tpg-tab-${tab}`}>
-        {tab === 'people' && <PeopleTab people={people} config={config} share={shareOf(state)} api={api} now={now} lendOn={lend.enabled} onAskUsage={() => setTab('usage')} onPassTask={(id) => setPassFor(id)} onChanged={onRefresh} />}
+        {tab === 'people' && <PeopleTab people={people} config={config} share={shareOf(state)} api={api} now={now} lendOn={lend.enabled} onAskUsage={() => setTab('usage')} onPassTask={(id) => setPassFor(id)} onChanged={onRefresh} onInvite={config.admin ? openInvite : undefined} />}
         {tab === 'usage' && <UsageTab lend={lend} api={lendClient} team={api} />}
         {tab === 'tasks' && <TasksTab state={state} api={api} tasksApi={tasksApi} tasks={tasks.view} now={now} onDone={onRefresh} onTasksChanged={tasks.refresh} pick={pick} />}
-        {tab === 'shelf' && <ShelfTab shelf={shelf} api={shelfClient} />}
+        {tab === 'shelf' && <ShelfTab shelf={shelf} api={shelfClient} onInvite={config.admin ? openInvite : undefined} />}
         {tab === 'feed' && <FeedTab state={state} api={api} now={now} paneNames={paneNames} onDone={onRefresh} />}
         {tab === 'setup' && <SetupTab api={api} lendApi={lendClient} displayName={displayName} />}
       </div>

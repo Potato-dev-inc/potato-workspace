@@ -46,6 +46,10 @@ pub trait SelfInfo: Send + Sync {
     fn health(&self) -> Value {
         json!({ "signed_out": [], "needs_person": [] })
     }
+    /// Room left per sign-in (`usage::room::payload`): numbers and labels only, never a login.
+    fn room(&self) -> Value {
+        json!([])
+    }
 }
 
 /// The inbound links that are open, so a switch turned off (or a device removed) can close them at once.
@@ -266,7 +270,7 @@ impl Stream {
                     200,
                     json!({
                         "ok": true, "v": wire::VERSION, "name": self.info.name(), "addrs": self.info.addrs(), "relay": self.info.relay(),
-                        "health": self.info.health(),
+                        "health": self.info.health(), "room": self.info.room(),
                     }),
                 );
                 let _ = wire::write_frame(&mut stream.send, &rh, &body).await;

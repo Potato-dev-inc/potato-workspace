@@ -13,7 +13,7 @@ const s: HarnessScenario = {
   panes: EXAMPLE_PANES.map((p) => ({ ...p, cwd: SAME, title: TITLES[p.id] ?? null })),
   after: async (dom) => {
     await dom.sleep(500);
-    await dom.click('button[aria-label="Show session details"]');
+    await dom.click('button[aria-label="Show chat details"]');
     await dom.sleep(500);
   },
 };

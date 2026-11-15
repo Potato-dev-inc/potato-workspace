@@ -10,8 +10,9 @@ const s: HarnessScenario = {
   team: teamPageState(),
   lend: teamPageLend(),
   after: async (dom) => {
-    await dom.waitFor('[data-testid="side-team"]');
-    await dom.click('[data-testid="side-team"]');
+    await dom.waitFor('[data-testid="side-connect"]');
+    await dom.click('[data-testid="side-connect"]');
+    await dom.click('[data-testid="connect-tab-team"]');
     await dom.waitFor('[data-testid="tab-people"]');
     await dom.click('[data-testid="tab-people"]');
     await dom.sleep(500);

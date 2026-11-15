@@ -112,10 +112,10 @@ describe('Settings blocks in Traditional Chinese have no visible English', () =>
     const accountsApi = { list: async () => ({ agents: [], accounts: [], helper_logins: {}, borrowed: [] }) } as never;
     await act(async () => root.render(<LendPage api={api} team={team} accountsApi={accountsApi} />));
     await settle(6);
-    expect(host.textContent).toContain('出借設定檔');
+    expect(host.textContent).toContain('誰可以借用');
     expect(host.textContent).toContain('進行中的出借');
     expect(english(host)).toEqual([]);
-    await click([...host.querySelectorAll('button')].find((b) => b.textContent === '新增出借設定檔')!);
+    await click([...host.querySelectorAll('button')].find((b) => b.textContent === '新增借用規則')!);
     await settle(3);
     expect(host.querySelector('.lend-sheet')).not.toBeNull();
     expect(english(host)).toEqual([]);

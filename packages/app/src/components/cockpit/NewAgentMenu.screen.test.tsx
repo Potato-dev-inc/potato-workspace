@@ -394,15 +394,15 @@ describe('the New agent menu: an agent with no working chat yet', () => {
     expect(promptButtons('addonagent')).toContain('Use terminal');
   });
 
-  it('no chat at all and an adapter on offer: Use adapter, Add chat… for the other ways, and Use terminal', async () => {
+  it('no chat at all and an adapter on offer: Use its built-in chat, Add chat… for the other ways, and Use terminal', async () => {
     shell.options = [adapterOption(true), nativeOption(true), bridgeOption(false)];
     await mount();
     await openMenu();
     await click(row('No chat agent'));
     expect(calls('acp_overlay_resolve')).toEqual([{ agent: 'nochat' }]);
-    expect(promptButtons('nochat')).toEqual(['Use adapter', 'Add chat…', 'Use terminal']);
+    expect(promptButtons('nochat')).toEqual(['Use its built-in chat', 'Add chat…', 'Use terminal']);
     // drawn with the shared empty state: one button, the other ways as quiet rows
-    expect(prompt('nochat')!.querySelector('[data-empty-state] .ck-btn--primary')!.textContent).toBe('Use adapter');
+    expect(prompt('nochat')!.querySelector('[data-empty-state] .ck-btn--primary')!.textContent).toBe('Use its built-in chat');
     expect(prompt('nochat')!.querySelectorAll('.ck-empty-or li')).toHaveLength(2);
     expect(calls('acp_chat_start')).toHaveLength(0);
     expect(c.newAgent).not.toHaveBeenCalled();
@@ -413,7 +413,7 @@ describe('the New agent menu: an agent with no working chat yet', () => {
     await mount();
     await openMenu();
     await click(row('No chat agent'));
-    expect(promptButtons('nochat')).toEqual(['Use adapter', 'Use terminal']);
+    expect(promptButtons('nochat')).toEqual(['Use its built-in chat', 'Use terminal']);
   });
 
   it('only other ways on offer: Add chat… and Use terminal, no adapter button', async () => {
@@ -441,12 +441,12 @@ describe('the New agent menu: an agent with no working chat yet', () => {
     expect(seg('Chat').getAttribute('aria-pressed')).toBe('true');
   });
 
-  it('Use adapter opens the add-chat dialog on the adapter way, and the chat starts once it is added', async () => {
+  it('Use its built-in chat opens the add-chat dialog on the adapter way, and the chat starts once it is added', async () => {
     shell.options = [nativeOption(true), adapterOption(true)];
     await mount();
     await openMenu();
     await click(row('No chat agent'));
-    await click(button('Use adapter', prompt('nochat')!));
+    await click(button('Use its built-in chat', prompt('nochat')!));
     expect(menu()).toBeNull();
     const dialog = document.querySelector('[data-testid="add-chat-dialog"]')!;
     expect(dialog).toBeTruthy();

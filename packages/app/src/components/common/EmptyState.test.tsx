@@ -44,4 +44,25 @@ describe('EmptyState', () => {
     expect(big?.getAttribute('width')).toBe('28');
     expect(render(<EmptyState plain title="T" />).querySelector('img')).toBeNull();
   });
+
+  it('draws an icon instead of the mark, carries a role and a test id, and a small button', () => {
+    const host = render(
+      <EmptyState
+        role="status"
+        testId="calm"
+        icon={<span className="my-tick" />}
+        title="Calm"
+        line="All clear."
+        action={{ label: 'Go', onClick: () => {}, small: true }}
+      />,
+    );
+    const root = host.querySelector('[data-testid="calm"]')!;
+    expect(root.getAttribute('role')).toBe('status');
+    expect(root.hasAttribute('data-empty-state')).toBe(true);
+    expect(root.querySelector('img')).toBeNull();
+    expect(root.querySelector('.my-tick')).not.toBeNull();
+    expect(root.querySelector('.ck-empty-title')!.textContent).toBe('Calm');
+    expect(root.querySelector('.ck-empty-line')!.textContent).toBe('All clear.');
+    expect(root.querySelector('button')!.className).toContain('ck-btn--sm');
+  });
 });

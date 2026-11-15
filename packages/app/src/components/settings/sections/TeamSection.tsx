@@ -2,8 +2,9 @@
 // The page is one row (the whole flow is one screen); the row's words are what search finds.
 import type { RowDef } from '../model';
 import { TeamPage } from '../blocks/TeamPage';
+import { movedToConnect } from '../../connect/movedRow';
 
-export const teamRows: RowDef[] = [
+export const teamRowsOriginal: RowDef[] = [
   {
     id: 'team-page',
     group: 'Your team',
@@ -14,3 +15,6 @@ export const teamRows: RowDef[] = [
     render: (env) => <TeamPage displayName={env.settings.display_name ?? ''} onSaved={env.markSaved} />,
   },
 ];
+
+/** In the cockpit the team lives on Connect > Team; this row links there. */
+export const teamRows: RowDef[] = movedToConnect(teamRowsOriginal, ['team-page'], 'team');

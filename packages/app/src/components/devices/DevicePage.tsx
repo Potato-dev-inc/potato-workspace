@@ -1,27 +1,37 @@
 // One paired device: its name, how it is connected, what it may do on this PC (off after pairing), Remove.
 // The words are from the giver's side: this switch says what that device may do HERE. A device cannot turn it on itself.
-import { useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useT } from '../../i18n';
-import { chipText, devicesApi, deviceNotices, stateSentence, type Device, type DevicesApi, type DeviceLevel } from '../../lib/devices';
+import { chipText, devicesApi, deviceNotices, nextStepLine, stateSentence, type Device, type DevicesApi, type DeviceLevel } from '../../lib/devices';
 import { DEVICE_NAMES_CHANGED } from '../../lib/deviceNames';
 import { errorSentence } from '../../lib/sayError';
 import { DeviceActivity } from './DeviceActivity';
 import { DeviceFolders } from './DeviceFolders';
+import { DeviceNextStep } from './DeviceNextStep';
 import { FilesView } from './FilesView';
 import { Transfers } from './TransferRow';
 import { DeviceNotices } from './DeviceNotices';
 import { DeviceRoute } from './DeviceRoute';
 import '../../styles/devices.css';
 
-export function DevicePage({ device, api = devicesApi, onBack, onRetry }: { device: Device; api?: DevicesApi; onBack: () => void; onRetry?: () => void }) {
+export function DevicePage({ device, api = devicesApi, onBack, onRetry, focusRights = false }: { device: Device; api?: DevicesApi; onBack: () => void; onRetry?: () => void; /** "Choose what it may do" asked for this device: show its rights choice. */ focusRights?: boolean }) {
   const t = useT();
   const [name, setName] = useState(device.name);
   const [error, setError] = useState<string | null>(null);
   const [confirmRemove, setConfirmRemove] = useState(false);
   const [tab, setTab] = useState<'overview' | 'files'>('overview');
+  const [rightsFocus, setRightsFocus] = useState(focusRights);
+  const rightsRef = useRef<HTMLDivElement>(null);
   const run = (p: Promise<unknown>) => p.then(() => setError(null)).catch((e: unknown) => setError(errorSentence(e)));
   const chip = chipText(device);
   const notices = deviceNotices(device);
+  const next = nextStepLine(device);
+  // The rights choice sits near the top of the overview, so "Choose what it may do" simply brings it into view.
+  useEffect(() => {
+    if (!rightsFocus || tab !== 'overview') return;
+    rightsRef.current?.scrollIntoView?.({ block: 'center' });
+    setRightsFocus(false);
+  }, [rightsFocus, tab]);
   return (
     <section className="dev-page" data-testid="device-page" aria-label={device.name}>
       <button type="button" className="dev-btn is-plain" onClick={onBack} data-testid="device-back">
@@ -46,6 +56,7 @@ export function DevicePage({ device, api = devicesApi, onBack, onRetry }: { devi
       {tab === 'files' && <FilesView device={device} api={api} />}
       {tab === 'overview' && (
         <>
+      {next && <DeviceNextStep device={device} line={next} onChoose={() => (setTab('overview'), setRightsFocus(true))} />}
       <DeviceNotices notices={notices.filter((n) => n.kind !== 'state')} />
       {onRetry && notices.some((n) => n.retry) && (
         <button type="button" className="dev-btn" onClick={onRetry} data-testid="try-again">
@@ -61,6 +72,7 @@ export function DevicePage({ device, api = devicesApi, onBack, onRetry }: { devi
           {t('devices.saveName')}
         </button>
       </div>
+      <div className="dev-rights" ref={rightsRef} data-testid="device-rights">
       <h4>{t('devices.let')}</h4>
       <label className="dev-opt dev-switch">
         <input type="checkbox" role="switch" checked={device.lets_run} onChange={(e) => void run(api.setPermission(device.node, e.target.checked, device.level))} data-testid="perm-agents" />
@@ -101,6 +113,7 @@ export function DevicePage({ device, api = devicesApi, onBack, onRetry }: { devi
         </span>
       </label>
       {device.lets_files && <DeviceFolders device={device} api={api} />}
+      </div>
       <DeviceRoute device={device} api={api} run={run} />
       <p className="dev-note">{t('devices.loginsStay')}</p>
       <Transfers api={api} node={device.node} />

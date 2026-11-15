@@ -2,10 +2,11 @@
 // The page is loaded when it is opened: an early feature does not weigh on the main bundle.
 import { lazy, Suspense } from 'react';
 import type { RowDef } from '../model';
+import { movedToConnect } from '../../connect/movedRow';
 
 const LendPage = lazy(() => import('../blocks/LendPage').then((m) => ({ default: m.LendPage })));
 
-export const lendRows: RowDef[] = [
+export const lendRowsOriginal: RowDef[] = [
   {
     id: 'lend-page',
     group: 'Share an agent',
@@ -21,3 +22,6 @@ export const lendRows: RowDef[] = [
     ),
   },
 ];
+
+/** In the cockpit lending lives on Connect > Lending; this row links there. */
+export const lendRows: RowDef[] = movedToConnect(lendRowsOriginal, ['lend-page'], 'lending');

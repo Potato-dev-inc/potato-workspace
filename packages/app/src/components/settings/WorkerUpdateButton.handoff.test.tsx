@@ -47,6 +47,10 @@ it('opens a chat with the prefilled task for the agent used last, though no agen
   await click(q('worker-update-go'));
   await settle(10);
   expect(q('worker-update-copy-note')).toBeNull();
+  expect(q('worker-update-handed')).toBeNull();
+  await click(q('worker-update-fix'));
+  await settle(4);
+  expect(q('worker-update-copy-note')).toBeNull();
   expect(q('worker-update-handed')!.textContent).toContain('codex');
   expect(startChat).toHaveBeenCalledWith('codex', '/work/demo');
   expect(readDraft('pane-9')).toContain('EISDIR lstat C:');

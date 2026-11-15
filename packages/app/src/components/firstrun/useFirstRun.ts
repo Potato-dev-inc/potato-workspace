@@ -25,10 +25,29 @@ export interface FirstRunHost {
    * while the welcome was never finished or skipped). Does nothing while it is open.
    */
   resume: () => void;
-  finish: () => void;
+  finish: (pending?: boolean) => void;
+  /** The welcome closed with set-up still open (no "Set up everything" run, or no folder): the "Finish setup" chip shows. */
+  pending: boolean;
   /** Finished or skipped (or no desktop shell to ask): "Set up your agents" goes to Set up agents. */
   done: boolean;
 }
+
+const PENDING_KEY = 'pm.firstrun.pending';
+const readPending = (): boolean => {
+  try {
+    return window.localStorage.getItem(PENDING_KEY) === '1';
+  } catch {
+    return false;
+  }
+};
+const writePending = (on: boolean): void => {
+  try {
+    if (on) window.localStorage.setItem(PENDING_KEY, '1');
+    else window.localStorage.removeItem(PENDING_KEY);
+  } catch {
+    /* a per-window convenience only */
+  }
+};
 
 const inTauri = (): boolean => typeof window !== 'undefined' && '__TAURI_INTERNALS__' in window;
 
@@ -63,6 +82,7 @@ export function useFirstRun(paneCount: number, panesReady: boolean, deps: Deps =
   const [open, setOpen] = useState(false);
   const [seed, setSeed] = useState<Seed>(EMPTY_SEED);
   const [openKey, setOpenKey] = useState(0);
+  const [pending, setPending] = useState<boolean>(readPending);
   // Set by this window's own Finish/Skip or reopen; until then the settings file decides.
   const [doneHere, setDoneHere] = useState<boolean | null>(null);
   const decided = useRef(false);
@@ -139,7 +159,9 @@ export function useFirstRun(paneCount: number, panesReady: boolean, deps: Deps =
     show(state, false);
   }, [show, state]);
 
-  const finish = useCallback(() => {
+  const finish = useCallback((stillOpen = false) => {
+    writePending(stillOpen);
+    setPending(stillOpen);
     setOpen(false);
     setDoneHere(true);
     void patch(finishPatch()).catch(() => undefined);
@@ -147,5 +169,5 @@ export function useFirstRun(paneCount: number, panesReady: boolean, deps: Deps =
 
   const done = doneHere ?? (state ? !state.show : true);
 
-  return { open, seed, openKey, reopen, resume, finish, done };
+  return { open, seed, openKey, reopen, resume, finish, pending, done };
 }

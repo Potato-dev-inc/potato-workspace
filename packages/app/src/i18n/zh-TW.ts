@@ -8,7 +8,7 @@
 //   helper    -> 幫手      an AI 助理 that another AI 助理 started; short, and clearly not the same word as 助理.
 //   chat      -> 對話      both the Chat view and "your chats"; 聊天 sounds like small talk, not work.
 //   terminal  -> 終端機
-//   pane      -> 窗格
+//   pane      -> AI 助理   an open pane is an AI 助理 in the UI now; the app no longer says 窗格.
 //   sign in   -> 登入 (verb, state); a sign-in you can pick or add (the noun) -> 帳號
 //   usage     -> 使用量;  plan -> 方案
 //   project 專案, branch 分支, Inbox 收件匣, Settings 設定, reset 重設, undo 復原, restore 還原,
@@ -57,6 +57,7 @@ import { settingsTeam } from './zh-TW/settingsTeam';
 import { settingsConnect } from './zh-TW/settingsConnect';
 import { settingsPhone } from './zh-TW/settingsPhone';
 import { workerUpdate } from './zh-TW/workerUpdate';
+import { setupStep } from './zh-TW/setupStep';
 import { notify } from './zh-TW/notify';
 import { board } from './zh-TW/board';
 import { routines } from './zh-TW/routines';
@@ -86,6 +87,7 @@ import { deskReview } from './zh-TW/deskReview';
 import { devices } from './zh-TW/devices';
 import { agentRules } from './zh-TW/agentRules';
 import { rail } from './zh-TW/rail';
+import { connect } from './zh-TW/connect';
 
 export const zhTW: Partial<Record<EnglishKey, string>> = {
   ...common,
@@ -129,6 +131,7 @@ export const zhTW: Partial<Record<EnglishKey, string>> = {
   ...settingsConnect,
   ...settingsPhone,
   ...workerUpdate,
+  ...setupStep,
   ...notify,
   ...board,
   ...routines,
@@ -158,4 +161,5 @@ export const zhTW: Partial<Record<EnglishKey, string>> = {
   ...devices,
   ...agentRules,
   ...rail,
+  ...connect,
 };

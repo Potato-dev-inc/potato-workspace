@@ -17,6 +17,7 @@ import { projectOfCwd } from '../../lib/ship-model';
 import { FloatingMenu } from '../cockpit/FloatingMenu';
 import { EditorMenuItems } from './OpenInEditor';
 import { RailSection } from '../cockpit/rail/RailSection';
+import { EmptyState } from '../common/EmptyState';
 import { setRailSectionClosed } from '../cockpit/rail/railFold';
 import { FileGlyph } from '../cockpit/rail/FileGlyph';
 import { baseOf, fileMark, folderHasChanges, visibleRows, type Mark } from './tree-model';
@@ -328,7 +329,13 @@ export function FilesCard({ paneId, cwd, canMention = true, refreshKey = '', api
       ) : !rootLoaded ? (
         <p className="ck-rail-empty">{t('files.loading')}</p>
       ) : rows.length === 0 ? (
-        <p className="ck-rail-empty">{t('files.empty')}</p>
+        <EmptyState
+          testId="files-empty"
+          className="ck-empty--rail"
+          title={t('files.emptyTitle')}
+          line={t('files.emptyLine')}
+          action={{ label: t('files.showInFolder'), onClick: () => reveal('') }}
+        />
       ) : (
         <ul className="ck-ftree" role="tree" aria-label={t('files.treeLabel')} ref={treeRef} data-testid="files-tree">
           {rows.map((row, ix) => {

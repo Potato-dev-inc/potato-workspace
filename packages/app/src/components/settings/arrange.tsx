@@ -6,10 +6,10 @@
 // A row that is not named here (for example one a new feature adds) lands in Advanced > Other, and the test in
 // arrange.test.ts fails naming it, so nothing hides by accident.
 import { SIGN_IN } from '../../lib/glossary';
-import type { BaseSectionDef, RowDef, SectionDef, SectionId, SettingsEnv } from './model';
-import { useDevLabsOverride, DEV_LABS_NOTE } from '../../lib/dev-labs';
-import { t, type MessageKey } from '../../i18n';
-import { Note, SettingBlock } from './settings-ui';
+import type { BaseSectionDef, RowDef, SectionDef, SectionId } from './model';
+import { LabsPage } from './LabsPage';
+import { LABS_SWITCH_KEYS } from './labs-areas';
+import { t } from '../../i18n';
 
 /**
  * One entry of a group: a row id, a row with its label changed here (`row`), `@labs` (every early feature), or
@@ -138,32 +138,6 @@ export function layoutRowIds(layout: Partial<Record<SectionId, LayoutGroup[]>> =
 
 // ---------- the rows this file adds ----------
 
-/** The translation of a Labs name or description, or the English from the row. */
-function labsText(id: string, part: 'name' | 'about', english: string | undefined): string | undefined {
-  const key = `labs.${id}.${part}`;
-  const text = t(key as MessageKey);
-  return text === key ? english : text;
-}
-
-function LabsIndex({ env, labs }: { env: SettingsEnv; labs: RowDef[] }) {
-  const devLabs = useDevLabsOverride();
-  return (
-    <SettingBlock label={t('settings.row.labs-index.label')} description={t('settings.row.labs-index.hint')}>
-      {devLabs && <Note>{DEV_LABS_NOTE}</Note>}
-      <ul className="st-labs-list">
-        {labs.map((row) => (
-          <li key={row.id}>
-            <button type="button" className="st-labs-item" onClick={() => env.openRow?.(row.id)}>
-              <span className="st-labs-name">{labsText(row.id, 'name', row.labs?.name)}</span>
-              <span className="st-labs-about">{labsText(row.id, 'about', row.labs?.about)}</span>
-            </button>
-          </li>
-        ))}
-      </ul>
-    </SettingBlock>
-  );
-}
-
 // ---------- arrange ----------
 
 /** The early features of every section, in the order they are listed in Labs. */
@@ -182,9 +156,10 @@ function labsIndexRow(labs: RowDef[]): RowDef | null {
     id: LABS_INDEX_ID,
     level: 'advanced',
     label: 'Early features',
-    hint: 'Tap one to jump to its switch.',
-    keywords: 'labs early experimental preview beta features',
-    render: (env) => <LabsIndex env={env} labs={labs} />,
+    hint: 'Turn each early feature on or off, and read what it does.',
+    // A search for any early feature's name or words lands on this page, since the features are listed only here.
+    keywords: ['labs early experimental preview beta features', ...labs.map((row) => `${row.label} ${row.keywords ?? ''}`)].join(' '),
+    render: (env) => <LabsPage env={env} labs={labs} />,
   };
 }
 
@@ -228,8 +203,11 @@ export function arrangeSections(base: BaseSectionDef[], layout: Partial<Record<S
     const rows: RowDef[] = [];
     for (const g of layout[page.id] ?? []) {
       for (const entry of g.rows) {
+        // A plain on/off early feature is not listed as a row: the Labs page (LABS_INDEX_ID) draws its switch.
+        // One with more than a switch (Ask bar, Live updates, Telegram...) keeps its own row, which the Labs
+        // page's Open button and a deep link jump to.
         if (entry === '@labs') {
-          for (const row of labs) rows.push({ ...row, group: g.group, keywords: `${row.keywords ?? ''} labs early` });
+          for (const row of labs) if (!LABS_SWITCH_KEYS[row.id]) rows.push({ ...row, group: g.group, keywords: `${row.keywords ?? ''} labs early` });
           continue;
         }
         if (typeof entry === 'string' && entry.startsWith('@base:')) {

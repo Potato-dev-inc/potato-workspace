@@ -161,7 +161,7 @@ describe('held-back rows in plain words', () => {
 
   it('turns the pool key label into an agent name and a folder', () => {
     expect(holdKeyLabel('claude C:/work/app')).toBe('Claude in C:/work/app');
-    expect(holdKeyLabel('codex (headless) C:/work/my app')).toBe('Codex CLI, headless in C:/work/my app');
+    expect(holdKeyLabel('codex (headless) C:/work/my app')).toBe('Codex CLI, in the background in C:/work/my app');
     expect(holdKeyLabel('cursor_agent [work] D:/x')).toBe('Cursor Agent CLI, work in D:/x');
     expect(holdKeyLabel('nonsense')).toBe('nonsense');
   });

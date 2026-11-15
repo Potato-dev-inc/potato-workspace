@@ -2,16 +2,23 @@
 .cockpit .ck-inbox {
   max-width: 720px;
 }
-.cockpit .ib-clear {
+/* The Inbox's calm line is the shared EmptyState drawn as one 44px strip (design-1116/INBOX-1116.md): a tick, the
+   title, the small line, then the one button at the right. The rules below win over the big block's spacing. */
+.cockpit .ck-empty.ib-clear {
   display: flex;
+  flex-direction: row;
   align-items: center;
   flex-wrap: wrap;
+  justify-content: flex-start;
   gap: 10px;
   min-height: 44px;
+  max-width: none;
+  margin: 0;
   padding: 0 12px;
   border-radius: 10px;
   background: var(--live-soft);
   color: var(--label);
+  text-align: left;
 }
 .cockpit .ib-clear-ok {
   flex: none;
@@ -23,19 +30,23 @@
   display: grid;
   place-items: center;
 }
-.cockpit .ib-clear .ib-clear-t {
+.cockpit .ib-clear .ck-empty-title {
   margin: 0;
   font-size: var(--fs-body);
   font-weight: 400;
+  color: var(--label);
 }
-.cockpit .ib-clear .ib-clear-s {
+.cockpit .ib-clear .ck-empty-line {
   margin: 0;
   color: var(--label-2);
   font-size: var(--fs-meta);
 }
-.cockpit .ib-clear-acts {
+.cockpit .ib-clear > .ck-btn {
   margin-left: auto;
-  display: flex;
+}
+.cockpit .ib-clear .ck-empty-or {
+  margin: 0;
+  flex-direction: row;
   gap: 6px;
 }
 .cockpit .ib-sec {

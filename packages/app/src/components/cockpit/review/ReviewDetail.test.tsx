@@ -212,16 +212,16 @@ describe('ReviewDetail: actions', () => {
     expect(onThrow).toHaveBeenCalledWith(ITEM);
   });
 
-  it('Open pane opens the row pane, and is off when the pane is closed', async () => {
+  it('Open agent opens the row agent, and is off when the agent is closed', async () => {
     const onOpenPane = vi.fn();
     await render(<ReviewDetail item={ITEM} api={fakeApi()} onOpenPane={onOpenPane} />);
-    await press(buttonWith('Open pane')!);
+    await press(buttonWith('Open agent')!);
     expect(onOpenPane).toHaveBeenCalledWith('pane-1');
 
     await render(
       <ReviewDetail item={{ ...ITEM, paneId: null, fixPaneId: null, fixWhyNot: NO_PANE_TEXT }} api={fakeApi()} onOpenPane={onOpenPane} />,
     );
-    const open = buttonWith('Open pane')!;
+    const open = buttonWith('Open agent')!;
     expect(open.disabled).toBe(true);
     expect(open.title).toBe(NO_PANE_TEXT);
     expect(buttonWith('Ask to fix')!.disabled).toBe(true);

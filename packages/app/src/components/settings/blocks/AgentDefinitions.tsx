@@ -301,7 +301,7 @@ export function AgentDefinitions({
       await api.revoke(row.id);
       apply(await api.list());
       await handleDefinitionsChanged();
-      setNote(`${row.id} was revoked - removed from the New session menu. No restart needed.`);
+      setNote(`${row.id} was revoked - removed from the New agent menu. No restart needed.`);
     });
 
   // Remove moves the files to .removed/ (never deletes), drops the approval and reloads the registry, so
@@ -941,7 +941,7 @@ function RemoveDialog({
           <li>Its approval</li>
         </ul>
         <p className="mt-3 text-xs text-pm-muted">
-          Panes already running this agent keep running. It leaves the New session menu now. You can undo this right
+          Windows already running this agent keep running. It leaves the New agent menu now. You can undo this right
           away, or restore it later from Recently removed.
         </p>
         <div className="mt-4 flex justify-end gap-2">

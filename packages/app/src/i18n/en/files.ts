@@ -91,4 +91,6 @@ export const files = {
   "tabwin.putBackTip": "Close the window and show this here again",
   "tabwin.gone": "This agent is not running any more.",
   "tabwin.barLabel": "Window controls",
+  "files.emptyTitle": "No files yet",
+  "files.emptyLine": "This project folder is empty. Ask your agent to make a file, or add one yourself.",
 } as const;

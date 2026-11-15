@@ -10,7 +10,7 @@ export const risk: Partial<Record<EnglishKey, string>> = {
   'risk.choice.deny': '拒絕',
   'risk.choice.alwaysAllowStarting': '一律允許開頭為以下內容的指令：',
   'risk.choice.alwaysAllow': '一律允許',
-  'risk.choice.allowSession': '這次工作階段都允許',
+  'risk.choice.allowSession': '這個 AI 助理都允許',
   'risk.choice.allowOnce': '允許一次',
 
   'risk.ask.anAgent': '某個 AI 助理',
@@ -25,7 +25,7 @@ export const risk: Partial<Record<EnglishKey, string>> = {
   'risk.signIn.needed': '需要登入',
   'risk.signIn.group': '登入',
   'risk.signIn.rowLabel': '登入',
-  'risk.signIn.rowHint': '同一個 AI 助理可以登入多個帳號，每個窗格各選一個使用。',
+  'risk.signIn.rowHint': '同一個 AI 助理可以登入多個帳號，每個 AI 助理各選一個使用。',
   'risk.signIn.addAnother': '新增其他帳號',
   'risk.signIn.openWindow': '開啟登入視窗',
   'risk.signIn.useAnother': '改用其他帳號',

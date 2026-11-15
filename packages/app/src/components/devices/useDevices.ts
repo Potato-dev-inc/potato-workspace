@@ -26,6 +26,8 @@ function saneDevice(d: Device): Device {
     signed_out: Array.isArray(d.signed_out) ? d.signed_out.filter((x) => typeof x === 'string') : [],
     needs_person: Array.isArray(d.needs_person) ? d.needs_person.filter((n) => n && typeof n.what === 'string') : [],
     connected: d.connected === true,
+    room: Array.isArray(d.room) ? d.room.filter((r) => r && typeof r.agent_id === 'string') : [],
+    room_at: typeof d.room_at === 'number' ? d.room_at : null,
   };
 }
 

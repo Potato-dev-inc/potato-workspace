@@ -2,7 +2,7 @@ import { describe, expect, it, vi } from 'vitest';
 import type { AcpLaneView } from './acpChat';
 import { freshSteps, handoffTask, isUpToDate, MAX_TRIES, pickHandoffAgent, runWorkerUpdate, type StepAnswer, type UpdateApi, type UpdateStepId } from './workerUpdate';
 
-const LABELS: Record<UpdateStepId, string> = { prepare: 'Getting the Worker files ready', install: 'Installing the tool it needs', login: 'Signing in to Cloudflare', deploy: 'Putting the Worker online', check: 'Checking that it works' };
+const LABELS: Record<UpdateStepId, string> = { prepare: 'Getting the link files ready', install: 'Installing the tool it needs', login: 'Signing in to Cloudflare', deploy: 'Turning your link on', check: 'Checking that it works' };
 const GOOD = { reachable: true, features: ['team', 'rooms', 'stable-link', 'invites'], legacyLink: false };
 
 function api(answer: (id: string, call: number) => StepAnswer | Error, health = GOOD): UpdateApi & { calls: string[] } {
@@ -82,9 +82,9 @@ describe('the hand-off note', () => {
     const run = await runWorkerUpdate({ address: 'https://pm-relay.me.workers.dev', api: a, pauseMs: 0 });
     const task = handoffTask(run, LABELS);
     expect(task).toContain('https://pm-relay.me.workers.dev');
-    expect(task).toContain(`The step that failed ${MAX_TRIES} times: Putting the Worker online`);
+    expect(task).toContain(`The step that failed ${MAX_TRIES} times: Turning your link on`);
     expect(task).toContain('Authentication error [code: 10000]');
-    expect(task).toContain('Steps that worked: Getting the Worker files ready, Installing the tool it needs, Signing in to Cloudflare.');
+    expect(task).toContain('Steps that worked: Getting the link files ready, Installing the tool it needs, Signing in to Cloudflare.');
     expect(task).not.toMatch(/npx wrangler|npm run deploy|cd relay/);
   });
 

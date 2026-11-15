@@ -89,16 +89,24 @@ describe('useFirstRun', () => {
       { settings: { onboarding_project: 'D:\\code\\shop', onboarding_agent: 'claude', simple_mode: true } },
     );
     expect(last.open).toBe(true);
-    expect(last.seed.start).toBe('task');
+    expect(last.seed.start).toBe('project'); // a step of an older build lands on today's folder screen
     expect(last.seed.project?.path).toBe('D:\\code\\shop');
     expect(last.seed.project?.name).toBe('shop');
     expect(last.seed.agentId).toBe('claude');
     expect(last.seed.look).toBe('ai');
   });
 
-  it('a saved task step without a folder lands on the folder step', async () => {
-    await mount({ show: true, auto: true, step: 'task' }, { settings: {} });
-    expect(last.seed.start).toBe('project');
+  it('a welcome closed with set-up open keeps the Finish setup chip; finishing it clears the chip', async () => {
+    await mount({ show: true, auto: true, step: null });
+    expect(last.pending).toBe(false);
+    await act(async () => last.finish(true));
+    expect(last.pending).toBe(true);
+    expect(window.localStorage.getItem('pm.firstrun.pending')).toBe('1');
+    await act(async () => last.reopen());
+    await settle();
+    await act(async () => last.finish(false));
+    expect(last.pending).toBe(false);
+    expect(window.localStorage.getItem('pm.firstrun.pending')).toBeNull();
   });
 
   it('is not done until finished or skipped; resume opens it where the person left off', async () => {

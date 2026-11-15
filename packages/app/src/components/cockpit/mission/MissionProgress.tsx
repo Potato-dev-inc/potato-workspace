@@ -4,6 +4,7 @@
 import { errorSentence } from '../../../lib/sayError';
 import { useEffect, useState } from 'react';
 import { barText, isActive, tauriMissionsApi, type MissionView, type MissionsApi, type TimelineRow } from '../../../lib/missions';
+import { useT } from '../../../i18n';
 import { SegTabs } from '../SegTabs';
 import { Sheet } from '../Sheet';
 import { MissionCard } from './MissionCards';
@@ -14,12 +15,13 @@ import '../../../styles/missions.css';
 const SHOWN = 8;
 
 function Row({ row, onOpenPane }: { row: TimelineRow; onOpenPane?: (paneId: string) => void }) {
+  const t = useT();
   const [open, setOpen] = useState(false);
   const checks = row.checks ?? [];
   const action =
     row.action === 'open_pane' && row.pane_id && onOpenPane ? (
       <button type="button" className="ck-btn ck-btn--plain ck-btn--sm" onClick={() => onOpenPane(row.pane_id!)}>
-        Open pane
+        {t('inboxCards.mission.openAgent')}
       </button>
     ) : null;
   const body = (

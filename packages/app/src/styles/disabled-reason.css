@@ -1,0 +1,12 @@
+/* The muted reason line under a greyed control (components/common/DisabledReason.tsx). Colour tokens only. */
+.dis-reason {
+  margin: 4px 0 0;
+  font-size: var(--fs-meta);
+  line-height: 1.4;
+  color: var(--label-3);
+}
+
+span.dis-reason {
+  display: block;
+  margin: 2px 0 0;
+}

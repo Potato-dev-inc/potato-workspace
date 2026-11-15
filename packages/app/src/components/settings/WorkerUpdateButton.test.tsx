@@ -44,10 +44,10 @@ async function mount(props: Partial<React.ComponentProps<typeof WorkerUpdateButt
 describe('WorkerUpdateButton', () => {
   it('is one button with a plain label and no command text', async () => {
     await mount({ api: fake().api });
-    expect(q('worker-update-go')!.textContent).toBe('Update Worker');
+    expect(q('worker-update-go')!.textContent).toBe('Update your link');
     expect(host.textContent).not.toMatch(/wrangler|npm |relay\/worker|cd /);
     await mount({ api: fake().api, label: 'wu.setup' });
-    expect(q('worker-update-go')!.textContent).toBe('Set up my Worker');
+    expect(q('worker-update-go')!.textContent).toBe('Set up my phone link');
   });
 
   it('runs the steps, shows each as done, keeps the output behind Details and calls onDone with the address', async () => {
@@ -71,13 +71,13 @@ describe('WorkerUpdateButton', () => {
     await mount({ api });
     await click(q('worker-update-go'));
     await settle(4);
-    expect(q('worker-update-login-note')!.textContent).toContain('Sign in to Cloudflare there and press Allow');
+    expect(q('worker-update-note-login')!.textContent).toContain('Sign in to Cloudflare there and press Allow');
     await act(async () => release({ ok: true, output: '' }));
     await settle(6);
-    expect(q('worker-update-login-note')).toBeNull();
+    expect(q('worker-update-note-login')).toBeNull();
   });
 
-  it('a step that keeps failing is tried 3 times, then handed to an agent with the prefilled task', async () => {
+  it('a step that keeps failing is tried 3 times, then "Let Claude fix it" hands it to an agent with the prefilled task', async () => {
     const { api, calls } = fake('install');
     const handOff = vi.fn();
     await mount({ api, loadAgents: async () => VIEW, handOff });
@@ -86,13 +86,20 @@ describe('WorkerUpdateButton', () => {
     expect(calls.filter((c) => c === 'install')).toHaveLength(3);
     expect(calls).not.toContain('login');
     expect(stepStatus()[1]).toBe('install:failed');
+    expect(q('worker-update-failed')!.textContent).toContain('Installing the tool it needs did not work.');
+    expect(q('worker-update-failed')!.querySelector('[role="alert"]')!.textContent).not.toContain('could not reach the registry');
+    // Nothing is handed over by itself: the person asks for it.
+    expect(handOff).not.toHaveBeenCalled();
+    expect(q('worker-update-go')!.textContent).toBe('Update your link');
+    await click(q('worker-update-fix'));
+    await settle(3);
     expect(handOff).toHaveBeenCalledTimes(1);
     const [kind, agentId, task] = handOff.mock.calls[0];
     expect([kind, agentId]).toEqual(['chat', 'helper']);
     expect(task).toContain('Installing the tool it needs');
     expect(task).toContain('could not reach the registry');
     expect(q('worker-update-handed')!.textContent).toContain('Handed over to Helper');
-    expect(q('worker-update-go')!.textContent).toBe('Try again');
+    expect(host.querySelector('[data-testid="worker-update-retry"]')!.textContent).toBe('Try again');
   });
 
   it('with no chat agent it offers the note to copy instead', async () => {
@@ -102,9 +109,12 @@ describe('WorkerUpdateButton', () => {
     await mount({ api, loadAgents: async () => null, handOff });
     await click(q('worker-update-go'));
     await settle(8);
+    expect(q('worker-update-copy-note')).toBeNull();
+    await click(q('worker-update-fix'));
+    await settle(3);
     expect(handOff).not.toHaveBeenCalled();
     expect(q('worker-update-copy-note')!.textContent).toContain('No chat agent');
     await click([...host.querySelectorAll('button')].find((b) => b.textContent === 'Copy the note'));
-    expect(vi.mocked(navigator.clipboard.writeText).mock.calls[0][0]).toContain('Putting the Worker online');
+    expect(vi.mocked(navigator.clipboard.writeText).mock.calls[0][0]).toContain('Turning your link on');
   });
 });

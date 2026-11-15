@@ -24,7 +24,7 @@ function plainError(err: unknown): string {
   const text = errorSentence(err);
   const m = / -> (\d+): ([\s\S]*)$/.exec(text);
   if (!m) return "Couldn't reach your PC. Try again.";
-  if (m[1] === '403') return "This phone isn't allowed to do that. Change it on your PC: Settings › Phone.";
+  if (m[1] === '403') return "This phone isn't allowed to do that. Change it on your PC: Connect › Phone.";
   try {
     const body = JSON.parse(m[2]) as { error?: unknown };
     if (typeof body.error === 'string' && body.error && !/^[a-z_]+$/.test(body.error)) return body.error;
@@ -196,7 +196,7 @@ export function TeamGroup({ bridge, bridgeReady }: { bridge: BridgeClient; bridg
       {error && <p className="ph-foot ph-foot--err">{error}</p>}
       {reply.missing > 0 && <p className="ph-foot">Some team updates may be missing.</p>}
       {!can.act && !can.dismiss && (
-        <p className="ph-foot">This phone can see team updates but not act on them. Change it on your PC: Settings › Phone.</p>
+        <p className="ph-foot">This phone can see team updates but not act on them. Change it on your PC: Connect › Phone.</p>
       )}
       {confirm?.kind === 'queue' && (
         <ConfirmSheet

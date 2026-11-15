@@ -59,6 +59,7 @@ import { CardSheet } from './components/mobile/CardSheet';
 import { usePushIntents } from './hooks/usePushIntents';
 import { useSharedContent } from './hooks/useSharedContent';
 import { usePhoneName } from './hooks/usePhoneName';
+import { usePhoneSetupProgress } from './hooks/usePhoneSetupProgress';
 import { usePhoneAbilities } from './hooks/usePhoneAbilities';
 import { inputRefusalNote } from './lib/input-refusal';
 import { InputRefusedNote } from './components/mobile/InputRefusedNote';
@@ -87,7 +88,7 @@ import { isAsking, phoneStatus } from './lib/phone-status';
 import { PhoneNeedsPill } from './components/mobile/PhoneNeedsPill';
 import { PhoneSetupSteps } from './components/mobile/PhoneSetupSteps';
 import { limitOf } from './lib/pane-rule-view';
-import { markSetupDone, markSetupPending, sendLocalTestNotification, setupPending } from './lib/phone-setup';
+import { markSetupDone, markSetupPending, sendLocalTestNotification, SETUP_STEPS, setupPending } from './lib/phone-setup';
 
 const LS_ACTIVE_TAB = 'pm.mobile.activeTab';
 const RESIZES_CONTENT = 'interactive-widget=resizes-content';
@@ -164,6 +165,10 @@ export default function PwaApp() {
   const [authFailed, setAuthFailed] = useState(false);
   /** The three setup steps (Home Screen, notifications, a test): once after pairing, and again from Help. */
   const [setupOpen, setSetupOpen] = useState(setupPending);
+  /** Bumped when the setup steps close, so the home's chip reads the permission and the test again. */
+  const [setupRev, setSetupRev] = useState(0);
+  /** How many of the three setup steps are done: the home shows one small chip, not a whole screen. */
+  const setupDone = usePhoneSetupProgress(bridgeUrl, setupRev);
   /** After a jump from the "needs you" pill: the chat to go back to. */
   const [backTo, setBackTo] = useState<string | null>(null);
   const [panes, setPanes] = useState<PaneInfo[]>([]);
@@ -943,6 +948,7 @@ export default function PwaApp() {
               attention={attention}
               canAnswer={canAnswer}
               onRefreshAttention={refreshAttentionNow}
+              setup={{ done: setupDone, total: SETUP_STEPS, onOpen: () => setSetupOpen(true) }}
             />
           )}
           {activeView === 'terminal' && dockedCard}
@@ -1134,6 +1140,7 @@ export default function PwaApp() {
           baseUrl={bridgeUrl}
           onDone={() => {
             markSetupDone();
+            setSetupRev((v) => v + 1);
             setSetupOpen(false);
           }}
         />

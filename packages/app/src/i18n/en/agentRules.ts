@@ -1,11 +1,11 @@
-// English messages: Force yes, Fences and Pins (the chip on a chat or pane, Settings > Agents > Rules for agents, the
+// English messages: Force yes, Fences and Pins (the chip on a chat or agent, Settings > Agents > Rules for agents, the
 // file tree's "Fence this folder" and the line on the New agent page). Keys are dotted (`rules.something`).
 export const agentRules = {
   'settings.row.agent-rules.label': 'Rules for agents',
   'settings.row.agent-rules.hint': 'Force yes, fences and starting settings for new agents.',
   'forceYes.chip': 'Force yes',
   'forceYes.chipOn': 'Force yes on',
-  'forceYes.chipOffTip': 'Force yes is off. Click to read what it does and turn it on for this pane.',
+  'forceYes.chipOffTip': 'Force yes is off. Click to read what it does and turn it on for this agent.',
   'forceYes.chipOnTip': 'Force yes is on. Plain asks are answered yes for you. Risky ones still come to you. Click to turn it off.',
   'forceYes.warnTitle': 'Turn on Force yes?',
   'forceYes.warnBody':
@@ -16,7 +16,7 @@ export const agentRules = {
   'rules.title': 'Rules for agents',
   'rules.blurb': 'Force yes, fences and the starting settings of new agents.',
   'rules.forceYesTitle': 'Force yes',
-  'rules.forceYesHelp': 'For an agent that asks permission for everything. New chats and panes of the agents you tick answer plain asks with yes for you. Risky asks and passwords still come to you.',
+  'rules.forceYesHelp': 'For an agent that asks permission for everything. New chats and terminals of the agents you tick answer plain asks with yes for you. Risky asks and passwords still come to you.',
   'rules.forceYesAgent': 'Force yes for {agent}',
   'rules.forceYesWarn': 'Force yes answers for you. Read what it does before you turn it on.',
   'rules.noAgents': 'No agents are installed yet.',

@@ -342,7 +342,7 @@ export const SHORTCUTS: readonly ShortcutEntry[] = [
     {
       id: 'mode-toggle',
       group: 'Navigate',
-      label: 'Switch between Orchestration and Individual, from any app',
+      label: 'Switch between one window at a time and a window per agent, from any app',
       handlers: [handler('src-tauri/src/global_shortcuts.rs', '("mode-toggle", "Mod+Alt+M", "Mod+Alt+Shift+M")')],
     },
     'Mod+Alt+M',
@@ -436,7 +436,7 @@ export const SHORTCUTS: readonly ShortcutEntry[] = [
   {
     id: 'review-pane',
     group: 'Navigate',
-    label: "Review: open the agent's pane",
+    label: "Review: open the agent's window",
     keys: ['P'],
     handlers: [handler('src/components/cockpit/review/review-keys.ts', "p: 'open'")],
   },
@@ -531,7 +531,7 @@ export const SHORTCUTS: readonly ShortcutEntry[] = [
     {
       id: 'split',
       group: 'Panes',
-      label: 'Split the view with the next pane. Again closes the split',
+      label: 'Split the view with the next chat. Again closes the split',
       handlers: [handler(MAIN_VIEW, "matchesAction(e, 'split', mac)")],
     },
     'Mod+\\',
@@ -658,14 +658,14 @@ export const SHORTCUTS: readonly ShortcutEntry[] = [
   {
     id: 'interrupt',
     group: 'Panes',
-    label: 'Stop what the agent is doing (sends Ctrl+C to the focused pane)',
+    label: 'Stop what the agent is doing (sends Ctrl+C to the window you are in)',
     keys: ['Ctrl+C'],
     handlers: [handler('src/terminal/canvas-terminal.ts', "event.key === 'c' && event.ctrlKey")],
   },
   {
     id: 'paste',
     group: 'Panes',
-    label: 'Paste into the focused pane',
+    label: 'Paste into the window you are in',
     keys: ['Mod+V'],
     handlers: [handler('src/terminal/xterm-textarea.ts', "event.key.toLowerCase() === 'v'")],
   },
@@ -689,7 +689,7 @@ export const SHORTCUTS: readonly ShortcutEntry[] = [
     {
       id: 'palette',
       group: 'Search',
-      label: 'Open the command palette: switch panes, start an agent, run an action',
+      label: 'Open the command palette: switch windows, start an agent, run an action',
       handlers: [handler(COCKPIT, "matchesAction(e, 'palette')")],
     },
     'Mod+K',
@@ -890,7 +890,7 @@ export function reservedReason(binding: string, mac: boolean): string | null {
   const f = wantsFlags(b, mac);
   const letter = /^[A-Z]$/.test(b.key);
   if (f.ctrl && !f.meta && !b.alt && !b.shift && letter && TERMINAL_CTRL_LETTERS.has(b.key)) {
-    return `Terminals use ${formatKey(`Ctrl+${b.key}`, mac)} (stop, end, clear, edit the line). In a terminal pane the agent would not get it.`;
+    return `Terminals use ${formatKey(`Ctrl+${b.key}`, mac)} (stop, end, clear, edit the line). In a terminal window the agent would not get it.`;
   }
   if (mac && f.meta && !f.ctrl && !b.alt && !b.shift && letter && MAC_SYSTEM_LETTERS.has(b.key)) {
     return `macOS uses ${formatKey(`Mod+${b.key}`, true)} for copy, paste, undo, quit, hide and similar.`;
@@ -902,7 +902,7 @@ export function reservedReason(binding: string, mac: boolean): string | null {
   if (b.alt && !f.ctrl && !f.meta && !b.shift && letter) {
     return mac
       ? 'Option+letter types a special character in boxes and terminals.'
-      : 'Terminals use Alt+letter to move and edit the line (Alt+B, Alt+F), so a pane would not get it.';
+      : 'Terminals use Alt+letter to move and edit the line (Alt+B, Alt+F), so a window would not get it.';
   }
   if (!f.ctrl && !f.meta && !b.alt && ['Esc', 'Enter', 'Tab', 'Backspace', 'Space'].includes(b.key)) return `${b.key} is used all over the app.`;
   return null;

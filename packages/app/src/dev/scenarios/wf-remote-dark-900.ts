@@ -12,7 +12,7 @@ const s: HarnessScenario = {
   after: async (dom) => {
     withChatItems();
     await dom.clickText('[role="tab"]', 'Chat');
-    if (!document.querySelector('[data-testid="rail-remote"]')) await dom.click('button[aria-label="Show session details"]');
+    if (!document.querySelector('[data-testid="rail-remote"]')) await dom.click('button[aria-label="Show chat details"]');
     await dom.waitFor('[data-testid="rail-remote"]');
     await dom.clickText('[data-testid="rail-remote"] [role="radio"]', 'Watch');
     await dom.sleep(400);

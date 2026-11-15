@@ -30,7 +30,7 @@ import '../../styles/cockpit-helpers.css';
 import '../../styles/cockpit-sidebar.css';
 import { DotSpinner } from './DotSpinner';
 import { useT } from '../../i18n';
-import { PotatoMark, IconChevronDown, IconClosedChats, IconFolderPlus, IconGlobe, IconInbox, IconMore, IconNewAgent, IconPin, IconSearch, IconSort, IconTeam } from './Icons';
+import { PotatoMark, IconChevronDown, IconClosedChats, IconFolderPlus, IconGlobe, IconInbox, IconMore, IconNewAgent, IconPin, IconSearch, IconSort, IconConnect } from './Icons';
 import { RowMark } from './RowMark';
 import { PlanLine } from '../common/PlanLine';
 import { ProjectHeader, ProjectMeta, type ProjectSignal } from './ProjectHeader';
@@ -82,6 +82,7 @@ import { DeviceGroups } from '../devices/DeviceGroups';
 import { NewAgentWhere, type WhereProps } from '../devices/NewAgentWhere';
 import type { DeviceGroup, RemoteRow } from '../devices/useDeviceGroups';
 import { useDismissable } from '../../hooks/useDismissable';
+import { openBrowserWindow } from '../../lib/browser-check';
 
 export function Sidebar({
   c,
@@ -106,9 +107,9 @@ export function Sidebar({
   onOpenSpaces,
   onOpenToday,
   todayOpen = false,
-  team,
+  connect,
   canPassTask,
-  onOpenTeam,
+  onOpenConnect,
   onOpenToSide,
   onOpenPlaced,
   onPaneAction,
@@ -165,9 +166,9 @@ export function Sidebar({
   /** Opens the Today page (Labs `timeline_day_enabled`). Absent: no Today button. */
   onOpenToday?: () => void;
   todayOpen?: boolean;
-  /** The Team page: its row (always shown) is the active one while `open`; `waiting` is the number on its badge. Absent: no Team row. */
-  team?: { open: boolean; waiting: number };
-  onOpenTeam?: () => void;
+  /** The Connect page (phone, other PCs, team, lending): its row (always shown) is the active one while `open`; `waiting` is the number on its badge (what waits in the team). Absent: no Connect row. */
+  connect?: { open: boolean; waiting: number };
+  onOpenConnect?: () => void;
   /** A team is on: a chat's menu offers "Pass to a teammate…". */
   canPassTask?: boolean;
   ship?: ShipApi;
@@ -998,7 +999,7 @@ export function Sidebar({
         )}
         <button
           type="button"
-          className={`ck-row ck-row--flat${c.selectedId === null && !c.spawn && !openCompanionId && !newAgentOpen && !spacesOpen && !team?.open ? ' is-active' : ''}`}
+          className={`ck-row ck-row--flat${c.selectedId === null && !c.spawn && !openCompanionId && !newAgentOpen && !spacesOpen && !connect?.open ? ' is-active' : ''}`}
           onClick={() => {
             c.select(null);
             onOpenInbox?.();
@@ -1012,17 +1013,17 @@ export function Sidebar({
           </span>
           {waiting > 0 && <span className="ck-count">{waiting}</span>}
         </button>
-        {team && onOpenTeam && (
-          <button type="button" data-testid="side-team" className={`ck-row ck-row--flat${team.open ? ' is-active' : ''}`} onClick={onOpenTeam}>
+        {connect && onOpenConnect && (
+          <button type="button" data-testid="side-connect" className={`ck-row ck-row--flat${connect.open ? ' is-active' : ''}`} onClick={onOpenConnect}>
             <span className="ck-row-glyph ck-row-glyph--icon">
-              <IconTeam />
+              <IconConnect />
             </span>
             <span className="ck-row-main">
-              <span className="ck-row-title">{t('teamHub.side')}</span>
+              <span className="ck-row-title">{t('connect.side')}</span>
             </span>
-            {team.waiting > 0 && (
-              <span className="ck-count" data-testid="side-team-count">
-                {team.waiting}
+            {connect.waiting > 0 && (
+              <span className="ck-count" data-testid="side-connect-count">
+                {connect.waiting}
               </span>
             )}
           </button>
@@ -1127,9 +1128,7 @@ export function Sidebar({
         onOpenPane={(id) => c.select(id)}
         mode={c.mode}
         onMode={(m) => void c.setMode(m)}
-        theme={c.theme}
-        onToggleTheme={() => void c.toggleTheme()}
-        onSetTheme={(next) => void c.setThemeChoice(next)}
+        onOpenBrowser={() => void openBrowserWindow().catch(() => c.notify(t('sidebar.browserFailed')))}
         helpersOf={(id) => helperRows(c.registry.paneList, id, (p) => c.names.get(p.info.id) ?? p.info.agent_type)}
         onStopHelper={(id) => c.interrupt(id)}
         onOpenSettings={(tab) => void (tab ? c.openSettings(tab) : c.openSettings())}

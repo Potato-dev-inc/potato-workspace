@@ -145,7 +145,7 @@ describe('Force yes chip in the pane header', () => {
 
 describe('Force yes and the session card in the chat header', () => {
   const card = () => host.querySelector('[data-testid="session-rail"]');
-  const panelButton = () => host.querySelector<HTMLButtonElement>('.ck-pane-head button[aria-label="Hide session details"], .ck-pane-head button[aria-label="Show session details"]');
+  const panelButton = () => host.querySelector<HTMLButtonElement>('.ck-pane-head button[aria-label="Hide chat details"], .ck-pane-head button[aria-label="Show chat details"]');
 
   beforeEach(() => window.localStorage.removeItem('pm.sessionRail.open'));
   afterEach(() => window.localStorage.removeItem('pm.sessionRail.open'));

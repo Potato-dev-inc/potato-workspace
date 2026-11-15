@@ -278,3 +278,60 @@
   font-size: 11px;
   color: var(--pm-muted, currentColor);
 }
+
+/* Room left: one thin meter per sign-in, on this PC, other PCs and lent to this PC. */
+.cockpit .ck-room {
+  margin-top: 12px;
+  padding-top: 10px;
+  border-top: 1px solid var(--fill-active);
+}
+.cockpit .ck-room-title {
+  margin: 0 0 6px;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--label);
+}
+.cockpit .ck-room-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: 8px;
+}
+.cockpit .ck-room-row {
+  display: grid;
+  grid-template-columns: 14px 1fr;
+  align-items: center;
+  column-gap: 6px;
+  row-gap: 3px;
+  color: var(--label);
+}
+.cockpit .ck-room-row.is-stale {
+  opacity: 0.7;
+}
+.cockpit .ck-room-meter {
+  grid-column: 2;
+  display: block;
+  height: 3px;
+  border-radius: 2px;
+  background: var(--fill-active);
+  overflow: hidden;
+}
+.cockpit .ck-room-meter > span {
+  display: block;
+  height: 100%;
+  background: var(--label-3);
+}
+.cockpit .ck-room-stale {
+  grid-column: 2;
+  color: var(--label-3);
+  font-size: 11px;
+}
+.cockpit .ck-room-suggest {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 0 0 8px;
+  color: var(--label-3);
+  font-size: 12px;
+}

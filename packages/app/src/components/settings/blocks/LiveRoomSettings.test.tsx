@@ -66,7 +66,7 @@ describe('LiveRoomSettings', () => {
 
   it('shows the team relay as the placeholder when a team relay is set', async () => {
     await mount(fakeApi(), 'https://team.example.test');
-    expect(field('Relay address').placeholder).toBe('Uses your team relay');
+    expect(field('Relay address').placeholder).toBe("Uses your team's link");
   });
 
   it('saves the relay when the field loses focus, keeping the other settings', async () => {
@@ -106,6 +106,6 @@ describe('LiveRoomSettings', () => {
 
   it('keeps the one-line privacy note', async () => {
     await mount(fakeApi());
-    expect(host.textContent).toContain('Rooms are end-to-end encrypted. The relay sees only sizes and times.');
+    expect(host.textContent).toContain('Rooms are end-to-end encrypted. The link sees only sizes and times.');
   });
 });

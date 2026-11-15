@@ -1,6 +1,7 @@
 // One button that puts the person's Worker online (or brings it up to date) by itself: it shows the steps as they run,
-// tries a failed step again, and after three failures hands the job to one of the person's agents. Nothing here shows a
-// command; the output is behind "Details". The only manual part is the Cloudflare approval in the browser.
+// tries a failed step again, and after three failures offers one thing to do — hand the job to one of the person's
+// agents. Nothing here shows a command; the output is behind "Details". The only manual part is the Cloudflare
+// approval in the browser. The picture is the shared SetupStepBlock, so a failure looks the same as everywhere else.
 import { useEffect, useRef, useState } from 'react';
 import { useT } from '../../i18n';
 import { requestAddAgentAction } from '../../lib/addAgentActions';
@@ -12,10 +13,10 @@ import {
   tauriUpdateApi,
   type UpdateApi,
   type UpdateRun,
-  type UpdateStep,
   type UpdateStepId,
 } from '../../lib/workerUpdate';
 import type { AcpLaneView } from '../../lib/acpChat';
+import { SetupStepBlock, type SetupStep } from '../common/SetupStepBlock';
 import { Btn } from './settings-ui';
 
 export type UpdateButtonLabel = 'wu.update' | 'wu.setup' | 'wu.setupLink';
@@ -43,7 +44,7 @@ export function WorkerUpdateButton({
   pauseMs?: number;
 }) {
   const t = useT();
-  const [steps, setSteps] = useState<UpdateStep[] | null>(null);
+  const [steps, setSteps] = useState<SetupStep[] | null>(null);
   const [running, setRunning] = useState(false);
   const [finished, setFinished] = useState<UpdateRun | null>(null);
   const [handoff, setHandoff] = useState<Handoff>({ kind: 'none' });
@@ -64,6 +65,7 @@ export function WorkerUpdateButton({
     check: t('wu.step.check'),
   });
 
+  /** "Let Claude fix it": the same chat hand-off Settings > Agents uses, with the goal and the printed error. */
   const giveToAgent = async (run: UpdateRun) => {
     setHandoff({ kind: 'busy' });
     const task = handoffTask(run, labels());
@@ -85,75 +87,56 @@ export function WorkerUpdateButton({
     setRunning(true);
     setFinished(null);
     setHandoff({ kind: 'none' });
+    setCopied(false);
     const run = await runWorkerUpdate({
       address,
       api,
       pauseMs,
       isCancelled: () => !alive.current,
-      onChange: (next) => alive.current && setSteps(next),
+      onChange: (next) =>
+        alive.current &&
+        setSteps(
+          next.map((s) => ({
+            id: s.id,
+            label: t(`wu.step.${s.id}` as 'wu.step.prepare'),
+            status: s.status,
+            tries: s.tries,
+            // The one manual part speaks only while its own step runs; later steps say nothing until then.
+            note: s.id === 'login' && (s.status === 'running' || s.status === 'retrying') ? t('wu.loginNote') : undefined,
+            output: s.output,
+          })),
+        ),
     });
     if (!alive.current) return;
     setRunning(false);
     setFinished(run);
     if (run.ok) onDone?.(run.address);
-    else await giveToAgent(run);
   };
 
-  const statusText = (s: UpdateStep): string =>
-    s.status === 'retrying' ? t('wu.status.retrying', { n: String(s.tries) }) : t(`wu.status.${s.status}` as 'wu.status.waiting');
-  const failedStep = finished?.steps.find((s) => s.id === finished.failed);
-  const login = steps?.find((s) => s.id === 'login');
+  const failed = finished && !finished.ok ? finished.failed : null;
 
   return (
     <div data-testid="worker-update-button" className="stable-update">
       {!steps && <p>{t('wu.intro')}</p>}
       <div className="flex gap-2 items-center">
         <Btn primary data-testid="worker-update-go" disabled={running} onClick={() => void start()}>
-          {t(finished && !finished.ok ? 'wu.retry' : label)}
+          {running ? t('setupStep.status.running') : t(label)}
         </Btn>
       </div>
       {steps && (
-        <ol data-testid="worker-update-steps" className="stable-steps" aria-live="polite">
-          {steps.map((s) => (
-            <li key={s.id} data-step={s.id} data-status={s.status}>
-              <strong>{t(`wu.step.${s.id}` as 'wu.step.prepare')}</strong> <span className="text-pm-muted">{statusText(s)}</span>
-            </li>
-          ))}
-        </ol>
-      )}
-      {login && (login.status === 'running' || login.status === 'retrying') && <p data-testid="worker-update-login-note">{t('wu.loginNote')}</p>}
-      {steps && steps.some((s) => s.output) && (
-        <details data-testid="worker-update-details">
-          <summary>{t('wu.details')}</summary>
-          {steps
-            .filter((s) => s.output)
-            .map((s) => (
-              <div key={s.id}>
-                <small>{t(`wu.step.${s.id}` as 'wu.step.prepare')}</small>
-                <pre className="font-mono break-all whitespace-pre-wrap">{s.output}</pre>
-              </div>
-            ))}
-        </details>
-      )}
-      {finished?.ok && (
-        <p data-testid="worker-update-done" role="status">
-          {t('wu.done')}
-        </p>
-      )}
-      {finished && !finished.ok && failedStep && (
-        <div data-testid="worker-update-failed">
-          <p role="alert">
-            {t(`wu.step.${failedStep.id}` as 'wu.step.prepare')}: {t('wu.failedAll')}
-          </p>
-          {handoff.kind === 'busy' && <p>{t('wu.handing')}</p>}
-          {handoff.kind === 'sent' && (
-            <p data-testid="worker-update-handed" role="status">
-              {t('wu.handedOver', { agent: handoff.agent })}
-            </p>
-          )}
+        <SetupStepBlock
+          testId="worker-update"
+          steps={steps}
+          failedId={failed}
+          onFix={finished && !finished.ok ? () => void giveToAgent(finished) : undefined}
+          fixing={handoff.kind === 'busy'}
+          handed={handoff.kind === 'sent' ? t('wu.handedOver', { agent: handoff.agent }) : null}
+          onRetry={finished && !finished.ok ? () => void start() : undefined}
+          done={finished?.ok ? t('wu.done') : null}
+        >
           {handoff.kind === 'copy' && (
-            <>
-              <p data-testid="worker-update-copy-note">{handoff.failed ? t('wu.handFailed') : t('wu.noAgent')}</p>
+            <div data-testid="worker-update-copy-note">
+              <p>{handoff.failed ? t('wu.handFailed') : t('wu.noAgent')}</p>
               <Btn
                 small
                 onClick={() => {
@@ -163,9 +146,9 @@ export function WorkerUpdateButton({
               >
                 {copied ? t('wu.copied') : t('wu.copyNote')}
               </Btn>
-            </>
+            </div>
           )}
-        </div>
+        </SetupStepBlock>
       )}
     </div>
   );

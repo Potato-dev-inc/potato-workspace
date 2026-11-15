@@ -12,7 +12,7 @@ export const settingsModelBridge = {
   "modelBridge.addedTo": "Added to {path}",
   "modelBridge.setFirst": "If you start Codex yourself, set this first (paste your key where it says so):",
   "modelBridge.copyVar": "Copy variable line",
-  "modelBridge.doneNote": "Panes that Potato Workspace starts get the key by themselves. In a Codex you start yourself, set the variable first.",
+  "modelBridge.doneNote": "Agents that Potato Workspace starts get the key by themselves. In a Codex you start yourself, set the variable first.",
   "modelBridge.connect": "Connect a model service",
   "modelBridge.serviceName": "Service name",
   "modelBridge.myService": "My service",

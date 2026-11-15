@@ -9,6 +9,7 @@
 // This file imports the catalog, so the entry route in `settings-entry.ts` (read by main.tsx) does not.
 import { LABS_INDEX_ID } from '../components/settings/arrange';
 import { SECTIONS } from '../components/settings/catalog';
+import { LABS_SWITCH_KEYS } from '../components/settings/labs-areas';
 import { findRowSection, type SettingsPageId } from '../components/settings/model';
 import { DEFAULT_SETTINGS_TAB, resolveSettingsTab } from './settings-entry';
 
@@ -36,7 +37,8 @@ const ROW_ALIASES: Record<string, string> = {
 export function resolveSettingsTarget(tab: string | null | undefined): SettingsTarget | null {
   if (!tab) return null;
   const direct = resolveSettingsTab(tab);
-  const rowId = ROW_ALIASES[tab] ?? tab;
+  // A plain on/off early feature has no row of its own: its switch is on the Labs page.
+  const rowId = ROW_ALIASES[tab] ?? (LABS_SWITCH_KEYS[tab] ? LABS_INDEX_ID : tab);
   const section = findRowSection(SECTIONS, rowId);
   // A section id wins over a row that happens to share its name.
   if (section && !(direct && direct === tab)) return { page: section.id, row: rowId };

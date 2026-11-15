@@ -112,7 +112,6 @@ export function MineRow({ item, teamSize, onSuggest, onSuggestInstall }: { item:
           type="button"
           className="ck-btn ck-btn--secondary"
           aria-disabled={blocked ? 'true' : undefined}
-          title={blocked ? (item.reason ?? undefined) : undefined}
           aria-describedby={blocked ? reasonId : undefined}
           onClick={blocked ? () => setAsked(true) : onSuggest}
         >
