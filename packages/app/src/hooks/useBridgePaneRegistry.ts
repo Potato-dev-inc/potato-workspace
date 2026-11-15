@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import type { PaneInfo } from '@potato-workspace/shared';
-import { PaneStreamManager } from '../terminal';
+import { PaneStreamManager } from '../terminal/pane-stream';
 import type { PaneDataListener, PaneDataSubscriber, PaneResizeListener } from '../terminal/types';
 import type { BridgeClient } from '../lib/bridge';
 import { makePaneTunnelTransport } from '../lib/pane-tunnel';

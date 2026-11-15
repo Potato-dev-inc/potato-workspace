@@ -46,6 +46,10 @@ pub struct StandbyHelper {
     /// Old files have none.
     #[serde(default)]
     pub home: Option<String>,
+    /// "Remove from the agent": the helper is no longer a standby of any agent. It keeps running as a free warm agent that
+    /// any agent's task of its type may use, until the person makes it a standby again or closes it.
+    #[serde(default)]
+    pub warm: bool,
 }
 
 /// What the person typed in the form.
@@ -123,7 +127,7 @@ impl HelperStore {
         if project.is_empty() {
             return Err("Pick a project folder.".into());
         }
-        let helper = StandbyHelper { id, name, agent, model: input.model.map(|m| m.trim().to_string()).filter(|m| !m.is_empty()), project, after_task: input.after_task, home: tidy_home(input.home) };
+        let helper = StandbyHelper { id, name, agent, model: input.model.map(|m| m.trim().to_string()).filter(|m| !m.is_empty()), project, after_task: input.after_task, home: tidy_home(input.home), warm: false };
         self.helpers.push(helper.clone());
         Ok(helper)
     }
@@ -132,6 +136,18 @@ impl HelperStore {
     pub fn set_home(&mut self, id: &str, home: Option<String>) -> Result<(), String> {
         let helper = self.helpers.iter_mut().find(|h| h.id == id).ok_or("That standby is gone.")?;
         helper.home = tidy_home(home);
+        // Under an agent again: a standby, not a free warm agent.
+        if helper.home.is_some() {
+            helper.warm = false;
+        }
+        Ok(())
+    }
+
+    /// "Remove from the agent": the helper stays (and keeps running) but belongs to no agent.
+    pub fn detach(&mut self, id: &str) -> Result<(), String> {
+        let helper = self.helpers.iter_mut().find(|h| h.id == id).ok_or("That standby is gone.")?;
+        helper.home = None;
+        helper.warm = true;
         Ok(())
     }
 
@@ -250,7 +266,8 @@ pub struct HelperEntry {
     pub home: Option<String>,
     /// Who has it while `busy`: `agent` (an agent's task) or `person` (the person is using it).
     pub used_by: Option<HelperUser>,
-    /// An agent took it over while the person was using it.
+    /// Always false: an agent never takes a standby away from the person any more (a seat with a turn running in it is
+    /// never taken). Kept so older screens read the same shape.
     pub taken_over: bool,
     /// `ready`, `busy`, `starting`, `asleep` or `problem`.
     pub state: HelperState,
@@ -260,8 +277,14 @@ pub struct HelperEntry {
     pub pane_id: Option<String>,
     /// The chat the person has open on it, while `ready` or `busy` by `person` (opening it does not take it from the pool).
     pub open_pane: Option<String>,
-    /// While `taken_over`: the person's chat, whose turn was stopped. It stays as a plain chat.
+    /// Always `None` (see `taken_over`).
     pub person_pane: Option<String>,
+    /// A free warm agent (it was removed from its agent and keeps running).
+    pub warm: bool,
+    /// While `starting`: where the start is (`starting program`, `connecting`, `opening session`, `setting model`).
+    pub stage: Option<String>,
+    /// How long the start has been at that stage, in milliseconds.
+    pub stage_ms: Option<i64>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
@@ -293,12 +316,15 @@ pub fn build_view(store: &HelperStore, statuses: &BTreeMap<String, HelperStatus>
                 after_task: h.after_task,
                 home: h.home.clone(),
                 used_by: status.used_by,
-                taken_over: status.taken_over,
+                taken_over: false,
                 state: status.state,
                 note: status.note,
                 pane_id: status.pane_id,
                 open_pane: status.open_pane,
-                person_pane: status.person_pane,
+                person_pane: None,
+                warm: h.warm,
+                stage: status.stage,
+                stage_ms: status.stage_since_ms.map(|since| (crate::event_log::now_ms() - since).max(0)),
             }
         })
         .collect();

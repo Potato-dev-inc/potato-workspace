@@ -13,6 +13,7 @@ export const DEFAULT_SETTINGS: Settings = {
   developer_use_rust_mcp: false,
   confirm_close_running_pane: true,
   keep_awake_while_working: true,
+  helper_answers_enabled: true,
   show_usage_bar: true,
   usage_login_reads: true,
   checkpoints_enabled: true,

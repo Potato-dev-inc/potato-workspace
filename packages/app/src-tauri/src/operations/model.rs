@@ -468,6 +468,10 @@ pub struct WorkerPersist {
     /// Absent until the turn finishes, and on runs that are not read-only.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub read_only_proof: Option<crate::agent_runs::tree_proof::ReadOnlyProof>,
+    /// Files that changed in the folder while the newest turn ran (git, start to end), set when the turn
+    /// finishes. The app builds the structured result from this (`agent_runs::structured`).
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub changed_files: Vec<String>,
 }
 
 impl OperationSnapshot {

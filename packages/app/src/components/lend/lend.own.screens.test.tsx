@@ -12,6 +12,8 @@ import { click, settle } from '../settings/test-utils';
 import { RequestUsage } from './RequestUsage';
 
 vi.mock('@tauri-apps/api/event', () => ({ listen: vi.fn(async () => () => {}) }));
+const openSettingsAt = vi.fn();
+vi.mock('../../lib/openSettingsAt', () => ({ openSettingsAt: (...a: unknown[]) => openSettingsAt(...a) }));
 
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 (globalThis as { ResizeObserver?: unknown }).ResizeObserver ??= class {
@@ -55,7 +57,7 @@ describe('Request usage: my other PCs are the Devices list', () => {
     const group = sheet.querySelector('optgroup')!;
     expect(group.label).toBe('My PCs');
     expect([...group.querySelectorAll('option')].map((o) => o.textContent)).toEqual(['Mac mini']);
-    const lines = [...sheet.querySelectorAll('[data-testid="lend-turn-on"]')].map((p) => p.textContent);
+    const lines = [...sheet.querySelectorAll('[data-testid="lend-turn-on"] .lend-note')].map((p) => p.textContent);
     expect(lines).toEqual(['Turn on Borrow my agent sign-ins on Work laptop.']);
     // An own PC has no offers list and no "did not answer" note: the agent picker is there at once.
     expect(sheet.querySelector('[data-testid="lend-no-answer"]')).toBeNull();
@@ -76,6 +78,18 @@ describe('Request usage: my other PCs are the Devices list', () => {
     expect(sheet.textContent).toContain('Turn on Borrow my agent sign-ins on Mac mini.');
     const ask = [...sheet.querySelectorAll('button')].find((b) => b.textContent === 'Ask') as HTMLButtonElement;
     expect(ask.disabled).toBe(true);
+  });
+
+  it('a PC that does not let me borrow yet says why and has a button to its Devices page (not a dead form)', async () => {
+    openSettingsAt.mockClear();
+    const fake = new DevicesFake({ enabled: true, devices: [{ ...MAC_MINI, lets_lend: false }] });
+    await mount(fake);
+    const sheet = document.querySelector<HTMLElement>('.lend-sheet')!;
+    const open = [...sheet.querySelectorAll('[data-testid="lend-turn-on"] button')].find((b) => b.textContent === 'Open Devices')!;
+    expect(open).toBeTruthy();
+    await click(open);
+    expect(openSettingsAt).toHaveBeenCalledWith('devices');
+    expect(document.querySelector('.lend-sheet')).toBeNull();
   });
 
   it('with Devices off there are no device rows at all', async () => {

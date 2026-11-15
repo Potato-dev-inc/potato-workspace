@@ -3,7 +3,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, describe, expect, it } from 'vitest';
 import { BRIDGE_PORT_FILE_ENV } from './protocol.js';
-import { isLoopbackHost, parseBridgePort, readAllBridgePorts } from './bridge-port.js';
+import { isLoopbackHost, parseBridgePort, readAllBridgePorts, readLocalSecretHeaders } from './bridge-port.js';
 
 describe('bridge port discovery', () => {
   const dirs: string[] = [];
@@ -46,6 +46,27 @@ describe('bridge port discovery', () => {
     } finally {
       process.chdir(prevCwd);
       if (prevEnv !== undefined) process.env[BRIDGE_PORT_FILE_ENV] = prevEnv;
+    }
+  });
+
+  it('sends the pane id from the shell environment so the bridge treats the call as that agent', async () => {
+    const dir = await mkdtemp(join(tmpdir(), 'pm-bridge-port-'));
+    dirs.push(dir);
+    const file = join(dir, 'potato-workspace.bridge.port');
+    await writeFile(file, '127.0.0.1:17321');
+    await writeFile(join(dir, 'potato-workspace.bridge.secret'), 'abc123');
+    const before = process.env.POTATO_WORKSPACE_PANE_ID;
+    try {
+      process.env.POTATO_WORKSPACE_PANE_ID = 'pane-7';
+      expect(await readLocalSecretHeaders(file)).toEqual({
+        'X-Potato-Workspace-Local-Secret': 'abc123',
+        'X-Potato-Workspace-Pane': 'pane-7',
+      });
+      delete process.env.POTATO_WORKSPACE_PANE_ID;
+      expect(await readLocalSecretHeaders(file)).toEqual({ 'X-Potato-Workspace-Local-Secret': 'abc123' });
+    } finally {
+      if (before === undefined) delete process.env.POTATO_WORKSPACE_PANE_ID;
+      else process.env.POTATO_WORKSPACE_PANE_ID = before;
     }
   });
 });

@@ -62,6 +62,8 @@ pub struct LocalItem {
     pub agents: Vec<AgentRef>,
     /// Where it was found: `toolbelt`, `agent` (an agent's own config) or `skills`.
     pub source: &'static str,
+    /// A tool that cannot be sent as it is but has a public install line (no folder of this PC in it).
+    pub install: Option<ShelfItem>,
 }
 
 #[derive(Debug, Clone, Serialize, PartialEq)]
@@ -102,12 +104,38 @@ fn agents_with_key(env: &Env, key: &str) -> Vec<AgentRef> {
     out
 }
 
+/// The app's own entries in an agent's config (the release and the dev build): not the person's tools, never listed.
+fn is_own_entry(name: &str) -> bool {
+    let key = super::model::slug(name);
+    let own = crate::agent_pack::custom::ENTRY_KEY;
+    key == own || key.starts_with(&format!("{own}-"))
+}
+
+/// The whole command or address of a tool, so two entries that run the same thing compare equal (secret values do not count).
+fn same_of(server: &ToolServer) -> String {
+    let mut s = format!("{}|{:?}|{}|{}|{}", server.name.trim().to_lowercase(), server.transport, server.command.as_deref().unwrap_or(""), server.args.join("\u{1f}"), server.url.as_deref().unwrap_or(""));
+    s.push('|');
+    s.push_str(&server.env.keys().cloned().collect::<Vec<_>>().join(","));
+    s.push('|');
+    s.push_str(&server.headers.keys().cloned().collect::<Vec<_>>().join(","));
+    s
+}
+
 fn push_item(out: &mut Vec<LocalItem>, name: String, kind: &'static str, source: &'static str, item: Result<ShelfItem, String>, agents: Vec<AgentRef>) {
+    push_with(out, name, kind, source, item, agents, None, String::new());
+}
+
+#[allow(clippy::too_many_arguments)]
+fn push_with(out: &mut Vec<LocalItem>, name: String, kind: &'static str, source: &'static str, item: Result<ShelfItem, String>, agents: Vec<AgentRef>, install: Option<ShelfItem>, same: String) {
+    use sha2::{Digest, Sha256};
     let id = match &item {
         Ok(i) => item_id(i),
-        Err(_) => format!("local-{kind}-{}", super::model::slug(&name)),
+        Err(_) => {
+            let tag: String = Sha256::digest(same.as_bytes()).iter().take(4).map(|b| format!("{b:02x}")).collect();
+            format!("local-{kind}-{}-{tag}", super::model::slug(&name))
+        }
     };
-    if let Some(found) = out.iter_mut().find(|l| l.id == id && l.item.is_ok()) {
+    if let Some(found) = out.iter_mut().find(|l| l.id == id) {
         for a in agents {
             if !found.agents.contains(&a) {
                 found.agents.push(a);
@@ -115,7 +143,7 @@ fn push_item(out: &mut Vec<LocalItem>, name: String, kind: &'static str, source:
         }
         return;
     }
-    out.push(LocalItem { id, item, name, kind, agents, source });
+    out.push(LocalItem { id, item, name, kind, agents, source, install });
 }
 
 fn first_line_value(text: &str, key: &str) -> Option<String> {
@@ -193,13 +221,21 @@ fn scan_skills(env: &Env, out: &mut Vec<LocalItem>) {
 pub fn scan(env: &Env) -> Vec<LocalItem> {
     let mut out: Vec<LocalItem> = Vec::new();
     let servers: Vec<ToolServer> = store::load_servers(&env.store_path).unwrap_or_default();
+    let push_tool = |out: &mut Vec<LocalItem>, s: &ToolServer, source: &'static str, agents: Vec<AgentRef>| {
+        if is_own_entry(&s.name) {
+            return;
+        }
+        let item = export::tool_item(s, &env.home);
+        let install = if item.is_err() { export::install_item(s, &env.home) } else { None };
+        push_with(out, s.name.clone(), "tool", source, item, agents, install, same_of(s));
+    };
     for s in &servers {
         let agents = agents_with_key(env, &format!("{KEY_PREFIX}{}", s.id));
-        push_item(&mut out, s.name.clone(), "tool", "toolbelt", export::tool_item(s, &env.home), agents);
+        push_tool(&mut out, s, "toolbelt", agents);
     }
     let hosts = env.hosts();
     for (_reference, agents, server, _already) in import::scan(&hosts, &env.sync_options(), &servers) {
-        push_item(&mut out, server.name.clone(), "tool", "agent", export::tool_item(&server, &env.home), agents);
+        push_tool(&mut out, &server, "agent", agents);
     }
     scan_skills(env, &mut out);
     out

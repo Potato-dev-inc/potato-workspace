@@ -8,7 +8,7 @@ import { ShelfSuggestSheet } from './ShelfSuggestSheet';
 import { kindMatches, SHELF_FILTERS, subjectOfCard, subjectOfRecommended, type AddSubject, type ShelfFilter } from './shelf-model';
 import type { ShelfHandle } from './useShelf';
 
-type Sheet = { kind: 'suggest'; item: MineView } | { kind: 'add'; subject: AddSubject } | null;
+type Sheet = { kind: 'suggest'; item: MineView; installLine?: string } | { kind: 'add'; subject: AddSubject } | null;
 
 /**
  * Shelf: the skills and tools this PC has, what teammates suggest, and what the team recommends. Adding is always
@@ -65,7 +65,7 @@ export function ShelfTab({ shelf, api }: { shelf: ShelfHandle; api: ShelfApi }) 
         </p>
       )}
       <div ref={sheetRef}>
-        {sheet?.kind === 'suggest' && <ShelfSuggestSheet key={sheet.item.id} item={sheet.item} people={state.people} api={api} onClose={close} onSent={reload} />}
+        {sheet?.kind === 'suggest' && <ShelfSuggestSheet key={sheet.item.id} item={sheet.item} installLine={sheet.installLine} people={state.people} api={api} onClose={close} onSent={reload} />}
         {sheet?.kind === 'add' && <ShelfAddSheet key={sheet.subject.cardId} subject={sheet.subject} targets={state.targets} api={api} onClose={close} onChanged={reload} />}
       </div>
 
@@ -100,7 +100,14 @@ export function ShelfTab({ shelf, api }: { shelf: ShelfHandle; api: ShelfApi }) 
         ) : (
           <ul className="ib-list tpg-shelf-list">
             {mine.map((m) => (
-              <MineRow key={m.id} item={m} teamSize={state.teamSize} onSuggest={() => setSheet({ kind: 'suggest', item: m })} />
+              <MineRow
+                key={m.id}
+                item={m}
+                teamSize={state.teamSize}
+                onSuggest={() => setSheet({ kind: 'suggest', item: m })}
+                // The install line has its own id: that is what is sent, never the tool that runs from a folder here.
+                onSuggestInstall={m.install ? () => setSheet({ kind: 'suggest', item: { ...m, id: m.install!.id }, installLine: m.install!.shown }) : undefined}
+              />
             ))}
           </ul>
         )}

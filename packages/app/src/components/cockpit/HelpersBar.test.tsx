@@ -135,7 +135,7 @@ describe('helpers bar', () => {
     await show(api(LIST));
     await act(async () => void chip('h3').dispatchEvent(new MouseEvent('contextmenu', { bubbles: true, cancelable: true, clientX: 40, clientY: 30 })));
     const items = [...host.querySelectorAll('[data-testid="helpers-menu"] [role="menuitem"]')];
-    expect(items.map((i) => i.textContent)).toEqual(['Open beside', 'Rename', 'Stop this helper', 'Keep on standby']);
+    expect(items.map((i) => i.textContent)).toEqual(['Open beside', 'Rename', 'Stop this helper', 'Keep as standby']);
     await act(async () => (items[0] as HTMLButtonElement).click());
     expect(onOpenBeside).toHaveBeenCalledWith('h3');
     expect(host.querySelector('[data-testid="helpers-menu"]')).toBeNull();
@@ -268,16 +268,16 @@ describe('helpers bar: making standbys', () => {
     expect([...host.querySelectorAll('[data-testid="standby-chip"]')].map((e) => e.textContent)).toEqual([expect.stringContaining('Reviewer')]);
   });
 
-  it('a finished helper offers "Keep on standby" in its menu', async () => {
+  it('a finished helper offers "Keep as standby" in its menu', async () => {
     await show(api(LIST));
     await act(async () => {
       chip('h3').dispatchEvent(new MouseEvent('contextmenu', { bubbles: true, clientX: 5, clientY: 5 }));
     });
-    expect([...host.querySelectorAll('[role="menuitem"]')].map((e) => e.textContent)).toContain('Keep on standby');
+    expect([...host.querySelectorAll('[role="menuitem"]')].map((e) => e.textContent)).toContain('Keep as standby');
     await act(async () => {
       chip('h1').dispatchEvent(new MouseEvent('contextmenu', { bubbles: true, clientX: 5, clientY: 5 }));
     });
-    expect([...host.querySelectorAll('[role="menuitem"]')].map((e) => e.textContent)).not.toContain('Keep on standby');
+    expect([...host.querySelectorAll('[role="menuitem"]')].map((e) => e.textContent)).not.toContain('Keep as standby');
   });
 });
 

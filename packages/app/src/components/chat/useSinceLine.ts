@@ -1,5 +1,6 @@
 // "New since you looked", for one chat: decides once (when the chat first has turns) whether there is a line to show,
-// opens the chat at it, and drops it when the reader reaches the end. Used by the desktop chat and the phone chat.
+// and drops it when the reader reaches the end. The chat itself opens at its latest message (SessionChatView pins it);
+// the line is a marker above the first new turn. Used by the desktop chat and the phone chat.
 // With everything already in view there is nothing to jump over, so no line. The moment of the last look is kept per
 // chat while the reader is at its end (see lib/chatSince.ts).
 import { useEffect, useLayoutEffect, useMemo, useRef, useState, type RefObject } from 'react';
@@ -35,18 +36,12 @@ export function useSinceLine(opts: { chatId: string | null | undefined; turns: r
     const el = scrollRef.current;
     const fits = !el || el.scrollHeight - el.clientHeight <= SINCE_AT_BOTTOM_PX;
     if (report && !fits) {
-      atBottom.current = false;
       shownAt.current = Date.now();
       setSince('show');
     } else {
       setSince('none');
     }
-  }, [since, ready, turns, report, scrollRef, atBottom]);
-
-  // Open at the line.
-  useLayoutEffect(() => {
-    if (since === 'show') scrollRef.current?.querySelector('[data-since]')?.scrollIntoView?.({ block: 'start' });
-  }, [since, scrollRef]);
+  }, [since, ready, turns, report, scrollRef]);
 
   const lastWrite = useRef(0);
   const keepSeen = (force: boolean) => {

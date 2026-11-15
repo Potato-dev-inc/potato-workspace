@@ -16,6 +16,13 @@
 //! health panel; the request is still allowed. Enforcing comes once every client sends it
 //! (roadmap 1-18).
 //!
+//! Why it stays log-only (decided 2026-11-16, `agent_authority::shell_gate`): an agent in a pane runs as
+//! the same user and can read the secret file as easily as the CLI, so enforcing it would not tell an
+//! agent from the app. Agent calls are told apart by the connection itself (the OS names the process
+//! behind the socket and the process table places it in a pane) and need the person's Allow for any
+//! change. The secret would only keep out other users and sandboxed code, and a wrong enforcement would
+//! lock out older CLIs and shims; so it is not enforced.
+//!
 //! Only GENUINE local callers are counted: a request that came through the PWA proxy, the Vite
 //! proxy or a tunnel (any forwarder header, a foreign `Host` or `Origin`) is a Device or Public
 //! caller by design and is never "local without the key" (`requires_pairing_token`). The log line is

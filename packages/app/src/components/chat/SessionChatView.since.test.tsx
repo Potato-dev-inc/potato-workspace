@@ -13,7 +13,6 @@ import { SessionChatView } from './SessionChatView';
 
 let host: HTMLDivElement;
 let root: Root;
-let scrollTops: number;
 
 /** jsdom has no layout: say how tall the conversation is and how much of it is in view. */
 function layout(scrollHeight: number, clientHeight: number) {
@@ -25,10 +24,6 @@ beforeEach(() => {
   vi.useFakeTimers({ toFake: ['Date'] });
   setLanguagePref('en', false);
   localStorage.clear();
-  scrollTops = 0;
-  Element.prototype.scrollIntoView = function () {
-    scrollTops += 1;
-  };
   host = document.createElement('div');
   document.body.appendChild(host);
   root = createRoot(host);
@@ -58,15 +53,16 @@ const render = () =>
 const body = () => host.querySelector<HTMLElement>('.ck-chat-body')!;
 
 describe('New since you looked', () => {
-  it('shows the line with the counts above the first new turn, and a Jump to latest button', () => {
+  it('shows the line with the counts above the first new turn, and opens at the latest message', () => {
     layout(2000, 400);
     writeSeen('p-since', looked);
     render();
     const line = host.querySelector('[data-testid="since-line"]')!;
     expect(line.textContent).toBe('New since you looked · 1 answer · 1 file changed');
     expect(line.nextElementSibling?.getAttribute('data-turn-id')).toBe('u2');
-    expect(host.querySelector('[data-testid="jump-latest"]')).not.toBeNull();
-    expect(scrollTops).toBeGreaterThan(0);
+    expect(body().scrollTop).toBe(2000);
+    // At the end there is nothing to jump to: the button shows once the reader is above the end.
+    expect(host.querySelector('[data-testid="jump-latest"]')).toBeNull();
   });
 
   it('goes when the reader reaches the end, and the moment is kept', () => {
@@ -89,6 +85,8 @@ describe('New since you looked', () => {
     layout(2000, 400);
     writeSeen('p-since', looked);
     render();
+    body().scrollTop = 0;
+    act(() => void body().dispatchEvent(new Event('scroll')));
     act(() => void host.querySelector<HTMLButtonElement>('[data-testid="jump-latest"]')!.click());
     expect(host.querySelector('[data-testid="since-line"]')).toBeNull();
     expect(body().scrollTop).toBe(2000);

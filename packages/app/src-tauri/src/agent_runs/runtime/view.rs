@@ -217,14 +217,19 @@ impl From<OperationSnapshot> for AgentRunView {
                     result: if same_turn { receipt.result } else { None },
                 })
             });
-        let structured_result = if snapshot.status.terminal() {
-            snapshot.result.as_deref().and_then(crate::agent_runs::structured::parse)
+        // The result the app builds from facts (reply, files changed per git, commands, open questions).
+        // Terminal lane: no command events are recorded, so `checks_run` is empty.
+        let structured_result = if snapshot.status == OperationStatus::Completed {
+            Some(crate::agent_runs::structured::build(
+                snapshot.result.as_deref(),
+                &snapshot.worker.changed_files,
+                &[],
+                &[],
+            ))
         } else {
             None
         };
-        let result_capture: String = if structured_result.is_some() {
-            "structured".into()
-        } else if snapshot.status.terminal() {
+        let result_capture: String = if snapshot.status.terminal() {
             match snapshot.result_capture {
                 Some(ResultCapture::Authoritative) => "authoritative".into(),
                 Some(ResultCapture::Inferred) => "inferred".into(),

@@ -188,11 +188,15 @@ fn chat_start_records_its_stages() {
     let stages = crate::startup_timing::stages(&pane);
     let names: Vec<&str> = stages.iter().map(|(name, _)| name.as_str()).collect();
     // No warm session is set up in this test, so the claim is a miss; a hit would also be a valid start.
-    assert_eq!(names.len(), 4, "{names:?}");
-    assert_eq!(names[0], "chat_start_begin");
-    assert!(names[1] == "chat_warm_miss" || names[1] == "chat_warm_hit", "{names:?}");
-    assert_eq!(names[2], "chat_pane_registered");
-    assert_eq!(names[3], "chat_session_ready");
+    let warm = names.get(1).copied().unwrap_or("");
+    assert!(warm == "chat_warm_miss" || warm == "chat_warm_hit", "{names:?}");
+    // The real stage order, as `start_in` marks it: the pane is built and registered before the session is ready,
+    // and the settings and the pane being shown come last.
+    assert_eq!(
+        names,
+        vec!["chat_start_begin", warm, "chat_pane_registered", "chat_session_ready", "chat_settings_applied", "chat_pane_shown"],
+        "{names:?}"
+    );
     assert!(stages.windows(2).all(|pair| pair[0].1 <= pair[1].1), "elapsed times go up: {stages:?}");
     chat.retire();
     let _ = std::fs::remove_dir_all(&dir);

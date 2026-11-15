@@ -372,6 +372,7 @@ export const tauri = {
       changeHome: 'home' in patch,
     }),
   standbyHelperRemove: (id: string) => safeInvoke<StandbyHelpersView | null>('standby_helper_remove', { id }),
+  standbyHelperDetach: (id: string) => safeInvoke<StandbyHelpersView | null>('standby_helper_detach', { id }),
   standbyHelperOpen: (id: string) => safeInvoke<string | null>('standby_helper_open', { id }, null),
   standbyHelperTakeBack: (id: string) => safeInvoke<StandbyHelpersView | null>('standby_helper_take_back', { id }),
   standbyHelperStart: (id: string) => safeInvoke<StandbyHelpersView | null>('standby_helper_start', { id }, null, true),

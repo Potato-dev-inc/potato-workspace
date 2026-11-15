@@ -615,6 +615,10 @@ impl Mapper {
                 let out = self.exited(exit, now, at);
                 self.note(out)
             }
+            SessionEvent::AutoRestarted => {
+                let line = self.notice("restarted", "The agent stopped, so it was restarted once.".into(), at);
+                self.note(vec![line])
+            }
             SessionEvent::Snapshot(_)
             | SessionEvent::HistoryLost(_)
             | SessionEvent::UpdateUnparsed { .. }
@@ -979,7 +983,7 @@ impl Mapper {
             ExitKind::Crashed => match exit.code {
                 // A "clean" exit in the middle of a turn is not a finished answer: say what the agent last said.
                 Some(0) => ending::quit_with_words(&exit.stderr_tail).unwrap_or_else(|| "The agent stopped unexpectedly.".to_string()),
-                Some(code) => format!("The agent stopped unexpectedly (exit code {code})."),
+                Some(code) => ending::crash_with_words(&exit.stderr_tail, code),
                 None => "The agent stopped unexpectedly.".to_string(),
             },
             ExitKind::Hung => "The agent stopped answering and was stopped.".to_string(),

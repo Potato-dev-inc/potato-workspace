@@ -37,7 +37,14 @@ const flat = (text: string) => text.replace(/\s+/g, '');
 const root = () => roots[0];
 const q = <T extends Element = HTMLElement>(sel: string) => root().querySelector<T>(sel);
 const btn = (label: string) => [...root().querySelectorAll('button')].find((b) => b.getAttribute('aria-label') === label) as HTMLButtonElement;
-const click = (el: Element) => el.dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true, clientX: 0, clientY: 100 }));
+const click = (el: Element) => el.dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true, composed: true, clientX: 0, clientY: 100 }));
+/** A real mouse click: composed, so it leaves the bar's shadow root and reaches the page's document listeners first. */
+const press = (el: Element) => {
+  for (const type of ['pointerdown', 'mousedown', 'pointerup', 'mouseup', 'click']) {
+    const Ctor = type.startsWith('pointer') && typeof PointerEvent !== 'undefined' ? PointerEvent : MouseEvent;
+    el.dispatchEvent(new Ctor(type, { bubbles: true, cancelable: true, composed: true, clientX: 60, clientY: 170, button: 0 }));
+  }
+};
 const events = (api: Api) => JSON.parse(api.take() ?? '[]') as Array<Record<string, unknown>>;
 
 beforeEach(() => {
@@ -104,6 +111,35 @@ describe('where it lives', () => {
     const first = api.take();
     expect(typeof first).toBe('string');
     expect(api.take()).toBeNull();
+  });
+});
+
+describe('a real mouse press on the bar', () => {
+  // Regression: the document's capture listeners held every press back from the page, the bar's own buttons included,
+  // so no button of the bar ever ran (the older tests used a non-composed click, which never reaches the document).
+  it('switches tools, opens the colour menu and closes the bar', () => {
+    const { api } = load();
+    open(api);
+    press(btn('pen'));
+    expect(btn('pen').getAttribute('aria-pressed')).toBe('true');
+    press(btn('text'));
+    expect(btn('text').getAttribute('aria-pressed')).toBe('true');
+    press(btn('select'));
+    expect(btn('select').getAttribute('aria-pressed')).toBe('true');
+    press(btn('colour'));
+    expect(q('[role="menu"]')).not.toBeNull();
+    press(btn('close'));
+    expect(events(api).map((e) => e.kind)).toContain('close');
+  });
+
+  it('a press on the bar never reaches the page button under it', () => {
+    const { api } = load();
+    open(api);
+    let pageRan = false;
+    document.getElementById('buy')!.addEventListener('click', () => (pageRan = true));
+    press(btn('pen'));
+    expect(pageRan).toBe(false);
+    expect(btn('pen').getAttribute('aria-pressed')).toBe('true');
   });
 });
 

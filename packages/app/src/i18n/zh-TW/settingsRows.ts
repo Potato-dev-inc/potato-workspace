@@ -12,6 +12,7 @@ export const settingsRows: Partial<Record<EnglishKey, string>> = {
   'settings.row.preload.hint': '讓 AI 助理先啟動並待命，開啟窗格時就像瞬間完成。',
   'settings.row.agent-default-models.hint': '每個 AI 助理預設使用的模型，除非你啟動時另外選擇。',
   'settings.row.show-terminals.hint': '關閉時，AI 助理一律以對話開啟。已開啟的終端機仍會繼續運作。',
+  'settings.row.helper-answers.hint': '開啟時，小幫手想做小事時，啟動它的 AI 助理可以代為答應一次，或拒絕。範圍較大或有風險的事（一律允許、刪除、推送、專案以外）仍會交給你決定。',
   'settings.row.agent-lane.hint': '幫手能用對話就用對話，否則用終端機。',
   'settings.row.chat-addons.hint': '每個 AI 助理以對話方式執行所需的小元件。可以在這裡安裝或移除。',
   'settings.row.hidden-agents.hint': '把你從不使用的 AI 助理從「新增 AI 助理」選單中隱藏。',

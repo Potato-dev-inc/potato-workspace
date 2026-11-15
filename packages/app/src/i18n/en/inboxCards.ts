@@ -39,6 +39,7 @@ export const inboxCards = {
   'inboxCards.consent.notStarted': 'It did not start this pane.',
   'inboxCards.consent.wantsToAnswer': 'It wants to answer: "{asked}".',
   'inboxCards.consent.controlTitle': 'Allow {who} to control {target}?',
+  'inboxCards.consent.changeTitle': 'Allow {who} to change {target}?',
   'inboxCards.consent.answerTitle': 'Allow {who} to answer a question in {target}?',
   'inboxCards.consent.thatWindow': 'that window',
   'inboxCards.consent.deny': 'Deny',

@@ -72,6 +72,8 @@ where
                 })
             });
             crate::agent_runs::tree_proof::begin(id, std::path::Path::new(peek.work_dir()), peek.read_only, others_active);
+            // The facts for this turn's result: how the folder looks now (`agent_runs::structured`).
+            crate::agent_runs::structured::begin(id, std::path::Path::new(peek.work_dir()));
         }
     }
     {

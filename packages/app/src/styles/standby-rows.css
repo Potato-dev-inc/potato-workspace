@@ -196,3 +196,40 @@
   opacity: 0.45;
   cursor: default;
 }
+
+/* The orange "standby" tag: a standby is a helper kept ready for an agent; a normal helper has none. */
+.cockpit .ck-sb-tag {
+  flex: none;
+  margin-left: 6px;
+  padding: 0 5px;
+  border-radius: 4px;
+  font-size: 10px;
+  line-height: 15px;
+  color: var(--accent);
+  background: var(--accent-soft);
+  border: 1px solid var(--accent-line);
+}
+/* Warm agents: one quiet line at the bottom of the sidebar, folded until it is opened. */
+.cockpit .ck-sb-warm {
+  padding: 2px 8px 4px;
+}
+.cockpit .ck-sb-warm-line {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  width: 100%;
+  padding: 3px 4px;
+  border: 0;
+  background: transparent;
+  color: var(--label-2);
+  font-size: 11px;
+  cursor: pointer;
+  text-align: left;
+}
+.cockpit .ck-sb-warm-line:hover {
+  color: var(--label);
+}
+.cockpit .ck-sb-warm-list {
+  display: flex;
+  flex-direction: column;
+}

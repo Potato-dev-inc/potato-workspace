@@ -154,11 +154,13 @@ export interface NewAgentPageProps {
   onSetUp?: () => void;
   /** "Continue where you left off": the chats that were open last time. Absent: no card. */
   continueYesterday?: Omit<ContinueYesterdayProps, 'onFresh'>;
+  /** Drawn first in the composer row, before the project pill (the Where pill, with Labs Devices on). */
+  leading?: ReactNode;
 }
 
 type Menu = 'plus' | 'folder' | 'agent' | null;
 
-export function NewAgentPage({ agents, panes, needs, selectedCwd = null, project = null, runningFolders = [], api = tauriNewAgentApi, addonApi = tauriAcpAddonApi, modelApi = tauriModelOptionsApi, defaultsApi = tauriAgentDefaultsApi, rulesApi = tauriAgentRulesApi, onSignIn, onStart, onOpenPane, onSetUp, continueYesterday }: NewAgentPageProps) {
+export function NewAgentPage({ agents, panes, needs, selectedCwd = null, project = null, runningFolders = [], api = tauriNewAgentApi, addonApi = tauriAcpAddonApi, modelApi = tauriModelOptionsApi, defaultsApi = tauriAgentDefaultsApi, rulesApi = tauriAgentRulesApi, onSignIn, onStart, onOpenPane, onSetUp, continueYesterday, leading = null }: NewAgentPageProps) {
   const t = useT();
   const [prompt, setPrompt] = useState('');
   const [exampleIdx, setExampleIdx] = useState(0);
@@ -519,6 +521,8 @@ export function NewAgentPage({ agents, panes, needs, selectedCwd = null, project
                   </>
                 )}
               </Pop>
+
+              {leading}
 
               <Pop
                 id="folder"

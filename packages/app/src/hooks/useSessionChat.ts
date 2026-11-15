@@ -3,6 +3,7 @@
 import { errorSentence } from '../lib/sayError';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { chatEarlier } from '../lib/chatMore';
+import { clearChatTiming, finishChatOpen, markChat } from '../lib/chatTiming';
 import { useEarlier, type EarlierState } from './useEarlier';
 import {
   closeSessionChat,
@@ -69,10 +70,19 @@ export function useSessionChat(paneId: string, enabled: boolean): SessionChatHoo
     let unlistenSource: (() => void) | null = null;
     setItems([]);
     setStatus(LOADING);
+    // Timing marks are per open: the last open's are cleared, and only this open's first item batch (before the
+    // snapshot lands) is marked. `opening` ends with the snapshot, so no mark is left behind after the open.
+    clearChatTiming();
+    markChat('view:open');
+    let opening = true;
 
     // Subscribe before opening, so no batch that arrives while the open is in flight is lost.
     void onSessionChatItems((event) => {
       if (!live || event.paneId !== paneId) return;
+      if (opening && event.items.length > 0) {
+        opening = false;
+        markChat('view:items');
+      }
       setItems((prev) => mergeItems(prev, event.items, event.reset));
     })
       .then((off) => {
@@ -109,6 +119,9 @@ export function useSessionChat(paneId: string, enabled: boolean): SessionChatHoo
           setStatus({ state: 'unavailable', reason: null, waitingFor: null, source: null });
           return;
         }
+        opening = false;
+        markChat('view:snapshot');
+        finishChatOpen();
         const incoming = snapshot.items ?? [];
         setItems((prev) => mergeItems(prev, incoming, false));
         setStatus(
@@ -132,6 +145,7 @@ export function useSessionChat(paneId: string, enabled: boolean): SessionChatHoo
       unlisten?.();
       unlistenStatus?.();
       unlistenSource?.();
+      clearChatTiming();
       void closeSessionChat(paneId, surface).catch(() => undefined);
     };
   }, [paneId, enabled, surface]);

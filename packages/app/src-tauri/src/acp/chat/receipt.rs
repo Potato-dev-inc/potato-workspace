@@ -41,6 +41,8 @@ pub struct RunMeta {
     pub cache: Arc<Mutex<Option<CheckedTurn>>>,
     /// The folder look of the newest read-only turn, taken once when the turn ended: `(turn, proof)`.
     pub proof: Option<(u64, crate::agent_runs::tree_proof::ReadOnlyProof)>,
+    /// The files the newest turn changed (git, start to end), taken once when the turn ended: `(turn, files)`.
+    pub files: Option<(u64, Vec<String>)>,
 }
 
 impl AcpChat {
@@ -127,6 +129,38 @@ impl AcpChat {
         Some(proof)
     }
 
+    /// A turn of a `run_agent` chat starts: how its folder looks now, so the result can list what changed.
+    pub(crate) fn begin_result_facts(&self) {
+        let folder = {
+            let mut meta = self.run_meta.lock();
+            meta.files = None;
+            meta.folder.clone()
+        };
+        if let Some(folder) = folder {
+            crate::agent_runs::structured::begin(self.pane_id(), &folder);
+        }
+    }
+
+    /// The files turn `turn` changed, once it ended: compared once and kept. Empty before that.
+    pub(crate) fn result_files(&self, final_turn: bool, turn: u64) -> Vec<String> {
+        let folder = {
+            let meta = self.run_meta.lock();
+            if let Some((_, files)) = meta.files.as_ref().filter(|(seen, _)| *seen == turn) {
+                return files.clone();
+            }
+            match meta.folder.clone() {
+                Some(folder) => folder,
+                None => return Vec::new(),
+            }
+        };
+        if !final_turn {
+            return Vec::new();
+        }
+        let files = crate::agent_runs::structured::finish(self.pane_id(), &folder);
+        self.run_meta.lock().files = Some((turn, files.clone()));
+        files
+    }
+
     pub(crate) fn run_meta_snapshot(&self) -> (Option<String>, Option<String>, Option<String>) {
         let meta = self.run_meta.lock();
         (meta.requested_model.clone(), meta.account.clone(), meta.account_source.clone())
@@ -146,6 +180,15 @@ pub fn outcome_of(status: &str, checks_total: usize, results: Option<&[CheckResu
         "waiting_input" => "needs_input",
         _ => "in_progress",
     }
+}
+
+/// What the result is built from besides the reply (`agent_runs::structured`).
+#[derive(Debug, Default)]
+pub struct ResultFacts {
+    pub files_changed: Vec<String>,
+    /// The commands the agent ran this turn, from its tool calls.
+    pub commands: Vec<String>,
+    pub open_questions: Vec<String>,
 }
 
 /// Everything a receipt needs, gathered by `surface::view`.
@@ -170,13 +213,18 @@ pub struct ReceiptInputs<'a> {
     /// The before/after look at the folder for this turn, once the turn ended (`agent_runs::tree_proof`).
     pub read_only_proof: Option<&'a crate::agent_runs::tree_proof::ReadOnlyProof>,
     pub checks: &'a [Check],
+    pub facts: &'a ResultFacts,
 }
 
 pub fn build(inputs: &ReceiptInputs) -> RunReceipt {
-    let structured = if inputs.final_turn { inputs.reply.and_then(crate::agent_runs::structured::parse) } else { None };
-    let result_capture = if structured.is_some() {
-        "structured"
-    } else if inputs.final_turn {
+    // The result is built here from facts; the agent is never asked to print it.
+    let structured = if inputs.final_turn || inputs.status == "waiting_input" {
+        let facts = inputs.facts;
+        Some(crate::agent_runs::structured::build(inputs.reply, &facts.files_changed, &facts.commands, &facts.open_questions))
+    } else {
+        None
+    };
+    let result_capture = if inputs.final_turn {
         "authoritative"
     } else {
         "pending"

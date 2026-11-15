@@ -268,6 +268,7 @@ pub fn run() {
         .manage(deep_link::PendingJoinLink::default())
         .register_asynchronous_uri_scheme_protocol("pmfile", commands::files_stream_protocol)
         .register_asynchronous_uri_scheme_protocol("potato-artifact", commands::artifact_serve_protocol)
+        .register_asynchronous_uri_scheme_protocol("potato-start", commands::start_page_protocol)
         .manage(commands::SessionChatState::default())
         .manage(live_room::service::LiveRoomState::default())
         .manage(commands::ChatImportState::default())
@@ -698,6 +699,7 @@ pub fn run() {
             commands::standby_helper_add,
             commands::standby_helper_update,
             commands::standby_helper_remove,
+            commands::standby_helper_detach,
             commands::standby_helper_open,
             commands::standby_helper_take_back,
             commands::standby_helper_start,
@@ -1245,16 +1247,14 @@ pub fn run() {
             if worker {
                 app_windows::open_worker_host_window(app.handle());
             }
-            if let Err(e) = tray::init(app.handle()) {
-                tracing::warn!(error = %e, "tray icon failed to start");
-            }
-            startup_trace::mark("tray");
             // A normal start opens the primary window (same as a tray click: always the cockpit, in
             // either UI mode; Individual mode still puts Settings in its own window). A sign-in start,
             // a worker host and a headless start (`--no-window` / `POTATO_WORKSPACE_NO_WINDOW`) leave only
             // the tray.
             let args = std::env::args().collect::<Vec<_>>();
             let no_window_env = std::env::var(cockpit::NO_WINDOW_ENV).ok();
+            // The window first, then the tray (built on this thread right after: it can be slow), then the
+            // chores (one background thread, in order).
             let open_window = || {
                 if cockpit::startup_window(&args, worker, no_window_env.as_deref()) {
                     cockpit::open_startup_windows(app.handle());
@@ -1262,8 +1262,8 @@ pub fn run() {
                     tracing::info!(worker, "started without a window: tray only");
                 }
                 startup_trace::mark("window_open");
+                tray::init_after_window(app.handle());
             };
-            // The window first, then the chores (one background thread, in order).
             let chore_log_dir = app_paths::app_data_dir();
             startup_chores::open_then_run(
                 open_window,

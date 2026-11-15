@@ -211,6 +211,21 @@ export const agentsRows: RowDef[] = [
     render: (env) => <StandbyHelpersSettings onSaved={env.markSaved} />,
   },
   {
+    id: 'helper-answers',
+    label: 'Let the agent that started a helper answer its questions',
+    hint: 'The agent that started a helper can say yes once, or no. Risky asks still come to you.',
+    keywords: 'helper answer question permission prompt allow once agent orchestrator ask approve standby',
+    group: 'Standby helpers',
+    render: (env) => (
+      <SettingToggle
+        label={t('settings.row.helper-answers.label')}
+        description={t('settings.row.helper-answers.hint')}
+        checked={env.settings.helper_answers_enabled ?? true}
+        onChange={(value) => void env.patch({ helper_answers_enabled: value })}
+      />
+    ),
+  },
+  {
     id: 'agent-default-models',
     label: AGENT_MODELS_LABEL,
     hint: AGENT_MODELS_HINT,

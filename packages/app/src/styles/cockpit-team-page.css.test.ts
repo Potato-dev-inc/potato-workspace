@@ -46,4 +46,21 @@ describe('team page styles', () => {
     expect(selectors.length).toBeGreaterThan(0);
     for (const selector of selectors) expect(selector, selector).toMatch(/^\.cockpit \.tpg/);
   });
+
+  it('the page is the scroll area of the main column: it grows, may shrink to the window, scrolls, and its rows keep their height', () => {
+    const rule = (selector: string) => [...bare.matchAll(/([^{}]+)\{([^}]*)\}/g)].find(([, sel]) => sel.trim() === selector)?.[2] ?? '';
+    const page = rule('.cockpit .tpg');
+    expect(page).toMatch(/flex:\s*1 1 auto/);
+    expect(page).toMatch(/min-height:\s*0/);
+    expect(page).toMatch(/overflow-y:\s*auto/);
+    expect(rule('.cockpit .tpg > *')).toMatch(/flex-shrink:\s*0/);
+  });
+
+  it('the lend sheet takes the mouse even when a layer around it ignores it, and its tag is a small inline tag', () => {
+    const lend = readFileSync(new URL('./lend.css', import.meta.url), 'utf8').replace(/\r\n/g, '\n').replace(/\/\*[\s\S]*?\*\//g, '');
+    const block = (selector: string) => [...lend.matchAll(/([^{}]+)\{([^}]*)\}/g)].find(([, sel]) => sel.trim() === selector)?.[2] ?? '';
+    expect(block('.lend-scrim')).toMatch(/pointer-events:\s*auto/);
+    expect(block('.lend-tag')).toMatch(/align-self:\s*flex-start/);
+    expect(block('.lend-tag')).toMatch(/width:\s*fit-content/);
+  });
 });

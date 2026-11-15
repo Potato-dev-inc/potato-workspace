@@ -4,6 +4,7 @@ import { dirname, join } from 'node:path';
 import {
   BRIDGE_LOCAL_SECRET_FILE,
   BRIDGE_LOCAL_SECRET_HEADER,
+  BRIDGE_PANE_HEADER,
   BRIDGE_PORT_FILE_ENV,
   DEFAULT_BRIDGE_PORT_FILE,
 } from './protocol.js';
@@ -93,6 +94,14 @@ export async function readBridgePort(filePath?: string): Promise<{ port: number;
  * for now; callers never fail because of it.
  */
 export async function readLocalSecretHeaders(filePath?: string): Promise<Record<string, string>> {
+  // Inside an agent's window the shell carries POTATO_WORKSPACE_PANE_ID. Say so: the bridge then treats a
+  // changing call as that agent's (it asks the person) instead of as the app. A hint only; the app also
+  // finds the pane from the connection itself.
+  const pane = (process.env.POTATO_WORKSPACE_PANE_ID ?? '').trim();
+  return { ...(await readSecretHeader(filePath)), ...(pane ? { [BRIDGE_PANE_HEADER]: pane.slice(0, 64) } : {}) };
+}
+
+async function readSecretHeader(filePath?: string): Promise<Record<string, string>> {
   for (const candidate of [...new Set(bridgePortCandidates(filePath))]) {
     try {
       if (!(await stat(candidate)).isFile()) continue;

@@ -1,7 +1,7 @@
 // "New chat" on the phone: an empty chat with three pills (the agent, the project, and Chat or Terminal when the agent can do
 // both) over the same message box as every chat. Send starts it on the PC with the first message. The agents and projects are
 // the PC's own (`GET /phone/new-chat`): only a project the PC already knows can be picked, and the path never reaches the phone.
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { useT } from '../../i18n';
 import type { BridgeClient, PhoneNewChatOptions } from '../../lib/bridge-types';
 import { errorSentence } from '../../lib/sayError';
@@ -36,6 +36,7 @@ export function PhoneNewChat({
   onClose,
   onStarted,
   shared = null,
+  leading = null,
 }: {
   bridge: BridgeClient;
   /** This phone may start things (`control`). Without it the box says so. */
@@ -46,6 +47,8 @@ export function PhoneNewChat({
   onStarted: (paneId: string, lane: Lane, sent: boolean) => void;
   /** Something the person shared from another app: it fills the box (words) and the chips (pictures, files). Nothing goes until Send. */
   shared?: SharedContent | null;
+  /** Drawn first in the row of pills (the desktop's Where pill). */
+  leading?: ReactNode;
 }) {
   const t = useT();
   const [options, setOptions] = useState<PhoneNewChatOptions | null>(null);
@@ -250,12 +253,15 @@ export function PhoneNewChat({
           </div>
         )}
       </div>
-      {options && (
+      {(options || leading) && (
         <div className="ph-nc-pills" role="group" aria-label={t('phone.nc.title')}>
+          {leading}
+          {options && (
           <button type="button" className="ph-nc-pill" data-testid="nc-project-pill" aria-haspopup="dialog" disabled={options.projects.length === 0} onClick={() => setPicking('project')}>
             <span>{project ? t('phone.nc.pillProject', { name: project.name }) : t('phone.nc.pickProject')}</span>
           </button>
-          {both && (
+          )}
+          {options && both && (
             <div className="ph-nc-lane" role="radiogroup" aria-label={t('phone.nc.lane')} data-testid="nc-lane">
               {(['chat', 'terminal'] as const).map((choice) => (
                 <button key={choice} type="button" role="radio" aria-checked={lane === choice} data-on={lane === choice || undefined} onClick={() => setLaneChoice(choice)}>

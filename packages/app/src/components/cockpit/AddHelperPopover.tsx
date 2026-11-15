@@ -78,6 +78,8 @@ export function AddHelperPopover({
   const [busy, setBusy] = useState(false);
   const ref = useRef<HTMLFormElement>(null);
   const addRef = useRef<HTMLButtonElement>(null);
+  // The model menu floats outside the card (a portal): it counts as inside, or using it would close the card.
+  const modelMenuRef = useRef<HTMLDivElement | null>(null);
   const frontRef = useRef(front);
   frontRef.current = front;
   const [recent, setRecent] = useState<RecentHelper[]>([]);
@@ -107,7 +109,8 @@ export function AddHelperPopover({
       off();
     };
   }, [show]);
-  useDismissable(req !== null, { inside: [ref], anchor: ref, onDismiss: () => setReq(null) });
+  // Escape closes the model menu first (the menu's own rule); the card stays until the next one.
+  useDismissable(req !== null, { inside: [ref, modelMenuRef], anchor: ref, onDismiss: (why) => !(why === 'escape' && modelMenuRef.current) && setReq(null) });
   useEffect(() => {
     if (req) addRef.current?.focus();
   }, [req]);
@@ -165,7 +168,7 @@ export function AddHelperPopover({
         e.preventDefault();
         submit();
       }}
-      onKeyDown={(e) => e.key === 'Escape' && setReq(null)}
+      onKeyDown={(e) => e.key === 'Escape' && !modelMenuRef.current && setReq(null)}
     >
       <div>
         <div className="font-semibold">{t('standby.addTitle')}</div>
@@ -215,7 +218,7 @@ export function AddHelperPopover({
       </div>
       <div className="grid gap-1">
         <span className="text-xs ah-muted">{t('standby.model')}</span>
-        {agentId && <ModelPicker testId="add-helper-model" label={t('standby.model')} state={options} value={model} onChange={setModel} defaultWord={t('models.agentDefault')} />}
+        {agentId && <ModelPicker testId="add-helper-model" menuRef={modelMenuRef} label={t('standby.model')} state={options} value={model} onChange={setModel} defaultWord={t('models.agentDefault')} />}
       </div>
       <div className="grid gap-1">
         <span className="text-xs ah-muted">{t('standby.role')}</span>

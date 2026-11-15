@@ -122,7 +122,8 @@ pub fn ending_without_report(cause: &str, facts: &TurnFacts) -> Ending {
 /// The one sentence for an agent that quit with exit code 0 in the middle of a turn: what it last said on its error
 /// output, in its own words, and one thing to do. `None` when it said nothing.
 pub fn quit_with_words(stderr_tail: &[String]) -> Option<String> {
-    let line = stderr_tail.iter().rev().map(|l| strip_leaked_markup(l)).map(|l| l.trim().to_string()).find(|l| !l.is_empty())?;
+    // The agent's own error text may carry a secret: it is redacted like any text the person reads.
+    let line = stderr_tail.iter().rev().map(|l| crate::redact::text(&strip_leaked_markup(l)).into_inner()).map(|l| l.trim().to_string()).find(|l| !l.is_empty())?;
     let mut said = line.as_str();
     for prefix in ["error:", "fatal:", "error", "fatal"] {
         if said.len() > prefix.len() && said.is_char_boundary(prefix.len()) && said[..prefix.len()].eq_ignore_ascii_case(prefix) {
@@ -138,6 +139,15 @@ pub fn quit_with_words(stderr_tail: &[String]) -> Option<String> {
     let said = plain_cause(Some(said), false);
     let todo = if says_signed_out(&said) { "Sign in, then try again." } else { "Try again." };
     Some(format!("The agent stopped. It said: \"{said}\". {todo}"))
+}
+
+/// The sentence for an agent that crashed mid-turn with a non-zero exit code: the words it last printed on its error
+/// output when it printed any, with the exit code kept at the end as details. Without words: the code alone.
+pub fn crash_with_words(stderr_tail: &[String], code: i32) -> String {
+    match quit_with_words(stderr_tail) {
+        Some(words) => format!("{words} (Exit code {code}.)"),
+        None => format!("The agent stopped unexpectedly (exit code {code})."),
+    }
 }
 
 /// The sentence for a failure the agent's definition calls "needs credit" (a billing error, an unknown model).
@@ -353,6 +363,21 @@ mod tests {
 
     fn facts() -> TurnFacts<'static> {
         TurnFacts { files: 0, visible: true, duration_ms: None, agent: Some("Fake A"), quiet_minutes: 5, own_cause: false, credit: None, model: None }
+    }
+
+    #[test]
+    fn a_crash_says_the_last_error_words_and_keeps_the_code_as_details() {
+        let tail = vec!["starting up".to_string(), "error: the model file is missing".to_string()];
+        let text = crash_with_words(&tail, 3);
+        assert!(text.starts_with("The agent stopped. It said: \""), "{text}");
+        assert!(text.contains("the model file is missing"), "{text}");
+        assert!(text.ends_with("(Exit code 3.)"), "{text}");
+    }
+
+    #[test]
+    fn a_crash_without_words_keeps_the_plain_line_with_the_code() {
+        assert_eq!(crash_with_words(&[], 3), "The agent stopped unexpectedly (exit code 3).");
+        assert_eq!(crash_with_words(&["   ".to_string()], 7), "The agent stopped unexpectedly (exit code 7).");
     }
 
     #[test]

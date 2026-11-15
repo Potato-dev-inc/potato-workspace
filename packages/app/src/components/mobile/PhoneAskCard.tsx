@@ -65,7 +65,7 @@ export function PhoneAskCard({
   if (view.settled && view.state !== 'expired' && view.state !== 'gone') {
     return (
       <p className="ph-ask-line" data-testid="phone-ask-line" data-card-state={view.state} role="status">
-        <svg viewBox="0 0 16 16" aria-hidden="true">
+        <svg viewBox="0 0 16 16" width="14" height="14" aria-hidden="true">
           <path d="m3.5 8.5 3 3 6-6.5" />
         </svg>
         <span>

@@ -97,7 +97,7 @@ pub struct AgentRunRequest {
     pub idempotency_key: Option<String>,
     #[serde(default)]
     pub acceptance_criteria: Option<Vec<String>>,
-    /// `false` skips the instruction to end the reply with a `potato-result` JSON block.
+    /// Accepted for old callers; ignored (the app builds the result itself, nothing is asked of the agent).
     #[serde(default)]
     pub structured_result: Option<bool>,
     /// State-based checks (file_exists / file_contains / file_absent) evaluated at completion.

@@ -32,6 +32,7 @@ import {
 } from "../../../lib/team";
 import { ConfirmSheet, Switch } from "../controls";
 import { Btn, FieldInput, Note } from "../settings-ui";
+import { SETTINGS_WINDOW } from "../../../lib/sheet-host";
 import { ExternalLink, RelaySheet } from "./RelaySheet";
 import { useTeamPings } from "./useTeamPings";
 
@@ -84,7 +85,7 @@ function Sheet({ children }: { children: ReactNode }) {
   const windowEl =
     typeof document === "undefined"
       ? null
-      : document.querySelector(".settings");
+      : document.querySelector(SETTINGS_WINDOW);
   return windowEl ? createPortal(children, windowEl) : <>{children}</>;
 }
 

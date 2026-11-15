@@ -1,5 +1,33 @@
 # Changelog
 
+## 1.1.3
+
+This is a beta.
+
+- Helpers on standby now really work.
+  - An agent that asks for a helper of the same type takes the one you keep ready, on the model you picked. Its answer comes back to the agent directly, never as a message in your chat.
+  - A finished standby goes back to Ready.
+  - "Remove from" keeps it warm for any agent, and Close stops it.
+  - Rows show what a helper is doing while it starts, and open instantly when clicked.
+- An agent can answer its helper's simple permission questions ("Let the agent that started a helper answer its questions", on by default). Risky asks still come to you.
+- Helper results are put together by the app from what actually changed (files from git, commands it ran), instead of asking the agent to print a report.
+- Safer: a command an agent runs in its own window can't change your settings without your Allow.
+- When an agent crashes you see its last words instead of "exit code 1", and it restarts once by itself.
+- Uses less memory: warm agents wait when your PC is low on memory, PCs with less memory keep fewer ready, and OpenCode chats clean up their tool helpers when they close.
+- Fixed:
+  - Opening a running agent now lands on its latest message.
+  - Force yes's warning showed behind the side panel.
+  - The Add a helper model menu closed the popover.
+  - Comments and arrows showed in Markdown files.
+  - Word temp files showed in Files.
+  - The browser opened blank.
+  - A chat on another PC looked unstyled.
+  - New agent had no Where choice.
+  - The Request usage sheet couldn't be clicked.
+  - The Team page didn't scroll.
+  - Setting up the Worker failed when the app was installed in a folder with spaces.
+- Faster: the window opens before the tray icon is ready, and the phone app loads about 20% less on first open.
+
 ## 1.1.2
 
 This is a beta.

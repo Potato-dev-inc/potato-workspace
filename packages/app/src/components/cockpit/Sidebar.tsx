@@ -36,6 +36,7 @@ import { PlanLine } from '../common/PlanLine';
 import { ProjectHeader, ProjectMeta, type ProjectSignal } from './ProjectHeader';
 import { groupByBranch, primaryBranch, projectChanges, usePaneCards } from './useProjectCard';
 import { SidebarFooter } from './SidebarFooter';
+import { SidebarWarmLine } from './SidebarWarmLine';
 import { dragSourceProps } from '../dnd/dragSourceProps';
 import { ReorderList } from '../dnd/ReorderList';
 import { applyOrder, moveToSlot } from '../dnd/reorder';
@@ -51,7 +52,7 @@ import { formatElapsed, spinnerStatus } from './model';
 import { splitPinned, usePinnedPanes } from '../../lib/pinnedPanes';
 import { useHelpersInSidebar } from '../../lib/helpersInSidebar';
 import { descendants, groupHelperTree, readFoldedParents, writeFoldedParents, liveParentId, type HelperNode } from '../../lib/pane-helpers';
-import { openNewStandby, tauriStandbyHelpersApi, useStandbyHelpers, type StandbyHelpersApi } from '../../lib/standbyHelpers';
+import { markStandbyOpen, openNewStandby, tauriStandbyHelpersApi, useStandbyHelpers, type StandbyHelpersApi } from '../../lib/standbyHelpers';
 import { placeHelpers, type StandbyRow } from './standby-rows';
 import { SidebarStandbyRow, type StandbyRowActions } from './SidebarStandbyRow';
 import { folderKey } from './history-model';
@@ -200,7 +201,15 @@ export function Sidebar({
   // Standby helpers: each sits under its home agent. A chat the person opened on one is that helper's row, not an agent.
   const { view: standbyView, apply: applyStandby } = useStandbyHelpers(standbyApi);
   const [showHelperTree] = useHelpersInSidebar();
-  const placement = placeHelpers(showHelperTree ? standbyView.helpers : [], list);
+  // Opening a standby makes its chat before the list of helpers says so: until it does, a chat that just appeared is not an agent.
+  const [openingFrom, setOpeningFrom] = useState<ReadonlySet<string> | null>(null);
+  const opening = new Set(openingFrom ? list.filter((p) => !openingFrom.has(p.info.id)).map((p) => p.info.id) : []);
+  const placement = placeHelpers(showHelperTree ? standbyView.helpers : [], list, opening);
+  // A chat that is a seat's own came or went (a task started or ended): read the helpers again now, not at the next poll.
+  const seatChats = list.filter((p) => p.info.standby_seat).map((p) => p.info.id).join(' ');
+  useEffect(() => {
+    void standbyApi.get().then(applyStandby).catch(() => {});
+  }, [seatChats]); // eslint-disable-line react-hooks/exhaustive-deps
   // A chat that is a standby's own never counts as an agent row.
   const panes = list.filter((p) => !isCompanionPaneId(p.info.id) && !placement.hiddenPanes.has(p.info.id));
   // The same list the Inbox badge and the Doto counter use, so the three numbers always agree.
@@ -382,15 +391,37 @@ export function Sidebar({
   const standbyActions: StandbyRowActions = {
     open: async (r) => {
       if (r.paneId) return void c.select(r.paneId);
+      setOpeningFrom(new Set(list.map((p) => p.info.id)));
+      markStandbyOpen('click');
       try {
         const id = await standbyApi.open(r.helper.id);
-        if (id) c.select(id);
-        else c.notify(t('standby.openFailed'));
+        // The pane is shown the moment its id is known; the row learns which chat is its own right after, and until it does the
+        // new chat is not drawn as an agent (`opening`).
+        if (id) {
+          c.select(id);
+          markStandbyOpen('selected');
+        } else c.notify(t('standby.openFailed'));
       } catch (e) {
         c.notify(errorSentence(e));
       }
+      void standbyApi
+        .get()
+        .then(applyStandby)
+        .catch(() => {})
+        .finally(() => setOpeningFrom(null));
     },
-    remove: (r) => {
+    detach: (r) => {
+      const h = r.helper;
+      const home = r.under;
+      void standbyApi.detach(h.id).then(applyStandby).catch((e) => c.notify(errorSentence(e)));
+      showUndo({
+        text: t('standby.detached', { name: h.name }),
+        failText: t('undo.failed'),
+        ms: 5000,
+        undo: async () => applyStandby(home ? await standbyApi.update(h.id, { home }) : await standbyApi.get()),
+      });
+    },
+    close: (r) => {
       const h = r.helper;
       void standbyApi.remove(h.id).then(applyStandby).catch(() => {});
       showUndo({
@@ -411,8 +442,12 @@ export function Sidebar({
     list
       .filter((p) => !isCompanionPaneId(p.info.id) && !placement.hiddenPanes.has(p.info.id) && !liveParentId(list, p.info.id) && p.info.id !== r.under && folderKey(p.info.cwd) === folderKey(r.helper.project))
       .map((p) => ({ id: p.info.id, title: paneTitle(p) }));
+  const underTitleOf = (r: StandbyRow) => {
+    const agent = r.under ? list.find((p) => p.info.id === r.under) : undefined;
+    return agent ? paneTitle(agent) : null;
+  };
   const standbyRowView = (r: StandbyRow) => (
-    <SidebarStandbyRow key={`sb-${r.helper.id}`} row={r} agentLabel={agentLabelOf(r.helper.agent)} active={r.paneId !== null && c.selectedId === r.paneId} movable={movableFor(r)} actions={standbyActions} />
+    <SidebarStandbyRow key={`sb-${r.helper.id}`} row={r} agentLabel={agentLabelOf(r.helper.agent)} active={r.paneId !== null && c.selectedId === r.paneId} movable={movableFor(r)} underTitle={underTitleOf(r)} actions={standbyActions} />
   );
   // Told once when a helper's home agent was closed and another agent took it in.
   const lastUnder = useRef<Map<string, string>>(new Map());
@@ -782,7 +817,7 @@ export function Sidebar({
     </div>
   );
 
-  // The row menu's extras: "Add a helper" on an agent, "Keep on standby" on a finished helper.
+  // The row menu's extras: "Add a helper" on an agent, "Keep as standby" on a finished helper.
   const menuPane = rowMenu ? list.find((p) => p.info.id === rowMenu.id) : undefined;
   const menuParent = rowMenu ? liveParentId(list, rowMenu.id) : null;
   const keepOnStandby = (p: Pane, home: string) =>
@@ -1084,6 +1119,8 @@ export function Sidebar({
           onClose={closeRowMenu}
         />
       )}
+
+      {showHelperTree && <SidebarWarmLine rows={placement.warm} renderRow={standbyRowView} />}
 
       <SidebarFooter
         names={c.names}

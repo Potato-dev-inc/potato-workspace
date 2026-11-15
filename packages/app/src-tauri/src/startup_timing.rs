@@ -48,6 +48,14 @@ pub fn mark(key: &str, stage: &str) -> u64 {
     elapsed
 }
 
+/// The last stage of a start (the first message went in): it is recorded and the clock is dropped, so the next start or
+/// send on the same pane (a standby seat is one pane for task after task) begins at zero and never counts the time before.
+pub fn mark_end(key: &str, stage: &str) -> u64 {
+    let elapsed = mark(key, stage);
+    TRACKS.lock().remove(key);
+    elapsed
+}
+
 /// Moves the stages recorded under `from` onto `to` (a pane id once it exists), keeping their elapsed times and the
 /// clock they started on. A key with no stages does nothing.
 #[allow(dead_code)]
@@ -76,6 +84,15 @@ pub fn stages(key: &str) -> Vec<(String, u64)> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn the_last_stage_drops_the_clock_so_the_next_start_of_the_pane_begins_at_zero() {
+        begin("t-end");
+        std::thread::sleep(std::time::Duration::from_millis(20));
+        assert!(mark_end("t-end", "chat_prompt_sent") >= 20);
+        assert!(stages("t-end").is_empty(), "nothing carries over to the next start");
+        assert!(mark("t-end", "again") < 20, "a later mark on the same pane starts its own clock");
+    }
 
     #[test]
     fn marks_are_ordered_and_monotonic() {

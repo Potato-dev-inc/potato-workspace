@@ -28,7 +28,7 @@ pub struct RunReceipt {
     /// Deprecated: read `guarantees.checks`. `none configured` or `<passed>/<total> passed`.
     pub checks: String,
     pub result_capture: String,
-    /// The worker's `potato-result` block when it ended its reply with a valid one.
+    /// The result the app built from facts: summary (the reply), files changed (git), commands run, open questions.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub structured_result: Option<serde_json::Value>,
     pub not_verified: Vec<String>,

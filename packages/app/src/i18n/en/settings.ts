@@ -192,6 +192,7 @@ export const settings = {
   "settings.row.agent-default-models.label": "Default model",
   "settings.row.agent-lane.label": "How to run",
   "settings.row.show-terminals.label": "Show terminals",
+  "settings.row.helper-answers.label": "Let the agent that started a helper answer its questions",
   "settings.row.chat-addons.label": "Chat add-ons",
   "settings.row.hidden-agents.label": "Agents in the New agent menu",
   "settings.row.versions.label": "Agent versions",

@@ -13,7 +13,10 @@ import '../../styles/standby-rows.css';
 
 export interface StandbyRowActions {
   open: (row: StandbyRow) => void;
-  remove: (row: StandbyRow) => void;
+  /** "Remove from the agent": the helper keeps running as a free warm agent. */
+  detach: (row: StandbyRow) => void;
+  /** "Close": the helper stops and goes. */
+  close: (row: StandbyRow) => void;
   rename: (row: StandbyRow, name: string) => void;
   setModel: (row: StandbyRow, model: string | null) => void;
   setAfter: (row: StandbyRow, after: AfterTask) => void;
@@ -43,6 +46,7 @@ export function SidebarStandbyRow({
   agentLabel,
   active,
   movable,
+  underTitle = null,
   actions,
   modelApi = tauriModelOptionsApi,
 }: {
@@ -51,6 +55,8 @@ export function SidebarStandbyRow({
   active: boolean;
   /** The other agents of the project this helper can move under. */
   movable: ReadonlyArray<{ id: string; title: string }>;
+  /** The agent this row hangs under (the menu says "Remove from it"). */
+  underTitle?: string | null;
   actions: StandbyRowActions;
   modelApi?: ModelOptionsApi;
 }) {
@@ -58,14 +64,17 @@ export function SidebarStandbyRow({
   const h = row.helper;
   const [menu, setMenu] = useState<{ x: number; y: number } | null>(null);
   const [editing, setEditing] = useState(false);
-  const word = t(WORD[row.state]);
+  const warm = !!h.warm;
+  const stageKey = row.state === 'starting' && h.stage ? (`standby.stage.${h.stage.replace(/ /g, '_')}` as MessageKey) : null;
+  const word = stageKey ? t(stageKey) : t(WORD[row.state]);
   const problemNote = row.state === 'problem' && h.note ? t(`standby.note.${h.note}` as MessageKey) : null;
   const tip = problemNote ?? t('standby.tip', { name: h.name, agent: h.model ? `${agentLabel} · ${h.model}` : agentLabel, state: t(TIP[row.state]) });
   const canRemove = row.state !== 'working' && row.state !== 'withYou';
+  const leave = () => (warm ? actions.close(row) : actions.detach(row));
   const from = useRef<HTMLElement | null>(null);
 
   return (
-    <div className="ck-rowwrap ck-sb-wrap" data-testid="standby-row" data-state={row.state} data-helper-id={h.id}>
+    <div className="ck-rowwrap ck-sb-wrap" data-testid="standby-row" data-state={row.state} data-helper-id={h.id} data-kind={warm ? 'warm' : 'standby'}>
       <button
         type="button"
         className={`ck-row ck-row--slim ck-sb-row${active ? ' is-active' : ''}`}
@@ -110,13 +119,18 @@ export function SidebarStandbyRow({
             <span className="ck-row-title">{h.name}</span>
           )}
         </span>
+        {!warm && (
+          <span className="ck-sb-tag" data-testid="standby-tag">
+            {t('standby.tag')}
+          </span>
+        )}
         <span className={`ck-sb-state is-${row.state}`} data-testid="standby-state">
           {row.state === 'starting' ? <span className="ck-sb-spin" aria-hidden="true" /> : <span className="ck-sb-dot" aria-hidden="true" />}
           <span className="ck-sb-word">{word}</span>
         </span>
       </button>
       {canRemove && (
-        <button type="button" className="ck-sb-x" data-testid="standby-row-x" aria-label={t('standby.rowX', { name: h.name })} title={t('standby.menu.remove')} onClick={() => actions.remove(row)}>
+        <button type="button" className="ck-sb-x" data-testid="standby-row-x" aria-label={t(warm ? 'standby.rowClose' : 'standby.rowX', { name: h.name })} title={warm ? t('standby.menu.close') : t('standby.menu.removeFrom', { agent: underTitle ?? t('standby.agentNow') })} onClick={leave}>
           <IconClose />
         </button>
       )}
@@ -138,6 +152,7 @@ export function SidebarStandbyRow({
           row={row}
           at={menu}
           movable={movable}
+          underTitle={underTitle}
           actions={actions}
           modelApi={modelApi}
           onRename={() => setEditing(true)}
@@ -155,6 +170,7 @@ function StandbyRowMenu({
   row,
   at,
   movable,
+  underTitle,
   actions,
   modelApi,
   onRename,
@@ -163,6 +179,7 @@ function StandbyRowMenu({
   row: StandbyRow;
   at: { x: number; y: number };
   movable: ReadonlyArray<{ id: string; title: string }>;
+  underTitle: string | null;
   actions: StandbyRowActions;
   modelApi: ModelOptionsApi;
   onRename: () => void;
@@ -226,10 +243,11 @@ function StandbyRowMenu({
       {head(t('standby.menu.after'))}
       {item(t('standby.after.wait'), () => actions.setAfter(row, 'wait'), h.after_task === 'wait')}
       {item(t('standby.after.close'), () => actions.setAfter(row, 'close'), h.after_task === 'close')}
-      {movable.length > 0 && head(t('standby.menu.move'))}
+      {movable.length > 0 && head(h.warm ? t('standby.menu.makeFor') : t('standby.menu.move'))}
       {movable.map((a) => plain(a.title, () => actions.moveUnder(row, a.id)))}
       <div className="ck-menu-sep" role="separator" />
-      {plain(t('standby.menu.remove'), () => actions.remove(row))}
+      {!h.warm && plain(t('standby.menu.removeFrom', { agent: underTitle ?? t('standby.agentNow') }), () => actions.detach(row))}
+      {plain(t('standby.menu.close'), () => actions.close(row))}
     </div>,
     scope,
   );

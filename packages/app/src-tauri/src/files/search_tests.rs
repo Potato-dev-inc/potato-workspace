@@ -169,3 +169,14 @@ fn an_empty_query_finds_nothing() {
     fs::write(dir.join("a.txt"), "x\n").unwrap();
     assert!(run(&dir, None, "   ").unwrap().hits.is_empty());
 }
+
+#[test]
+fn office_lock_files_are_not_searched_inside() {
+    let dir = scratch("office-lock-inside");
+    fs::write(dir.join("~$a.docx"), "needle here").unwrap();
+    fs::write(dir.join(".~lock.a.odt#"), "needle here").unwrap();
+    fs::write(dir.join("real.txt"), "needle here").unwrap();
+    let found = run(&dir, None, "needle").unwrap();
+    let paths: Vec<&str> = found.hits.iter().map(|h| h.path.as_str()).collect();
+    assert_eq!(paths, vec!["real.txt"]);
+}

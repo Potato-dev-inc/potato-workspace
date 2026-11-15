@@ -89,5 +89,10 @@ fn main() {
         println!("cargo:rustc-link-arg-tests=/MANIFEST:EMBED");
         println!("cargo:rustc-link-arg-tests=/MANIFESTINPUT:{}", manifest.display());
     }
+    // The debug build's frames are large and startup overflowed Windows' default 1 MB main-thread stack
+    // (STATUS_STACK_OVERFLOW). Reserve 16 MB for the app exe (address space only; pages commit when used).
+    if std::env::var("CARGO_CFG_TARGET_OS").as_deref() == Ok("windows") && std::env::var("CARGO_CFG_TARGET_ENV").as_deref() == Ok("msvc") {
+        println!("cargo:rustc-link-arg-bin=puppet_master_app=/STACK:16777216");
+    }
     tauri_build::build();
 }

@@ -19,6 +19,7 @@ const mine = (over: Partial<MineView> & Pick<MineView, 'id' | 'kind' | 'name'>):
   skippedFiles: 0,
   have: [],
   suggested: false,
+  install: null,
   ...over,
 });
 
@@ -26,6 +27,15 @@ export const MINE: MineView[] = [
   mine({ id: 'skill-review', kind: 'skill', name: 'Review checklist', have: ['Maya'], suggested: true }),
   mine({ id: 'tool-github', kind: 'tool', name: 'GitHub', agents: ['Claude Code', 'Codex'], needs: ['GITHUB_TOKEN'], shown: 'npx -y @modelcontextprotocol/server-github', have: ['Maya', 'Sam'] }),
   mine({ id: 'tool-postgres', kind: 'tool', name: 'Postgres', shareable: false, reason: 'The password is inside the command. Move it to a key first, then suggest it.' }),
+  mine({
+    id: 'local-tool-docs-1a2b3c4d',
+    kind: 'tool',
+    name: 'Docs',
+    shareable: false,
+    reason: 'It runs a program from a folder on your PC. A teammate does not have that file.',
+    install: { id: 'aabbccddeeff001122334455', shown: 'npx -y @scope/docs-server' },
+  }),
+  mine({ id: 'local-tool-pencil-9f8e7d6c', kind: 'tool', name: 'pencil', shareable: false, reason: 'It runs a program from a folder on your PC. A teammate does not have that file.' }),
 ];
 
 export const RISKY_LINE = 'npx -y @linear/mcp-server --workspace acme';

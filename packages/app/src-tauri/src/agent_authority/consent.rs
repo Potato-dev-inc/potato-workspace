@@ -28,6 +28,7 @@ pub const CHOICE_DENY: &str = "deny";
 
 const ACTION_TAKE_OVER: &str = "take_over";
 const ACTION_ANSWER: &str = "answer_prompt";
+const ACTION_CONFIG: &str = "config_change";
 /// How long the agent's call can stay unanswered before the card expires.
 const CARD_TIMEOUT_S: u64 = 600;
 
@@ -35,6 +36,8 @@ const CARD_TIMEOUT_S: u64 = 600;
 pub enum Action {
     TakeOver,
     AnswerPrompt,
+    /// A shell command (curl, the CLI) in an agent pane changes the app (`shell_gate`).
+    ConfigChange,
 }
 
 impl Action {
@@ -42,6 +45,7 @@ impl Action {
         match self {
             Self::TakeOver => ACTION_TAKE_OVER,
             Self::AnswerPrompt => ACTION_ANSWER,
+            Self::ConfigChange => ACTION_CONFIG,
         }
     }
 }
@@ -181,6 +185,14 @@ fn card_words(ask: &Ask) -> (String, String, Vec<Choice>) {
             "It would type into the window and answer its questions. It did not start this window.".to_string(),
             vec![choice(CHOICE_ONCE, "Allow once"), choice(CHOICE_ALWAYS, "Always allow here"), choice(CHOICE_DENY, "Deny")],
         ),
+        Action::ConfigChange => (
+            format!("Allow {who} to change {}?", ask.target),
+            ask.risk_headline
+                .clone()
+                .map(|detail| format!("{detail}. It asked from a command in its own window."))
+                .unwrap_or_else(|| "It asked from a command in its own window.".to_string()),
+            vec![choice(CHOICE_ONCE, "Allow once"), choice(CHOICE_DENY, "Deny")],
+        ),
         Action::AnswerPrompt => (
             format!("Allow {who} to answer a question in {}?", ask.target),
             ask.risk_headline
@@ -267,6 +279,8 @@ pub fn on_resolved(question: &Question) {
             format!("to answer a question in {}", info.target),
             format!("{who_asked} answering in {}", info.target),
         )
+    } else if info.action == ACTION_CONFIG {
+        (format!("to change {}", info.target), format!("{who_asked} changing {}", info.target))
     } else {
         (format!("to control {}", info.target), format!("{who_asked} controlling {}", info.target))
     };

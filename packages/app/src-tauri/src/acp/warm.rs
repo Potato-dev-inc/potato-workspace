@@ -32,7 +32,10 @@ use crate::standby::key::canonical_project;
 use crate::standby::config::{StandbyConfig, MAX_PRELOAD_TOTAL};
 
 mod helpers;
-pub use helpers::{Claimed, HelperClaim, HelperMeta, HelperState, HelperStatus, HelperUser, HelperWant};
+mod stage;
+pub use helpers::{Claimed, HelperClaim, HelperMeta, HelperState, HelperStatus, HelperUser, HelperWant, SeatLook};
+#[cfg(test)]
+pub use helpers::{agent_family, same_project, CLEAN_HOLD_MS};
 
 /// What a warm session is keyed by: everything fixed when its adapter starts.
 #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord)]
@@ -97,11 +100,22 @@ pub struct WarmFail {
     pub auth: bool,
 }
 
+/// The `WarmFail` message that means "memory is low, try again later": not a failure of the agent.
+pub const WAITING_FOR_MEMORY: &str = "waiting for memory";
+/// The stage a standby shows while it waits for memory.
+pub const MEMORY_STAGE: &str = "waiting for memory";
+/// How long a start waits after a low-memory skip.
+const MEMORY_RETRY_MS: i64 = 30_000;
+
 /// What the pool needs from the machine.
 pub trait WarmHost: Send + Sync + 'static {
     type Item: Send + 'static;
     /// Starts a session for `key` in `folder` (blocking: until it is ready).
     fn start(&self, key: &WarmKey, folder: &Path) -> Result<Self::Item, WarmFail>;
+    /// `start` for a standby helper made for `model`: the session is put on that model while it warms, so a task finds it ready on it.
+    fn start_for(&self, key: &WarmKey, folder: &Path, _model: Option<&str>) -> Result<Self::Item, WarmFail> {
+        self.start(key, folder)
+    }
     /// Still running and ready.
     fn alive(&self, item: &Self::Item) -> bool;
     /// Stops it for good.
@@ -115,8 +129,15 @@ pub trait WarmHost: Send + Sync + 'static {
     fn working(&self, _pane_id: &str) -> Option<bool> {
         None
     }
-    /// Stops the turn the person has running in chat `pane_id` (an agent takes their standby over). The chat is not closed.
+    /// How many turns chat `pane_id` has started so far. `None`: the host does not count them (or the chat is gone).
+    fn turns(&self, _pane_id: &str) -> Option<u64> {
+        None
+    }
+    /// Stops the turn running in chat `pane_id` (the person takes their standby back from a task). The chat is not closed.
     fn cancel_turn(&self, _pane_id: &str) {}
+    /// A standby gave up a task's chat: it is an ordinary chat now (the finished chat stays open; nothing closes it). The screens
+    /// must read the pane list again, because the chat is no longer the seat's own.
+    fn seat_released(&self, _pane_id: &str) {}
 }
 
 const BACKOFF_FIRST_MS: i64 = 30_000;
@@ -147,7 +168,8 @@ struct Slot<T> {
     last_use: Option<i64>,
     /// The standby helper this slot belongs to (`key.slot`), as last asked for by the policy.
     helper: Option<helpers::HelperMeta>,
-    /// A claimed helper's task, running: the slot is not refilled until it is over.
+    /// A claimed helper's task, running. An agent's task has taken the session, so the seat's next clean one is started
+    /// meanwhile; the seat stays busy until the task is over.
     busy: Option<helpers::Busy>,
     /// Why the last start failed (for the helper's status line).
     last_error: Option<String>,
@@ -177,6 +199,8 @@ struct Inner<T> {
     policy: Policy,
     generation: u64,
     shut: bool,
+    /// Task chats a seat just gave up: `tick` tells the host outside the lock (`WarmHost::seat_released`).
+    released: Vec<String>,
 }
 
 /// A start the pool decided on. Run it with `Pool::run`.
@@ -193,7 +217,7 @@ pub struct Pool<H: WarmHost> {
 
 impl<H: WarmHost> Pool<H> {
     pub fn new(host: Arc<H>) -> Arc<Self> {
-        Arc::new(Self { host, inner: Mutex::new(Inner { slots: BTreeMap::new(), hints: BTreeMap::new(), policy: Policy::default(), generation: 0, shut: false }) })
+        Arc::new(Self { host, inner: Mutex::new(Inner { slots: BTreeMap::new(), hints: BTreeMap::new(), policy: Policy::default(), generation: 0, shut: false, released: Vec::new() }) })
     }
 
     pub fn set_policy(&self, policy: Policy) {
@@ -278,7 +302,8 @@ impl<H: WarmHost> Pool<H> {
             if let State::Ready { item, since } = &slot.state {
                 let dead = !self.host.alive(item);
                 // A session the person has open (or is using) is theirs while they do: never closed for sitting idle.
-                let person_held = slot.opened.is_some() || slot.busy.as_ref().is_some_and(|b| b.by == HelperUser::Person);
+                // (A seat busy with an agent's task holds its next clean session here: that is not idling either.)
+                let person_held = slot.opened.is_some() || slot.busy.is_some();
                 let gone = slot.opened.as_deref().is_some_and(|pane| self.host.working(pane).is_none());
                 let idle = now - *since >= idle_ms && !person_held;
                 if dead || gone || idle || !wanted_now {
@@ -312,7 +337,9 @@ impl<H: WarmHost> Pool<H> {
                 continue;
             }
             let Some(slot) = inner.slots.get_mut(key) else { continue };
-            if matches!(slot.state, State::Empty) && !slot.cold && slot.busy.is_none() && now >= slot.backoff_until {
+            // A seat whose session an agent's task took gets its next clean session now, so it is ready the moment the task ends.
+            let refill_ok = slot.busy.as_ref().is_none_or(|b| b.by == HelperUser::Agent && !b.awaiting_pane);
+            if matches!(slot.state, State::Empty) && !slot.cold && refill_ok && now >= slot.backoff_until {
                 generation += 1;
                 slot.state = State::Starting { generation };
                 taken += 1;
@@ -325,11 +352,15 @@ impl<H: WarmHost> Pool<H> {
 
     /// Runs one start (blocking) and records the outcome.
     pub fn run(&self, job: Job, now: impl Fn() -> i64) {
-        let result = self.host.start(&job.key, &job.folder);
+        let model = self.inner.lock().slots.get(&job.key).and_then(|slot| slot.helper.as_ref()).and_then(|meta| meta.model.clone());
+        let result = self.host.start_for(&job.key, &job.folder, model.as_deref());
         self.finish(&job.key, job.generation, result, now());
     }
 
     fn finish(&self, key: &WarmKey, generation: u64, result: Result<H::Item, WarmFail>, now: i64) {
+        if let Some(id) = &key.slot {
+            stage::clear(id);
+        }
         let mut leftover = None;
         {
             let mut guard = self.inner.lock();
@@ -341,6 +372,13 @@ impl<H: WarmHost> Pool<H> {
                     slot.backoff_until = 0;
                     slot.last_error = None;
                     slot.state = State::Ready { item, since: now };
+                }
+                (Some(slot), Err(fail), _) if fail.message == WAITING_FOR_MEMORY => {
+                    // Not a failure: no strike, a short wait, and the row says why.
+                    slot.backoff_until = now + MEMORY_RETRY_MS;
+                    slot.last_error = Some(WAITING_FOR_MEMORY.to_string());
+                    slot.state = State::Empty;
+                    tracing::info!(agent = %key.agent, "acp: warm chat skipped, memory is low");
                 }
                 (Some(slot), Err(fail), _) => {
                     slot.fails += 1;
@@ -433,7 +471,15 @@ impl<H: WarmHost> Pool<H> {
         for item in close {
             self.host.close(item);
         }
+        for pane in self.take_released() {
+            self.host.seat_released(&pane);
+        }
         self.spawn(jobs);
+    }
+
+    /// The task chats seats gave up in the last `plan` (the caller tells the host, outside the lock).
+    pub(crate) fn take_released(&self) -> Vec<String> {
+        std::mem::take(&mut self.inner.lock().released)
     }
 
     /// Takes the warm session for `key` and starts the refill in the background.
@@ -552,6 +598,8 @@ pub struct WarmChat {
 
 pub struct LiveHost {
     pub conversations: Conversations,
+    /// The pane list, for the pool's own look at the standbys (`refresh_now`). `None`: tests and probes.
+    pub registry: Option<Arc<Mutex<crate::pty::PaneRegistry>>>,
 }
 
 /// The agent's config as a comparable value.
@@ -563,7 +611,22 @@ impl WarmHost for LiveHost {
     type Item = WarmChat;
 
     fn start(&self, key: &WarmKey, folder: &Path) -> Result<WarmChat, WarmFail> {
+        self.start_for(key, folder, None)
+    }
+
+    fn start_for(&self, key: &WarmKey, folder: &Path, model: Option<&str>) -> Result<WarmChat, WarmFail> {
         let fail = |message: String| WarmFail { message, auth: false };
+        let slot = key.slot.clone();
+        let say = |stage: &str| {
+            if let Some(id) = &slot {
+                stage::note(id, stage);
+            }
+        };
+        // Low commit memory: a warm-up waits (a chat the person starts never does).
+        if super::memory::is_low(&super::memory::SystemReader, &key.agent) {
+            return Err(fail(WAITING_FOR_MEMORY.into()));
+        }
+        say("starting program");
         // The same refusals a real start makes: a blocked adapter or a missing add-on is not warmed.
         if let Some(reason) = super::adapter_health::check_before_start(&key.agent) {
             return Err(fail(reason));
@@ -573,9 +636,22 @@ impl WarmHost for LiveHost {
             return Err(fail("the add-on is not installed".into()));
         }
         let (id, session) = self.conversations.prepare_warm(&key.agent, folder, key.account.as_deref()).map_err(|e| fail(e.to_string()))?;
+        if let Some(id) = key.slot.clone() {
+            session.on_stage(Arc::new(move |stage| stage::note(&id, stage)));
+        }
         if let Err(error) = session.ensure_running() {
             session.close();
             return Err(WarmFail { auth: matches!(error, AcpError::AuthRequired { .. }), message: error.to_string() });
+        }
+        // A standby made for a model is put on it now, while it waits (a task finds it ready, on its model). A model the agent
+        // does not offer, or refuses, is left for the claim to say in words (`default_model::apply_standby_model`).
+        if let Some(model) = model.map(str::trim).filter(|m| !m.is_empty()) {
+            say("setting model");
+            match super::chat::choice::apply_model_to_session(&session, model) {
+                Ok(Some(value)) => tracing::info!(agent = %key.agent, model = %value, "acp: a standby warmed on its model"),
+                Ok(None) => tracing::info!(agent = %key.agent, "acp: a standby's model is not offered by the agent"),
+                Err(error) => tracing::warn!(agent = %key.agent, %error, "acp: a standby's model could not be set while warming"),
+            }
         }
         Ok(WarmChat { id, session, folder: folder.to_path_buf(), account: key.account.clone(), config: config_fingerprint(&cfg) })
     }
@@ -597,10 +673,20 @@ impl WarmHost for LiveHost {
         Some(chat.state().get("turnInFlight").and_then(|v| v.as_bool()).unwrap_or(false))
     }
 
+    fn turns(&self, pane_id: &str) -> Option<u64> {
+        Some(super::chat::get(pane_id)?.session().snapshot().turn)
+    }
+
     fn cancel_turn(&self, pane_id: &str) {
         if let Some(chat) = super::chat::get(pane_id) {
             let _ = chat.cancel();
         }
+    }
+
+    fn seat_released(&self, pane_id: &str) {
+        // The chat is no longer the seat's own: the screens read the pane list again, so it is drawn as the ordinary helper it is now.
+        crate::bridge::notify_panes_changed();
+        crate::standby::seat_log::line(&format!("chat {pane_id} is an ordinary chat now: its standby is ready again (the chat stays open)"));
     }
 }
 
@@ -645,20 +731,25 @@ pub fn claim_waiting(cfg: &AgentConfig, folder: &Path, account: Option<&str>, wa
     Some(warm)
 }
 
-/// A standby helper that fits this start, taken for it: the caller's own helpers come first, a helper can be asked for by
-/// name, and a helper the person is using or has open is taken over only when no free one fits (the result is then `fresh`:
-/// no session comes with it, the start opens a new one). Waits for one that is still starting. A session is checked like
-/// `claim`'s: a changed agent definition makes it a miss.
+/// A standby helper that fits this start, taken for it: the caller's own seats come first and a seat can be asked for by
+/// name. The task runs in the seat's own chat (`Claimed::pane` when the person has it open). Waits for one that is still
+/// starting. A session is checked like `claim`'s: a changed agent definition makes it a miss.
 pub fn claim_helper_for(cfg: &AgentConfig, claim: &HelperClaim, wait: Duration) -> Option<Claimed<WarmChat>> {
     let pool = pool()?;
     let mut claimed = pool.claim_helper_waiting_for(claim, wait)?;
     if let Some(item) = claimed.item.take_if(|item| item.config != config_fingerprint(cfg) || item.account.as_deref() != claim.account.map(str::trim).filter(|a| !a.is_empty())) {
         // Nobody starts a chat for it: it is given back at the next pass.
         pool.set_helper_task_pane(&claimed.meta.id, "");
+        crate::standby::seat_log::line(&format!("claim SKIPPED after the match: seat {} was started with an older agent definition; it is restarted", claimed.meta.id));
         pool.host.close(item);
         return None;
     }
     Some(claimed)
+}
+
+/// The caller's own seat that would take a task for `agent_type`, whatever lane wording the caller used (`Pool::seat_for`).
+pub fn seat_for(claim: &HelperClaim) -> Option<SeatLook> {
+    pool()?.seat_for(claim)
 }
 
 /// A message was sent in chat `pane_id`: when it is a standby the person opened, the helper is theirs ("With you") until the
@@ -698,30 +789,46 @@ pub fn hint(agent: &str, folder: &Path, account: Option<&str>) -> bool {
 const STARTUP_GRACE_MS: i64 = 8_000;
 const TICK: Duration = Duration::from_secs(2);
 
+static STARTED_AT: std::sync::atomic::AtomicI64 = std::sync::atomic::AtomicI64::new(0);
+
+/// One look at the standby settings and one pass of the pool. `honour_grace`: the loop leaves the pool alone for the first
+/// seconds after the app starts; a person's own action (adding a standby) does not wait for that.
+fn refresh(pool: &Arc<Pool<LiveHost>>, registry: &Arc<Mutex<crate::pty::PaneRegistry>>, now: i64, honour_grace: bool) {
+    let up = !honour_grace || now - STARTED_AT.load(Ordering::SeqCst) >= STARTUP_GRACE_MS;
+    let policy = match crate::standby::config_snapshot() {
+        Some(config) if up => {
+            let project = crate::standby::default_project(registry);
+            let mut policy = compute_policy(&config, Some(Path::new(&project)), &LiveProbe);
+            crate::standby::helpers::extend_policy(&mut policy, &crate::standby::helpers::file().snapshot(), &LiveProbe);
+            policy
+        }
+        _ => Policy::default(),
+    };
+    pool.set_policy(policy);
+    pool.tick(now);
+}
+
+/// The person changed the standbys (added one, moved one): the pool follows now, not at the next pass of its 2 s loop.
+pub fn refresh_now() {
+    let Some(pool) = pool() else { return };
+    let Some(registry) = pool.host.registry.clone() else { return };
+    refresh(&pool, &registry, crate::event_log::now_ms(), false);
+}
+
 /// Starts the loop (once): every few seconds the policy is read from the standby settings and the pool follows it.
 pub fn init(registry: Arc<Mutex<crate::pty::PaneRegistry>>) {
     if GLOBAL.read().is_some() {
         return;
     }
-    let pool = Pool::new(Arc::new(LiveHost { conversations: super::conversations::global().clone() }));
+    let pool = Pool::new(Arc::new(LiveHost { conversations: super::conversations::global().clone(), registry: Some(registry.clone()) }));
     *GLOBAL.write() = Some(pool.clone());
+    super::memory::log_start(&super::memory::SystemReader);
     LOOP_STOP.store(false, Ordering::SeqCst);
-    let started = crate::event_log::now_ms();
+    STARTED_AT.store(crate::event_log::now_ms(), Ordering::SeqCst);
     let spawned = std::thread::Builder::new().name("acp-warm-pool".into()).spawn(move || {
         while !LOOP_STOP.load(Ordering::SeqCst) && !pool.is_shut_down() {
             std::thread::sleep(TICK);
-            let now = crate::event_log::now_ms();
-            let policy = match crate::standby::config_snapshot() {
-                Some(config) if now - started >= STARTUP_GRACE_MS => {
-                    let project = crate::standby::default_project(&registry);
-                    let mut policy = compute_policy(&config, Some(Path::new(&project)), &LiveProbe);
-                    crate::standby::helpers::extend_policy(&mut policy, &crate::standby::helpers::file().snapshot(), &LiveProbe);
-                    policy
-                }
-                _ => Policy::default(),
-            };
-            pool.set_policy(policy);
-            pool.tick(now);
+            refresh(&pool, &registry, crate::event_log::now_ms(), true);
         }
     });
     if spawned.is_err() {

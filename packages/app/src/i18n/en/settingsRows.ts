@@ -10,6 +10,7 @@ export const settingsRows = {
   "settings.row.preload.hint": "Keep an agent started and waiting, so opening a pane feels instant.",
   "settings.row.agent-default-models.hint": "The model each agent starts on, unless you pick another when you start it.",
   "settings.row.show-terminals.hint": "Off: agents start as a chat. Terminals already open keep working.",
+  "settings.row.helper-answers.hint": "On: when a helper asks to do something small, the agent that started it can say yes once, or say no. Anything broad or risky (always allow, delete, push, outside the project) always comes to you.",
   "settings.row.agent-lane.hint": "Helpers run as a chat when the agent can, else in a terminal.",
   "settings.row.chat-addons.hint": "The small helper each agent needs to run as a chat. Install or remove it here.",
   "settings.row.hidden-agents.hint": "Hide the agents you never use from the New agent menu.",

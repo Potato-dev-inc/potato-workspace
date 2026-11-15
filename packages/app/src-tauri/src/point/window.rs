@@ -263,6 +263,11 @@ pub fn open_for_browser(app: &AppHandle, url: &str, origin: PreviewOrigin, show:
     create(app, "about:blank".to_string(), origin, String::new(), String::new(), false, show, Kind::Agent)
 }
 
+/// What the person's browser window opens: the address it was given, else the app's own start page (never an empty page).
+pub(crate) fn person_first_address(url: Option<&str>) -> String {
+    url.map(str::to_string).unwrap_or_else(|| crate::browser::start::address(None))
+}
+
 /// The browser window of the person: the globe button opens it (or brings it forward). `url` is an address the caller
 /// has checked with `browser::guard::check_url`; without one the window starts empty, with its address box ready.
 pub fn open_person_browser(app: &AppHandle, url: Option<&str>) -> Result<PreviewInfo, String> {
@@ -277,7 +282,10 @@ pub fn open_person_browser(app: &AppHandle, url: Option<&str>) -> Result<Preview
         }
     }
     let origin = PreviewOrigin { scheme: "about".to_string(), host: "blank".to_string(), port: 0 };
-    create(app, url.unwrap_or("about:blank").to_string(), origin, String::new(), String::new(), false, Show::Focus, Kind::Person)
+    // Without an address the window opens on the app's own start page: WebView2 runs no page script on `about:blank`,
+    // so the browser bar (an injected script) never drew there and the window was empty.
+    let first = person_first_address(url);
+    create(app, first, origin, String::new(), String::new(), false, Show::Focus, Kind::Person)
 }
 
 /// The id of the window the person opened, if it is open.
@@ -618,8 +626,8 @@ fn chrome_loop(app: AppHandle, rec: Preview, dev_port: Option<u16>) {
                             if let Some(token) = crate::artifacts::live_token(&here) {
                                 crate::artifacts::close_tab_address(&token);
                             }
-                            if let Ok(blank) = tauri::Url::parse("about:blank") {
-                                let _ = window.navigate(blank);
+                            if let Ok(start) = tauri::Url::parse(&crate::browser::start::address(None)) {
+                                let _ = window.navigate(start);
                             }
                         }
                     }
@@ -629,14 +637,26 @@ fn chrome_loop(app: AppHandle, rec: Preview, dev_port: Option<u16>) {
                                 let _ = window.navigate(target);
                             }
                         }
-                        Err(word) => error = word,
+                        Err(word) => {
+                            error = word;
+                            // On the start page the reason is written there, in a plain sentence.
+                            let here = ask_text(&window, "location.href".to_string()).unwrap_or_default();
+                            if here == "about:blank" || crate::browser::start::is_start_address(&here) {
+                                if let Ok(start) = tauri::Url::parse(&crate::browser::start::address(Some(word))) {
+                                    let _ = window.navigate(start);
+                                }
+                            }
+                        }
                     },
                 }
             }
         }
         crate::markup::live::tick(&app, &rec.id, &rec.markup_key, &window, &mut marking);
         let here = ask_text(&window, "location.href".to_string()).unwrap_or_default();
-        let here = if here == "about:blank" { String::new() } else { here };
+        let on_start = crate::browser::start::is_start_address(&here);
+        // The start page keeps its reason for a refused address; the bar shows an empty box on it.
+        let shown_error = if on_start && error.is_empty() { crate::browser::start::reason_of(&here).unwrap_or("") } else { error };
+        let here = if here == "about:blank" || on_start { String::new() } else { here };
         // A tab's access ends when the tab leaves its page (the token is dropped, never kept for a later visit).
         let now_token = crate::artifacts::live_token(&here);
         if tab_token != now_token {
@@ -645,7 +665,7 @@ fn chrome_loop(app: AppHandle, rec: Preview, dev_port: Option<u16>) {
             }
             tab_token = now_token;
         }
-        let _ = window.eval(chrome::set_script_with(&rec.chrome_key, &here, error, markup_on(&app)));
+        let _ = window.eval(chrome::set_script_full(&rec.chrome_key, &here, shown_error, markup_on(&app), on_start));
     }
     if let Some(old) = tab_token {
         crate::artifacts::close_tab_address(&old);
@@ -884,6 +904,14 @@ pub fn discard_all(app: &AppHandle) {
 
 #[cfg(test)]
 mod tests {
+    #[test]
+    fn the_globe_window_never_opens_empty() {
+        let start = person_first_address(None);
+        assert!(crate::browser::start::is_start_address(&start), "{start}");
+        assert_ne!(start, "about:blank");
+        assert_eq!(person_first_address(Some("https://example.com/")), "https://example.com/");
+    }
+
     use super::*;
 
     /// A window with no title bar or borders (the frame argument of `preview_bounds`).

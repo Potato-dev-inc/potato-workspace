@@ -61,7 +61,7 @@ export function PaneContextMenu({
   onPassTask?: () => void;
   /** An agent's row: "Add a helper" opens the popover under it. Absent: no such item. */
   onAddHelper?: () => void;
-  /** A finished helper's row: "Keep on standby" turns it into a standby helper. Absent: no such item. */
+  /** A finished helper's row: "Keep as standby" turns it into a standby helper. Absent: no such item. */
   onKeepStandby?: () => void;
   onAction: (action: PaneAction) => void;
   onInterrupt: () => void;

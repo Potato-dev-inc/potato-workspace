@@ -142,3 +142,48 @@ describe('Force yes chip in the pane header', () => {
     expect(chip()?.textContent).toBe('Force yes on');
   });
 });
+
+describe('Force yes and the session card in the chat header', () => {
+  const card = () => host.querySelector('[data-testid="session-rail"]');
+  const panelButton = () => host.querySelector<HTMLButtonElement>('.ck-pane-head button[aria-label="Hide session details"], .ck-pane-head button[aria-label="Show session details"]');
+
+  beforeEach(() => window.localStorage.removeItem('pm.sessionRail.open'));
+  afterEach(() => window.localStorage.removeItem('pm.sessionRail.open'));
+
+  it('clicking Force yes asks first and does not open or move the session card', async () => {
+    const setForceYes = vi.fn(async () => state({ forceYes: true }));
+    await act(async () => root.render(<PaneView c={cockpit().c} paneId="p1" acp={fakeAcpApi({ state: async () => state({ forceYes: false }), setForceYes })} />));
+    await flush();
+    const before = card();
+    expect(before).not.toBeNull();
+    await act(async () => chip()!.click());
+    const warning = host.querySelector('[data-testid="force-yes-warning"]');
+    expect(warning).not.toBeNull();
+    // It is drawn in the top layer, not inside the header (which clips), and it is fixed under its own chip.
+    expect(warning!.closest(".ck-pane-head")).toBeNull();
+    expect(warning!.parentElement).toBe(host);
+    expect((warning as HTMLElement).style.position).toBe("fixed");
+    expect(card()).not.toBeNull();
+    // The card is the same node as before: nothing reopened it.
+    expect(card()).toBe(before);
+    expect(setForceYes).not.toHaveBeenCalled();
+    await act(async () => host.querySelector<HTMLButtonElement>('[data-testid="force-yes-confirm"]')!.click());
+    await flush();
+    expect(setForceYes).toHaveBeenCalledWith('p1', true);
+    expect(card()).toBe(before);
+  });
+
+  it('the session card opens and closes only from its own panel button', async () => {
+    await act(async () => root.render(<PaneView c={cockpit().c} paneId="p1" acp={fakeAcpApi({ state: async () => state({ forceYes: false }), setForceYes: vi.fn() })} />));
+    await flush();
+    expect(card()).not.toBeNull();
+    // The status word beside Force yes does nothing when pressed.
+    await act(async () => host.querySelector<HTMLElement>('.ck-pane-state')!.click());
+    expect(host.querySelector('[data-testid="force-yes-warning"]')).toBeNull();
+    expect(card()).not.toBeNull();
+    await act(async () => panelButton()!.click());
+    expect(card()).toBeNull();
+    await act(async () => panelButton()!.click());
+    expect(card()).not.toBeNull();
+  });
+});

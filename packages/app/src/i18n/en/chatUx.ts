@@ -19,6 +19,7 @@ export const chatUx = {
   'chatUx.mine.none': 'No message matches.',
   'chatUx.mine.hint': 'Enter puts it in the box. Nothing is sent.',
   'chatUx.mine.close': 'Close my messages',
+  'chatUx.restarted': 'The agent stopped, so it was restarted once.',
   'chatUx.since.title': 'New since you looked',
   'chatUx.since.answers_one': '{count} answer',
   'chatUx.since.answers_other': '{count} answers',
@@ -75,4 +76,5 @@ export const chatUx = {
   'copyOffer.follow': 'Same as above',
   'copyOffer.always': 'Always offer',
   'copyOffer.never': 'Never offer',
+  'chat.readyIdle': 'Ready. Type to use it yourself.',
 } as const;

@@ -106,9 +106,26 @@ export async function runWorkerUpdate(opts: {
   return { ok: true, steps, failed: null, address };
 }
 
-/** The one agent a failed job goes to: the first one that can chat (chat add-on in place). */
-export function pickHandoffAgent(view: AcpLaneView | null): { id: string; label: string } | null {
-  const agent = chatCapable(view).find((a) => (a.effective_lane ?? a.lane) === 'acp' && a.addon_installed !== false);
+/** The agent the person started last on the New agent page (it remembers `agent` or `agent:sign-in`). */
+export function lastUsedAgentId(): string | null {
+  try {
+    const key = localStorage.getItem('pm.newagent.agent');
+    return key ? key.split(':')[0] : null;
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * The one agent a failed job goes to. The same agents the New agent page offers Chat for (Labs on, not disabled),
+ * not only ones saved to run as a chat: the hand-off starts a chat itself. Best first: the agent used most recently,
+ * then one whose chat is ready (chat lane, add-on in place), then the first one listed. Nothing when none can chat.
+ */
+export function pickHandoffAgent(view: AcpLaneView | null, lastUsed: string | null = lastUsedAgentId()): { id: string; label: string } | null {
+  const all = chatCapable(view);
+  const recent = lastUsed ? all.find((a) => a.id.toLowerCase() === lastUsed.toLowerCase()) : undefined;
+  const ready = all.find((a) => (a.effective_lane ?? a.lane) === 'acp' && a.addon_installed !== false);
+  const agent = recent ?? ready ?? all[0];
   return agent ? { id: agent.id, label: agent.label } : null;
 }
 

@@ -481,6 +481,8 @@ fn the_agent_tools_see_a_chat_by_its_handle_and_read_the_chat_not_a_screen() {
 
 #[test]
 fn followup_runs_the_next_turn_and_answer_prompt_needs_the_switch() {
+    // The person's own switch is what this test is about: the helper-answers setting is off here.
+    let _off = super::helper_answers::test_switch(false);
     let rig = Rig::new("");
     let id = rig.id();
     rig.chat.set_started_by(Some("session-A"));
@@ -502,6 +504,61 @@ fn followup_runs_the_next_turn_and_answer_prompt_needs_the_switch() {
     assert_eq!(answered["answered"]["name"], "Reject");
     let finished = call(&rig, "POST", "agents/wait", json!({ "handles": [id], "wait_ms": crate::test_support::wait::slow_ms(20000) }), Some("session-A")).unwrap().unwrap();
     assert_eq!(finished["agents"][0]["status"], "completed");
+}
+
+#[test]
+fn the_agent_that_started_a_helper_is_told_its_question_and_may_answer_a_safe_one() {
+    let _on = super::helper_answers::test_switch(true);
+    let rig = Rig::new("");
+    let id = rig.id();
+    rig.chat.set_started_by(Some("session-A"));
+    // The wait ends early on the question and carries what it needs to answer (never a typed prompt).
+    let asked = call(&rig, "POST", "agents/followup", json!({ "handle": id, "task": "perm", "wait_ms": crate::test_support::wait::slow_ms(20000) }), Some("session-A")).unwrap().unwrap();
+    assert_eq!(asked["status"], "waiting_input");
+    assert_eq!(asked["prompt"]["title"], "Write notes.txt");
+    assert_eq!(asked["prompt"]["answerable_by_agent"], json!(true));
+    assert_eq!(asked["prompt"]["agent_options"], json!(["allow_once", "reject_once"]), "never the always-allow option: {}", asked["prompt"]);
+    let prompt = asked["prompt"]["prompt_id"].as_str().unwrap().to_string();
+    assert!(asked["prompt"]["hint"].as_str().unwrap().contains("answer_prompt"), "{}", asked["prompt"]["hint"]);
+    // The broad option stays with the person.
+    let broad = call(&rig, "POST", "agents/answer", json!({ "handle": id, "prompt_id": prompt, "choice": "allow_always" }), Some("session-A")).unwrap();
+    assert_eq!(broad.unwrap_err().code, "AGENT_ANSWER_NEEDS_PERSON");
+    assert!(rig.chat.state()["permissions"].as_array().is_some_and(|p| p.len() == 1), "the question is still open for the person");
+    // "Allow once" is the agent's to give.
+    let answered = call(&rig, "POST", "agents/answer", json!({ "handle": id, "prompt_id": prompt, "choice": "allow_once" }), Some("session-A")).unwrap().unwrap();
+    assert_eq!(answered["answered"]["name"], "Allow Once");
+    let finished = call(&rig, "POST", "agents/wait", json!({ "handles": [id], "wait_ms": crate::test_support::wait::slow_ms(20000) }), Some("session-A")).unwrap().unwrap();
+    assert_eq!(finished["agents"][0]["status"], "completed");
+    assert!(wait_until(30, || rig.of_texts_contain("chose:allow_once")), "the choice reached the helper: {:?}", rig.texts());
+}
+
+#[test]
+fn a_risky_question_of_a_helper_stays_with_the_person_but_the_agent_may_say_no() {
+    let _on = super::helper_answers::test_switch(true);
+    let rig = Rig::new("");
+    let id = rig.id();
+    rig.chat.set_started_by(Some("session-A"));
+    let asked = call(&rig, "POST", "agents/followup", json!({ "handle": id, "task": "permwith execute cmd:git push origin main", "wait_ms": crate::test_support::wait::slow_ms(20000) }), Some("session-A")).unwrap().unwrap();
+    assert_eq!(asked["status"], "waiting_input");
+    assert_eq!(asked["prompt"]["agent_options"], json!(["reject_once"]), "only a no: {}", asked["prompt"]);
+    let prompt = asked["prompt"]["prompt_id"].as_str().unwrap().to_string();
+    let refused = call(&rig, "POST", "agents/answer", json!({ "handle": id, "prompt_id": prompt, "choice": "allow_once" }), Some("session-A")).unwrap();
+    assert_eq!(refused.unwrap_err().code, "AGENT_ANSWER_NEEDS_PERSON");
+    let no = call(&rig, "POST", "agents/answer", json!({ "handle": id, "prompt_id": prompt, "choice": "reject_once" }), Some("session-A")).unwrap().unwrap();
+    assert_eq!(no["answered"]["name"], "Reject");
+}
+
+#[test]
+fn with_the_setting_off_a_helpers_question_is_the_persons_alone() {
+    let _off = super::helper_answers::test_switch(false);
+    let rig = Rig::new("");
+    let id = rig.id();
+    rig.chat.set_started_by(Some("session-A"));
+    let asked = call(&rig, "POST", "agents/followup", json!({ "handle": id, "task": "perm", "wait_ms": crate::test_support::wait::slow_ms(20000) }), Some("session-A")).unwrap().unwrap();
+    assert_eq!(asked["prompt"]["answerable_by_agent"], json!(false));
+    let prompt = asked["prompt"]["prompt_id"].as_str().unwrap().to_string();
+    let refused = call(&rig, "POST", "agents/answer", json!({ "handle": id, "prompt_id": prompt, "choice": "reject_once" }), Some("session-A")).unwrap();
+    assert_eq!(refused.unwrap_err().code, "AGENT_ANSWER_NOT_ALLOWED");
 }
 
 #[test]

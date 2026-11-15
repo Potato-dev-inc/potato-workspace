@@ -392,6 +392,7 @@ pub fn spawn_pane(
         origin: None,
         place: linux.as_ref().map(crate::wsl::place::pane_place).or_else(|| ssh.as_ref().map(crate::ssh::once::pane_place)),
         lane: None,
+        standby_seat: None,
     };
 
     let pane = PaneState {

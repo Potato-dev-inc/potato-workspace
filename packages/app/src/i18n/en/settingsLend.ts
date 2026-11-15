@@ -76,6 +76,7 @@ export const settingsLend = {
   "lend.request.yours": "Your requests",
   "lend.request.myOtherPc": "My other PC",
   "lend.request.turnOn": "Turn on Borrow my agent sign-ins on {name}.",
+  "lend.request.openDevices": "Open Devices",
   "lend.request.sent": "Request sent",
   "lend.request.readyNote": "It is ready.",
   "lend.request.declinedNote": "They said no. You can ask again with another time.",

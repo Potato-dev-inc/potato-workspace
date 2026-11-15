@@ -148,6 +148,9 @@ fn parse_range(header: Option<&str>, len: u64) -> Result<Option<(u64, u64)>, ()>
 /// Tells the viewer about a file before it asks for the bytes: its size and whether it can be opened.
 pub fn open_info(root: &str, rel: &str) -> Result<FileStreamInfo, String> {
     let (canon_root, file) = resolve_in_root(root, rel)?;
+    if super::is_office_lock(rel) {
+        return Err("FILES_NOT_OPENABLE: That is a temporary file made by Word or Excel while a document is open. It is not a document.".to_string());
+    }
     let meta = fs::metadata(&file).map_err(|e| format!("FILES_IO: Could not open the file: {e}."))?;
     if !meta.is_file() {
         return Err("FILES_NOT_FILE: That is not a file.".to_string());
@@ -165,6 +168,9 @@ pub fn serve(root: &str, rel: &str, range: Option<&str>, origin: Option<&str>) -
         Err(e) => return StreamReply::error(404, &e, origin),
     };
     let name = file.file_name().map(|n| n.to_string_lossy().into_owned()).unwrap_or_default();
+    if super::is_office_lock(&name) {
+        return StreamReply::error(403, "FILES_NOT_OPENABLE: That is a temporary file made by Word or Excel. It is not a document.", origin);
+    }
     let ext = extension(&name);
     if !STREAMABLE.contains(&ext.as_str()) {
         return StreamReply::error(403, "FILES_KIND: This kind of file is not served here.", origin);

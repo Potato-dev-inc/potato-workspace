@@ -71,6 +71,14 @@ describe('SessionChatView states', () => {
     expect(text()).toContain(WAITING);
   });
 
+  it('an idle chat session that has not been asked anything says it is ready, not that it waits', () => {
+    render({ state: 'ready', source: 'acp', ready: true, turns: [] });
+    expect(text()).toContain('Ready. Type to use it yourself.');
+    expect(text()).not.toContain("Waiting for the agent's session");
+    render({ state: 'ready', source: 'acp', ready: false, turns: [] });
+    expect(text()).toContain("Waiting for the agent's session");
+  });
+
   it('says what it is waiting for in a muted line under the waiting note', () => {
     const line = 'Looking in C:\\x\\projects\\p for a file written after 05:03:05.';
     render({ state: 'ready', turns: [], waitingFor: line });

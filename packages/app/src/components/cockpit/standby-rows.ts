@@ -1,9 +1,9 @@
 // Where each standby helper is drawn in the sidebar. Pure, no React.
 //
-// A helper belongs to the project and has a home agent it is shown under (founder design, STANDBY-FLOW section 3):
-//   waiting (Ready, Starting, Resting, cannot start) -> under its home agent
-//   working for an agent                             -> that agent's own helper row already shows it (the task chat is a pane)
-//   working for the person ("With you")              -> under its home agent
+// A standby is a SEAT under its home agent (the founder's rule): one row that never moves. A task changes the row's state
+// (Ready -> Working -> Ready) and nothing else: no new row appears, the row is never drawn anywhere else, and the chat the
+// task runs in is this row's chat, never an agent of its own.
+//   every state (Ready, Working, With you, Starting, Resting, cannot start) -> under its home agent
 //   home agent gone                                  -> under the newest main agent of the same project
 //   no main agent in the project                     -> the project's "Helpers waiting for an agent" group
 import type { StandbyHelperEntry } from '../../lib/standbyHelpers';
@@ -11,7 +11,7 @@ import { liveParentId } from '../../lib/pane-helpers';
 import { folderKey } from './history-model';
 
 interface PaneLike {
-  info: { id: string; parent_pane_id?: string | null; cwd?: string | null };
+  info: { id: string; parent_pane_id?: string | null; cwd?: string | null; standby_seat?: string | null };
   status: string;
 }
 
@@ -33,6 +33,8 @@ export interface Placement {
   loose: Map<string, StandbyRow[]>;
   /** Panes that are a helper's own chat (drawn as the helper's row, never as an agent). */
   hiddenPanes: Set<string>;
+  /** Free warm agents: removed from their agent and still running. They are drawn on the quiet line at the bottom of the sidebar. */
+  warm: StandbyRow[];
 }
 
 export function rowState(h: StandbyHelperEntry): StandbyRowState {
@@ -52,14 +54,29 @@ export function rowState(h: StandbyHelperEntry): StandbyRowState {
 
 const ORDER: Record<StandbyRowState, number> = { working: 0, withYou: 1, ready: 2, starting: 3, resting: 4, problem: 5 };
 
-/** Puts every helper in its place. `panes` is the live pane list in the order the sidebar knows (newest last). */
-export function placeHelpers(helpers: readonly StandbyHelperEntry[], panes: ReadonlyArray<PaneLike>): Placement {
+/** Puts every helper in its place. `panes` is the live pane list in the order the sidebar knows (newest last). `opening`: chats
+ * that appeared while a helper was being opened: they are the helper's own chat (its row says so as soon as the list is read
+ * again), so they never show as an agent in the meantime. */
+export function placeHelpers(helpers: readonly StandbyHelperEntry[], panes: ReadonlyArray<PaneLike>, opening: ReadonlySet<string> = new Set()): Placement {
   const ids = new Set(panes.map((p) => p.info.id));
-  const hiddenPanes = new Set<string>();
+  const hiddenPanes = new Set<string>(opening);
   const byAgent = new Map<string, StandbyRow[]>();
   const loose = new Map<string, StandbyRow[]>();
-  // Panes that are a helper's own chat never count as agents of the project.
-  for (const h of helpers) if (h.open_pane && ids.has(h.open_pane) && h.used_by !== 'agent') hiddenPanes.add(h.open_pane);
+  const warm: StandbyRow[] = [];
+  // Panes that are a seat's own chat never count as agents: the chat the person opened on it, the chat its task runs in, and
+  // (a finished task chat is an ordinary chat again: the pane list stops flagging it). The pane list itself says which seat a chat belongs to
+  // (`standby_seat`), so a task's chat is hidden from the first moment it is listed, before the helper list is read again.
+  const seats = new Set(helpers.map((h) => h.id));
+  const seatPane = new Map<string, string>();
+  for (const p of panes) {
+    const seat = p.info.standby_seat;
+    if (!seat || !seats.has(seat)) continue;
+    hiddenPanes.add(p.info.id);
+    seatPane.set(seat, p.info.id);
+  }
+  for (const h of helpers) {
+    for (const id of [h.open_pane, h.pane_id]) if (id && ids.has(id)) hiddenPanes.add(id);
+  }
   const mains = panes.filter((p) => !hiddenPanes.has(p.info.id) && !liveParentId(panes, p.info.id));
   const newestMainOf = (project: string): string | null => {
     const key = folderKey(project);
@@ -67,16 +84,25 @@ export function placeHelpers(helpers: readonly StandbyHelperEntry[], panes: Read
     return found.length > 0 ? found[found.length - 1].info.id : null;
   };
   for (const h of helpers) {
-    const state = rowState(h);
-    // An agent's task: its chat is an ordinary helper row under the agent that asked, which says Working already.
-    if (state === 'working' && h.pane_id && ids.has(h.pane_id)) continue;
+    // The seat's chat right now: the task's chat, else the one the person opened, else a chat the pane list says is this
+    // seat's (the helper list is a moment behind).
+    const flagged = seatPane.get(h.id);
+    const live = h.pane_id && ids.has(h.pane_id) ? h.pane_id : h.open_pane && ids.has(h.open_pane) ? h.open_pane : flagged ?? null;
+    // A task's chat is listed before the helper list says "busy": the row says Working from that moment.
+    // (A chat that is idle is a finished one the list has not dropped yet: the row stays Ready.)
+    const taskListed = !!live && live !== h.open_pane && panes.some((p) => p.info.id === live && !!p.info.parent_pane_id && p.status === 'running');
+    const state: StandbyRowState = h.state === 'ready' && taskListed ? 'working' : rowState(h);
     const home = h.home && ids.has(h.home) && !hiddenPanes.has(h.home) ? h.home : newestMainOf(h.project);
-    const paneId = h.open_pane && ids.has(h.open_pane) ? h.open_pane : h.pane_id && ids.has(h.pane_id) ? h.pane_id : null;
+    const paneId = live;
+    if (h.warm) {
+      warm.push({ helper: h, state, paneId, under: null });
+      continue;
+    }
     const row: StandbyRow = { helper: h, state, paneId, under: home };
     const into = home ? byAgent : loose;
     const key = home ?? folderKey(h.project) ?? '';
     into.set(key, [...(into.get(key) ?? []), row]);
   }
   for (const map of [byAgent, loose]) for (const [k, rows] of map) map.set(k, [...rows].sort((a, b) => ORDER[a.state] - ORDER[b.state]));
-  return { byAgent, loose, hiddenPanes };
+  return { byAgent, loose, hiddenPanes, warm: warm.sort((a, b) => ORDER[a.state] - ORDER[b.state]) };
 }

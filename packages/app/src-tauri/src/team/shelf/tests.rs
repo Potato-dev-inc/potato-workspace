@@ -675,3 +675,66 @@ fn no_agent_surface_can_reach_the_shelf() {
     let mcp = read(src.join("team/mcp.rs"));
     assert!(!mcp.contains("shelf"), "team/mcp.rs must not know the shelf");
 }
+
+// ------------------------------------------------- a tool that runs from a folder: why, install line, no copies
+
+#[test]
+fn a_known_package_runner_started_by_its_full_path_has_a_public_install_line_without_the_path() {
+    let h = home("install");
+    let npx = "C:\\Program Files\\nodejs\\npx.cmd";
+    let item = export::install_item(&server("Docs", npx, &["-y", "@scope/pkg", "--api-key", "sk-PlantedInstallSecret0123456789"]), &h).expect("a published package");
+    let text = serde_json::to_string(&item).unwrap();
+    let tool = item.tool.as_ref().unwrap();
+    assert_eq!(tool.command.as_deref(), Some("npx"));
+    assert!(tool.args.iter().any(|a| a == "@scope/pkg"));
+    assert!(!text.contains("Program Files") && !text.contains("PlantedInstallSecret") && !text.contains(":\\") && !text.contains(&h.to_string_lossy().to_string()), "{text}");
+    // Nothing to install: an app of mine, a folder argument, or a program that is not a package runner.
+    assert!(export::install_item(&server("Mine", "C:\\Apps\\pencil\\mcp.exe", &[]), &h).is_none());
+    assert!(export::install_item(&server("Folder", npx, &["-y", "pkg", "C:\\Users\\you\\data"]), &h).is_none());
+    assert!(export::install_item(&server("Home", "/usr/local/bin/uvx", &["tool", "~/notes"]), &h).is_none());
+    assert!(export::install_item(&server("Plain", "npx", &["-y", "pkg"]), &h).is_none(), "a plain command needs no install line: it is shared as it is");
+    assert!(export::install_item(&server("Docker", "/usr/bin/docker", &["run", "-i", "ghcr.io/x/y"]), &h).is_some());
+}
+
+#[test]
+fn the_scan_hides_the_apps_own_entries_merges_copies_and_offers_the_install_line() {
+    let h = home("scan2");
+    let env = env_in(&h);
+    fs::write(
+        h.join(".alpha/mcp.json"),
+        r#"{"mcpServers":{
+            "pencil":{"command":"C:\\Apps\\pencil\\mcp.exe","args":["--app","desktop"]},
+            "potato-workspace":{"command":"C:\\Apps\\pw\\mcp.exe"},
+            "potato-workspace-dev":{"command":"C:\\Apps\\pw-dev\\mcp.exe"},
+            "docs":{"command":"C:\\Program Files\\nodejs\\npx.cmd","args":["-y","@scope/pkg"]}}}"#,
+    )
+    .unwrap();
+    fs::write(
+        h.join(".beta/config.toml"),
+        "[mcp_servers.pencil]\ncommand = 'C:\\Apps\\pencil\\mcp.exe'\nargs = [\"--app\", \"desktop\"]\n",
+    )
+    .unwrap();
+    let found = local::scan(&env);
+    let names: Vec<&str> = found.iter().map(|l| l.name.as_str()).collect();
+    assert!(!names.iter().any(|n| n.starts_with("potato-workspace")), "the app's own entries are not listed: {names:?}");
+    let pencils: Vec<_> = found.iter().filter(|l| l.name == "pencil").collect();
+    assert_eq!(pencils.len(), 1, "the same program in two agents is one row: {names:?}");
+    let mut who: Vec<&str> = pencils[0].agents.iter().map(|a| a.id.as_str()).collect();
+    who.sort();
+    assert_eq!(who, ["alpha", "beta"]);
+    assert!(pencils[0].install.is_none() && pencils[0].item.is_err());
+    // The npx tool by its full path: not sendable as it is, but its install line is, and that is what the id of the offer sends.
+    let docs = found.iter().find(|l| l.name == "docs").unwrap();
+    assert!(docs.item.is_err());
+    let offer = docs.install.as_ref().expect("install line");
+    let view = state::build(&env, &found, &ShelfStore::default(), &Ctx { me: "me".into(), members: vec![("me".into(), "Me".into())] });
+    let row = view.mine.iter().find(|m| m.name == "docs").unwrap();
+    let install = row.install.as_ref().expect("the row offers it");
+    assert!(!row.shareable && install.shown.starts_with("npx") && !install.shown.contains(':'), "{}", install.shown);
+    let sent = super::commands::item_to_send(&env, &install.id).expect("the offer's id resolves");
+    assert_eq!(&sent, offer);
+    let wire = serde_json::to_string(&sent).unwrap();
+    assert!(!wire.contains("Program Files") && !wire.contains("nodejs") && !wire.contains(&h.to_string_lossy().to_string()), "{wire}");
+    // The tool that cannot be sent still cannot be sent by its own id.
+    assert!(super::commands::item_to_send(&env, &docs.id).is_err());
+}

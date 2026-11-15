@@ -54,8 +54,22 @@ pub fn profile_from(raw: Option<&str>) -> Option<String> {
 pub fn profile() -> Option<String> {
     static PROFILE: std::sync::OnceLock<Option<String>> = std::sync::OnceLock::new();
     PROFILE
-        .get_or_init(|| profile_from(std::env::var(PROFILE_ENV).ok().as_deref()))
+        .get_or_init(|| profile_with_dev_default(std::env::var(PROFILE_ENV).ok().as_deref(), dev_build()))
         .clone()
+}
+
+/// A debug build (not the unit tests) that was given no profile at all.
+fn dev_build() -> bool {
+    cfg!(debug_assertions) && !cfg!(test)
+}
+
+/// [`profile_from`], except that a dev build with the variable unset runs as the `dev` profile, so it can never
+/// read or write the installed app's data folder. Setting the variable (even to `default`) is respected.
+pub fn profile_with_dev_default(raw: Option<&str>, dev: bool) -> Option<String> {
+    match raw {
+        None if dev => Some("dev".to_string()),
+        other => profile_from(other),
+    }
 }
 
 /// The app id for a profile: today's id for the default profile, `<id>.profile-<name>` otherwise.
@@ -380,6 +394,15 @@ mod tests {
     /// The default profile must be today's app exactly: same app id, same data folder (compared
     /// with a verbatim copy of the old implementation), same port file, same bridge ports, same
     /// phone port.
+    #[test]
+    fn a_dev_build_without_a_profile_is_never_the_installed_app() {
+        assert_eq!(profile_with_dev_default(None, true).as_deref(), Some("dev"));
+        assert_eq!(profile_with_dev_default(Some("globe"), true).as_deref(), Some("globe"));
+        assert_eq!(profile_with_dev_default(Some("default"), true), None);
+        assert_eq!(profile_with_dev_default(None, false), None);
+        assert_ne!(app_data_dir_for(profile_with_dev_default(None, true).as_deref()), app_data_dir_for(None));
+    }
+
     #[test]
     fn default_profile_is_unchanged() {
         for raw in [None, Some(""), Some("  "), Some("default"), Some("DEFAULT"), Some("bad name"), Some("-x"), Some("a/b")] {

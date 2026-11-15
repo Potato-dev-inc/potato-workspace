@@ -74,6 +74,10 @@ pub struct StandbyConfig {
     pub recent_hours: u64,
     /// A standby unused this long is shut down and its key stays cold until the next run.
     pub idle_timeout_secs: u64,
+    /// Hand-set cap on warm workers in all. `None`: the default for this PC's RAM (`acp::memory::default_caps`).
+    pub max_preload_total: Option<usize>,
+    /// Hand-set cap per provider. `None`: the default for this PC's RAM.
+    pub max_per_provider: Option<u8>,
 }
 
 impl Default for StandbyConfig {
@@ -86,6 +90,8 @@ impl Default for StandbyConfig {
             recent_projects: 2,
             recent_hours: 6,
             idle_timeout_secs: 20 * 60,
+            max_preload_total: None,
+            max_per_provider: None,
         }
     }
 }
@@ -93,17 +99,30 @@ impl Default for StandbyConfig {
 impl StandbyConfig {
     /// Pull every field into its supported range (a hand-edited file or an old UI must not be
     /// able to start 50 CLIs) and drop toggles a backend cannot honour.
-    pub fn clamped(mut self) -> Self {
-        self.max_total = self.max_total.min(MAX_PRELOAD_TOTAL);
+    pub fn clamped(self) -> Self {
+        self.clamped_for(crate::acp::memory::pc_caps())
+    }
+
+    /// The most warm workers in all and per provider: a hand-set number wins, else the default for the PC's RAM.
+    pub fn limits(&self, defaults: crate::acp::memory::Caps) -> (usize, u8) {
+        (
+            self.max_preload_total.unwrap_or(defaults.total).min(MAX_PRELOAD_TOTAL),
+            self.max_per_provider.unwrap_or(defaults.per_provider).min(MAX_WARM_PER_PROVIDER),
+        )
+    }
+
+    pub fn clamped_for(mut self, defaults: crate::acp::memory::Caps) -> Self {
+        let (limit_total, limit_each) = self.limits(defaults);
+        self.max_total = self.max_total.min(limit_total);
         self.recent_projects = self.recent_projects.clamp(1, 5);
         self.recent_hours = self.recent_hours.clamp(1, 24 * 14);
         self.idle_timeout_secs = self.idle_timeout_secs.clamp(5, 24 * 3600);
         // Visible standbys belong to Preload; only its supported providers survive, counts 0-10, total capped.
-        let mut budget = MAX_PRELOAD_TOTAL;
+        let mut budget = limit_total;
         let providers = std::mem::take(&mut self.preload.providers);
         for (agent, count) in providers {
             let agent = agent.to_ascii_lowercase();
-            let count = count.min(MAX_WARM_PER_PROVIDER).min(budget as u8);
+            let count = count.min(limit_each).min(budget as u8);
             if count == 0 || !crate::tui::profile_for(&agent).standby_support().visible {
                 continue;
             }
@@ -127,7 +146,7 @@ impl StandbyConfig {
 
     /// Pool-wide cap on live standbys: the legacy cap, widened to hold every wanted preload worker.
     pub fn cap(&self) -> usize {
-        self.max_total.max(self.preload.total_target()).min(MAX_PRELOAD_TOTAL)
+        self.max_total.max(self.preload.total_target()).min(self.limits(crate::acp::memory::pc_caps()).0)
     }
 
     /// Whether this config allows a standby for `key`.
@@ -299,7 +318,7 @@ mod tests {
         for (agent, n) in agents {
             config.preload.providers.insert((*agent).into(), *n);
         }
-        config.clamped()
+        config.clamped_for(crate::acp::memory::default_caps(None))
     }
 
     #[test]
@@ -320,7 +339,7 @@ mod tests {
 
     #[test]
     fn headless_keeps_its_legacy_toggle() {
-        let config = enabled("claude", false, true).clamped();
+        let config = enabled("claude", false, true).clamped_for(crate::acp::memory::default_caps(None));
         assert!(config.allows(&PoolKey::new("claude", "/p", None, false, false, true)));
         assert!(!config.allows(&PoolKey::new("claude", "/p", None, false, false, false)));
     }
@@ -337,7 +356,7 @@ mod tests {
         config.max_total = 99;
         config.recent_projects = 0;
         config.idle_timeout_secs = 0;
-        let config = config.clamped();
+        let config = config.clamped_for(crate::acp::memory::default_caps(None));
         assert_eq!(config.max_total, MAX_PRELOAD_TOTAL);
         assert_eq!(config.recent_projects, 1);
         assert_eq!(config.idle_timeout_secs, 5);
@@ -389,7 +408,7 @@ mod tests {
         let path = dir.join("standby-pool.json");
         let mut config = enabled("claude", false, true);
         config.preload = PreloadConfig { enabled: true, providers: [("claude".to_string(), 2u8)].into() };
-        let config = config.clamped();
+        let config = config.clamped_for(crate::acp::memory::default_caps(None));
         let recent = vec![RecentUse {
             key: PoolKey::new("claude", "/p", None, false, false, false),
             cwd: "/p".into(),
@@ -401,5 +420,29 @@ mod tests {
         let (loaded, history) = load(&path);
         assert!(!loaded.enabled && history.is_empty());
         assert!(!load(&dir.join("missing.json")).0.enabled);
+    }
+
+    #[test]
+    fn a_small_pc_gets_small_default_caps_and_a_hand_set_number_wins() {
+        use crate::acp::memory::{default_caps, Caps};
+        let small = default_caps(Some(8 << 30));
+        let raw = |a: u8, b: u8| {
+            let mut c = StandbyConfig::default();
+            c.preload.enabled = true;
+            c.preload.providers.insert("claude".into(), a);
+            c.preload.providers.insert("cursor_agent".into(), b);
+            c
+        };
+        let config = raw(5, 5).clamped_for(small);
+        assert_eq!(config.preload.providers.get("claude"), Some(&2));
+        assert_eq!(config.preload.total_target(), 3, "3 in all");
+        let mid = raw(9, 9).clamped_for(default_caps(Some(24 << 30)));
+        assert_eq!(mid.preload.total_target(), 6);
+        let mut hand = raw(9, 9);
+        hand.max_preload_total = Some(8);
+        hand.max_per_provider = Some(5);
+        let hand = hand.clamped_for(Caps { total: 3, per_provider: 2 });
+        assert_eq!(hand.preload.providers.get("claude"), Some(&5));
+        assert_eq!(hand.preload.total_target(), 8);
     }
 }

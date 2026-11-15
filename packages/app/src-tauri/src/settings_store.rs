@@ -106,6 +106,7 @@ const PATCHABLE_KEYS: &[&str] = &[
     "desktop_pet_quiet",
     "desktop_pet_hidden_until_ms",
     "keep_awake_while_working",
+    "helper_answers_enabled",
     "helper_default_models",
     "agent_default_models",
     "early_versions_enabled",
@@ -176,6 +177,8 @@ pub fn default_public_settings() -> Value {
         "desktop_pet_hidden_until_ms": 0,
         // Keep the PC awake (the screen may still turn off) while an agent works, so locking with Win+L does not stop it.
         "keep_awake_while_working": true,
+        // The agent that started a helper may answer its safe questions (allow once, any no). Rust: acp::chat::helper_answers.
+        "helper_answers_enabled": true,
         // Settings > Agents > Helper agents: the model a helper runs on per agent id when the request names none.
         "helper_default_models": {},
         // Settings > Agents: the model each agent starts on when nothing names one (agent id -> model id).

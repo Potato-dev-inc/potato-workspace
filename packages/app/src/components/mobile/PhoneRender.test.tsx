@@ -59,6 +59,20 @@ describe('no icon on the phone can draw giant', () => {
   });
 });
 
+describe('the box and the result bar carry their own icon size too (the remote chat on a PC has no phone shell around it)', () => {
+  it('every svg in the whole chat view, composer included, has width and height attributes', async () => {
+    const bridge = { paneChat: vi.fn(async () => phoneRenderReply(Date.now())), paneArtifact: vi.fn(async () => phoneRenderArtifact('overview')) } as unknown as BridgeClient;
+    await act(async () => {
+      root.render(<PhoneChatView bridge={bridge} paneId="p1" canWatch canType />);
+    });
+    await flush(50);
+    const svgs = Array.from(host.querySelectorAll('svg'));
+    expect(svgs.length).toBeGreaterThan(5);
+    const unsized = svgs.filter((svg) => !(Number(svg.getAttribute('width')) >= 8 && Number(svg.getAttribute('height')) >= 8));
+    expect(unsized.map((svg) => svg.outerHTML.slice(0, 90))).toEqual([]);
+  });
+});
+
 describe('an opened page fills the phone and shrinks a fixed-width page to fit', () => {
   const open = async (id: string, wanted: number) => {
     // jsdom has no layout: the box says it is 390 px wide.

@@ -395,10 +395,11 @@
   cursor: default;
 }
 .cockpit .fy-pop {
-  position: absolute;
-  top: calc(100% + 6px);
-  left: 0;
-  z-index: 30;
+  /* Top layer, placed by the component (window pixels): the same layer as the pop-up menus, so the header's
+     overflow and the session card cannot clip or cover it. */
+  position: fixed;
+  z-index: 1000;
+  box-sizing: border-box;
   display: flex;
   flex-direction: column;
   gap: 8px;

@@ -55,6 +55,15 @@ pub(super) fn codex_needs_refresh(content: &str, source: McpLaunchSource) -> boo
     false
 }
 
+/// A table header that is this server's own (`[mcp_servers.potato-workspace]` or a sub-table of it), not another
+/// server whose name merely starts with it (`potato-workspace-dev`).
+fn is_own_header(trimmed: &str) -> bool {
+    let Some(rest) = trimmed.strip_prefix("[mcp_servers.") else { return false };
+    [MCP_SERVER_NAME.to_string(), format!("\"{MCP_SERVER_NAME}\"")]
+        .iter()
+        .any(|name| rest.strip_prefix(name.as_str()).is_some_and(|tail| tail.starts_with(']') || tail.starts_with('.')))
+}
+
 /// Only this server's `[mcp_servers.potato-workspace...]` tables, so another server's keys never count.
 fn codex_own_block(content: &str) -> String {
     let mut out = Vec::new();
@@ -62,7 +71,7 @@ fn codex_own_block(content: &str) -> String {
     for line in content.lines() {
         let trimmed = line.trim();
         if trimmed.starts_with('[') && trimmed.ends_with(']') {
-            inside = trimmed.starts_with("[mcp_servers.") && trimmed.contains(MCP_SERVER_NAME);
+            inside = is_own_header(trimmed);
         }
         if inside {
             out.push(line);
@@ -77,14 +86,14 @@ pub(super) fn strip_codex_puppet_master_block(content: &str) -> String {
     let mut skip = false;
     for line in content.lines() {
         let trimmed = line.trim();
-        if trimmed.starts_with("[mcp_servers.") && trimmed.contains(MCP_SERVER_NAME) {
+        if is_own_header(trimmed) {
             skip = true;
             continue;
         }
         if skip
             && trimmed.starts_with('[')
             && trimmed.ends_with(']')
-            && !trimmed.contains(MCP_SERVER_NAME)
+            && !is_own_header(trimmed)
         {
             skip = false;
         }

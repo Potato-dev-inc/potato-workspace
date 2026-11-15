@@ -1,5 +1,6 @@
-// The thin orange line in a chat: "New since you looked · 3 answers · 5 files changed". The chat opens at it; it goes
-// when the reader reaches the end. `JumpToLatest` is the button at the bottom while the line is showing.
+// The thin orange line in a chat: "New since you looked · 3 answers · 5 files changed". It sits above the first new
+// turn and goes when the reader reaches the end. `JumpToLatest` is the button at the bottom while the reader is above
+// the end.
 import { useT } from '../../i18n';
 import type { SinceReport } from '../../lib/chatSince';
 import '../../styles/chat-ux.css';

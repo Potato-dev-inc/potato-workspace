@@ -133,6 +133,11 @@ pub struct AgentConfig {
     /// Error text (lower case) that means "the agent does not know this session id", as opposed to a
     /// transient failure. Empty = every agent error on resume counts as "does not know".
     pub unknown_session_patterns: Vec<String>,
+    /// Image names (no `.exe`) of a long-lived server of this agent that starts the tool servers of its sessions and
+    /// keeps them after a session ends (OpenCode's `opencode serve --service`). Empty (the default): the agent's tool
+    /// servers live under its adapter and end with it. When set, each session marks this app's own tool server
+    /// (`acp::leak`) and a closed session, and the next app start, end the marked ones left behind, by pid.
+    pub shared_server_images: Vec<String>,
     pub quirks: Quirks,
     /// How the person's own tool-server list is kept out of a chat session.
     pub mcp_config: McpConfig,
@@ -1015,6 +1020,9 @@ pub fn problems(cfg: &AgentConfig) -> Vec<(String, String)> {
     if !cfg.quirks.serial_prompts {
         add("quirks.serial_prompts", "reserved: this build supports one prompt at a time only (true)".into());
     }
+    if cfg.shared_server_images.len() > 4 || !cfg.shared_server_images.iter().all(|p| plain_text(p) && !p.contains(['/', '\\'])) {
+        add("shared_server_images", "at most 4 program names, no folders".into());
+    }
     if cfg.unknown_session_patterns.len() > 16 || !cfg.unknown_session_patterns.iter().all(|p| plain_text(p)) {
         add("unknown_session_patterns", "at most 16 short patterns".into());
     }
@@ -1460,6 +1468,7 @@ mod tests {
         let opencode = find_builtin("opencode").expect("opencode has its own [acp] table (its own `opencode acp`)");
         assert_eq!(opencode.args, vec!["acp".to_string()]);
         assert!(!opencode.disabled);
+        assert_eq!(opencode.shared_server_images, vec!["opencode".to_string()], "its shared server keeps tool servers: they are marked and swept");
         assert!(opencode.chat_only, "OpenCode's terminal takes no typed prompt: a failed chat is never rerun there");
         assert!(!find_builtin("codex").unwrap().chat_only);
     }

@@ -76,9 +76,25 @@ pub fn installed_resource_dir(resource_dir: Option<&Path>, exe_dir: Option<&Path
     resource_candidates(resource_dir, exe_dir, rel).into_iter().find(|path| path.is_dir())
 }
 
+/// `path` without the Windows extended-length prefix: `\\?\C:\x` becomes `C:\x`, `\\?\UNC\h\s` becomes `\\h\s`.
+/// Tauri's `resource_dir()` returns the prefixed spelling on Windows; node and npm (and `cmd.exe` behind npm's
+/// install scripts) split it at the first space ("Program Files") and fail with `EISDIR ... lstat 'C:'`.
+/// Any other path comes back unchanged.
+pub fn without_verbatim_prefix(path: &Path) -> PathBuf {
+    let text = path.to_string_lossy();
+    if let Some(rest) = text.strip_prefix(r"\\?\UNC\") {
+        return PathBuf::from(format!(r"\\{rest}"));
+    }
+    match text.strip_prefix(r"\\?\") {
+        Some(rest) if rest.as_bytes().get(1) == Some(&b':') => PathBuf::from(rest),
+        _ => path.to_path_buf(),
+    }
+}
+
 fn resource_candidates(resource_dir: Option<&Path>, exe_dir: Option<&Path>, rel: &str) -> Vec<PathBuf> {
     let mut candidates: Vec<PathBuf> = Vec::new();
     for base in [resource_dir, exe_dir].into_iter().flatten() {
+        let base = without_verbatim_prefix(base);
         for path in [base.join(rel), base.join("resources").join(rel)] {
             if !candidates.contains(&path) {
                 candidates.push(path);
@@ -270,6 +286,18 @@ mod installed_layout_tests {
         // A file is not a folder.
         std::fs::write(install.join("resources/plain"), "x").unwrap();
         assert_eq!(installed_resource_dir(Some(&install), None, "plain"), None);
+    }
+
+    /// Tauri spells the resource folder with the `\\?\` prefix on Windows; a path handed to node or npm must not have it.
+    #[cfg(windows)]
+    #[test]
+    fn a_verbatim_resource_dir_comes_back_as_a_plain_path() {
+        let install = std::env::temp_dir().join(format!("pm mcp verbatim {}", uuid::Uuid::new_v4()));
+        std::fs::create_dir_all(install.join("resources/node")).unwrap();
+        let verbatim = std::path::PathBuf::from(format!(r"\\?\{}", install.display()));
+        let found = installed_resource_dir(Some(&verbatim), None, "node").unwrap();
+        assert_eq!(found, install.join("resources/node"));
+        assert!(!found.to_string_lossy().starts_with(r"\\?\"));
     }
 
     /// The 1.0.6 MSI layout: tauri.conf.json lists `resources/bin/*` and `resources/mcp-stdio.bundle.cjs`, and the

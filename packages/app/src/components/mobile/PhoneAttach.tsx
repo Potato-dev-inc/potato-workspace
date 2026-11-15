@@ -114,7 +114,7 @@ export function AttachChips({ items, onRemove }: { items: readonly AttachItem[];
             </span>
           </span>
           <button type="button" className="ph-chip-x" aria-label={t('phone.attach.remove', { name: item.name })} onClick={() => onRemove(item.key)}>
-            <svg viewBox="0 0 24 24" aria-hidden="true">
+            <svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true">
               <path d="M6 6l12 12M18 6L6 18" />
             </svg>
           </button>

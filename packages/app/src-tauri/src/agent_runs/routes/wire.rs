@@ -29,7 +29,9 @@ pub(super) struct WaitAgentsRequest {
 
 #[derive(Debug, Deserialize)]
 pub(super) struct SendAgentRequest {
+    /// Accepted for old callers; ignored (the app builds the result itself).
     #[serde(default)]
+    #[allow(dead_code)]
     pub(super) structured_result: Option<bool>,
     #[serde(default)]
     pub(super) project_path: Option<String>,

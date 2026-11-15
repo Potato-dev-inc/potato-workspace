@@ -7,7 +7,7 @@ use std::collections::{BTreeMap, BTreeSet};
 
 use super::gate::{self, Risk};
 use super::local::{self, Env, LocalItem, Target};
-use super::model::{ItemKind, ShelfItem, ToolTransport};
+use super::model::{item_id, ItemKind, ShelfItem, ToolTransport};
 use super::store::{CardState, ShelfStore};
 
 /// Who is on the team (member id, name), me included.
@@ -44,6 +44,16 @@ pub struct MineView {
     pub have: Vec<String>,
     /// I sent it to the team (or a teammate).
     pub suggested: bool,
+    /// Not shareable as it is, but it starts a published package: the public install line can be suggested instead.
+    pub install: Option<InstallView>,
+}
+
+/// The public install line of a tool (never a folder of this PC): its own id, and the line the person is shown.
+#[derive(Debug, Clone, Serialize, PartialEq)]
+#[serde(rename_all = "camelCase")]
+pub struct InstallView {
+    pub id: String,
+    pub shown: String,
 }
 
 /// A suggestion, or an item the team recommends.
@@ -163,6 +173,7 @@ fn mine_view(l: &LocalItem, store: &ShelfStore, ctx: &Ctx) -> MineView {
         skipped_files: skipped,
         have: have_names(store, ctx, &l.id, false),
         suggested: store.suggested.iter().any(|i| i == &l.id),
+        install: l.install.as_ref().map(|i| InstallView { id: item_id(i), shown: shown_of(i) }),
     }
 }
 

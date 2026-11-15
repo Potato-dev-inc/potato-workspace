@@ -120,6 +120,21 @@ pub fn offered_model(chat: &AcpChat, requested: &str) -> Option<String> {
     select(group, requested).ok().map(|(value, _)| value)
 }
 
+/// Puts a waiting session (no chat around it yet) on the model it offers for `requested`: what a standby does while it warms,
+/// so the model is already set when a task takes it. `Ok(Some(value))`: set (or already in use); `Ok(None)`: the agent offers no
+/// such model; `Err`: the agent refused it. The caller says so in words at claim time (`default_model::apply_standby_model`).
+pub fn apply_model_to_session(session: &crate::acp::session::AcpSession, requested: &str) -> Result<Option<String>, String> {
+    let options = session.snapshot().config_options;
+    let Some(group) = group(&options, MODEL_CATEGORY, MODEL_IDS) else { return Ok(None) };
+    let Ok((value, _)) = select(group, requested) else { return Ok(None) };
+    if group.get("currentValue").and_then(Value::as_str) == Some(value.as_str()) {
+        return Ok(Some(value));
+    }
+    let id = group.get("id").and_then(Value::as_str).unwrap_or("model").to_string();
+    session.set_config_option(&id, Value::String(value.clone())).map_err(|e| e.to_string())?;
+    Ok(Some(value))
+}
+
 /// Whether `option_id` is the agent's model setting.
 pub fn is_model_option(chat: &AcpChat, option_id: &str) -> bool {
     let options = chat.session().snapshot().config_options;

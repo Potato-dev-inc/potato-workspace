@@ -20,6 +20,8 @@ pub fn standby_helper_add(input: NewHelper) -> Result<HelpersView, String> {
     }
     let id = format!("sb-{}", uuid::Uuid::new_v4().simple());
     helpers::file().edit(|store| store.add(input, id).map(|_| ()))?;
+    // Started now, not at the next pass of the pool's 2 s loop.
+    crate::acp::warm::refresh_now();
     Ok(helpers::view())
 }
 
@@ -33,6 +35,7 @@ pub fn standby_helper_update(id: String, name: Option<String>, model: Option<Str
         }
         Ok(())
     })?;
+    crate::acp::warm::refresh_now();
     Ok(helpers::view())
 }
 
@@ -44,6 +47,13 @@ pub fn standby_helper_remove(id: String) -> Result<HelpersView, String> {
     if let Some(pool) = crate::acp::warm::pool() {
         pool.drop_helper(&id, crate::event_log::now_ms());
     }
+    Ok(helpers::view())
+}
+
+/// "Remove from the agent": the standby stops belonging to an agent and keeps running as a free warm agent (nothing is closed).
+#[tauri::command]
+pub fn standby_helper_detach(id: String) -> Result<HelpersView, String> {
+    helpers::file().edit(|store| store.detach(&id))?;
     Ok(helpers::view())
 }
 

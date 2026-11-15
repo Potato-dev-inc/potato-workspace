@@ -80,6 +80,7 @@ pub mod install;
 pub mod install_archive;
 pub mod install_registry;
 pub mod job;
+pub mod leak;
 pub mod journal;
 pub mod lane;
 pub mod overlay;
@@ -94,6 +95,7 @@ pub mod state;
 pub mod supervisor;
 pub mod timers;
 pub mod types;
+pub mod memory;
 pub mod warm;
 pub mod wire;
 pub mod write_queue;
@@ -140,12 +142,31 @@ pub fn labs_on(public: &Value) -> bool {
 /// the switch off closes every live ACP session: the switch is also the kill switch.
 pub fn apply_settings(public: &Value) {
     chat::default_model::note_settings(public);
+    chat::helper_answers::apply_settings(public);
+    sweep_leftovers_once();
     let on = labs_on(public);
     let was = ENABLED.swap(on, Ordering::SeqCst);
     if was && !on {
         chat::close_all();
         supervisor::global().close_all();
     }
+}
+
+/// At the first settings load of a run: tool servers an earlier run left behind in an agent's shared server are ended
+/// (`leak::sweep_stale`; only ours, proven by the marker). In the background: it reads the process list.
+fn sweep_leftovers_once() {
+    static ONCE: std::sync::Once = std::sync::Once::new();
+    ONCE.call_once(|| {
+        if cfg!(test) {
+            return;
+        }
+        std::thread::spawn(|| {
+            let images = leak::all_shared_images();
+            if !images.is_empty() {
+                leak::sweep_stale(&images);
+            }
+        });
+    });
 }
 
 /// Whether the Labs switch is on.

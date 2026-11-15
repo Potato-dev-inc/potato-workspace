@@ -16,6 +16,8 @@ export interface WatchLine {
   revision?: number;
   result?: string | null;
   error?: unknown;
+  /** `waiting_input` lines: the question the agent waits on (title, options, prompt_id), when the run reports one. */
+  prompt?: unknown;
   /** `timeout` lines: the last status the watcher saw before the deadline. */
   last_status?: string;
   /** `timeout` lines: true when the bridge could not be reached at the end. */
@@ -134,6 +136,7 @@ function watchLine(snapshot: Record<string, unknown>, operationId: string, proje
     revision,
     result: (snapshot.result as string | null | undefined) ?? null,
     error: snapshot.error,
+    prompt: snapshot.prompt ?? undefined,
   };
 }
 

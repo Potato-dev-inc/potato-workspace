@@ -90,7 +90,7 @@ fn config(backends: &[(&str, bool, bool)]) -> StandbyConfig {
             },
         );
     }
-    config.clamped()
+    config.clamped_for(crate::acp::memory::default_caps(None))
 }
 
 fn key(agent: &str, project: &str) -> PoolKey {
@@ -326,7 +326,7 @@ fn preload_keeps_the_requested_count_per_provider_and_replaces_after_a_claim() {
     let host = Arc::new(FakeHost::default());
     let mut cfg = config(&[("claude", true, false)]);
     cfg.preload.providers.insert("claude".into(), 2);
-    let pool = pool(&host, cfg.clamped());
+    let pool = pool(&host, cfg.clamped_for(crate::acp::memory::default_caps(None)));
     pool.reconcile(0);
     assert_eq!(host.spawn_count(), 2, "two warm workers for count 2");
     let now = warm_up(&pool, 1_000);
@@ -344,7 +344,7 @@ fn a_claim_takes_the_ready_worker_even_when_a_sibling_is_still_starting() {
     let host = Arc::new(FakeHost::default());
     let mut cfg = config(&[("claude", true, false)]);
     cfg.preload.providers.insert("claude".into(), 2);
-    let pool = pool(&host, cfg.clamped());
+    let pool = pool(&host, cfg.clamped_for(crate::acp::memory::default_caps(None)));
     pool.reconcile(0); // two spawned
     let first = host.spawned.lock()[0].1.clone();
     let second = host.spawned.lock()[1].1.clone();
@@ -757,7 +757,7 @@ fn a_full_pool_retires_the_old_folder_first_and_never_passes_the_cap() {
     let mut cfg = config(&[("claude", true, false)]);
     cfg.preload.providers.insert("claude".into(), 2);
     cfg.max_total = 2;
-    let pool = pool(&host, cfg.clamped());
+    let pool = pool(&host, cfg.clamped_for(crate::acp::memory::default_caps(None)));
     pool.reconcile(0);
     let now = warm_up(&pool, 1_000);
     assert_eq!(pool.status(now).counts.ready, 2);
@@ -813,7 +813,7 @@ fn two_quick_claims_are_refilled_by_two_spawns_and_never_pass_the_cap() {
     let host = Arc::new(FakeHost::default());
     let mut cfg = config(&[("claude", true, false)]);
     cfg.preload.providers.insert("claude".into(), 2);
-    let pool = pool(&host, cfg.clamped());
+    let pool = pool(&host, cfg.clamped_for(crate::acp::memory::default_caps(None)));
     pool.reconcile(0);
     let now = warm_up(&pool, 1_000);
     assert_eq!(host.spawn_count(), 2);
@@ -831,7 +831,7 @@ fn an_earlier_failure_does_not_slow_the_refill_after_a_good_claim() {
     let host = Arc::new(FakeHost::default());
     let mut cfg = config(&[("claude", true, false)]);
     cfg.preload.providers.insert("claude".into(), 2);
-    let pool = pool(&host, cfg.clamped());
+    let pool = pool(&host, cfg.clamped_for(crate::acp::memory::default_caps(None)));
     pool.reconcile(0);
     let second = host.spawned.lock()[1].1.clone();
     host.set_health(&second, Health::Dialog); // one worker is bad: the agent backs off for 15 s

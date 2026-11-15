@@ -11,7 +11,8 @@
 //!   decides and the chat cannot start, the request falls through to the terminal way (the automatic fallback);
 //!   when the caller asked for `"acp"` it gets the error instead.
 //! * **Answering permissions.** `answer_prompt` on a chat's question needs the person's switch for that chat
-//!   (`AcpChat::set_agent_answering`, default off, Settings window only). Without it the call is refused and says who
+//!   (`AcpChat::set_agent_answering`, default off, Settings window only), or the setting "Let the agent that started a
+//!   helper answer its questions" (on by default) for the safe ones (`helper_answers`). Without either the call is refused and says who
 //!   can answer. With it, the choice must be one of the options the agent offered, and the answer goes through the
 //!   question store like the person's own, with an audit line naming the caller.
 //! * **Whose chat.** An agent may steer, answer, stop or close only a chat it started itself. A chat started by the
@@ -106,6 +107,38 @@ fn last_turn(items: &[ChatItem]) -> (Option<String>, Option<String>) {
     (reply, problem)
 }
 
+/// The commands the agent ran in its last turn, from the tool calls the chat records (`run` calls).
+fn commands_of(items: &[ChatItem]) -> Vec<String> {
+    let mut commands: Vec<String> = Vec::new();
+    for item in items.iter().rev() {
+        match item {
+            ChatItem::User { .. } => break,
+            ChatItem::ToolCall { name, summary, detail, .. } if name == "run" => {
+                let from_input = detail.input.as_ref().and_then(|input| {
+                    ["command", "cmd"].iter().find_map(|key| match input.get(*key)? {
+                        Value::String(text) => Some(text.clone()),
+                        Value::Array(parts) => Some(parts.iter().filter_map(Value::as_str).collect::<Vec<_>>().join(" ")),
+                        _ => None,
+                    })
+                });
+                commands.push(from_input.filter(|c| !c.trim().is_empty()).unwrap_or_else(|| summary.clone()));
+            }
+            _ => {}
+        }
+    }
+    commands.reverse();
+    commands
+}
+
+/// The questions the agent waits on right now (its pending permission prompts).
+fn questions_of(state: &Value) -> Vec<String> {
+    state
+        .get("permissions")
+        .and_then(Value::as_array)
+        .map(|list| list.iter().filter_map(|p| p.get("title").and_then(Value::as_str)).map(str::to_string).collect())
+        .unwrap_or_default()
+}
+
 fn item_line(item: &ChatItem) -> Option<Value> {
     match item {
         ChatItem::User { text, .. } => Some(json!({ "kind": "user", "text": cut(text, ITEM_TEXT_CHARS) })),
@@ -122,6 +155,9 @@ fn item_line(item: &ChatItem) -> Option<Value> {
 fn prompt_of(state: &Value) -> Value {
     let Some(first) = state.get("permissions").and_then(Value::as_array).and_then(|list| list.first()) else { return Value::Null };
     let since = first.get("sinceMs").and_then(Value::as_u64);
+    let everything = state.get("agentAnswering").and_then(Value::as_bool).unwrap_or(false);
+    let agent_options: Vec<Value> = first.get("agentOptions").and_then(Value::as_array).cloned().unwrap_or_default();
+    let why = first.get("agentWhy").and_then(Value::as_str).map(str::to_string);
     let options: Vec<Value> = first
         .get("options")
         .and_then(Value::as_array)
@@ -135,11 +171,17 @@ fn prompt_of(state: &Value) -> Value {
         "options": options,
         "since_ms": since.map(Value::from).unwrap_or(Value::Null),
         "open_ms": since.map(|ms| Value::from(crate::questions::now_ms().saturating_sub(ms))).unwrap_or(Value::Null),
-        "answerable_by_agent": state.get("agentAnswering").and_then(Value::as_bool).unwrap_or(false),
-        "hint": if state.get("agentAnswering").and_then(Value::as_bool).unwrap_or(false) {
-            "answer_prompt with prompt_id and the id of one option"
+        "answerable_by_agent": !agent_options.is_empty(),
+        "agent_options": agent_options,
+        "hint": if everything {
+            "answer_prompt with prompt_id and the id of one option".to_string()
+        } else if !agent_options.is_empty() {
+            let ids: Vec<String> = agent_options.iter().filter_map(|v| v.as_str().map(str::to_string)).collect();
+            format!("This is your helper's question. Answer it with answer_prompt(handle, prompt_id, choice) using one of: {}. {}Then wait for it again.", ids.join(", "), why.as_deref().map(|w| format!("Allowing it is for the person ({w}). ")).unwrap_or_default())
+        } else if why.is_some() {
+            format!("Only the person can allow this ({}). You may refuse it with answer_prompt, or tell the person (ask_user) and wait.", why.as_deref().unwrap_or_default())
         } else {
-            "Only the person can answer this: they have not let agents answer in this chat. Tell them, or wait."
+            "Only the person can answer this: they have not let agents answer in this chat. Tell them, or wait.".to_string()
         },
     })
 }
@@ -160,6 +202,11 @@ pub fn view(chat: &AcpChat) -> Value {
     let (requested_model, account, account_source) = chat.run_meta_snapshot();
     let read_only_proof = chat.read_only_proof(is_final(status), snapshot.turn);
     let read_only_enforcement = if chat.session().config().read_only.as_ref().is_some_and(|rule| !rule.mode.trim().is_empty()) { "plan_mode" } else { "permission_reject" };
+    let facts = super::receipt::ResultFacts {
+        files_changed: chat.result_files(is_final(status), snapshot.turn),
+        commands: commands_of(&items),
+        open_questions: questions_of(&state),
+    };
     let receipt = super::receipt::build(&super::receipt::ReceiptInputs {
         status: if in_terminal && !is_final(status) { "idle" } else { status },
         final_turn: is_final(status),
@@ -176,6 +223,7 @@ pub fn view(chat: &AcpChat) -> Value {
         read_only_enforcement,
         read_only_proof: read_only_proof.as_ref(),
         checks: &chat.run_checks(),
+        facts: &facts,
     });
     let guarantees = receipt.guarantees.clone();
     let verified = guarantees.as_ref().and_then(|g| g.verified());
@@ -247,6 +295,17 @@ pub fn view(chat: &AcpChat) -> Value {
     });
     if let Some(note) = chat.lane_note() {
         lanes::merge_note(&mut shown, &note);
+    }
+    // A standby seat did (or does) this task: the answer says which one, and that nothing else was started.
+    if let (Some(seat), Some(map)) = (chat.seat(), shown.as_object_mut()) {
+        let name = crate::standby::helpers::file().snapshot().helpers.into_iter().find(|h| h.id == seat).map(|h| h.name);
+        map.insert("standby".into(), json!({
+            "used": true,
+            "id": seat,
+            "name": name,
+            "note": "Your standby took this task in its own place. No new helper was started. When the task is over the standby is ready again with clean memory (this chat stays open as a normal chat), so use run_agent (not followup_task) for the next task.",
+        }));
+        map.insert("pane_policy".into(), json!("stays_open_until_you_close_it"));
     }
     // The receipt says what the app answered for the caller, so it can be checked afterwards.
     let approved = shown.get("auto_approved").cloned().unwrap_or(Value::Null);
@@ -682,6 +741,9 @@ fn run(body: &[u8], query: &str, deps: &StartDeps, session: Option<&str>, lookup
         }
         return (Some(Ok(view(&chat))), None);
     }
+    // The caller's own standby seat of this agent type takes the task, whatever lane wording the caller used ("opencode",
+    // "opencode_native", lane "terminal"): the seat is a chat, so the run is a chat on the seat's agent.
+    let (value, seat_note) = seat_first(value, session, &deps.registry.lock().project_path.clone(), query);
     // One resolver picks the way (`decide`): what the request needs decides, `lane` is a hint, and a refusal carries the call
     // that works.
     let account = text_of(&value, "account");
@@ -695,6 +757,7 @@ fn run(body: &[u8], query: &str, deps: &StartDeps, session: Option<&str>, lookup
         super::decide::Route::Terminal { reason, adjusted } => return (None, Some(lanes::LaneNote::terminal(&reason).with_adjusted(adjusted))),
         super::decide::Route::Chat { explicit, reason, adjusted } => (explicit, reason, adjusted),
     };
+    let adjusted: Vec<Value> = adjusted.into_iter().chain(seat_note).collect();
     let Some(agent) = agent else {
         return (Some(Err(err("INVALID_ARGUMENT", "agent_type is required with lane: \"acp\"", false))), None);
     };
@@ -825,6 +888,44 @@ fn run(body: &[u8], query: &str, deps: &StartDeps, session: Option<&str>, lookup
         wait_status(&chat, &default_until(), wait_ms);
     }
     (Some(Ok(view(&chat))), None)
+}
+
+/// The caller's own standby seat goes first. When the caller (a pane in this app) has a seat of the asked agent *type* that
+/// is ready or starting, the request is turned into a chat run on the seat's agent: `agent_type` becomes the seat's, and a
+/// `lane` that would have missed the seat ("terminal") is dropped. A request that needs what only a terminal run can do
+/// keeps its lane, and the seat log says why the seat was passed over. Returns the request to run and what was changed.
+fn seat_first(value: Value, session: Option<&str>, default_project: &str, query: &str) -> (Value, Option<Value>) {
+    let (Some(agent), Some(caller)) = (text_of(&value, "agent_type"), caller_pane_of(session)) else { return (value, None) };
+    let folder = text_of(&value, "project_path").or_else(|| query.trim_start_matches('?').split('&').find_map(|p| p.strip_prefix("project_path=").map(str::to_string))).unwrap_or_else(|| default_project.to_string());
+    let model = if value.get("model_from_helper_default").and_then(Value::as_bool) == Some(true) { None } else { text_of(&value, "model") };
+    let account = text_of(&value, "account");
+    let name = text_of(&value, "helper");
+    let claim = crate::acp::warm::HelperClaim { agent: &agent, folder: std::path::Path::new(&folder), account: account.as_deref(), model: model.as_deref(), caller: Some(&caller), name: name.as_deref() };
+    let Some(seat) = crate::acp::warm::seat_for(&claim) else { return (value, None) };
+    let needs_terminal = chat_cannot_do(&value);
+    let headless = value.get("headless").and_then(Value::as_bool) == Some(true);
+    if !needs_terminal.is_empty() || headless {
+        let what = if headless { "headless".to_string() } else { needs_terminal.join(", ") };
+        crate::standby::seat_log::line(&format!("claim SKIPPED: agent {agent} caller {caller} -> seat \"{}\" ({}) fits, but the task asks for {what}, which only a terminal run can do", seat.name, seat.id));
+        return (value, None);
+    }
+    let asked_lane = text_of(&value, "lane");
+    let same_agent = seat.agent.eq_ignore_ascii_case(&agent);
+    if same_agent && asked_lane.as_deref() == Some("acp") {
+        return (value, None);
+    }
+    // The seat is a chat: the run is a chat whatever the agent's saved "How to run" says.
+    let mut next = value;
+    let Some(map) = next.as_object_mut() else { return (next, None) };
+    map.insert("agent_type".into(), json!(seat.agent));
+    map.insert("lane".into(), json!("acp"));
+    if same_agent && asked_lane.as_deref() != Some("terminal") {
+        return (next, None);
+    }
+    let asked = if same_agent { format!("lane {}", asked_lane.as_deref().unwrap_or("auto")) } else { agent.clone() };
+    let why = format!("Your standby \"{}\" is the same agent type and was ready, so it took the task. No new helper was started.", seat.name);
+    crate::standby::seat_log::line(&format!("seat first: agent {agent} lane {} caller {caller} -> runs on seat \"{}\" ({}) as {} chat", asked_lane.as_deref().unwrap_or("(none named)"), seat.name, seat.id, seat.agent));
+    (next, Some(super::decide::adjusted("agent_type", &asked, &seat.agent, &why)))
 }
 
 /// The pane of the agent asking, known before its helper starts (the registry's parent link is only written after the start).
@@ -1014,6 +1115,11 @@ fn answer(chat: &AcpChat, value: &Value, session: Option<&str>) -> Reply {
         Err(AgentAnswerError::NotAllowed) => Err(err(
             "AGENT_ANSWER_NOT_ALLOWED",
             "The person has not let agents answer questions in this chat session, so only they can. Nothing was answered. Tell them what you need (ask_user) and wait; do not retry in a loop.",
+            false,
+        )),
+        Err(AgentAnswerError::NeedsPerson(why)) => Err(err(
+            "AGENT_ANSWER_NEEDS_PERSON",
+            format!("This question is for the person: {why}. Nothing was answered. You may still refuse it (a no is always yours to give). Otherwise tell them what you need (ask_user) and wait; do not retry in a loop."),
             false,
         )),
         Err(AgentAnswerError::NoSuchQuestion) => Err(err("NO_OPEN_QUESTION", "That question is not open any more (it was answered, or the agent stopped asking). Read the chat again.", true)),

@@ -767,6 +767,15 @@ mod runtime {
         }
     }
 
+    /// Start-up: called right after the first window is opened, so the tray build never delays the window.
+    /// A tray that fails to build is logged and the app runs without it.
+    pub fn init_after_window(app: &AppHandle) {
+        if let Err(e) = init(app) {
+            tracing::warn!(error = %e, "tray icon failed to start");
+        }
+        crate::startup_trace::mark("tray");
+    }
+
     pub fn init(app: &AppHandle) -> tauri::Result<()> {
         let _ = APP.set(app.clone());
         let menu = build_menu(app)?;
@@ -798,7 +807,7 @@ mod runtime {
     }
 }
 
-pub use runtime::{init, new_pane, new_pane_on_model};
+pub use runtime::{init_after_window, new_pane, new_pane_on_model};
 #[cfg(not(test))]
 pub use runtime::request_refresh;
 

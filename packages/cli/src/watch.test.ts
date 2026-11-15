@@ -80,7 +80,7 @@ class MockBridge {
 
   private async handle(req: IncomingMessage, res: ServerResponse): Promise<void> {
     this.sessionHeaders.push(req.headers['x-potato-workspace-session'] as string | undefined);
-    this.secretHeaders.push(req.headers['x-pm-local-secret'] as string | undefined);
+    this.secretHeaders.push(req.headers['x-potato-workspace-local-secret'] as string | undefined);
     const url = new URL(req.url ?? '/', 'http://x');
     const parts = url.pathname.split('/').filter(Boolean);
     let raw = '';

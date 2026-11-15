@@ -327,6 +327,7 @@ fn a_warm_chat_is_named_in_the_receipt() {
 #[test]
 fn the_receipt_lists_a_requested_model_the_agent_did_not_confirm() {
     use super::receipt::{build, ReceiptInputs};
+    let no_facts = super::receipt::ResultFacts::default();
     let inputs = |requested, in_use| ReceiptInputs {
         status: "completed",
         final_turn: true,
@@ -343,6 +344,7 @@ fn the_receipt_lists_a_requested_model_the_agent_did_not_confirm() {
         read_only_enforcement: "permission_reject",
         read_only_proof: None,
         checks: &[],
+        facts: &no_facts,
     };
     let unconfirmed = "model not confirmed".to_string();
     assert!(build(&inputs(Some("fast-1"), Some("slow-2"))).not_verified.contains(&unconfirmed));
@@ -352,15 +354,15 @@ fn the_receipt_lists_a_requested_model_the_agent_did_not_confirm() {
 }
 
 #[test]
-fn a_potato_result_block_in_the_reply_is_the_structured_result() {
-    use super::receipt::{build, ReceiptInputs};
-    let reply = "All done.\n```potato-result\n{\"summary\":\"ok\",\"files_changed\":[],\"checks_run\":[],\"open_questions\":[]}\n```";
+fn the_structured_result_is_built_from_the_reply_and_the_facts() {
+    use super::receipt::{build, ReceiptInputs, ResultFacts};
+    let facts = ResultFacts { files_changed: vec!["a.rs".into()], commands: vec!["cargo test".into()], open_questions: vec![] };
     let receipt = build(&ReceiptInputs {
         status: "completed",
         final_turn: true,
         checks_total: 0,
         results: None,
-        reply: Some(reply),
+        reply: Some("All done."),
         requested_model: None,
         model_in_use: None,
         account: Some("work"),
@@ -371,9 +373,13 @@ fn a_potato_result_block_in_the_reply_is_the_structured_result() {
         read_only_enforcement: "permission_reject",
         read_only_proof: None,
         checks: &[],
+        facts: &facts,
     });
-    assert_eq!(receipt.result_capture, "structured");
-    assert_eq!(receipt.structured_result.unwrap()["summary"], "ok");
+    assert_eq!(receipt.result_capture, "authoritative");
+    let result = receipt.structured_result.unwrap();
+    assert_eq!(result["summary"], "All done.");
+    assert_eq!(result["files_changed"][0], "a.rs");
+    assert_eq!(result["checks_run"][0], "cargo test");
     assert_eq!((receipt.account_used.as_deref(), receipt.account_source.as_str()), (Some("work"), "helper_default"));
 }
 

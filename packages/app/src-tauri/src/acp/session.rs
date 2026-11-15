@@ -158,6 +158,8 @@ pub enum SessionEvent {
     TurnEnded(TurnSummary),
     HistoryLost(HistoryLost),
     Exited(ExitSummary),
+    /// The app is starting a crashed agent again by itself (once, see `AUTO_RESTART_WINDOW`).
+    AutoRestarted,
     Slept,
 }
 
@@ -211,6 +213,19 @@ pub struct AutoApproved {
 /// At most this many auto-approvals are kept for the receipt.
 const MAX_AUTO_APPROVED: usize = 50;
 
+/// A crashed agent is started again by itself at most once per this window: a second crash inside it is shown.
+const AUTO_RESTART_WINDOW: Duration = Duration::from_secs(60);
+/// The short pause before the automatic start.
+const AUTO_RESTART_BACKOFF: Duration = Duration::from_secs(2);
+
+/// Whether a crashed agent may be started again by itself: no automatic start happened within the window before `now`.
+fn auto_restart_allowed(last: Option<Instant>, now: Instant) -> bool {
+    match last {
+        None => true,
+        Some(at) => now.saturating_duration_since(at) >= AUTO_RESTART_WINDOW,
+    }
+}
+
 struct Parked {
     rpc_id: Value,
     options: Vec<String>,
@@ -248,6 +263,8 @@ struct Core {
     app_cancelled: bool,
     /// What this turn showed, for the capability table (`agent_caps::record_seen`).
     seen: crate::agent_caps::live::TurnSeen,
+    /// When the app last started a crashed agent again by itself (see `AUTO_RESTART_WINDOW`).
+    auto_restart_at: Option<Instant>,
 }
 
 impl Core {
@@ -275,6 +292,8 @@ pub struct AcpSession {
     cfg: Arc<AgentConfig>,
     host: Arc<dyn HostEnv>,
     key: String,
+    /// Marks this session's tool server (`acp::leak`); only used by an agent with `shared_server_images`.
+    marker: String,
     cwd: PathBuf,
     core: Mutex<Core>,
     changed: Condvar,
@@ -283,7 +302,12 @@ pub struct AcpSession {
     /// While `Some`, every event is also kept here and handed to a sink added later (a warm session starts before the
     /// chat that will own it exists). `stop_buffering` ends it.
     buffered: Mutex<Option<Vec<SessionEvent>>>,
+    /// Told the stage of a start as it goes (a standby's row says "Opening session", not just "Starting").
+    stage_sink: Mutex<Option<StageSink>>,
 }
+
+/// What a start tells its owner: `starting program`, `connecting`, `opening session`.
+pub type StageSink = Arc<dyn Fn(&'static str) + Send + Sync>;
 
 /// Most events a warm session keeps for its future owner.
 const MAX_BUFFERED_EVENTS: usize = 512;
@@ -318,6 +342,7 @@ impl AcpSession {
             cfg,
             host,
             key: params.key,
+            marker: super::leak::new_marker(),
             cwd: params.cwd,
             core: Mutex::new(Core {
                 state,
@@ -339,12 +364,32 @@ impl AcpSession {
                 stats: SessionStats::default(),
                 app_cancelled: false,
                 seen: Default::default(),
+                auto_restart_at: None,
             }),
             changed: Condvar::new(),
             outbox: Mutex::new(Outbox::default()),
             sinks: RwLock::new(Vec::new()),
             buffered: Mutex::new(None),
+            stage_sink: Mutex::new(None),
         })
+    }
+
+    /// Who is told the stages of a start (`StageSink`). Set before `ensure_running`.
+    pub fn on_stage(&self, sink: StageSink) {
+        *self.stage_sink.lock() = Some(sink);
+    }
+
+    fn stage(&self, stage: &'static str) {
+        let sink = self.stage_sink.lock().clone();
+        if let Some(sink) = sink {
+            sink(stage);
+        }
+    }
+
+    /// This session's marker (`acp::leak`), for the real-app proof test.
+    #[cfg(test)]
+    pub(crate) fn marker_for_proof(&self) -> String {
+        self.marker.clone()
     }
 
     pub fn key(&self) -> &str {
@@ -662,6 +707,7 @@ impl AcpSession {
 
     fn connect_and_open(&self, epoch: u64, resume_id: Option<&str>) -> Result<StartKind, AcpError> {
         let cfg = &self.cfg;
+        self.stage("starting program");
         let t0 = Instant::now();
         let spec = config::resolve_spawn(cfg, &*self.host, &self.cwd)?;
         let resolve_ms = t0.elapsed().as_millis() as u64;
@@ -683,6 +729,7 @@ impl AcpSession {
             return Err(AcpError::SessionClosed);
         }
 
+        self.stage("connecting");
         let t2 = Instant::now();
         let init = conn.request("initialize", handshake::initialize_params("potato-workspace", crate::app_lifecycle::app_version()), cfg.timeouts.request())?;
         let caps = handshake::parse_initialize(&init)?;
@@ -694,6 +741,7 @@ impl AcpSession {
         self.with_core(|core, _| core.caps = Some(caps.clone()));
         let initialize_ms = t2.elapsed().as_millis() as u64;
 
+        self.stage("opening session");
         let t3 = Instant::now();
         let (session_id, kind, info) = self.open_session(&conn, &caps, resume_id)?;
         let open_ms = t3.elapsed().as_millis() as u64;
@@ -728,6 +776,16 @@ impl AcpSession {
         Ok(kind)
     }
 
+    /// The tool servers for the session calls. For an agent with a shared server, our own entry carries this
+    /// session's marker (`acp::leak`), so what that server leaves behind can be proven ours.
+    fn marked_servers(&self) -> Vec<Value> {
+        let servers = config::session_mcp_servers(&self.cfg);
+        if self.cfg.shared_server_images.is_empty() {
+            return servers;
+        }
+        super::leak::mark_own_server(servers, crate::mcp_install::MCP_SERVER_NAME, &self.marker)
+    }
+
     fn session_params(&self, mut base: Value) -> Value {
         if let (Some(meta), Some(map)) = (config::session_meta(&self.cfg), base.as_object_mut()) {
             map.insert("_meta".into(), meta);
@@ -738,7 +796,8 @@ impl AcpSession {
     fn open_session(&self, conn: &AcpConnection, caps: &AgentCaps, resume_id: Option<&str>) -> Result<(String, StartKind, SessionInfo), AcpError> {
         let cwd = self.cwd.to_string_lossy().into_owned();
         let replay = self.with_core(|core, _| std::mem::take(&mut core.replay_next));
-        let new_params = self.session_params(json!({ "cwd": cwd, "mcpServers": config::session_mcp_servers(&self.cfg) }));
+        let mcp_servers = self.marked_servers();
+        let new_params = self.session_params(json!({ "cwd": cwd, "mcpServers": mcp_servers }));
         let Some(old_id) = resume_id else {
             let (id, info) = self.session_new(conn, caps, new_params)?;
             return Ok((id, StartKind::New, info));
@@ -747,7 +806,7 @@ impl AcpSession {
         let mut reason = "the agent cannot restore a session".to_string();
         let preference = if replay { ResumePreference::PreferLoad } else { self.cfg.resume };
         for method in restore_order(preference, caps) {
-            let params = self.session_params(json!({ "sessionId": old_id, "cwd": cwd, "mcpServers": config::session_mcp_servers(&self.cfg) }));
+            let params = self.session_params(json!({ "sessionId": old_id, "cwd": cwd, "mcpServers": mcp_servers }));
             match self.restore(conn, method, params) {
                 Ok(info) => return Ok((old_id.to_string(), if method == Restore::Resume { StartKind::Resumed } else { StartKind::Loaded }, info)),
                 // Slow, dead or not yet started: the id is still good, try again later.
@@ -1305,6 +1364,7 @@ impl AcpSession {
 
     /// Ends the session for good: the adapter and everything under it are killed.
     pub fn close(&self) {
+        let closing = self.with_core(|core, _| (core.state.session_id().map(str::to_string), core.caps.as_ref().map_or(false, |c| c.close)));
         let conn = self.with_core(|core, ev| {
             core.closed = true;
             // Moves the epoch on so a start that is still in flight (its handler, its handshake)
@@ -1325,7 +1385,31 @@ impl AcpSession {
             core.conn.take()
         });
         if let Some(conn) = conn {
+            self.end_adapter_and_tool_servers(conn, closing.0, closing.1);
+        }
+    }
+
+    /// An agent with a shared server keeps this session's tool servers alive after `session/close`: ask it to close
+    /// (when it can), end the adapter, then end the tool servers that carry this session's marker (by pid, proven by
+    /// the marker and the parent chain: `acp::leak`). Other agents: just end the adapter.
+    fn end_adapter_and_tool_servers(&self, conn: AcpConnection, session_id: Option<String>, can_close: bool) {
+        let images = &self.cfg.shared_server_images;
+        if images.is_empty() {
             conn.kill();
+            return;
+        }
+        if let (Some(id), true) = (session_id, can_close) {
+            let _ = conn.request("session/close", json!({ "sessionId": id }), Duration::from_millis(1500));
+        }
+        conn.kill();
+        let (marker, images) = (self.marker.clone(), images.clone());
+        if super::chat::app_is_shutting_down() {
+            // The process ends right after: no time for a thread.
+            super::leak::sweep_session(&marker, &images);
+        } else {
+            thread::spawn(move || {
+                super::leak::sweep_session(&marker, &images);
+            });
         }
     }
 
@@ -1596,9 +1680,9 @@ impl AcpSession {
     }
 
     fn on_exited(&self, epoch: u64, info: ExitInfo) {
-        self.with_core(|core, ev| {
+        let retry = self.with_core(|core, ev| {
             if core.state.epoch() != epoch || matches!(core.state.phase(), Phase::Dormant | Phase::Exited) {
-                return;
+                return false;
             }
             core.conn = None;
             if let Some(turn) = core.turn.take() {
@@ -1618,7 +1702,37 @@ impl AcpSession {
             let summary = ExitSummary { kind, code: info.code, stderr_tail: info.stderr_tail, reason: None };
             core.state.on_exit(summary.clone());
             ev.push(SessionEvent::Exited(summary));
+            // A crash the person did not ask for (not a close, not a hold) is retried once, keeping the conversation.
+            let now = Instant::now();
+            let retry = kind == ExitKind::Crashed && !core.closed && core.held.is_none() && auto_restart_allowed(core.auto_restart_at, now);
+            if retry {
+                core.auto_restart_at = Some(now);
+            }
+            retry
         });
+        if retry {
+            if let Some(me) = self.me.upgrade() {
+                let _ = thread::Builder::new().name("acp-auto-restart".into()).spawn(move || {
+                    thread::sleep(AUTO_RESTART_BACKOFF);
+                    me.start_after_crash();
+                });
+            }
+        }
+    }
+
+    /// The automatic start after a crash: only when nothing else started the agent meanwhile. The start's own errors are
+    /// reported as any other start's.
+    fn start_after_crash(&self) {
+        let go = self.with_core(|core, ev| {
+            if core.closed || core.held.is_some() || core.is_running() || core.starting {
+                return false;
+            }
+            ev.push(SessionEvent::AutoRestarted);
+            true
+        });
+        if go {
+            let _ = self.ensure_running();
+        }
     }
 }
 
@@ -1659,6 +1773,22 @@ fn auth_required(caps: &AgentCaps, _cause: AcpError) -> AcpError {
 #[cfg(test)]
 pub(super) fn restore_order_for_tests(preference: ResumePreference, caps: &AgentCaps) -> Vec<&'static str> {
     restore_order(preference, caps).into_iter().map(|r| if r == Restore::Resume { "resume" } else { "load" }).collect()
+}
+
+#[cfg(test)]
+mod auto_restart_tests {
+    use super::*;
+
+    #[test]
+    fn a_crash_is_retried_once_and_a_second_one_inside_the_window_is_shown() {
+        let first = Instant::now();
+        // No earlier automatic start: the first crash is retried.
+        assert!(auto_restart_allowed(None, first));
+        // The retry crashes again 59 s later: it is not retried, the error is shown.
+        assert!(!auto_restart_allowed(Some(first), first + Duration::from_secs(59)));
+        // Exactly at the window's end a new crash is a fresh first crash.
+        assert!(auto_restart_allowed(Some(first), first + AUTO_RESTART_WINDOW));
+    }
 }
 
 #[cfg(test)]

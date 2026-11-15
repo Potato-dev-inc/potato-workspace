@@ -417,9 +417,12 @@ export class DevicesFake implements DevicesApi {
     if (method === 'POST' && /^\/panes\/[^/]+\/messages/.test(path)) return { status: 200, body: { message: { id: 'm1', text: (body as { text?: string })?.text ?? '', state: 'sent' } } };
     if (method === 'GET' && /^\/panes\/[^/]+\/snapshot/.test(path)) return { status: 200, body: { content: '$ make dmg\nBuilding...' } };
     if (method === 'POST' && /^\/panes\/[^/]+\/input/.test(path)) return { status: 200, body: { ok: true } };
+    if (method === 'GET' && /^\/panes\/[^/]+\/result/.test(path)) {
+      return { status: 200, body: { available: true, turn: 1, sentence: 'Claude edited 2 files (+48 -12), now idle.', durationMs: 45_000, files: { count: 2, added: 48, deleted: 12, paths: [] }, tests: 'all checks passed (3/3)', changes: [{ path: 'src/auth/redirect.ts', status: 'M', added: 30, deleted: 8, binary: false }, { path: 'src/auth/session.ts', status: 'M', added: 18, deleted: 4, binary: false }] } };
+    }
     if (method === 'GET' && /^\/panes\/[^/]+\/chat/.test(path)) {
       const id = decodeURIComponent(path.split('/')[2] ?? '');
-      return { status: 200, body: { items: this.chats[id] ?? [], revision: 1 } };
+      return { status: 200, body: { available: true, reason: null, source: 'file', waitingFor: null, rev: 1, reset: false, items: this.chats[id] ?? [], revision: 1 } };
     }
     return { status: 404, body: { error: 'not found' } };
   };

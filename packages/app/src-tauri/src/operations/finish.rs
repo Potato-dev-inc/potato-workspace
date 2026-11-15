@@ -124,6 +124,12 @@ fn finish_operation(
         .ok()
         .filter(|peek| peek.read_only && !peek.status.terminal())
         .and_then(|peek| crate::agent_runs::tree_proof::finish(id, std::path::Path::new(peek.work_dir())));
+    // The files this turn changed, for the result the app builds (git runs outside the lock).
+    let changed_files = get_operation(project, id)
+        .ok()
+        .filter(|peek| !peek.status.terminal())
+        .map(|peek| crate::agent_runs::structured::finish(id, std::path::Path::new(peek.work_dir())))
+        .unwrap_or_default();
     // Command checks can run for minutes; execute them before taking the global update lock.
     let command_results = match get_operation(project, id) {
         Ok(peek) if !peek.status.terminal() && !peek.checks.is_empty() => {
@@ -178,6 +184,7 @@ fn finish_operation(
     if read_only_proof.is_some() {
         op.worker.read_only_proof = read_only_proof;
     }
+    op.worker.changed_files = changed_files;
     if let (Some(summary), Some(worktree)) = (worktree_changes, op.worker.worktree.as_mut()) {
         worktree.changes = Some(summary);
     }

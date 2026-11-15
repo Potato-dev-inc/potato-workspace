@@ -41,6 +41,7 @@ export const inboxCards: Partial<Record<EnglishKey, string>> = {
   'inboxCards.consent.notStarted': '這個窗格不是它啟動的。',
   'inboxCards.consent.wantsToAnswer': '它想回答：「{asked}」。',
   'inboxCards.consent.controlTitle': '要允許{who}控制{target}嗎？',
+  'inboxCards.consent.changeTitle': '要允許{who}變更{target}嗎？',
   'inboxCards.consent.answerTitle': '要允許{who}回答{target}中的問題嗎？',
   'inboxCards.consent.thatWindow': '那個視窗',
   'inboxCards.consent.deny': '拒絕',

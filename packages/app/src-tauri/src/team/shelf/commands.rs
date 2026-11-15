@@ -44,7 +44,12 @@ pub async fn shelf_state() -> Result<Value, String> {
 
 /// The item to send for a local id, or the sentence why it cannot go. Pure: the commands and the tests share it.
 pub fn item_to_send(env: &Env, id: &str) -> Result<ShelfItem, String> {
-    let found = local::scan(env).into_iter().find(|l| l.id == id).ok_or("Potato Workspace cannot find that on this PC any more.")?;
+    let all = local::scan(env);
+    // The install line of a tool that runs a package from a folder on this PC has its own id; it holds no folder of this PC.
+    if let Some(install) = all.iter().filter(|l| l.item.is_err()).filter_map(|l| l.install.as_ref()).find(|i| item_id(i) == id) {
+        return Ok(install.clone());
+    }
+    let found = all.into_iter().find(|l| l.id == id).ok_or("Potato Workspace cannot find that on this PC any more.")?;
     found.item
 }
 

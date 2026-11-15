@@ -231,6 +231,9 @@
   border-top: 1px solid var(--sep);
 }
 .cockpit .ck-file-page {
+  /* The font turns -> and --> into arrows; a file must show what it says. */
+  font-variant-ligatures: none;
+  font-feature-settings: 'cv11', 'ss01', 'calt' 0, 'liga' 0;
   padding: 16px 20px;
   max-width: 760px;
 }

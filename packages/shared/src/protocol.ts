@@ -83,5 +83,7 @@ export const DEFAULT_BRIDGE_PORT_FILE = 'potato-workspace.bridge.port';
 /** Per-launch local secret the app writes beside the port file; sent as `X-Potato-Workspace-Local-Secret`. */
 export const BRIDGE_LOCAL_SECRET_FILE = 'potato-workspace.bridge.secret';
 export const BRIDGE_LOCAL_SECRET_HEADER = 'X-Potato-Workspace-Local-Secret';
+/** The agent pane a shell command runs in (from POTATO_WORKSPACE_PANE_ID). A hint that only makes the bridge stricter. */
+export const BRIDGE_PANE_HEADER = 'X-Potato-Workspace-Pane';
 export const DEFAULT_BRIDGE_HOST = '127.0.0.1';
 export const BRIDGE_HTTP_PORT_RANGE = { min: 17421, max: 17499 };

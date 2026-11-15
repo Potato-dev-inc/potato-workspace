@@ -307,11 +307,22 @@ describe('one Worker: the team relay address is offered for the phone link only 
       const update = stepsApi(undefined, 'https://potato-stable-link.me.workers.dev');
       await open({ relay: null, health: () => GOOD, update });
       expect(go()!.textContent).toBe('Set up stable link');
+      expect(host.textContent).not.toContain('is filled in for you');
       await click(go());
       await settle(10);
       expect(update.calls).toEqual(['prepare', 'install', 'login', 'deploy']);
       expect(host.querySelectorAll('[data-step][data-status="done"]')).toHaveLength(5);
       expect(field().value).toBe('https://potato-stable-link.me.workers.dev');
+      expect(host.textContent).toContain('is filled in for you');
+    });
+
+    it('a failed deploy never says the address is filled in', async () => {
+      const update = stepsApi('install');
+      await open({ relay: null, health: () => GOOD, update });
+      await click(go());
+      await settle(10);
+      expect(field().value).toBe('');
+      expect(host.textContent).not.toContain('is filled in for you');
     });
 
     it('an old Worker: "Update Worker" finishes, the notice goes away and the address can be used', async () => {

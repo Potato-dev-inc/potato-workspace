@@ -6,8 +6,9 @@
 use crate::conformance_suite::rig::{wait_until, ChatRig};
 use crate::proc_util::pid_alive;
 
-const CRASH_NOTICE: &str = "The agent stopped unexpectedly (exit code 3).";
-const CRASHED: &str = "The agent stopped unexpectedly";
+/// The notice now carries the agent's last words (when it left some) instead of only an exit code.
+const CRASH_NOTICE: &str = "The agent stopped. It said: \"fake agent: boom\"";
+const CRASHED: &str = "The agent stopped. It said: ";
 
 /// Sends `text` and waits up to `secs` for its turn to end.
 fn send_and_end(rig: &ChatRig, text: &str, secs: u64) -> bool {
@@ -59,7 +60,7 @@ fn chaos_crash_mid_turn() {
     let rig = ChatRig::new("");
     assert!(send_and_end(&rig, "crash", 30), "the turn did not end; kinds {:?}", rig.kinds());
     assert_eq!(notices_starting(&rig, CRASHED), 1, "notices {:?}", rig.notices());
-    assert!(rig.notices().iter().any(|n| n == CRASH_NOTICE), "notices {:?}", rig.notices());
+    assert!(rig.notices().iter().any(|n| n.starts_with(CRASH_NOTICE)), "notices {:?}", rig.notices());
     assert_eq!(rig.outcomes().last().map(String::as_str), Some("failed"), "outcomes {:?}", rig.outcomes());
     assert_ne!(rig.pane_status(), "running", "the pane still says it is working");
     no_agent_left(&rig);
@@ -121,7 +122,7 @@ fn chaos_killed_from_outside() {
     let _ = std::process::Command::new("taskkill").args(["/PID", &pid.to_string(), "/F"]).output();
     assert!(wait_until(10, || !pid_alive(pid)), "the killed agent is still alive");
     assert!(wait_until(10, || rig.turn_over()), "the turn did not end after the kill; kinds {:?}", rig.kinds());
-    assert_eq!(notices_starting(&rig, "The agent stopped unexpectedly"), 1, "notices {:?}", rig.notices());
+    assert_eq!(notices_starting(&rig, CRASHED), 1, "notices {:?}", rig.notices());
     assert!(wait_until(5, || !pid_alive(grandchild)), "the grandchild {grandchild} is still running 5 s after the agent died");
     no_agent_left(&rig);
 }
@@ -175,7 +176,7 @@ fn chaos_three_crashes_in_a_row() {
     for n in 1..=3 {
         assert!(send_and_end(&rig, "crash", 30), "crash {n} did not end; kinds {:?}", rig.kinds());
     }
-    assert_eq!(rig.notices().iter().filter(|n| n.as_str() == CRASH_NOTICE).count(), 3, "notices {:?}", rig.notices());
+    assert_eq!(rig.notices().iter().filter(|n| n.starts_with(CRASH_NOTICE)).count(), 3, "notices {:?}", rig.notices());
     assert_eq!(rig.outcomes().iter().filter(|o| o.as_str() == "failed").count(), 3, "outcomes {:?}", rig.outcomes());
     no_agent_left(&rig);
     next_turn_works(&rig);

@@ -405,42 +405,34 @@ fn receipt_reports_the_account_used_and_how_it_was_chosen() {
 }
 
 #[test]
-fn receipt_gains_structured_result_and_capture_becomes_structured() {
+fn a_completed_run_gets_a_structured_result_built_from_facts() {
     let mut snapshot = parked_snapshot(OperationStatus::Completed, "none");
     snapshot.result_capture = Some(operations::ResultCapture::Inferred);
-    snapshot.result = Some(
-        "All done.\n```potato-result\n{\"summary\":\"fixed it\",\"files_changed\":[\"a.rs\"],\"checks_run\":[\"cargo test\"],\"open_questions\":[]}\n```".into(),
-    );
+    snapshot.result = Some("All done.".into());
+    snapshot.worker.changed_files = vec!["a.rs".into()];
     let view = crate::agent_runs::runtime::AgentRunView::from(snapshot);
-    assert_eq!(view.result_capture, "structured");
-    let receipt = view.receipt.unwrap();
-    assert_eq!(receipt.result_capture, "structured");
-    let structured = receipt.structured_result.expect("structured_result");
-    assert_eq!(structured["summary"], "fixed it");
+    // The capture still says how the reply was read; the result is built by the app.
+    assert_eq!(view.result_capture, "inferred");
+    let structured = view.receipt.unwrap().structured_result.expect("structured_result");
+    assert_eq!(structured["summary"], "All done.");
     assert_eq!(structured["files_changed"][0], "a.rs");
+    assert_eq!(structured["checks_run"], serde_json::json!([]));
+    assert_eq!(structured["open_questions"], serde_json::json!([]));
 }
 
 #[test]
-fn a_missing_or_broken_block_keeps_the_old_capture_and_the_raw_result() {
-    for text in ["plain answer", "```potato-result\n{broken\n```"] {
-        let mut snapshot = parked_snapshot(OperationStatus::Completed, "none");
-        snapshot.result_capture = Some(operations::ResultCapture::Inferred);
-        snapshot.result = Some(text.into());
-        let view = crate::agent_runs::runtime::AgentRunView::from(snapshot);
-        assert_eq!(view.result_capture, "inferred");
-        assert_eq!(view.result.as_deref(), Some(text));
-        assert!(view.receipt.unwrap().structured_result.is_none());
-    }
+fn an_empty_reply_still_gets_a_result_and_a_running_run_gets_none() {
+    let mut snapshot = parked_snapshot(OperationStatus::Completed, "none");
+    snapshot.result = None;
+    let view = crate::agent_runs::runtime::AgentRunView::from(snapshot);
+    assert_eq!(view.receipt.unwrap().structured_result.unwrap()["summary"], "");
+    let running = crate::agent_runs::runtime::AgentRunView::from(parked_snapshot(OperationStatus::Running, "none"));
+    assert!(running.receipt.unwrap().structured_result.is_none());
 }
 
 #[test]
-fn structured_result_opt_out_parses_on_both_requests() {
+fn structured_result_opt_out_still_parses_on_the_request() {
     let run: crate::agent_runs::runtime::AgentRunRequest =
         serde_json::from_value(serde_json::json!({"task": "x", "structured_result": false})).unwrap();
     assert_eq!(run.structured_result, Some(false));
-    assert_eq!(crate::agent_runs::structured::with_instruction(&run.task, run.structured_result), "x");
-    let on: crate::agent_runs::runtime::AgentRunRequest =
-        serde_json::from_value(serde_json::json!({"task": "x"})).unwrap();
-    assert!(crate::agent_runs::structured::with_instruction(&on.task, on.structured_result)
-        .contains(crate::agent_runs::structured::STRUCTURED_RESULT_INSTRUCTION));
 }

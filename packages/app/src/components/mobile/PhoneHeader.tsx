@@ -68,7 +68,7 @@ export function PhoneHeader({
     <header className="ph-head">
       {onBack && (
         <button type="button" className="ph-iconbtn ph-back" data-testid="phone-back" aria-label={t('phone.header.back', { name: onBack.label })} onClick={onBack.go}>
-          <svg viewBox="0 0 24 24" aria-hidden="true">
+          <svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true">
             <path d="m15 5-7 7 7 7" />
           </svg>
         </button>
@@ -79,7 +79,7 @@ export function PhoneHeader({
         aria-label={waiting > 0 ? t('phone.menuWaiting', { count: waiting }) : t('phone.menuOpen')}
         onClick={onMenu}
       >
-        <svg viewBox="0 0 24 24" aria-hidden="true">
+        <svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true">
           <path d="M4 7h16M4 12h10M4 17h16" />
         </svg>
         {waiting > 0 && <span className="ph-badge" aria-hidden="true">{waiting}</span>}
@@ -136,7 +136,7 @@ export function PhoneHeader({
         )}
       </div>
       <button type="button" className="ph-iconbtn" aria-label={t('phone.newChat')} onClick={onNew} disabled={!bridgeReady}>
-        <svg viewBox="0 0 24 24" aria-hidden="true">
+        <svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true">
           <path d="M4 20h4L19 9l-4-4L4 16zM13.5 6.5l4 4" />
         </svg>
       </button>

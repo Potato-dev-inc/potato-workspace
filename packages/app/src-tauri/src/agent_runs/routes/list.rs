@@ -174,7 +174,34 @@ pub(super) fn list_agents(
     live_workers.extend(other);
     // `agent_types`: what each agent type supports and which run mode is chosen (headless_verified,
     // run_mode), so a lead sees the choice even when no worker is live.
-    Ok(json!({"workers": live_workers, "agent_types": crate::agent_run_mode::types_summary()}))
+    Ok(json!({"workers": live_workers, "agent_types": crate::agent_run_mode::types_summary(), "standbys": standbys_json(explicit_project.then_some(project))}))
+}
+
+/// The standby helpers the person made (`list_agents`): what an agent can ask for with `run_agent({ helper })`, or gets on its
+/// own when it asks for that agent type and names no model. Paths are not repeated: `project` is only compared.
+pub(super) fn standbys_json(project: Option<&str>) -> Value {
+    standbys_of(&crate::standby::helpers::view(), project)
+}
+
+fn standbys_of(view: &crate::standby::helpers::HelpersView, project: Option<&str>) -> Value {
+    let wanted = project.map(crate::standby::key::canonical_project);
+    let list: Vec<Value> = view
+        .helpers
+        .iter()
+        .filter(|h| wanted.as_ref().is_none_or(|w| *w == crate::standby::key::canonical_project(&h.project)))
+        .map(|h| {
+            json!({
+                "name": h.name,
+                "agent": h.agent,
+                "model": h.model,
+                "state": h.state,
+                "used_by": h.used_by,
+                "project": h.project,
+                "use": format!("run_agent({{ agent_type: \"{}\", helper: \"{}\", project_path, task }}); the same type with no model also takes it", h.agent, h.name),
+            })
+        })
+        .collect();
+    Value::Array(list)
 }
 
 pub(super) fn should_hide_from_agent_list(snapshot: &crate::operations::OperationSnapshot) -> bool {
@@ -243,3 +270,33 @@ pub(super) fn pane_worker_entry(pane: &crate::pty::PaneInfo, session_id: Option<
         "adoptable": pane.status != "error",
     })
 }
+
+#[cfg(test)]
+mod standby_list_tests {
+    use super::*;
+    use crate::acp::warm::HelperState;
+    use crate::standby::helpers::{AfterTask, HelperEntry, HelpersView};
+
+    fn entry(name: &str, agent: &str, model: Option<&str>, project: &str, state: HelperState) -> HelperEntry {
+        HelperEntry { id: name.into(), name: name.into(), agent: agent.into(), model: model.map(str::to_string), project: project.into(), after_task: AfterTask::Wait, home: None, used_by: None, taken_over: false, state, note: None, pane_id: None, open_pane: None, person_pane: None, warm: false, stage: None, stage_ms: None }
+    }
+
+    #[test]
+    fn list_agents_shows_the_standbys_with_name_agent_model_and_state_and_says_how_to_use_them() {
+        let view = HelpersView { helpers: vec![entry("Reviewer", "claude", Some("sonnet"), "C:/work/app", HelperState::Ready), entry("Other", "codex", None, "C:/work/else", HelperState::Starting)], max: 4, idle_minutes: 30 };
+        let all = standbys_of(&view, None);
+        assert_eq!(all.as_array().unwrap().len(), 2);
+        assert_eq!(all[0]["name"], "Reviewer");
+        assert_eq!(all[0]["agent"], "claude");
+        assert_eq!(all[0]["model"], "sonnet");
+        assert_eq!(all[0]["state"], "ready");
+        assert!(all[0]["use"].as_str().unwrap().contains("helper: \"Reviewer\""));
+        assert_eq!(all[1]["model"], serde_json::Value::Null);
+        assert_eq!(all[1]["state"], "starting");
+        // A project passed to list_agents narrows the list to that project's standbys.
+        let here = standbys_of(&view, Some("C:/work/app"));
+        assert_eq!(here.as_array().unwrap().len(), 1);
+        assert_eq!(here[0]["name"], "Reviewer");
+    }
+}
+

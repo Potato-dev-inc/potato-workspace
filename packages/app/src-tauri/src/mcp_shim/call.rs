@@ -7,6 +7,7 @@ pub(crate) fn call_tool(params: Value) -> Result<Value, String> {
     call_tool_cancellable(params, None)
 }
 
+#[cfg(test)]
 pub(crate) fn call_tool_cancellable(
     params: Value,
     cancel_rx: Option<std::sync::mpsc::Receiver<()>>,

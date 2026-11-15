@@ -189,21 +189,49 @@ fn the_policy_hands_the_home_to_the_pool_and_the_view_says_who_has_a_busy_helper
 }
 
 #[test]
-fn an_entry_carries_the_chat_the_person_has_open_and_the_chat_an_agent_took_it_from() {
+fn an_entry_carries_the_seats_own_chats_and_never_a_takeover() {
     let mut store = HelperStore::default();
     store.add(input("Reviewer", "codex"), "sb-1".into()).unwrap();
     store.add(input("Tester", "codex"), "sb-2".into()).unwrap();
     let statuses = BTreeMap::from([
         ("sb-1".to_string(), HelperStatus { state: HelperState::Ready, open_pane: Some("chat-1".into()), ..Default::default() }),
-        ("sb-2".to_string(), HelperStatus { state: HelperState::Busy, pane_id: Some("chat-2".into()), used_by: Some(HelperUser::Agent), taken_over: true, person_pane: Some("chat-1".into()), ..Default::default() }),
+        ("sb-2".to_string(), HelperStatus { state: HelperState::Busy, pane_id: Some("chat-2".into()), used_by: Some(HelperUser::Agent), ..Default::default() }),
     ]);
     let view = build_view(&store, &statuses, |_| true, |_| true);
-    assert_eq!((view.helpers[0].open_pane.as_deref(), view.helpers[0].person_pane.as_deref()), (Some("chat-1"), None));
-    assert_eq!((view.helpers[1].person_pane.as_deref(), view.helpers[1].pane_id.as_deref(), view.helpers[1].taken_over), (Some("chat-1"), Some("chat-2"), true));
+    assert_eq!(view.helpers[0].open_pane.as_deref(), Some("chat-1"));
+    assert_eq!((view.helpers[1].pane_id.as_deref(), view.helpers[1].used_by), (Some("chat-2"), Some(HelperUser::Agent)));
+    // An agent never takes a standby away from the person: the old fields stay in the shape and are always empty.
     let json = serde_json::to_value(&view.helpers[1]).unwrap();
-    assert_eq!(json["person_pane"], "chat-1");
+    assert_eq!((json["taken_over"].clone(), json["person_pane"].clone()), (serde_json::Value::Bool(false), serde_json::Value::Null));
     assert_eq!(json["open_pane"], serde_json::Value::Null);
     // A helper with no slot yet: nothing is open.
     let none = build_view(&store, &BTreeMap::new(), |_| true, |_| true);
-    assert_eq!((none.helpers[0].open_pane.clone(), none.helpers[0].person_pane.clone()), (None, None));
+    assert_eq!(none.helpers[0].open_pane.clone(), None);
+}
+
+#[test]
+fn removing_from_an_agent_keeps_the_helper_as_a_free_warm_agent_until_it_is_made_a_standby_again() {
+    let mut store = HelperStore::default();
+    let mut under = input("Reviewer", "opencode");
+    under.home = Some("pane-1".into());
+    store.add(under, "sb-1".into()).unwrap();
+    assert!(!store.helpers[0].warm);
+    store.detach("sb-1").unwrap();
+    assert_eq!((store.helpers[0].home.clone(), store.helpers[0].warm), (None, true), "no agent owns it, and it is still in the list (still running)");
+    assert_eq!(store.helpers.len(), 1, "nothing is removed: Close is the only thing that stops it");
+    let view = build_view(&store, &BTreeMap::new(), |_| true, |_| true);
+    assert!(view.helpers[0].warm);
+    store.set_home("sb-1", Some("pane-2".into())).unwrap();
+    assert_eq!((store.helpers[0].home.as_deref(), store.helpers[0].warm), (Some("pane-2"), false), "a standby of the new agent again");
+    assert!(store.detach("nope").is_err());
+}
+
+#[test]
+fn a_starting_helper_says_where_its_start_is() {
+    let mut store = HelperStore::default();
+    store.add(input("Reviewer", "opencode"), "sb-1".into()).unwrap();
+    let statuses = BTreeMap::from([("sb-1".to_string(), HelperStatus { state: HelperState::Starting, stage: Some("opening session".into()), stage_since_ms: Some(crate::event_log::now_ms() - 2_000), ..Default::default() })]);
+    let view = build_view(&store, &statuses, |_| true, |_| true);
+    assert_eq!(view.helpers[0].stage.as_deref(), Some("opening session"));
+    assert!(view.helpers[0].stage_ms.is_some_and(|ms| ms >= 2_000));
 }

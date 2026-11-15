@@ -15,6 +15,11 @@ env_allow = []
 # submitted), so a chat that cannot start is reported as it is and never rerun in a terminal.
 chat_only = true
 
+# OpenCode 2.x can run one shared `opencode serve --service`. It starts each session's tool servers (ours included)
+# and keeps them after the session closes (`session/close` answers {} and leaves them). Our own tool server is
+# marked per session and the marked ones are ended by pid when the chat closes and at the next app start (acp::leak).
+shared_server_images = ["opencode"]
+
 # Added to the normal terminal launch: `opencode --session <session id>`.
 resume_command = ["--session", "{session}"]
 

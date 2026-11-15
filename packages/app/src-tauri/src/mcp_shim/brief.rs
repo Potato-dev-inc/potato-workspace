@@ -90,7 +90,7 @@ fn brief_run(run: &Value) -> Value {
     // `verified` is shown even when null: a caller must see that nothing was verified.
     out.insert("verified".into(), get("verified"));
     out.insert("guarantees".into(), non_default_guarantees(run.get("guarantees")));
-    for key in ["warnings", "error", "prompt", "lane_used", "lane_reason", "lane_fallback", "adjusted", "next", "watch_command", "pane_id"] {
+    for key in ["warnings", "error", "prompt", "lane_used", "lane_reason", "lane_fallback", "adjusted", "next", "watch_command", "pane_id", "standby"] {
         out.insert(key.into(), get(key));
     }
     let model = run

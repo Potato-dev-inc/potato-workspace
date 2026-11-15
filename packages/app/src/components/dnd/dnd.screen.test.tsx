@@ -84,8 +84,11 @@ async function render(select: () => void, onDropChat: (id: string, zone: string,
 }
 const row = () =>
   [...host.querySelectorAll<HTMLButtonElement>('button.ck-row')].find((b) => b.querySelector('.ck-row-title')?.textContent === 'Codex two')!;
-const fire = (target: EventTarget, type: string, x: number, y: number) =>
-  act(async () => void target.dispatchEvent(new MouseEvent(type, { bubbles: true, cancelable: true, clientX: x, clientY: y, button: 0 })));
+const fire = async (target: EventTarget, type: string, x: number, y: number) => {
+  await act(async () => void target.dispatchEvent(new MouseEvent(type, { bubbles: true, cancelable: true, clientX: x, clientY: y, button: 0 })));
+  // The first move draws the zones, then looks for the zone again on a timer: let that timer run and commit before the test reads.
+  await act(async () => new Promise<void>((done) => setTimeout(done, 0)));
+};
 
 describe('drag a chat from the sidebar', () => {
   const zoneNow = () => host.querySelector('[data-testid="work-drop"]')?.getAttribute('data-zone');

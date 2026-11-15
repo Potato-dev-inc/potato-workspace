@@ -29,7 +29,7 @@ const RETRY_AFTER_MS: u64 = 10_000;
 type Registry = Arc<Mutex<PaneRegistry>>;
 
 /// The agent label the UI shows for an agent type, from its profile or definition.
-fn agent_label(agent_type: &str) -> String {
+pub(super) fn agent_label(agent_type: &str) -> String {
     crate::tui::descriptors()
         .into_iter()
         .find(|d| d.id == agent_type)
@@ -38,7 +38,7 @@ fn agent_label(agent_type: &str) -> String {
 }
 
 /// "Codex" for a pane running Codex; a plain fallback when the pane is not in the registry.
-fn target_label(pane_id: Option<&str>, registry: Option<&Registry>) -> String {
+pub(super) fn target_label(pane_id: Option<&str>, registry: Option<&Registry>) -> String {
     pane_id
         .zip(registry)
         .and_then(|(pane, registry)| registry.lock().panes.get(pane).map(|p| agent_label(&p.info.agent_type)))
@@ -60,11 +60,16 @@ fn pending(ask: &Ask, id: &str) -> OperationError {
     let what = match ask.action {
         Action::TakeOver => format!("control {}", ask.target),
         Action::AnswerPrompt => format!("answer a question in {}", ask.target),
+        Action::ConfigChange => format!("change {}", ask.target),
+    };
+    let (why, instead) = match ask.action {
+        Action::ConfigChange => ("a command from an agent window may not change the app by itself", ""),
+        _ => ("that pane was not started by you", " If you do not need that pane, start your own agent with run_agent instead."),
     };
     let mut error = OperationError::new(
         "CONSENT_PENDING",
         format!(
-            "A person has to say yes first. Potato Workspace is asking them whether you may {what}; that pane was not started by you, so nothing was done. Do not retry in a loop: wait about {} seconds, then make the same call again, or carry on with other work and check back. If you do not need that pane, start your own agent with run_agent instead.",
+            "A person has to say yes first. Potato Workspace is asking them whether you may {what}; {why}, so nothing was done. Do not retry in a loop: wait about {} seconds, then make the same call again, or carry on with other work and check back.{instead}",
             RETRY_AFTER_MS / 1000
         ),
         true,
@@ -90,7 +95,7 @@ fn refused(ask: &Ask, id: &str) -> OperationError {
     error
 }
 
-fn run(ask: Ask, now: u64) -> Result<Basis, OperationError> {
+pub(super) fn run(ask: Ask, now: u64) -> Result<Basis, OperationError> {
     match consent::decide(&ask, now) {
         Verdict::Allowed(basis) => Ok(basis),
         Verdict::Pending(id) => Err(pending(&ask, &id)),
@@ -164,7 +169,7 @@ pub(crate) fn check_take_over_at(
     Ok(())
 }
 
-fn questions_now() -> u64 {
+pub(super) fn questions_now() -> u64 {
     crate::questions::now_ms()
 }
 

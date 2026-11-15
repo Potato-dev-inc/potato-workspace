@@ -1,105 +1,112 @@
-//! Structured results: ask a helper to end its final message with a fenced `potato-result` JSON
-//! block, and read it back tolerantly. A missing or broken block never fails a run.
+//! Structured results, built by the app from facts. A helper is never asked to print JSON.
+//!
+//! The result keeps the shape callers know (`summary`, `files_changed`, `checks_run`,
+//! `open_questions`):
+//!
+//! * `summary`: the agent's final reply, trimmed (cut when long);
+//! * `files_changed`: the files that differ between a look at the folder when the turn started and
+//!   one when it ended (`tree_proof`: `HEAD` plus `git status`). A folder that is not a git
+//!   repository, or a look that fails, gives an empty list;
+//! * `checks_run`: the commands the agent ran, from the tool calls the app already records;
+//! * `open_questions`: the questions the agent was waiting on.
 
-use serde_json::Value;
+use std::collections::HashMap;
+use std::path::Path;
+use std::sync::OnceLock;
 
-/// Appended to the task sent to a helper. The example is deliberately not valid JSON, so the
-/// prompt echoed back on a terminal screen is never mistaken for an answer. It is ONE line with no
-/// line break: a newline typed into a terminal pane can submit the task early, and a multi-line
-/// task fails the "typed text is visible in the input box" check of prompt delivery.
-pub const STRUCTURED_RESULT_INSTRUCTION: &str = " End your final message with a fenced block tagged potato-result holding JSON, like ```potato-result {\"summary\": <string>, \"files_changed\": [<path>], \"checks_run\": [<command>], \"open_questions\": [<string>]} ```";
+use parking_lot::Mutex;
+use serde_json::{json, Value};
 
-/// The task as sent to the helper: `task` plus the instruction, unless the caller opted out.
-pub fn with_instruction(task: &str, enabled: Option<bool>) -> String {
-    if enabled == Some(false) || task.contains("```potato-result") {
-        task.to_string()
-    } else {
-        format!("{task}{STRUCTURED_RESULT_INSTRUCTION}")
-    }
-}
+use super::tree_proof::{self, TreeSnapshot};
 
-/// The last valid `potato-result` block in `text`. Invalid JSON, or JSON without a string
-/// `summary`, is ignored; an earlier valid block then still counts.
-pub fn parse(text: &str) -> Option<Value> {
-    const FENCE: &str = "```potato-result";
-    let mut found = None;
-    let mut rest = text;
-    while let Some(at) = rest.find(FENCE) {
-        let after = &rest[at + FENCE.len()..];
-        let Some(end) = after.find("```") else { break };
-        if let Ok(value) = serde_json::from_str::<Value>(after[..end].trim()) {
-            if value.get("summary").is_some_and(Value::is_string) {
-                found = Some(normalize(&value));
-            }
-        }
-        rest = &after[end + 3..];
-    }
-    found
-}
+/// The longest `summary`, in characters.
+pub const SUMMARY_CHARS: usize = 600;
+/// The most paths / commands / questions listed.
+pub const MAX_ITEMS: usize = 200;
+/// The longest single command or question.
+const ITEM_CHARS: usize = 300;
 
-/// The four documented fields, with the lists coerced to arrays of strings.
-fn normalize(value: &Value) -> Value {
-    let list = |key: &str| -> Value {
-        Value::Array(
-            value
-                .get(key)
-                .and_then(Value::as_array)
-                .map(|items| {
-                    items
-                        .iter()
-                        .filter_map(|item| item.as_str().map(|s| Value::String(s.into())))
-                        .collect()
-                })
-                .unwrap_or_default(),
-        )
-    };
-    serde_json::json!({
-        "summary": value["summary"],
-        "files_changed": list("files_changed"),
-        "checks_run": list("checks_run"),
-        "open_questions": list("open_questions"),
+/// The result for one turn. Always the four fields; the lists hold strings.
+pub fn build(reply: Option<&str>, files_changed: &[String], checks_run: &[String], open_questions: &[String]) -> Value {
+    json!({
+        "summary": summary_of(reply.unwrap_or("")),
+        "files_changed": list(files_changed, usize::MAX),
+        "checks_run": list(checks_run, ITEM_CHARS),
+        "open_questions": list(open_questions, ITEM_CHARS),
     })
 }
 
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn parses_a_valid_block() {
-        let text = "done\n```potato-result\n{\"summary\":\"ok\",\"files_changed\":[\"a.rs\"],\"checks_run\":[],\"open_questions\":[\"q\"]}\n```\n";
-        let v = parse(text).unwrap();
-        assert_eq!(v["summary"], "ok");
-        assert_eq!(v["files_changed"][0], "a.rs");
-        assert_eq!(v["open_questions"][0], "q");
+fn list(items: &[String], chars: usize) -> Vec<String> {
+    let mut out: Vec<String> = Vec::new();
+    for item in items {
+        let item = item.trim();
+        if item.is_empty() || out.iter().any(|seen| seen == item) {
+            continue;
+        }
+        out.push(cut(item, chars));
+        if out.len() >= MAX_ITEMS {
+            break;
+        }
     }
+    out
+}
 
-    #[test]
-    fn invalid_json_or_missing_summary_is_ignored() {
-        assert!(parse("```potato-result\n{nope}\n```").is_none());
-        assert!(parse("```potato-result\n{\"files_changed\":[]}\n```").is_none());
-        assert!(parse("```potato-result\n{\"summary\":\"x\"").is_none());
+fn cut(text: &str, chars: usize) -> String {
+    if text.chars().count() <= chars {
+        return text.to_string();
     }
+    let kept: String = text.chars().take(chars).collect();
+    format!("{}…", kept.trim_end())
+}
 
-    #[test]
-    fn last_valid_block_wins_and_a_broken_last_one_does_not_hide_an_earlier() {
-        let two = "```potato-result\n{\"summary\":\"one\"}\n```\nmore\n```potato-result\n{\"summary\":\"two\"}\n```";
-        assert_eq!(parse(two).unwrap()["summary"], "two");
-        let broken_last = "```potato-result\n{\"summary\":\"one\"}\n```\n```potato-result\n{bad\n```";
-        assert_eq!(parse(broken_last).unwrap()["summary"], "one");
-    }
+/// The reply without any `potato-result` block an older prompt may still have made an agent print.
+pub fn without_result_block(text: &str) -> String {
+    let Some(start) = text.find("```potato-result") else { return text.to_string() };
+    let rest = &text[start + 3..];
+    let end = rest.find("```").map(|at| start + 3 + at + 3).unwrap_or(text.len());
+    format!("{}{}", &text[..start], &text[end..])
+}
 
-    #[test]
-    fn missing_block_and_the_echoed_instruction_give_nothing() {
-        assert!(parse("just text").is_none());
-        assert!(parse(&with_instruction("task", None)).is_none());
-    }
+/// The summary: the reply, trimmed and cut. Empty when the agent said nothing.
+pub fn summary_of(reply: &str) -> String {
+    cut(without_result_block(reply).trim(), SUMMARY_CHARS)
+}
 
-    #[test]
-    fn instruction_is_appended_once_and_can_be_opted_out() {
-        let on = with_instruction("do it", None);
-        assert!(on.starts_with("do it") && on.contains("potato-result"));
-        assert_eq!(with_instruction(&on, Some(true)), on);
-        assert_eq!(with_instruction("do it", Some(false)), "do it");
+// ---- the look at the folder, from the start of a turn to its end --------------------------------------------------
+
+fn registry() -> &'static Mutex<HashMap<String, TreeSnapshot>> {
+    static REGISTRY: OnceLock<Mutex<HashMap<String, TreeSnapshot>>> = OnceLock::new();
+    REGISTRY.get_or_init(|| Mutex::new(HashMap::new()))
+}
+
+/// A turn of run `key` starts in `dir`. A folder that cannot be looked at (not a git repository) is
+/// simply not tracked.
+pub fn begin(key: &str, dir: &Path) {
+    match tree_proof::capture(dir) {
+        Ok(before) => {
+            registry().lock().insert(key.to_string(), before);
+        }
+        Err(_) => {
+            registry().lock().remove(key);
+        }
     }
 }
+
+/// The turn of run `key` ended: the files that changed since `begin`. Forgets the look. Empty when
+/// there was none or the folder cannot be looked at now.
+pub fn finish(key: &str, dir: &Path) -> Vec<String> {
+    let Some(before) = registry().lock().remove(key) else { return Vec::new() };
+    match tree_proof::capture(dir) {
+        Ok(after) => tree_proof::changed_files(&before, &after, dir),
+        Err(_) => Vec::new(),
+    }
+}
+
+/// Drops a run that ended without a look.
+pub fn forget(key: &str) {
+    registry().lock().remove(key);
+}
+
+#[cfg(test)]
+#[path = "structured_tests.rs"]
+mod tests;

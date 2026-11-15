@@ -69,6 +69,7 @@ export function StableLinkSheet({
   const t = useT();
   const [status, setStatus] = useState<TunnelStatus | null>(initial);
   const [worker, setWorker] = useState(initial?.config.mode === 'stable' ? (initial.config.url ?? '') : '');
+  const [filledByDeploy, setFilledByDeploy] = useState(false);
   const [secret, setSecret] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -147,11 +148,15 @@ export function StableLinkSheet({
           <li>
             <strong>{t('stable.step2')}</strong>
             <p>{t('stable.deployHelp')}</p>
-            <WorkerUpdateButton address={workersDevAddress(worker) ?? relay} label="wu.setupLink" api={updateApi} onDone={(url) => url && setWorker(url)} />
+            <WorkerUpdateButton address={workersDevAddress(worker) ?? relay} label="wu.setupLink" api={updateApi} onDone={(url) => {
+                if (!url) return;
+                setWorker(url);
+                setFilledByDeploy(true);
+              }} />
           </li>
           <li>
             <strong>{t('stable.step3')}</strong>
-            <p>{t('stable.pasteHelp')}</p>
+            <p>{t(filledByDeploy ? 'stable.pasteDone' : 'stable.pasteHelp')}</p>
             <WorkerSuggestion
               address={relay}
               current={worker}

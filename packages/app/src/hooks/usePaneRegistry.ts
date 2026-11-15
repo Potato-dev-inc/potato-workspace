@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { PaneStreamManager, createOwnerReplayReader } from '../terminal';
+import { PaneStreamManager } from '../terminal/pane-stream';
+import { createOwnerReplayReader } from '../terminal/pane-replay';
 import type { PaneDataSubscriber } from '../terminal/types';
 import {
   tauri,

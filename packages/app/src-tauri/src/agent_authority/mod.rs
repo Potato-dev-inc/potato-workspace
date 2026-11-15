@@ -34,6 +34,7 @@ pub mod config;
 pub mod consent;
 pub mod gate;
 pub mod merge;
+pub mod shell_gate;
 #[cfg(test)]
 mod tests;
 

@@ -98,6 +98,10 @@ pub struct PaneInfo {
     /// out of their JSON, so it stays byte-identical.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub lane: Option<String>,
+    /// This chat is a standby seat's own chat (the seat's id, `standby::seat_panes`): the sidebar draws it as the seat's
+    /// row under its owner, never as an agent of its own. Filled by `PaneState::info()`; left out of the JSON otherwise.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub standby_seat: Option<String>,
 }
 
 /// Internal handle — owns the PTY master and the reader thread handle.
@@ -141,6 +145,7 @@ impl PaneState {
         info.reprints_on_resize = crate::tui::profile_for(&info.agent_type).reprints_on_resize();
         info.title = crate::ambient::store::get(&info.id);
         info.origin = crate::pty::pane_origin::get(&info.id);
+        info.standby_seat = crate::standby::seat_panes::get(&info.id);
         info
     }
 }
@@ -427,6 +432,7 @@ impl PaneRegistry {
 origin: None,
             place: None,
             lane: None,
+            standby_seat: None,
         };
         PaneState {
             info,

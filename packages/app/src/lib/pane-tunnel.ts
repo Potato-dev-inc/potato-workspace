@@ -1,4 +1,4 @@
-import { PaneStreamManager } from '../terminal';
+import { PaneStreamManager } from '../terminal/pane-stream';
 import type { TerminalTransport } from '../hooks/useTerminalSession';
 import type { BridgeClient } from './bridge';
 import { tauri } from './tauri';

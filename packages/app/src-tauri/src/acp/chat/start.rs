@@ -160,10 +160,11 @@ pub fn start(deps: &StartDeps, cfg: AgentConfig, mut request: StartRequest) -> R
     }
 }
 
-/// The model a standby helper is matched on: the one the caller named, else (for a helper an agent started) the person's
-/// "Default model for helpers" for this agent, so a standby made for that model is the one that gets used.
-fn match_model(agent_id: &str, request: &StartRequest) -> Option<String> {
-    request.model.clone().or_else(|| if request.is_helper { crate::agent_run_mode::helper_default_for(&super::default_model::settings(), agent_id) } else { None })
+/// The model a standby helper is matched on: only one the caller named. A task that names none takes a standby of its agent type
+/// whatever model the standby has (the person made it for that model on purpose); "Default model for helpers" is a default for
+/// a helper nobody gave a standby for, never a reason to skip one.
+fn match_model(request: &StartRequest) -> Option<String> {
+    request.model.clone()
 }
 
 fn start_in(deps: &StartDeps, cfg: AgentConfig, request: StartRequest) -> Result<Arc<AcpChat>, StartError> {
@@ -184,28 +185,32 @@ fn start_in(deps: &StartDeps, cfg: AgentConfig, request: StartRequest) -> Result
     // A session started ahead of time for this agent, folder and account (`acp::warm`): the same chat, minus the adapter's
     // startup. The checks below ran when it was warmed; nothing about the chat differs.
     let account_id = account_env.as_ref().map(|(id, _)| id.clone());
-    // A standby helper the person made that fits this start comes first (agent, folder, account, and a model that agrees); a
-    // helper that is still starting is not waited for here, a plain warm session is.
+    // A standby seat the person made that fits this start comes first (agent, folder, account, and a model that agrees). An
+    // agent's own seat that is still starting is waited for: the seat takes the task, nothing else is started for it.
+    let seat_wait = if request.parent_pane.is_some() { WARM_WAIT } else { std::time::Duration::ZERO };
     let helper = deps.conversations.as_ref().and_then(|_| crate::acp::warm::claim_helper_for(
             &cfg,
-            &crate::acp::warm::HelperClaim { agent: &cfg.id, folder: &folder, account: account_id.as_deref(), model: match_model(&cfg.id, &request).as_deref(), caller: request.parent_pane.as_deref(), name: request.helper_name.as_deref() },
-            std::time::Duration::ZERO,
+            &crate::acp::warm::HelperClaim { agent: &cfg.id, folder: &folder, account: account_id.as_deref(), model: match_model(&request).as_deref(), caller: request.parent_pane.as_deref(), name: request.helper_name.as_deref() },
+            seat_wait,
         ));
-    let mut taken_from: Option<String> = None;
-    let (warm, helper_meta) = match helper {
-        Some(claimed) => {
-            taken_from = claimed.person_pane.clone();
-            // A taken-over standby comes without its session (`claimed.fresh`): the person's chat keeps it, this start is cold.
-            (claimed.item, Some(claimed.meta))
+    // The seat's chat exists already (the person has the seat open): the task runs in that chat. Nothing is built.
+    if let Some(claimed) = &helper {
+        if let Some(chat) = claimed.pane.as_deref().and_then(super::get) {
+            // A new start on a pane that has had starts before: its clock begins now, not at the first one.
+            crate::startup_timing::begin(chat.pane_id());
+            crate::startup_timing::mark(chat.pane_id(), "chat_seat_task_begin");
+            crate::standby::seat_panes::note(chat.pane_id(), &claimed.meta.id);
+            crate::acp::warm::set_helper_task_pane(&claimed.meta.id, chat.pane_id());
+            chat.set_seat(Some(&claimed.meta.id));
+            deps.host.panes_changed();
+            return Ok(chat);
         }
+    }
+    let (warm, helper_meta) = match helper {
+        Some(claimed) => (claimed.item, Some(claimed.meta)),
         None => (deps.conversations.as_ref().and_then(|_| crate::acp::warm::claim_waiting(&cfg, &folder, account_id.as_deref(), WARM_WAIT)), None),
     };
-    if let Some(pane) = &taken_from {
-        // An agent took a standby the person had open or was using; their turn was stopped (`warm::HelperClaim`).
-        tracing::info!(pane = %pane, "acp: a standby helper was taken over from the person; the task starts a fresh session");
-    }
-    // Where the task's chat is, told to the pool once it exists (a fresh start has no chat at the claim). A start that fails
-    // leaves it empty and the helper is given back.
+    // Where the task's chat is, told to the pool once it exists. A start that fails leaves it empty and the helper is given back.
     let mut task_pane = TaskPane { helper: helper_meta.as_ref().map(|meta| meta.id.clone()), pane: None };
     crate::startup_timing::mark(&timing_key, if warm.is_some() { "chat_warm_hit" } else { "chat_warm_miss" });
     if warm.is_none() {
@@ -222,6 +227,7 @@ fn start_in(deps: &StartDeps, cfg: AgentConfig, request: StartRequest) -> Result
     }
     let label = cfg.label.clone();
     let agent_id = cfg.id.clone();
+    let agent_id_for_memory = agent_id.clone();
     let warm_claimed = warm.is_some();
     let (session, pane_id) = match &deps.conversations {
         Some(conversations) if warm.is_some() => {
@@ -250,7 +256,12 @@ fn start_in(deps: &StartDeps, cfg: AgentConfig, request: StartRequest) -> Result
         }
     };
     crate::startup_timing::carry(&timing_key, &pane_id);
+    // A seat's chat is the seat's from before it is listed: no screen ever shows it as a new agent.
+    if let Some(meta) = &helper_meta {
+        crate::standby::seat_panes::note(&pane_id, &meta.id);
+    }
     let chat = build_registered_chat(deps, &pane_id, &label, &session, &folder, request.project.as_deref(), warm_claimed);
+    chat.set_seat(helper_meta.as_ref().map(|meta| meta.id.as_str()));
     ensure_sweeper();
 
     if let Err(error) = session.ensure_running() {
@@ -276,11 +287,17 @@ fn start_in(deps: &StartDeps, cfg: AgentConfig, request: StartRequest) -> Result
     }
     // The pins of the project (model, mode, Force yes) and the agent's own Force yes switch (`rules.rs`).
     super::rules::apply_at_start(&chat, model.is_some());
+    crate::startup_timing::mark(&pane_id, "chat_settings_applied");
 
     let grant = account_env.as_ref().and_then(|(id, _)| id.strip_prefix(crate::capacity_proxy::ACCOUNT_PREFIX));
     show_pane(deps, &chat, &session, agent_id, &folder, grant);
+    crate::startup_timing::mark(&pane_id, "chat_pane_shown");
     deps.host.panes_changed();
     deps.host.state_changed(&pane_id, &chat.state());
+    // Low memory never blocks a chat the person starts: one plain line says so.
+    if let Some(line) = crate::acp::memory::chat_warning(&crate::acp::memory::SystemReader, &agent_id_for_memory) {
+        chat.side_line("low-memory", &line);
+    }
     task_pane.pane = Some(pane_id);
     Ok(chat)
 }

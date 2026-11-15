@@ -10,7 +10,7 @@ export const WHY_MAX = 200;
  * "Suggest to...": pick people (or everyone), add one line of why, send. Only the definition goes; the sheet says so,
  * and for a tool it lists the names of the keys that each person adds for themselves.
  */
-export function ShelfSuggestSheet({ item, people, api, onClose, onSent }: { item: MineView; people: ShelfPerson[]; api: ShelfApi; onClose: () => void; onSent: () => void }) {
+export function ShelfSuggestSheet({ item, installLine, people, api, onClose, onSent }: { item: MineView; installLine?: string; people: ShelfPerson[]; api: ShelfApi; onClose: () => void; onSent: () => void }) {
   const t = useT();
   const [picked, setPicked] = useState<string[]>([]);
   const [everyone, setEveryone] = useState(false);
@@ -74,7 +74,7 @@ export function ShelfSuggestSheet({ item, people, api, onClose, onSent }: { item
             <input className="tpg-field-input" type="text" maxLength={WHY_MAX} value={why} onChange={(e) => setWhy(e.target.value)} placeholder={t('teamHub.shelf.why.hint')} />
             <small>{t('teamHub.shelf.why.count', { n: why.length, max: WHY_MAX })}</small>
           </label>
-          <p className="tpg-note">{t('teamHub.shelf.suggest.sends')}</p>
+          <p className="tpg-note">{installLine ? t('teamHub.shelf.suggest.installSends', { line: installLine }) : t('teamHub.shelf.suggest.sends')}</p>
           {item.needs.length > 0 && <p className="tpg-note">{t('teamHub.shelf.suggest.keys', { names: item.needs.join(', ') })}</p>}
           {item.skippedFiles > 0 && <p className="tpg-note">{t('teamHub.shelf.skipped', { count: item.skippedFiles })}</p>}
           {error && (

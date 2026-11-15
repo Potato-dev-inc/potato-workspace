@@ -14,6 +14,7 @@ const listen = vi.fn(async (event: string, cb: (e: { payload: unknown }) => void
 vi.mock('@tauri-apps/api/event', () => ({ listen: (...a: unknown[]) => listen(...(a as Parameters<typeof listen>)) }));
 vi.mock('@tauri-apps/api/core', () => ({ invoke: (...a: unknown[]) => invoke(...a) }));
 
+import { CHAT_OPEN_STAGES } from '../lib/chatTiming';
 import { useSessionChat, type SessionChatHook } from './useSessionChat';
 
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
@@ -194,5 +195,68 @@ describe('useSessionChat source', () => {
     // An item that went away is a reset with what is left.
     act(() => handlers.get('session-chat-items')!({ payload: { paneId: 'p1', items: [user], reset: true } }));
     expect(latest.turns[0].steps).toHaveLength(0);
+  });
+});
+
+describe('useSessionChat timing marks', () => {
+  // jsdom's performance has no mark buffer, so a small recording stand-in takes its place for these tests.
+  type Entry = { name: string; entryType: 'mark' | 'measure'; startTime: number; duration: number };
+  let entries: Entry[];
+  const fakePerformance = {
+    now: () => 0,
+    mark: (name: string) => {
+      entries.push({ name, entryType: 'mark', startTime: 0, duration: 0 });
+    },
+    measure: (name: string) => {
+      const m = { name, entryType: 'measure' as const, startTime: 0, duration: 1 };
+      entries.push(m);
+      return m;
+    },
+    getEntriesByType: (type: string) => entries.filter((e) => e.entryType === type),
+    getEntriesByName: (name: string, type?: string) => entries.filter((e) => e.name === name && (!type || e.entryType === type)),
+    clearMarks: (name?: string) => {
+      entries = entries.filter((e) => e.entryType !== 'mark' || (name !== undefined && e.name !== name));
+    },
+    clearMeasures: (name?: string) => {
+      entries = entries.filter((e) => e.entryType !== 'measure' || (name !== undefined && e.name !== name));
+    },
+  };
+  const chatMarks = () => entries.filter((entry) => entry.entryType === 'mark' && entry.name.startsWith('chat:'));
+  const batch = (i: number, paneId = 'p1') => ({
+    paneId,
+    items: [{ kind: 'assistant', id: `screen:${i}:reply`, at: null, text: `batch ${i}`, model: null, finalAnswer: false }],
+    reset: false,
+  });
+
+  beforeEach(() => {
+    entries = [];
+    vi.stubGlobal('performance', fakePerformance);
+  });
+  afterEach(() => vi.unstubAllGlobals());
+
+  it('keeps the chat marks to the fixed opening stages across 50 item batches', async () => {
+    // The open never answers here, so the chat stays in its opening stage while the batches arrive.
+    invoke.mockImplementation(async (cmd: string) => (cmd === 'session_chat_open' ? new Promise(() => undefined) : undefined));
+    act(() => root.render(<Probe paneId="p1" />));
+    await flush();
+    for (let i = 0; i < 50; i++) {
+      act(() => handlers.get('session-chat-items')!({ payload: batch(i) }));
+    }
+    expect(chatMarks().length).toBeLessThanOrEqual(CHAT_OPEN_STAGES.length);
+    expect(chatMarks().map((entry) => entry.name)).toEqual(['chat:view:open', 'chat:view:items']);
+  });
+
+  it('measures the open and clears its marks once the snapshot lands', async () => {
+    invoke.mockImplementation(async (cmd: string) =>
+      cmd === 'session_chat_open' ? { available: true, reason: null, items: [] } : undefined,
+    );
+    act(() => root.render(<Probe paneId="p2" />));
+    // The snapshot has landed once the chat reports ready; only then is the open finished.
+    await vi.waitFor(async () => {
+      await flush();
+      expect(latest.state).toBe('ready');
+    });
+    act(() => handlers.get('session-chat-items')!({ payload: batch(1, 'p2') }));
+    expect(chatMarks()).toEqual([]);
   });
 });

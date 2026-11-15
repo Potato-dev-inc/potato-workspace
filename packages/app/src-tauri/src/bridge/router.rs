@@ -173,6 +173,22 @@ pub(super) fn route_authorized(
         crate::companion::peer::check(registry, &crate::companion::peer::SystemTcp, peer, method, &route_path, &request_body)
             .map_err(operation_http_error)?;
     }
+    // The same door for what a plain `curl` or the CLI does inside an agent's window: no MCP session does not
+    // mean "the app". A call that CHANGES something and comes from an agent pane needs the person's Allow
+    // (a card in the Inbox); the app's own UI is in no pane and is never asked. See `agent_authority::shell_gate`.
+    if session.is_none() && !mobile_pairing::requires_pairing_token(headers, peer_loopback) {
+        crate::agent_authority::shell_gate::check_request(
+            registry,
+            &crate::companion::peer::SystemTcp,
+            &crate::pty::agent_proc::snapshot,
+            peer,
+            headers,
+            method,
+            segments,
+            &request_body,
+        )
+        .map_err(operation_http_error)?;
+    }
     if let Some(reply) = crate::questions::routes::handle(
         method,
         segments,

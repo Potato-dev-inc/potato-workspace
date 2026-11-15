@@ -126,7 +126,7 @@ fn a_chat_from_a_warm_session_is_ready_at_once_and_is_the_same_chat() {
     let cold_kinds = item_kinds(&cold);
 
     // A pool that wants this agent in this folder; its session starts in the background.
-    let host = Arc::new(LiveHost { conversations: rig.conversations.clone() });
+    let host = Arc::new(LiveHost { conversations: rig.conversations.clone(), registry: None });
     let pool = Pool::new(host);
     let key = WarmKey::new("fake", &rig.dir.to_string_lossy(), None);
     pool.set_policy(Policy { wanted: vec![WarmWant { key: key.clone(), folder: rig.dir.clone() }], cap: 4, idle_ms: 20 * 60_000, recent_ms: 3_600_000, ..Policy::default() });
@@ -174,7 +174,7 @@ fn a_chat_from_a_warm_session_is_ready_at_once_and_is_the_same_chat() {
 fn a_warm_session_whose_agent_definition_changed_is_not_used() {
     let _slot = WARM_SLOT.lock();
     let mut rig = Rig::new("init_delay_ms=50;new_delay_ms=50");
-    let host = Arc::new(LiveHost { conversations: rig.conversations.clone() });
+    let host = Arc::new(LiveHost { conversations: rig.conversations.clone(), registry: None });
     let pool = Pool::new(host);
     let key = WarmKey::new("fake", &rig.dir.to_string_lossy(), None);
     pool.set_policy(Policy { wanted: vec![WarmWant { key, folder: rig.dir.clone() }], cap: 4, idle_ms: 20 * 60_000, recent_ms: 3_600_000, ..Policy::default() });
@@ -199,7 +199,7 @@ fn a_phone_that_opened_new_chat_starts_fast_with_standby_off_and_no_desktop() {
     let (cold, cold_ready, cold_answer) = rig.start_and_say();
     assert!(!cold.warm_claimed());
 
-    let host = Arc::new(LiveHost { conversations: rig.conversations.clone() });
+    let host = Arc::new(LiveHost { conversations: rig.conversations.clone(), registry: None });
     let pool = Pool::new(host);
     pool.set_policy(Policy { cap: 0, idle_ms: 20 * 60_000, recent_ms: 3_600_000, ..Policy::default() });
     let _installed = Installed(pool.clone());
@@ -235,7 +235,7 @@ fn a_phone_that_opened_new_chat_starts_fast_with_standby_off_and_no_desktop() {
 /// A pool holding one standby helper per `(id, model)`, all ready, installed where `start` finds it.
 fn standby_pool(rig: &Rig, helpers: &[(&str, Option<&str>)]) -> Installed {
     use crate::acp::warm::{HelperMeta, HelperWant};
-    let pool = Pool::new(Arc::new(LiveHost { conversations: rig.conversations.clone() }));
+    let pool = Pool::new(Arc::new(LiveHost { conversations: rig.conversations.clone(), registry: Some(rig.deps.registry.clone()) }));
     let wants = helpers
         .iter()
         .map(|(id, model)| HelperWant::new(HelperMeta { id: (*id).into(), name: format!("Helper {id}"), model: model.map(str::to_string), close_after_use: false, home: None }, "fake", &rig.dir, None))
@@ -280,20 +280,32 @@ fn a_standby_model_the_agent_does_not_offer_is_said_in_the_result() {
 }
 
 #[test]
-fn a_helper_with_no_model_takes_the_standby_that_has_the_helper_default_model() {
+fn a_helper_with_no_model_takes_the_standby_even_when_the_helper_default_model_is_another() {
     let _slot = WARM_SLOT.lock();
     let rig = Rig::new("init_delay_ms=20;new_delay_ms=20");
-    let _installed = standby_pool(&rig, &[("s-a", Some("a")), ("s-b", Some("b"))]);
+    let _installed = standby_pool(&rig, &[("s-a", Some("a"))]);
+    // "Default model for helpers" is b, the standby was made for a: the caller named no model, so the standby is used, on a.
     crate::acp::chat::default_model::note_settings(&serde_json::json!({ "helper_default_models": { "fake": "b" } }));
     let chat = start(&rig.deps, rig.cfg.clone(), StartRequest { is_helper: true, ..rig.request() }).expect("starts");
     crate::acp::chat::default_model::note_settings(&serde_json::Value::Null);
-    assert!(chat.warm_claimed());
-    assert_eq!(model_of(&chat).as_deref(), Some("b"), "the helper default model decided which standby, and the session is on it");
-    let statuses = warm::pool().unwrap().helper_statuses();
-    assert_eq!(statuses["s-b"].state, warm::HelperState::Busy);
-    assert_eq!(statuses["s-a"].state, warm::HelperState::Ready, "the other standby is untouched");
+    assert!(chat.warm_claimed(), "the standby was used, not a fresh helper");
+    assert_eq!(model_of(&chat).as_deref(), Some("a"), "on the model the standby was made for");
+    assert_eq!(warm::pool().unwrap().helper_statuses()["s-a"].state, warm::HelperState::Busy);
     chat.retire();
     let _ = rig.conversations.close(chat.pane_id());
+}
+
+#[test]
+fn a_standby_is_on_its_model_while_it_waits_before_any_task_takes_it() {
+    let _slot = WARM_SLOT.lock();
+    let rig = Rig::new("init_delay_ms=20;new_delay_ms=20");
+    let _installed = standby_pool(&rig, &[("s1", Some("b"))]);
+    // Taken straight from the pool, no chat and no claim-time setting around it: the agent's own default is "a".
+    let (item, meta) = warm::pool().unwrap().claim_helper("fake", &rig.dir, None, None, crate::event_log::now_ms()).expect("ready");
+    assert_eq!(meta.model.as_deref(), Some("b"));
+    let current = item.session.snapshot().config_options.iter().find(|o| o.get("id").and_then(|v| v.as_str()) == Some("model")).and_then(|o| o.get("currentValue").and_then(|v| v.as_str()).map(str::to_string));
+    assert_eq!(current.as_deref(), Some("b"), "it warmed on the person's model");
+    item.session.close();
 }
 
 #[test]
@@ -308,8 +320,21 @@ fn a_named_model_picks_the_standby_with_that_model_and_wins() {
     let _ = rig.conversations.close(chat.pane_id());
 }
 
+/// The panes the app lists, as the sidebar gets them: `(id, the seat it is the own chat of, the pane it is nested under)`.
+fn listed(rig: &Rig) -> Vec<(String, Option<String>, Option<String>)> {
+    let registry = rig.deps.registry.lock();
+    let mut out: Vec<_> = registry.list().into_iter().map(|info| (info.id, info.standby_seat, info.parent_pane_id)).collect();
+    out.sort();
+    out
+}
+
+fn turn_done(chat: &AcpChat) -> bool {
+    let turn = chat.session().snapshot().turn;
+    chat.items().iter().any(|i| serde_json::to_value(i).unwrap()["id"] == format!("end:{turn}"))
+}
+
 #[test]
-fn a_standby_the_person_opened_is_taken_with_a_fresh_cold_session_on_its_model() {
+fn a_task_runs_in_the_chat_the_person_has_open_on_the_standby_and_nothing_new_is_made() {
     let _slot = WARM_SLOT.lock();
     let rig = Rig::new("init_delay_ms=20;new_delay_ms=20");
     let _installed = standby_pool(&rig, &[("s1", Some("b"))]);
@@ -322,29 +347,67 @@ fn a_standby_the_person_opened_is_taken_with_a_fresh_cold_session_on_its_model()
     assert_eq!(model_of(&person_chat).as_deref(), Some("b"), "the standby's model shows in the opened chat");
     let status = pool.helper_statuses()["s1"].clone();
     assert_eq!((status.state, status.open_pane.as_deref()), (warm::HelperState::Ready, Some(person.as_str())));
-    let person_session = rig.conversations.session(&person).expect("the person's chat has its session");
+    let person_session = rig.conversations.session(&person).expect("the chat has its session");
+    // The chat is listed as the seat's own, so no screen draws it as an agent.
+    assert_eq!(listed(&rig), vec![(person.clone(), Some("s1".to_string()), None)]);
 
-    // Sending in it makes the helper "with you".
-    person_chat.send("stream 1").unwrap_or_else(|e| panic!("send: {e:?}"));
-    assert_eq!(pool.helper_statuses()["s1"].used_by, Some(warm::HelperUser::Person));
-
-    // A task from an agent takes it: a cold session, never the person's, on the standby's model.
+    // A task from an agent takes the seat: it runs in that same chat, on the same session. Nothing is started.
     let chat = start(&rig.deps, rig.cfg.clone(), rig.request()).expect("starts");
-    assert!(!chat.warm_claimed(), "a taken-over standby starts a fresh session");
-    assert_ne!(chat.pane_id(), person);
-    assert!(!Arc::ptr_eq(chat.session(), &person_session));
-    assert_eq!(model_of(&chat).as_deref(), Some("b"), "the standby's model is applied to the fresh chat");
+    assert_eq!(chat.pane_id(), person, "the seat's own chat, not a new one");
+    assert!(Arc::ptr_eq(chat.session(), &person_session), "the seat's own session, not a fresh one");
+    assert_eq!(chat.seat().as_deref(), Some("s1"));
+    assert_eq!(model_of(&chat).as_deref(), Some("b"), "still on the standby's model");
+    assert_eq!(listed(&rig), vec![(person.clone(), Some("s1".to_string()), None)], "the pane list is what it was: no new pane");
     let status = pool.helper_statuses()["s1"].clone();
-    assert_eq!((status.state, status.used_by, status.taken_over), (warm::HelperState::Busy, Some(warm::HelperUser::Agent), true));
-    assert_eq!((status.pane_id.as_deref(), status.person_pane.as_deref()), (Some(chat.pane_id()), Some(person.as_str())), "the pool watches the new chat");
-    // The person's chat and its session are alive and readable.
-    assert!(rig.conversations.session(&person).is_some_and(|s| Arc::ptr_eq(&s, &person_session)));
-    assert!(crate::acp::chat::get(&person).is_some());
+    assert_eq!((status.state, status.used_by, status.pane_id.as_deref()), (warm::HelperState::Busy, Some(warm::HelperUser::Agent), Some(person.as_str())));
+    assert_eq!(pool.seat_count(), 1);
 
-    for pane in [chat.pane_id().to_string(), person] {
-        if let Some(c) = crate::acp::chat::get(&pane) {
-            c.retire();
-        }
-        let _ = rig.conversations.close(&pane);
-    }
+    chat.retire();
+    let _ = rig.conversations.close(&person);
+}
+
+#[test]
+fn a_seat_does_its_task_in_its_own_chat_and_the_pane_list_ends_as_it_began() {
+    let _slot = WARM_SLOT.lock();
+    let rig = Rig::new("init_delay_ms=20;new_delay_ms=20");
+    let _installed = standby_pool(&rig, &[("s1", Some("b"))]);
+    let pool = warm::pool().unwrap();
+    assert_eq!(listed(&rig), vec![], "a waiting standby is no pane");
+    assert_eq!(pool.seat_count(), 1);
+
+    let chat = start(&rig.deps, rig.cfg.clone(), rig.request()).expect("starts");
+    assert!(chat.warm_claimed(), "the seat's waiting session did the start: no new agent process was started for the task");
+    assert_eq!(chat.seat().as_deref(), Some("s1"));
+    // The one chat that is listed now is the seat's own (drawn as the seat's row), never an agent of its own.
+    assert_eq!(listed(&rig), vec![(chat.pane_id().to_string(), Some("s1".to_string()), None)]);
+    let shown = crate::acp::chat::surface::view(&chat);
+    assert_eq!(shown["standby"]["used"], true, "{shown}");
+    assert_eq!((shown["standby"]["id"].as_str(), shown["standby"]["note"].as_str().is_some_and(|n| n.contains("No new helper was started"))), (Some("s1"), true));
+
+    chat.send("ping").unwrap_or_else(|e| panic!("send: {e:?}"));
+    assert!(wait_until(30, || turn_done(&chat)), "the turn did not end");
+    // The task is over: the same seat is ready again (its next clean session was started while it worked), still one seat.
+    assert!(wait_until(30, || {
+        pool.tick(crate::event_log::now_ms());
+        pool.helper_statuses()["s1"].state == warm::HelperState::Ready
+    }), "the seat did not go back to ready");
+    let status = pool.helper_statuses()["s1"].clone();
+    assert_eq!((status.pane_id, status.used_by), (None, None));
+    assert_eq!(pool.seat_count(), 1);
+    // The finished chat is NOT closed (founder 2026-11-16): it stays listed and open as an ordinary chat, never labelled as a standby.
+    assert!(wait_until(30, || listed(&rig) == vec![(chat.pane_id().to_string(), None, None)]), "the finished chat should stay as an ordinary chat: {:?}", listed(&rig));
+    // Later, but inside the helper idle time (20 minutes): past that an unused seat sleeps on purpose.
+    pool.tick(crate::event_log::now_ms() + 5 * 60_000);
+    assert!(crate::acp::chat::get(chat.pane_id()).is_some(), "nothing closes it later either");
+    assert_eq!(pool.helper_statuses()["s1"].state, warm::HelperState::Ready, "and the seat is still there, ready");
+    // The next task finds the same seat, with clean memory (a new session).
+    let again = start(&rig.deps, rig.cfg.clone(), rig.request()).expect("starts again");
+    assert_eq!(again.seat().as_deref(), Some("s1"));
+    assert!(!Arc::ptr_eq(again.session(), chat.session()), "a clean session for the next task");
+    again.send("recall").unwrap_or_else(|e| panic!("send: {e:?}"));
+    assert!(wait_until(30, || turn_done(&again)));
+    assert!(serde_json::to_string(&again.items()).unwrap().contains("recall:none"), "the seat remembers nothing of the task before");
+    assert_eq!(pool.seat_count(), 1);
+    again.retire();
+    let _ = rig.conversations.close(again.pane_id());
 }

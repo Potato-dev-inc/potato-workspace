@@ -26,12 +26,13 @@
 
 pub mod api;
 pub mod cards;
-mod choice;
+pub(crate) mod choice;
 pub mod decide;
 pub mod default_model;
 pub mod drive;
 pub mod earlier;
 pub mod ending;
+pub mod helper_answers;
 pub mod images;
 pub mod lanes;
 pub mod mapper;
@@ -161,6 +162,8 @@ pub enum AgentAnswerError {
     BadChoice(Vec<String>),
     /// The chat was closed.
     Closed,
+    /// The person lets the agent that started a helper answer only the safe questions; this one is for the person (the words say why).
+    NeedsPerson(String),
     Failed(String),
 }
 
@@ -228,6 +231,8 @@ pub struct AcpChat {
     lane_note: Mutex<Option<serde_json::Value>>,
     /// This chat was taken from the warm (ready-made) chats instead of started fresh; the receipt says so.
     warm_claimed: AtomicBool,
+    /// The standby seat this chat is the own chat of (`standby::seat_panes`); the tools' answers say a standby took the task.
+    seat: Mutex<Option<String>>,
     /// What the `run_agent` that started this chat asked for and how its turns were checked (`receipt.rs`).
     run_meta: Mutex<receipt::RunMeta>,
     /// The append-only journal of this chat (`journal.rs`): every item is written as it arrives. `None` without a saved conversation.
@@ -326,6 +331,7 @@ pub fn on_pane_closed(pane_id: &str) {
 
 /// `app_ending`: the pane goes because the app ends, not because a person closed it.
 fn on_pane_gone(pane_id: &str, app_ending: bool) {
+    crate::standby::seat_panes::forget(pane_id);
     let chat = CHATS.lock().remove(pane_id);
     if let Some(chat) = chat {
         // Closing the pane ends the conversation (the confirm sheet says so); its record stays, as closed. When the app
@@ -424,6 +430,7 @@ impl AcpChat {
             nested_under: Mutex::new(None),
             lane_note: Mutex::new(None),
             warm_claimed: AtomicBool::new(false),
+            seat: Mutex::new(None),
             run_meta: Mutex::new(receipt::RunMeta::default()),
             journal,
             interrupted: AtomicBool::new(false),
@@ -508,6 +515,16 @@ impl AcpChat {
 
     pub fn warm_claimed(&self) -> bool {
         self.warm_claimed.load(Ordering::SeqCst)
+    }
+
+    /// This chat is standby seat `helper_id`'s own chat.
+    pub fn set_seat(&self, helper_id: Option<&str>) {
+        *self.seat.lock() = helper_id.map(str::to_string);
+    }
+
+    /// The standby seat this chat belongs to.
+    pub fn seat(&self) -> Option<String> {
+        self.seat.lock().clone()
     }
 
     pub fn lane_note(&self) -> Option<serde_json::Value> {
@@ -1086,10 +1103,12 @@ impl AcpChat {
         }
         let Some(_gate) = self.send_gate.try_lock() else { return Err(SendError::Busy) };
         self.begin_read_only_look();
+        self.begin_result_facts();
         *self.pending_user.lock() = Some((text.to_string(), attachments.to_vec()));
         let wire = self.wire_text(text);
         match self.session.prompt_message(&wire, attachments) {
             Ok(_) => {
+                crate::startup_timing::mark_end(&self.pane_id, "chat_prompt_sent");
                 self.sign_in_held.lock().take();
                 // A standby the person opened is theirs ("With you") while this turn runs.
                 crate::acp::warm::note_person_send(&self.pane_id);
@@ -1224,6 +1243,7 @@ impl AcpChat {
             return;
         }
         crate::agent_runs::tree_proof::forget(&self.pane_id);
+        crate::agent_runs::structured::forget(&self.pane_id);
         // Cards still open are taken down without an answer: nobody is waiting any more.
         let open: Vec<Card> = std::mem::take(&mut *self.cards.lock()).into_values().collect();
         for card in &open {
@@ -1381,19 +1401,31 @@ impl AcpChat {
         if self.is_closed() {
             return Err(AgentAnswerError::Closed);
         }
-        if !self.agent_answering() {
+        // The person's switch for this chat answers everything. Without it, the agent that started a helper may answer the safe
+        // questions when the setting is on (`helper_answers`).
+        let person_allowed = self.agent_answering();
+        if !person_allowed && !(helper_answers::enabled() && self.started_by().is_some()) {
             return Err(AgentAnswerError::NotAllowed);
         }
         self.reconcile_cards();
-        let (question_id, option) = {
+        let (question_id, option, ask_id) = {
             let cards = self.cards.lock();
             let found = cards.iter().find(|(ask_id, card)| !card.resolved && (card.question_id == prompt || ask_id.to_string() == prompt));
-            let Some((_, card)) = found else { return Err(AgentAnswerError::NoSuchQuestion) };
+            let Some((ask_id, card)) = found else { return Err(AgentAnswerError::NoSuchQuestion) };
             let Some(option) = card.options.iter().find(|o| o.choice_id == choice || o.option_id == choice) else {
                 return Err(AgentAnswerError::BadChoice(card.options.iter().map(|o| o.option_id.clone()).collect()));
             };
-            (card.question_id.clone(), option.clone())
+            (card.question_id.clone(), option.clone(), *ask_id)
         };
+        if !person_allowed {
+            let snapshot = self.session.snapshot();
+            if let Some(wait) = snapshot.permission_waits.iter().find(|w| w.ask_id == ask_id) {
+                let words = [wait.title.clone().unwrap_or_default(), wait.command.clone().unwrap_or_default(), wait.paths.join(" ")].join(" ");
+                if let Some(why) = helper_answers::needs_person(&words, wait.tool_kind.as_deref().unwrap_or(""), &option.kind, self.session.cwd()) {
+                    return Err(AgentAnswerError::NeedsPerson(why));
+                }
+            }
+        }
         let resolution = questions::store().answer(&question_id, Some(&option.choice_id), None, "agent", questions::now_ms()).map_err(|e| AgentAnswerError::Failed(format!("{}: {}", e.code, e.message)))?;
         if !resolution.accepted {
             return Err(AgentAnswerError::NoSuchQuestion);
@@ -1413,13 +1445,24 @@ impl AcpChat {
     /// exposes. Raises a card for a question that has none.
     pub fn state(&self) -> Value {
         let snapshot = self.session.snapshot();
+        let person_allowed = self.agent_answering();
+        let helper_may = helper_answers::enabled() && self.started_by().is_some();
+        let cwd = self.session.cwd().to_path_buf();
         let cards = self.cards.lock();
         let permissions: Vec<Value> = snapshot
             .permission_waits
             .iter()
             .map(|wait| {
                 let card = cards.get(&wait.ask_id);
+                // Which options the agent that started this chat may pick (`helper_answers`), and why not the others.
+                let words = [wait.title.clone().unwrap_or_default(), wait.command.clone().unwrap_or_default(), wait.paths.join(" ")].join(" ");
+                let agent_options: Vec<Value> = card
+                    .map(|c| c.options.iter().filter(|o| person_allowed || (helper_may && helper_answers::needs_person(&words, wait.tool_kind.as_deref().unwrap_or(""), &o.kind, &cwd).is_none())).map(|o| json!(o.choice_id)).collect())
+                    .unwrap_or_default();
+                let agent_why = (helper_may && !person_allowed).then(|| card.and_then(|c| c.options.iter().find(|o| o.kind == "allow_once").and_then(|o| helper_answers::needs_person(&words, wait.tool_kind.as_deref().unwrap_or(""), &o.kind, &cwd)))).flatten();
                 json!({
+                    "agentOptions": agent_options,
+                    "agentWhy": agent_why,
                     "askId": wait.ask_id,
                     "title": wait.title,
                     "toolKind": wait.tool_kind,

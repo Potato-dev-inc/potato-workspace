@@ -29,6 +29,8 @@ export type PaneInfo = {
   place?: PanePlace;
   /** `acp`: a chat session over the Agent Client Protocol (no terminal behind the pane). Absent for a terminal pane. */
   lane?: 'acp';
+  /** This chat is a standby seat's own chat (the seat's id). It is drawn as the seat's row under its owner, never as an agent. */
+  standby_seat?: string | null;
 };
 
 export type TerminalSnapshotEvent = { pane_id: string; snapshot: string };

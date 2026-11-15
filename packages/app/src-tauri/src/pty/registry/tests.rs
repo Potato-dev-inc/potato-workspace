@@ -388,6 +388,7 @@ fn windows_pane_json_is_unchanged_by_place_field() {
 origin: None,
         place: None,
         lane: None,
+        standby_seat: None,
     };
     assert_eq!(
         serde_json::to_string(&info).unwrap(),
@@ -425,6 +426,7 @@ fn linux_pane_json_carries_place() {
 origin: None,
         place: None,
         lane: None,
+        standby_seat: None,
     };
     info.place = Some(crate::wsl::model::PanePlace {
         kind: "linux".into(),

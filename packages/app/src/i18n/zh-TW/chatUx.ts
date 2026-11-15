@@ -15,6 +15,7 @@ export const chatUx: Partial<Record<EnglishKey, string>> = {
   'chatUx.find.prev': '上一筆',
   'chatUx.find.next': '下一筆',
   'chatUx.find.close': '關閉尋找',
+  'chatUx.restarted': '代理程式停止了，所以已自動重新啟動一次。',
   'chatUx.mine.title': '我的訊息',
   'chatUx.mine.placeholder': '搜尋你送出過的內容',
   'chatUx.mine.empty': '你還沒有送出過任何訊息。',
@@ -77,4 +78,5 @@ export const chatUx: Partial<Record<EnglishKey, string>> = {
   'copyOffer.follow': '和上面相同',
   'copyOffer.always': '一律提供',
   'copyOffer.never': '一律不提供',
+  'chat.readyIdle': '已就緒。直接輸入就能自己用它。',
 };

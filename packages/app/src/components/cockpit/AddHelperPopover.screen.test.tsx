@@ -127,4 +127,56 @@ describe('Add a helper popover', () => {
     await act(async () => void pop()!.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true })));
     expect(pop()).toBeNull();
   });
+
+  // The model menu floats in its own layer outside the card; a real press goes pointerdown, mousedown, then click.
+  const press = (el: Element) => {
+    el.dispatchEvent(new MouseEvent('pointerdown', { bubbles: true }));
+    el.dispatchEvent(new MouseEvent('mousedown', { bubbles: true }));
+    (el as HTMLElement).click();
+  };
+  const modelChip = () => pop()!.querySelector<HTMLButtonElement>('[data-testid="add-helper-model"]')!;
+  const menu = () => document.querySelector<HTMLElement>('.mp-menu');
+
+  it('the model menu is part of the card: open it, search, pick a model, and the card is still open with the model set', async () => {
+    const api = mkApi(view(0));
+    await open(api);
+    await act(async () => press(modelChip()));
+    expect(menu()).not.toBeNull();
+    expect(pop()).not.toBeNull();
+    // Typing in the search box moves the focus out of the card into the menu: it stays open.
+    const search = menu()!.querySelector<HTMLInputElement>('.mp-search')!;
+    await act(async () => {
+      press(search);
+      search.focus();
+    });
+    expect(pop()).not.toBeNull();
+    await act(async () => {
+      Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value')!.set!.call(search, 'gpt');
+      search.dispatchEvent(new Event('input', { bubbles: true }));
+    });
+    expect(pop()).not.toBeNull();
+    const pick = [...menu()!.querySelectorAll<HTMLButtonElement>('[role="option"]')].find((b) => b.textContent === 'Gpt-5')!;
+    await act(async () => press(pick));
+    expect(menu()).toBeNull();
+    expect(pop()).not.toBeNull();
+    expect(modelChip().getAttribute('aria-label')).toContain('Gpt-5');
+    await act(async () => pop()!.requestSubmit());
+    await flush();
+    expect(api.add.mock.calls[0][0]).toMatchObject({ agent: 'claude', model: 'gpt-5' });
+  });
+
+  it('a press outside both the card and the menu still closes the card; Escape closes the menu first, then the card', async () => {
+    await open(mkApi(view(0)));
+    await act(async () => press(modelChip()));
+    await act(async () => void document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true })));
+    expect(menu()).toBeNull();
+    expect(pop()).not.toBeNull();
+    await act(async () => void document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true })));
+    expect(pop()).toBeNull();
+    await act(async () => openNewStandby('C:/p', 'a1', { x: 20, y: 20 }));
+    await flush();
+    await act(async () => press(modelChip()));
+    await act(async () => press(document.body));
+    expect(pop()).toBeNull();
+  });
 });

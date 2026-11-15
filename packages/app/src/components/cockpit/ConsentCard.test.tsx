@@ -155,4 +155,20 @@ describe('ConsentCard: answering a risky prompt', () => {
     expect(host.querySelector('.ib-status')).toBeNull();
     expect(host.querySelector('.ib-meta')?.textContent).toBe('Claude');
   });
+
+  it('words a change asked from an agent command by what changes, not by a pane', () => {
+    const change: Question = {
+      ...takeOver,
+      id: 'c2',
+      question: 'Allow Claude to change your settings?',
+      context: 'It wants to change: language. It asked from a command in its own window.',
+      choices: takeOver.choices.filter((c) => c.id !== 'always'),
+      consent: { action: 'config_change', requester: 'Claude', target: 'your settings', pane_id: 'p-claude' },
+    };
+    render(change, 'Claude 1');
+    expect(host.querySelector('.ib-title')?.textContent).toBe('Allow Claude to change your settings?');
+    expect(consentTitle(change, 'Claude 1')).toBe('Allow Claude to change your settings?');
+    expect(button('Deny')?.className).toContain('ck-btn--primary');
+    expect(button('Always allow here')).toBeUndefined();
+  });
 });

@@ -40,6 +40,8 @@ export function consentTitle(q: Question, paneName?: string): string {
   const info = q.consent;
   if (!info) return q.question;
   const who = inSentence(info.requester || UNKNOWN);
+  // A change asked from an agent's command: the target is what changes ("your settings"), not a pane.
+  if (info.action === 'config_change') return t('inboxCards.consent.changeTitle', { who, target: info.target });
   const target = paneName?.trim() || info.target || t('inboxCards.consent.thatWindow');
   return info.action === 'answer_prompt'
     ? t('inboxCards.consent.answerTitle', { who, target })

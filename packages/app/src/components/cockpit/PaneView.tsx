@@ -796,6 +796,7 @@ export function PaneView({
                 slashCommands={isAcp ? acpState?.commands : undefined}
                 slashAgent={isAcp ? (acpState?.agent || agentType) : undefined}
                 slashWaiting={isAcp && !!acpState && ['starting', 'resuming', 'dormant'].includes(acpState.phase)}
+                sessionReady={isAcp && acpState?.phase === 'idle'}
                 onWarm={isAcp ? () => void acp.warm?.(paneId)?.catch(() => undefined) : undefined}
                 composerTop={isAcp ? <AcpConfigChips paneId={paneId} state={acpState} api={acp} /> : undefined}
               />

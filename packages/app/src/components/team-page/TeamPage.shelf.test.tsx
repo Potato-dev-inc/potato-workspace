@@ -131,9 +131,37 @@ describe('Team page: Shelf', () => {
     const row = $('[data-testid="shelf-mine-tool-postgres"]');
     expect(row.textContent).toContain('The password is inside the command');
     const b = row.querySelector<HTMLButtonElement>('button')!;
-    expect(b.disabled).toBe(true);
+    // Not a dead button: it is marked off, says why on hover, and a click answers with the reason.
+    expect(b.getAttribute('aria-disabled')).toBe('true');
+    expect(b.title).toContain('The password is inside the command');
     await click(b);
     expect(host.querySelector('[data-testid="shelf-suggest-sheet"]')).toBeNull();
+    expect(row.querySelector('[role="alert"]')?.textContent).toContain('Cannot suggest this one: The password is inside the command');
+    expect(row.querySelector('[data-testid^="shelf-install-"]')).toBeNull();
+  });
+
+  it('a tool that runs from a folder here offers the public install line instead, and only that line is sent', async () => {
+    const api = fakeShelfApi();
+    await show(api);
+    const row = $('[data-testid="shelf-mine-local-tool-docs-1a2b3c4d"]');
+    expect(row.textContent).toContain('It runs a program from a folder on your PC');
+    await click(row.querySelector<HTMLButtonElement>('[data-testid^="shelf-install-"]')!);
+    const sheet = $('[data-testid="shelf-suggest-sheet"]');
+    expect(sheet.textContent).toContain('Only this public install line goes: npx -y @scope/docs-server. Nothing from your PC.');
+    await tick(box('Sam'));
+    await click(btns('Send')[0]);
+    const sent = api.calls.filter((c) => c.startsWith('suggest'));
+    expect(sent).toEqual(['suggest("aabbccddeeff001122334455",["m-sam"],"")']);
+    // The id that goes is the install line's own: never the id of the tool that runs from a folder, and never a path.
+    expect(sent[0]).not.toContain('local-tool-docs');
+    expect(sent[0]).not.toMatch(/[A-Za-z]:\\|\/Users\/|\/home\//);
+  });
+
+  it('a tool with no public install line only shows its reason (no install button)', async () => {
+    await show(fakeShelfApi());
+    const row = $('[data-testid="shelf-mine-local-tool-pencil-9f8e7d6c"]');
+    expect(row.textContent).toContain('It runs a program from a folder on your PC');
+    expect(row.querySelector('[data-testid^="shelf-install-"]')).toBeNull();
   });
 
   it('Add: Look shows the writes, the path and the exact command line; Add sends the chosen agents', async () => {

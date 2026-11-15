@@ -175,6 +175,39 @@ pub fn compare(before: &TreeSnapshot, after: &TreeSnapshot) -> ReadOnlyProof {
     }
 }
 
+/// The files a run changed between two looks: those whose state or size/time differ, plus, when the
+/// commit moved, the files `git diff --name-only` reports between the two commits. Paths relative to
+/// the repository root, sorted, no repeats.
+pub fn changed_files(before: &TreeSnapshot, after: &TreeSnapshot, dir: &Path) -> Vec<String> {
+    let mut changed: std::collections::BTreeSet<String> = std::collections::BTreeSet::new();
+    for (path, value) in &after.files {
+        if before.files.get(path) != Some(value) {
+            changed.insert(path.clone());
+        }
+    }
+    for path in before.files.keys() {
+        if !after.files.contains_key(path) {
+            changed.insert(path.clone());
+        }
+    }
+    if before.head != after.head && !before.head.is_empty() && !after.head.is_empty() {
+        let range = format!("{}..{}", before.head, after.head);
+        if let Ok(bytes) = git_output(dir, &["diff", "--name-only", "-z", &range]) {
+            for name in bytes.split(|b| *b == 0).filter(|n| !n.is_empty()) {
+                changed.insert(String::from_utf8_lossy(name).to_string());
+            }
+        }
+    } else if before.head != after.head {
+        // The first commit of a fresh repository: everything it holds is new.
+        if let Ok(bytes) = git_output(dir, &["ls-files", "-z"]) {
+            for name in bytes.split(|b| *b == 0).filter(|n| !n.is_empty()) {
+                changed.insert(String::from_utf8_lossy(name).to_string());
+            }
+        }
+    }
+    changed.into_iter().collect()
+}
+
 // ---- runs in flight ---------------------------------------------------------------------------
 
 struct Watch {

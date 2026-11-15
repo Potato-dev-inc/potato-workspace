@@ -4,8 +4,9 @@
 // (Summary, Normal, Verbose) is in the header. The agent's text is Markdown when it comes from the session file;
 // text read off the terminal is shown as it is.
 import { loadDesktopDeviceNames } from '../../lib/deviceNames.desktop';
+import { t } from '../../i18n';
 import { sentFromLines, useDeviceNames } from '../../lib/deviceNames';
-import { Fragment, memo, useCallback, useEffect, useLayoutEffect, useMemo, useRef, type KeyboardEvent, type ReactNode } from 'react';
+import { Fragment, memo, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type KeyboardEvent, type ReactNode } from 'react';
 import { createPortal } from 'react-dom';
 import { clearChatJump, turnWithItem, type ChatJump } from '../../lib/chatJump';
 import { registerPaneTurns } from '../../lib/potatoCheck';
@@ -16,6 +17,7 @@ import { AttachmentChips } from './AttachmentChips';
 import { segmentSteps } from './chatActivity';
 import { formatDuration } from './chatFormat';
 import { useChatViewMode, type ChatViewMode } from './chatViewMode';
+import { hideResultBlock } from '../../lib/phone-result';
 import { ChatMarkdown } from './ChatMarkdown';
 import { PictureSourceContext } from './ChatPicture';
 import { EarlierRow } from './EarlierRow';
@@ -62,6 +64,8 @@ export interface SessionChatViewProps {
   reason: string | null;
   /** What an empty chat is waiting for, under the waiting line (where the reader looks). */
   waitingFor?: string | null;
+  /** An ACP chat whose agent is up and idle and has not been asked anything yet: the empty view says it is ready (not "waiting"). */
+  ready?: boolean;
   /** Where the items are read from. `screen`: the terminal's text (no tool output; text may be cut or wrapped). */
   source?: ChatSource | null;
   turns: ChatTurn[];
@@ -135,14 +139,17 @@ const TextStep = memo(function TextStep({ step, markdown, mode, actions }: { ste
   const bodyRef = useRef<HTMLDivElement>(null);
   // Summary keeps only the agent's final answers; the rest of its talk is folded away with the rows.
   if (mode === 'summary' && !step.item.finalAnswer) return null;
-  const body = markdown ? <ChatMarkdown text={step.item.text} /> : <div className="whitespace-pre-wrap break-words ck-chat-text">{step.item.text}</div>;
+  // A `potato-result` block (an older prompt, or another agent) is data for the tools, not for the person: hidden.
+  const text = hideResultBlock(step.item.text);
+  if (text.trim() === '' && step.item.text.trim() !== '') return null;
+  const body = markdown ? <ChatMarkdown text={text} /> : <div className="whitespace-pre-wrap break-words ck-chat-text">{text}</div>;
   // `data-rail-id`: the message rail jumps to this reply by it.
   if (!actions) return <div data-rail-id={step.id}>{body}</div>;
   // A finished reply: its text, and under it the quiet row (Copy, and Retry on the newest turn).
   return (
     <div className="ck-msg" data-rail-id={step.id}>
       <div ref={bodyRef}>{body}</div>
-      <ResponseActions text={step.item.text} targetRef={bodyRef} onRetry={actions.onRetry} />
+      <ResponseActions text={text} targetRef={bodyRef} onRetry={actions.onRetry} />
     </div>
   );
 });
@@ -253,7 +260,7 @@ function useStable<T>(next: Map<string, T>): Map<string, T> {
   return out;
 }
 
-export function SessionChatView({ state, reason, waitingFor, source, turns, model, cliVersion, dock, pending, composer, paneId, remember, emptyNote, headerExtra, headerMenu, headerSlot, banner, overlay, aside, jump, readOnly, canBranch, onBranch, helpers, onOpenPane, endings, earlier }: SessionChatViewProps) {
+export function SessionChatView({ state, reason, waitingFor, ready, source, turns, model, cliVersion, dock, pending, composer, paneId, remember, emptyNote, headerExtra, headerMenu, headerSlot, banner, overlay, aside, jump, readOnly, canBranch, onBranch, helpers, onOpenPane, endings, earlier }: SessionChatViewProps) {
   const fromScreen = source === 'screen';
   // "from OPPO Reno13" under a message that another device sent (names come from the PC's one device record).
   const deviceNames = useDeviceNames(loadDesktopDeviceNames);
@@ -282,6 +289,8 @@ export function SessionChatView({ state, reason, waitingFor, source, turns, mode
   const scrollRef = useRef<HTMLDivElement>(null);
   const rootRef = useRef<HTMLDivElement>(null);
   const atBottom = useRef(true);
+  // True while the reader is above the end: the `Jump to latest` button shows.
+  const [away, setAway] = useState(false);
   const prices = useStable(useMemo(() => turnPrices(turns), [turns]));
   // The message rail beside the scroll bar: one dash per message. Its own list; nothing here reaches a TurnView.
   const railEntries = useMemo(() => buildRailEntries(turns, mode), [turns, mode]);
@@ -304,23 +313,38 @@ export function SessionChatView({ state, reason, waitingFor, source, turns, mode
   // "Show earlier": older messages go in front, and the reader keeps the same message under the same place.
   const noteWhere = useKeepPlace(scrollRef, atBottom, earlier?.version ?? 0);
 
-  // Follow new items only while the person is already at the bottom.
-  useLayoutEffect(() => {
+  // Pinned to the end: a reader at the end follows whatever arrives after (history, streamed text, a picture or a code
+  // block that changes height later). A reader scrolled up keeps the place, and `Jump to latest` shows.
+  const pinToEnd = useCallback(() => {
     const el = scrollRef.current;
     if (el && atBottom.current) el.scrollTop = el.scrollHeight;
-  }, [turns, pending]);
-
-  // A docked card takes height from the conversation when it appears or goes: a reader at the end stays at the
-  // end; a reader scrolled up keeps the same place.
+  }, []);
+  // Another pane opens at its latest message, whatever place the last reader of this view was at.
+  useLayoutEffect(() => {
+    atBottom.current = true;
+    setAway(false);
+  }, [paneId]);
+  useLayoutEffect(() => {
+    pinToEnd();
+  }, [turns, pending, state, mode, pinToEnd]);
   useLayoutEffect(() => {
     const el = scrollRef.current;
-    if (!el || typeof ResizeObserver === 'undefined') return;
-    const ro = new ResizeObserver(() => {
-      if (atBottom.current) el.scrollTop = el.scrollHeight;
-    });
-    ro.observe(el);
-    return () => ro.disconnect();
-  }, []);
+    if (!el) return;
+    // Any change inside the conversation (history rows, a streamed chunk, a code block that gets its colours later).
+    const mutations = typeof MutationObserver === 'undefined' ? null : new MutationObserver(pinToEnd);
+    mutations?.observe(el, { childList: true, subtree: true, characterData: true });
+    // A picture changes the height without changing the DOM: its load event is caught on the way down.
+    el.addEventListener('load', pinToEnd, true);
+    // A docked card takes height from the conversation when it appears or goes: a reader at the end stays at the end;
+    // a reader scrolled up keeps the same place.
+    const resizes = typeof ResizeObserver === 'undefined' ? null : new ResizeObserver(pinToEnd);
+    resizes?.observe(el);
+    return () => {
+      mutations?.disconnect();
+      el.removeEventListener('load', pinToEnd, true);
+      resizes?.disconnect();
+    };
+  }, [pinToEnd]);
 
   // Scroll to the message a search result opened and wash it for a moment. A message that never comes (the chat
   // does not hold it any more) is dropped after a while, and so is one that is not in a chat that has loaded.
@@ -348,7 +372,12 @@ export function SessionChatView({ state, reason, waitingFor, source, turns, mode
     const el = scrollRef.current;
     if (!el) return;
     atBottom.current = el.scrollHeight - el.scrollTop - el.clientHeight <= AT_BOTTOM_PX;
+    setAway(!atBottom.current);
     if (atBottom.current) sinceLine.reachedEnd();
+  };
+  const jumpToLatest = () => {
+    sinceLine.jumpToLatest();
+    setAway(false);
   };
 
   return (
@@ -401,7 +430,7 @@ export function SessionChatView({ state, reason, waitingFor, source, turns, mode
         {state !== 'unavailable' && turns.length === 0 && (
           <div className="ck-chat-waiting">
             <p className="ck-sub text-pm-muted ck-chat-waiting-line">
-              {fromScreen ? 'Waiting for a message on the terminal…' : source === 'api' || source === 'acp' ? "Waiting for the agent's session…" : "Waiting for the agent's session file…"}
+              {fromScreen ? 'Waiting for a message on the terminal…' : source === 'acp' && ready ? t('chat.readyIdle') : source === 'api' || source === 'acp' ? "Waiting for the agent's session…" : "Waiting for the agent's session file…"}
             </p>
             {waitingFor && (
               <p className="mt-0.5 break-words text-[11px] text-pm-muted opacity-70 ck-chat-waiting-for">{waitingFor}</p>
@@ -430,7 +459,7 @@ export function SessionChatView({ state, reason, waitingFor, source, turns, mode
             </Fragment>
           ))}
         {state !== 'unavailable' && pending}
-        {sinceLine.show && <JumpToLatest onJump={sinceLine.jumpToLatest} />}
+        {away && <JumpToLatest onJump={jumpToLatest} />}
       </div>
       {state !== 'unavailable' && <MessageRail entries={railEntries} scrollRef={scrollRef} rootRef={rootRef} findQuery={find.open ? find.query : ''} />}
       </div>

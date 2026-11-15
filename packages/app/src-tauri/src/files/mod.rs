@@ -146,6 +146,13 @@ pub fn natural_cmp(a: &str, b: &str) -> Ordering {
     }
 }
 
+/// An Office or LibreOffice lock file: `~$name.docx` (Word, Excel, PowerPoint) or `.~lock.name#` (LibreOffice). It is
+/// made while a document is open in the program and is not a document. It is left out of every list and never opened.
+pub fn is_office_lock(name: &str) -> bool {
+    let name = name.rsplit(['/', '\\']).next().unwrap_or(name);
+    name.starts_with("~$") || (name.starts_with(".~lock.") && name.ends_with('#'))
+}
+
 /// The entries of one folder: folders first, then files, each in natural order. `rel` is "" for the root.
 /// Entries that lead out of the root (a link to elsewhere) are left out. `.git` and the heavy folders are left out
 /// unless `show_heavy` is true.
@@ -159,6 +166,9 @@ pub fn list_dir(root: &str, rel: &str, show_heavy: bool) -> Result<FolderListing
     for item in read.flatten() {
         let name = item.file_name().to_string_lossy().into_owned();
         if !show_heavy && HEAVY_DIRS.contains(&name.as_str()) {
+            continue;
+        }
+        if is_office_lock(&name) {
             continue;
         }
         // Resolve links: one that leads out of the project is not shown at all.
@@ -192,6 +202,9 @@ fn image_mime(ext: &str) -> Option<&'static str> {
 /// `data:` URL; text as text; anything else with NUL bytes as `binary`.
 pub fn read_file(root: &str, rel: &str) -> Result<FileContent, String> {
     let (canon_root, file) = resolve_in_root(root, rel)?;
+    if is_office_lock(rel) {
+        return Err("FILES_NOT_OPENABLE: That is a temporary file made by Word or Excel while a document is open. It is not a document.".to_string());
+    }
     let meta = fs::metadata(&file).map_err(|e| format!("FILES_IO: Could not open the file: {e}."))?;
     if !meta.is_file() {
         return Err("FILES_NOT_FILE: That is not a file.".to_string());
@@ -222,6 +235,9 @@ pub fn read_file(root: &str, rel: &str) -> Result<FileContent, String> {
 /// `read_file`; a file over `MAX_BYTES_READ` is not read (`too_large`).
 pub fn read_bytes(root: &str, rel: &str) -> Result<FileBytes, String> {
     let (canon_root, file) = resolve_in_root(root, rel)?;
+    if is_office_lock(rel) {
+        return Err("FILES_NOT_OPENABLE: That is a temporary file made by Word or Excel while a document is open. It is not a document.".to_string());
+    }
     let meta = fs::metadata(&file).map_err(|e| format!("FILES_IO: Could not open the file: {e}."))?;
     if !meta.is_file() {
         return Err("FILES_NOT_FILE: That is not a file.".to_string());
