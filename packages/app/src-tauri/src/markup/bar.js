@@ -287,15 +287,20 @@
     b.cy = e.clientY - TOP;
     blob(b);
   }
+  // The bar's own buttons sit inside `host` (a closed shadow root). A real click is composed, so the capture listeners on
+  // the document see it first: those must let the bar's own events through, or no button ever gets its click.
+  function ownBar(e) {
+    return !!host && typeof e.composedPath === 'function' && e.composedPath().indexOf(host) >= 0;
+  }
   function stopPage(e) {
-    if (!st.open || !e.isTrusted || e.clientY < TOP) return;
+    if (!st.open || !e.isTrusted || e.clientY < TOP || ownBar(e)) return;
     // A draw tool's layer uses pointer events itself; everything else is held back from the page.
     if (e.type.indexOf('pointer') === 0 && takesMouse()) return;
     e.preventDefault();
     e.stopImmediatePropagation();
   }
   function onClickCapture(e) {
-    if (!st.open || !e.isTrusted || e.clientY < TOP) return;
+    if (!st.open || !e.isTrusted || e.clientY < TOP || ownBar(e)) return;
     e.preventDefault();
     e.stopImmediatePropagation();
     if (st.tool !== 'select') return;
