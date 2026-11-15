@@ -102,4 +102,12 @@ describe('the hand-off note', () => {
     expect(pickHandoffAgent({ ...view, labs_enabled: false })).toBeNull();
     expect(pickHandoffAgent(null)).toBeNull();
   });
+  it('also picks agents saved to run in the terminal (the New agent page offers Chat for them), the last used one first', () => {
+    const agent = (id: string, over: object = {}) => ({ id, label: id.toUpperCase(), lane: 'terminal', effective_lane: 'terminal', disabled: false, ...over });
+    const view = { labs_enabled: true, agents: [agent('claude'), agent('codex'), agent('opencode', { disabled: true })] } as unknown as AcpLaneView;
+    expect(pickHandoffAgent(view, null)).toEqual({ id: 'claude', label: 'CLAUDE' });
+    expect(pickHandoffAgent(view, 'codex')).toEqual({ id: 'codex', label: 'CODEX' });
+    expect(pickHandoffAgent(view, 'opencode')).toEqual({ id: 'claude', label: 'CLAUDE' });
+    expect(pickHandoffAgent({ ...view, agents: [] }, 'codex')).toBeNull();
+  });
 });

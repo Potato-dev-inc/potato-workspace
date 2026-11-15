@@ -121,8 +121,17 @@ pub fn workers_dev_url(text: &str) -> Option<String> {
         .map(str::to_string)
 }
 
+fn plain(p: &Path) -> PathBuf {
+    crate::mcp_runtime::without_verbatim_prefix(p)
+}
+
+/// The bundled npm: `<node dir>/node_modules/npm/bin/npm-cli.js`, run by our own node as ONE argument (never npm.cmd, never a shell).
+fn npm_cli_js(env: &Env) -> PathBuf {
+    plain(&env.node_dir).join("node_modules").join("npm").join("bin").join("npm-cli.js")
+}
+
 fn node_exe(env: &Env) -> PathBuf {
-    let exe = env.node_dir.join(if cfg!(windows) { "node.exe" } else { "bin/node" });
+    let exe = plain(&env.node_dir).join(if cfg!(windows) { "node.exe" } else { "bin/node" });
     if exe.is_file() {
         exe
     } else {
@@ -143,8 +152,10 @@ fn collect(stream: Option<impl Read + Send + 'static>) -> std::thread::JoinHandl
 /// Runs `node <script> <args>` in the working copy and waits (bounded). The output is both streams together.
 fn run_node(env: &Env, script: &Path, args: &[&str], limit: Duration) -> StepOut {
     let node = node_exe(env);
+    let script = plain(script);
+    let work = plain(&env.work);
     let mut cmd = crate::proc_util::hidden_command(&node);
-    cmd.arg(script).args(args).current_dir(&env.work).stdin(Stdio::null()).stdout(Stdio::piped()).stderr(Stdio::piped());
+    cmd.arg(&script).args(args).current_dir(&work).stdin(Stdio::null()).stdout(Stdio::piped()).stderr(Stdio::piped());
     // Our Node first on PATH: wrangler's helpers and npm's install scripts start `node` by name.
     let mut paths = vec![node.parent().map(Path::to_path_buf).unwrap_or_default()];
     paths.extend(std::env::split_paths(&std::env::var_os("PATH").unwrap_or_default()));
@@ -159,7 +170,7 @@ fn run_node(env: &Env, script: &Path, args: &[&str], limit: Duration) -> StepOut
         .env_remove("CI");
     let mut child = match cmd.spawn() {
         Ok(c) => c,
-        Err(_) => return fail("The built-in Node could not start."),
+        Err(e) => return fail(format!("The built-in Node could not start ({e}).")),
     };
     let out = collect(child.stdout.take());
     let err = collect(child.stderr.take());
@@ -185,7 +196,7 @@ fn run_node(env: &Env, script: &Path, args: &[&str], limit: Duration) -> StepOut
 }
 
 fn wrangler_js(env: &Env) -> PathBuf {
-    env.work.join("node_modules/wrangler/bin/wrangler.js")
+    plain(&env.work).join("node_modules").join("wrangler").join("bin").join("wrangler.js")
 }
 
 fn prepare(env: &Env, name: &str) -> StepOut {
@@ -226,7 +237,10 @@ pub fn run_step(env: &Env, step: &str, name: &str) -> StepOut {
             if wrangler_js(env).is_file() {
                 return done("The tool is already here.");
             }
-            let npm = env.node_dir.join("node_modules/npm/bin/npm-cli.js");
+            let npm = npm_cli_js(env);
+            if !npm.is_file() {
+                return fail("The built-in npm is missing.");
+            }
             run_node(env, &npm, &["install", "--no-audit", "--no-fund"], Duration::from_secs(600))
         }
         "login" => {
@@ -253,7 +267,7 @@ fn env_for(app: &tauri::AppHandle) -> Env {
             .or_else(|| cfg!(debug_assertions).then(|| Path::new(env!("CARGO_MANIFEST_DIR")).join("resources").join(rel)))
             .unwrap_or_default()
     };
-    Env { bundle_dir: find("relay-worker"), node_dir: find("node"), work: crate::app_paths::app_data_dir().join("worker-update") }
+    Env { bundle_dir: plain(&find("relay-worker")), node_dir: plain(&find("node")), work: plain(&crate::app_paths::app_data_dir()).join("worker-update") }
 }
 
 /// One step of "Update Worker". `address`: the Worker to update (its name is used); none: a new Worker with the shipped name.
@@ -328,5 +342,51 @@ mod tests {
         .unwrap();
         let t = wrangler_toml(&m, "pm-relay");
         assert!(!t.contains("[vars]") && t.contains("enabled = true") && t.contains("new_sqlite_classes = [\"Team\"]"));
+    }
+
+    #[test]
+    fn verbatim_prefix_is_dropped() {
+        use crate::mcp_runtime::without_verbatim_prefix as plain;
+        assert_eq!(plain(Path::new(r"\\?\C:\Program Files\Potato Workspace\resources\node")), PathBuf::from(r"C:\Program Files\Potato Workspace\resources\node"));
+        assert_eq!(plain(Path::new(r"\\?\UNC\host\share\x")), PathBuf::from(r"\\host\share\x"));
+        assert_eq!(plain(Path::new(r"C:\plain\path")), PathBuf::from(r"C:\plain\path"));
+    }
+
+    /// The installed app lives in "C:\Program Files\..." and Tauri hands out its folders with the `\\?\` prefix. Our node must
+    /// get the npm script as ONE plain argument and run in the working copy, whatever the spelling of the folders.
+    #[test]
+    fn npm_runs_from_a_folder_with_spaces_even_when_spelled_with_the_verbatim_prefix() {
+        let real_node = Path::new(env!("CARGO_MANIFEST_DIR")).join("resources/node");
+        let node_exe_src = real_node.join(if cfg!(windows) { "node.exe" } else { "bin/node" });
+        if !node_exe_src.is_file() {
+            return;
+        }
+        let top = tmp("sp ace");
+        let root = top.join("Program Files").join("Potato Workspace");
+        let node_dir = root.join("resources").join("node");
+        let exe_dest = node_dir.join(if cfg!(windows) { "node.exe" } else { "bin/node" });
+        std::fs::create_dir_all(exe_dest.parent().unwrap()).unwrap();
+        std::fs::copy(&node_exe_src, &exe_dest).unwrap();
+        let bin = node_dir.join("node_modules").join("npm").join("bin");
+        std::fs::create_dir_all(&bin).unwrap();
+        std::fs::write(bin.join("npm-cli.js"), "console.log('ARGV1=' + process.argv[1]); console.log('CWD=' + process.cwd()); console.log('ARGS=' + process.argv.slice(2).join('|'));").unwrap();
+        let work = root.join("app data").join("worker-update");
+        std::fs::create_dir_all(&work).unwrap();
+        std::fs::write(work.join("package.json"), "{}").unwrap();
+        let mut spellings = vec![(node_dir.clone(), work.clone())];
+        if cfg!(windows) {
+            let verbatim = |p: &Path| PathBuf::from(format!(r"\\?\{}", p.display()));
+            spellings.push((verbatim(&node_dir), verbatim(&work)));
+        }
+        for (nd, w) in spellings {
+            let env = Env { bundle_dir: PathBuf::new(), node_dir: nd, work: w };
+            let npm = npm_cli_js(&env);
+            let out = run_node(&env, &npm, &["install", "--no-audit", "--no-fund"], Duration::from_secs(60));
+            assert!(out.ok, "{}", out.output);
+            assert!(out.output.contains("npm-cli.js") && !out.output.contains(r"\\?\"), "{}", out.output);
+            assert!(out.output.contains("Program Files") && out.output.contains("ARGS=install|--no-audit|--no-fund"), "{}", out.output);
+            assert!(out.output.contains("app data"), "{}", out.output);
+        }
+        let _ = std::fs::remove_dir_all(&top);
     }
 }
