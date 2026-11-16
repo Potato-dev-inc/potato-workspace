@@ -95,6 +95,13 @@ pub struct ConversationRecord {
     /// The pane that started this chat (its helper-of link). Restored on start when that pane is live.
     #[serde(default)]
     pub parent_pane_id: Option<String>,
+    /// `minion` | `spin_off`: what the agent that started this chat made it (Two types mode). Absent on records
+    /// from before the field: see [`ConversationRecord::effective_started_as`].
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub started_as: Option<String>,
+    /// Why (`requested` | `default` | `person_setting` | `standby`), kept so a restored chat still says it.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub as_reason: Option<String>,
     /// The account (`accounts::Store`) this chat runs under; `None`: the agent's own login. Kept so a restored chat
     /// starts under the same login.
     #[serde(default)]
@@ -115,6 +122,15 @@ impl ConversationRecord {
         let extra = self.notices.len().saturating_sub(MAX_NOTICES);
         self.notices.drain(..extra);
         self.updated_ms = at_ms;
+    }
+
+    /// What the agent that started this chat made it. A record from before `started_as` that has a parent link is a
+    /// helper chat the person could already type into, so it is a **spin-off** (plan section 7); no link, no kind.
+    pub fn effective_started_as(&self) -> Option<crate::agent_run_mode::StartedAs> {
+        self.started_as
+            .as_deref()
+            .and_then(crate::agent_run_mode::StartedAs::parse)
+            .or_else(|| self.parent_pane_id.is_some().then(|| crate::agent_run_mode::legacy_kind(true, false)))
     }
 }
 
@@ -210,6 +226,8 @@ mod tests {
             config_options: Vec::new(),
             started_by: None,
             parent_pane_id: None,
+            started_as: None,
+            as_reason: None,
             account: None,
             lane_note: None, copy: None,
             created_ms: 1,
@@ -266,6 +284,44 @@ mod tests {
     }
 
     #[test]
+    fn the_kind_survives_a_save_and_a_load() {
+        let (store, dir) = temp_store();
+        let mut minion = record("minion");
+        minion.parent_pane_id = Some("pane-parent".into());
+        minion.started_as = Some("minion".into());
+        minion.as_reason = Some("default".into());
+        store.save(&[minion.clone()]).unwrap();
+        let back = RecordStore::at(dir.join(FILE)).load();
+        assert_eq!(back, vec![minion]);
+        assert_eq!(back[0].effective_started_as(), Some(crate::agent_run_mode::StartedAs::Minion));
+        let _ = std::fs::remove_dir_all(dir);
+    }
+
+    #[test]
+    fn an_old_helper_record_loads_as_a_spin_off() {
+        let (store, dir) = temp_store();
+        std::fs::create_dir_all(&dir).unwrap();
+        // Written before `started_as` existed: a helper (has a parent link) and a chat the person started.
+        let mut helper = serde_json::to_value({
+            let mut r = record("helper");
+            r.parent_pane_id = Some("pane-parent".into());
+            r
+        })
+        .unwrap();
+        helper.as_object_mut().unwrap().remove("started_as");
+        helper.as_object_mut().unwrap().remove("as_reason");
+        let mut own = serde_json::to_value(record("own")).unwrap();
+        own.as_object_mut().unwrap().remove("started_as");
+        std::fs::write(dir.join(FILE), serde_json::json!({ "version": 1, "conversations": [helper, own] }).to_string()).unwrap();
+        let back = store.load();
+        assert_eq!(back.len(), 2);
+        assert_eq!(back[0].started_as, None, "nothing is rewritten");
+        assert_eq!(back[0].effective_started_as(), Some(crate::agent_run_mode::StartedAs::SpinOff));
+        assert_eq!(back[1].effective_started_as(), None, "a chat the person started has no kind");
+        let _ = std::fs::remove_dir_all(dir);
+    }
+
+    #[test]
     fn one_unreadable_record_does_not_cost_the_others() {
         let (store, dir) = temp_store();
         store.save(&[record("a")]).unwrap();
@@ -306,7 +362,7 @@ mod journal_sweep_tests {
     fn rec(id: &str, state: LastState) -> ConversationRecord {
         ConversationRecord {
             id: id.into(), agent: "codex".into(), session_id: None, cwd: "D:/w".into(), lane: RunLane::Acp,
-            last_known_state: state, terminal_pane: None, notices: Vec::new(), config_options: Vec::new(), started_by: None, parent_pane_id: None, account: None, lane_note: None, copy: None, created_ms: 1, updated_ms: 1,
+            last_known_state: state, terminal_pane: None, notices: Vec::new(), config_options: Vec::new(), started_by: None, parent_pane_id: None, started_as: None, as_reason: None, account: None, lane_note: None, copy: None, created_ms: 1, updated_ms: 1,
         }
     }
 

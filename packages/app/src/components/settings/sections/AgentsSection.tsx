@@ -15,7 +15,7 @@ import { CHAT_ADDONS_LABEL, ChatAddonRows } from '../blocks/ChatAddonRows';
 import { COLLISION_LABEL, CollisionSettings } from '../blocks/CollisionSettings';
 import { CloseHelpersWithAgentToggle, HelperAgentsChoice, KeepHelpersOpenToggle, MostHelpersAtOnce, StuckHelperMinutes } from '../blocks/HelperAgents';
 import { HELPER_MODELS_HINT, HELPER_MODELS_LABEL, HelperDefaultModels } from '../blocks/HelperModels';
-import { HiddenAgentsRow } from '../blocks/HiddenAgentsRow';
+import { StartedAgents } from '../blocks/StartedAgents';
 import { StandbyHelpersSettings } from '../blocks/StandbyHelpersSettings';
 import { PreloadSettings } from '../blocks/PreloadSettings';
 import { HANDOFF_MODE_HINT, HANDOFF_MODE_LABEL, QuickHandoffRows } from '../blocks/QuickHandoffRows';
@@ -28,10 +28,7 @@ import { SetupCheckPage } from '../SetupCheckPage';
 import { Popup } from '../controls';
 import type { RowDef, SettingsEnv } from '../model';
 import { requestBringChats } from '../../../lib/chatImport';
-import { CHAT_VIEW_MODES, useChatViewDefault, type ChatViewMode } from '../../chat/chatViewMode';
-import { useDoneCardSwitch } from '../../../lib/done-card';
-import { Btn, SettingRow, SettingToggle } from '../settings-ui';
-import { useMessageRail } from '../../../lib/messageRail';
+import { SettingRow, SettingToggle } from '../settings-ui';
 import { useHelpersInSidebar } from '../../../lib/helpersInSidebar';
 import { KeepGoingRows } from './KeepGoingRows';
 import { LinuxRows } from './LinuxRows';
@@ -96,34 +93,6 @@ function LiveUpdates({ env }: { env: SettingsEnv }) {
 }
 
 /** Settings > Agents > Chat: the rail beside the chat scroll bar. Kept on this device (the phone has its own), not in settings.json. */
-function MessageRailRow() {
-  const [on, setOn] = useMessageRail();
-  return <SettingToggle label={t('settings.row.message-rail.label')} description={t('settings.row.message-rail.hint')} checked={on} onChange={setOn} />;
-}
-
-/** Settings > Agents > Chat: how much of the work a new chat shows (Summary until changed). Each chat keeps its own choice from its View menu. */
-const VIEW_KEY = { summary: 'chatView.summary', normal: 'chatView.normal', verbose: 'chatView.verbose' } as const;
-function ChatDetailRow() {
-  const [mode, setMode] = useChatViewDefault();
-  return (
-    <SettingRow label={t('settings.row.chat-view.label')} description={t('settings.row.chat-view.hint')}>
-      <Popup aria-label={t('settings.row.chat-view.label')} value={mode} onChange={(event) => setMode(event.target.value as ChatViewMode)}>
-        {CHAT_VIEW_MODES.map((m) => (
-          <option key={m} value={m}>
-            {t(VIEW_KEY[m])}
-          </option>
-        ))}
-      </Popup>
-    </SettingRow>
-  );
-}
-
-/** Settings > Agents > Chat: the small "Done means" line above the message box. On this device only. */
-function DoneCardRow() {
-  const [on, setOn] = useDoneCardSwitch();
-  return <SettingToggle label={t('settings.row.done-card.label')} description={t('settings.row.done-card.hint')} checked={on} onChange={setOn} />;
-}
-
 /** Settings > Agents > How helpers run: bring the indented helper list back under each agent in the sidebar. Kept on this device. */
 function HelpersInSidebarRow() {
   const [on, setOn] = useHelpersInSidebar();
@@ -168,7 +137,7 @@ export const agentsRows: RowDef[] = [
     level: 'basic',
     label: 'Your agents',
     hint: 'One page per agent: sign-ins, model, how it opens, version and what it can do.',
-    keywords: 'agents list page claude codex each agent sign in model chat terminal version remove chips capabilities what it can do',
+    keywords: 'agents list page claude codex each agent sign in model chat terminal version remove chips capabilities what it can do add-on addon chat add-on keep ready warm how to run default model',
     group: 'Your agents',
     // Found on this computer: the Add an agent box above holds it (built there, not here).
     render: (env) => <AgentsView env={env} />,
@@ -192,16 +161,16 @@ export const agentsRows: RowDef[] = [
   },
   {
     id: 'standby-helpers',
-    label: 'Standby helpers',
-    hint: 'Helpers you make. They wait ready with no tokens used; the next task that fits uses one.',
+    label: 'Standbys',
+    hint: 'Standbys you make. They wait ready with no tokens used; the next task that fits uses one.',
     keywords: 'standby helper helpers ready waiting idle reviewer warm agent model project name limit at most close after task',
     group: 'Standby helpers',
     render: (env) => <StandbyHelpersSettings onSaved={env.markSaved} />,
   },
   {
     id: 'helper-answers',
-    label: 'Let the agent that started a helper answer its questions',
-    hint: 'The agent that started a helper can say yes once, or no. Risky asks still come to you.',
+    label: 'Let the agent that started an agent answer its questions',
+    hint: 'The agent that started an agent can say yes once, or no. Risky asks still come to you.',
     keywords: 'helper answer question permission prompt allow once agent orchestrator ask approve standby',
     group: 'Standby helpers',
     render: (env) => (
@@ -231,10 +200,10 @@ export const agentsRows: RowDef[] = [
   },
   {
     id: 'helper-tools',
-    label: 'Potato Workspace helpers inside agents',
-    hint: 'Give every agent you open here the Potato Workspace helper tools, ready with no setup.',
-    keywords: 'mcp helpers helper tools run agent wait agents subagent spawn inside pane panes automatic setup bridge claude codex opencode',
-    group: 'Helpers',
+    label: 'Potato tools in every agent',
+    hint: 'Give every agent you open here the Potato tools, ready with no setup.',
+    keywords: 'workspace potato mcp helpers helper tools run agent wait agents subagent spawn inside pane panes automatic setup bridge claude codex opencode',
+    group: 'How helpers run',
     render: (env) => (
       <SettingToggle
         label={t('agentsRows.helperToolsLabel')}
@@ -245,19 +214,27 @@ export const agentsRows: RowDef[] = [
     ),
   },
   {
+    id: 'started-agents',
+    label: 'Agents that agents start',
+    hint: 'One type: as today. Two types: minions the agent runs, and spin-offs you talk to.',
+    keywords: 'minion minions spin-off spin off spinoff one type two types helper helpers subagent sub-agent started agents agent starts another background chat nested let it choose',
+    group: 'How helpers run',
+    render: (env) => <StartedAgents onSaved={env.markSaved} />,
+  },
+  {
     id: 'helper-agents',
-    label: 'Helper agents',
-    hint: 'Choose whether helpers an agent starts are shown in a window or run in the background.',
+    label: 'How started agents show',
+    hint: 'Choose whether agents an agent starts are shown in a window or run in the background.',
     keywords: 'hidden helper helpers headless background invisible no window pane subagent sub-agent agent hide show visible watch inbox always show choose',
-    group: 'Helpers',
+    group: 'How helpers run',
     render: (env) => <HelperAgentsChoice onSaved={env.markSaved} />,
   },
   {
     id: 'helpers-in-sidebar',
-    label: 'Show helpers in the sidebar',
-    hint: 'Helpers show in the bar above the chat. Turn this on to list them under their agent too.',
+    label: 'Show started agents in the sidebar',
+    hint: 'Started agents show in the bar above the chat. On: list them under their agent too.',
     keywords: 'helpers sidebar tree list under agent bar top subagents show hide',
-    group: 'Helpers',
+    group: 'How helpers run',
     render: () => <HelpersInSidebarRow />,
   },
   {
@@ -265,39 +242,39 @@ export const agentsRows: RowDef[] = [
     label: HELPER_MODELS_LABEL,
     hint: HELPER_MODELS_HINT,
     keywords: 'helper helpers model default models subagent sub-agent agent choose pick gpt sonnet opus haiku opencode which',
-    group: 'Helpers',
+    group: 'How helpers run',
     render: (env) => <HelperDefaultModels saved={env.settings.helper_default_models} onChange={(next) => void env.patch({ helper_default_models: next })} />,
   },
   {
     id: 'keep-helpers-open',
-    label: 'Keep helpers open when they finish',
-    hint: 'On: a finished helper stays open so you can read it and ask it more.',
+    label: 'Keep started agents open when they finish',
+    hint: 'On: a finished started agent stays open so you can read it and ask it more.',
     keywords: 'keep open close closed pane finish finished done helper helpers subagent sub-agent follow-up followup release',
-    group: 'Helpers',
+    group: 'How helpers run',
     render: (env) => <KeepHelpersOpenToggle onSaved={env.markSaved} />,
   },
   {
     id: 'close-helpers-with-agent',
-    label: 'Close helpers when their agent closes',
-    hint: 'On: when you close an agent, the helpers it started close too.',
+    label: 'Close started agents when their agent closes',
+    hint: 'On: when you close an agent, the agents it started close too.',
     keywords: 'close closed closing helper helpers subagent sub-agent parent orchestrator agent pane leftover orphan stop with together',
-    group: 'Helpers',
+    group: 'How helpers run',
     render: (env) => <CloseHelpersWithAgentToggle onSaved={env.markSaved} />,
   },
   {
     id: 'most-helpers-at-once',
-    label: 'Most helpers at once',
-    hint: 'How many helpers run together when one call starts several.',
+    label: 'Most started agents at once',
+    hint: 'How many started agents run together when one call starts several.',
     keywords: 'most helpers at once how many parallel batch limit cap queue several many same time subagents',
-    group: 'Helpers',
+    group: 'How helpers run',
     render: (env) => <MostHelpersAtOnce onSaved={env.markSaved} />,
   },
   {
     id: 'stuck-helper-minutes',
-    label: 'Tell me when a helper is stuck',
-    hint: 'Minutes with no progress before a helper shows Stuck.',
+    label: 'Tell me when an agent is stuck',
+    hint: 'Minutes with no progress before an agent shows Stuck.',
     keywords: 'stuck stall stalled helper no progress minutes nudge respawn quiet silent hang hung frozen notify',
-    group: 'Helpers',
+    group: 'How helpers run',
     render: (env) => <StuckHelperMinutes onSaved={env.markSaved} />,
   },
   {
@@ -309,20 +286,12 @@ export const agentsRows: RowDef[] = [
     render: (env) => <QuickHandoffRows env={env} />,
   },
   {
-    id: 'hidden-agents',
-    label: 'Agents in the New agent menu',
-    hint: 'Hide the agents you never use from the New agent menu.',
-    keywords: 'hide show hidden agent agents new agent menu list edit remove visible tick untick plus button',
-    group: 'Menu',
-    render: () => <HiddenAgentsRow />,
-  },
-  {
     id: 'versions',
     label: 'Agent versions',
     hint: 'Check that an agent still starts the way Potato Workspace expects after it updates.',
     keywords: 'version update tested untested check canary strict unknown screens recognise capture folder fixture',
     group: 'Updates',
-    render: () => <AgentVersions />,
+    render: () => <AgentVersions noList />,
   },
   {
     id: 'show-terminals',
@@ -340,33 +309,9 @@ export const agentsRows: RowDef[] = [
     ),
   },
   {
-    id: 'message-rail',
-    label: 'Jump marks beside the chat',
-    hint: 'Thin dashes by the chat scroll bar, one per message. Click or drag to jump.',
-    keywords: 'message rail minimap dashes lines scroll bar jump scrub chat long navigate overview',
-    group: 'Chat',
-    render: () => <MessageRailRow />,
-  },
-  {
-    id: 'chat-view',
-    label: 'Chat detail',
-    hint: 'How much a new chat shows to start with: Summary, Normal or Verbose.',
-    keywords: 'chat detail view summary normal verbose default level activity lines how much',
-    group: 'Chat',
-    render: () => <ChatDetailRow />,
-  },
-  {
-    id: 'done-card',
-    label: 'Show if build and tests passed',
-    hint: 'A small line above the message box that says if the build and tests passed.',
-    keywords: 'done means card checks build tests result strip hide show line composer',
-    group: 'Chat',
-    render: () => <DoneCardRow />,
-  },
-  {
     id: 'agent-lane',
     label: 'Chat or terminal',
-    hint: 'Helpers run as a chat when the agent can, else in a terminal.',
+    hint: 'Started agents run as a chat when the agent can, else in a terminal.',
     keywords: 'chat acp terminal lane run mode conversation session how to run',
     group: 'Chat',
     render: () => <AgentLaneRows />,
@@ -374,7 +319,7 @@ export const agentsRows: RowDef[] = [
   {
     id: 'chat-addons',
     label: CHAT_ADDONS_LABEL,
-    hint: 'The small helper each agent needs to run as a chat. Install or remove it here.',
+    hint: 'The small add-on each agent needs to run as a chat. Install or remove it here.',
     keywords: 'chat acp add-on addon adapter install remove helper download sign in claude codex',
     group: 'Chat',
     render: () => <ChatAddonRows />,

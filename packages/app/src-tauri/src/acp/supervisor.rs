@@ -69,6 +69,7 @@ impl Supervisor {
     /// Removes and closes a session.
     pub fn remove(&self, key: &str) -> bool {
         let removed = self.sessions.lock().remove(key);
+        crate::agent_authority::pane_keys::revoke(key);
         match removed {
             Some(session) => {
                 session.close();
@@ -92,7 +93,11 @@ impl Supervisor {
 
     /// Closes everything (the app is exiting, or the Labs switch went off).
     pub fn close_all(&self) {
-        let all: Vec<Arc<AcpSession>> = std::mem::take(&mut *self.sessions.lock()).into_values().collect();
+        let taken = std::mem::take(&mut *self.sessions.lock());
+        for key in taken.keys() {
+            crate::agent_authority::pane_keys::revoke(key);
+        }
+        let all: Vec<Arc<AcpSession>> = taken.into_values().collect();
         for session in all {
             session.close();
         }

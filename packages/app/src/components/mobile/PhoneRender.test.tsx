@@ -132,7 +132,7 @@ describe('helper chats in the drawer', () => {
     expect(nestHelpers(list).map((r) => `${r.pane.id}:${r.depth}`)).toEqual(['a:0', 'h1:1', 'h2:1', 'b:0', 'lost:0', 'x:0', 'y:0']);
   });
 
-  it('the drawer shows a helper indented under its parent with the word "Helper"', async () => {
+  it('the drawer shows a helper indented under its parent with the words "Started agent"', async () => {
     const panes = [pane('a'), pane('h1', 'a')];
     await act(async () => {
       root.render(
@@ -144,8 +144,8 @@ describe('helper chats in the drawer', () => {
     expect(rows[0].getAttribute('data-testid')).toBeNull();
     expect(rows[1].getAttribute('data-testid')).toBe('drawer-helper');
     expect(rows[1].classList.contains('ph-dhelper')).toBe(true);
-    expect(rows[1].textContent).toContain('Helper');
-    expect(rows[0].textContent).not.toContain('Helper');
+    expect(rows[1].textContent).toContain('Started agent');
+    expect(rows[0].textContent).not.toContain('Started agent');
   });
 });
 

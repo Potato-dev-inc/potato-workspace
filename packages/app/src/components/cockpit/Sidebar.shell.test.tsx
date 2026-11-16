@@ -81,23 +81,23 @@ async function render(c: CockpitApi, s: ShipApi = ship('repo')) {
 }
 
 async function openMenu(): Promise<HTMLElement> {
-  const plus = host.querySelector<HTMLButtonElement>('button[aria-label="New agent"]')!;
+  const plus = document.querySelector<HTMLButtonElement>('button[aria-label="New agent"]')!;
   await act(async () => plus.click());
   await act(async () => {});
-  return host.querySelector<HTMLElement>('[role="menu"]')!;
+  return document.querySelector<HTMLElement>('[role="menu"]')!;
 }
 
 describe('sidebar: nothing raw', () => {
   it('shows nothing about the bridge while it works, and never its address', async () => {
     await render(fakeApi({ bridgeLine: '' }));
-    expect(host.querySelector('.ck-bridge')).toBeNull();
+    expect(document.querySelector('.ck-bridge')).toBeNull();
     expect(host.textContent).not.toMatch(/127\.0\.0\.1|localhost|Bridge/);
   });
 
   it('says "Connection lost" with a Fix button that opens the bridge settings, when it is down', async () => {
     const c = fakeApi({ bridgeLine: 'Not connected' });
     await render(c);
-    const line = host.querySelector('.ck-bridge')!;
+    const line = document.querySelector('.ck-bridge')!;
     expect(line.textContent).toContain('Connection lost');
     act(() => line.querySelector<HTMLButtonElement>('button')!.click());
     expect(c.openSettings).toHaveBeenCalledWith('bridge');
@@ -105,7 +105,7 @@ describe('sidebar: nothing raw', () => {
 
   it('names a pane in a separate copy by its project, never by the id of the copy folder', async () => {
     await render(fakeApi({}, COPY_CWD));
-    const row = host.querySelector('.ck-row:not(.ck-row--flat)')!;
+    const row = document.querySelector('.ck-row:not(.ck-row--flat)')!;
     expect(row.querySelector('.ck-row-sub')!.textContent).toBe('separate copy of shop');
     expect(row.textContent).not.toContain('7d4cb2b3');
     expect(row.querySelector('.ck-row-main')!.getAttribute('title')).not.toContain('7d4cb2b3');
@@ -113,7 +113,7 @@ describe('sidebar: nothing raw', () => {
 
   it('calls the Project view "Project", not "Project memory"', async () => {
     await act(async () => root.render(<Sidebar c={fakeApi()} onOpenPalette={() => {}} onOpenMemory={() => {}} ship={ship('repo')} />));
-    act(() => host.querySelector<HTMLButtonElement>('.ck-side-foot button[aria-label="More"]')!.click());
+    act(() => document.querySelector<HTMLButtonElement>('.ck-side-foot button[aria-label="More"]')!.click());
     const labels = [...document.querySelectorAll('[role="menuitem"]')].map((b) => b.textContent?.trim());
     expect(labels).toContain('Project');
     expect(labels).not.toContain('Project memory');
@@ -123,7 +123,7 @@ describe('sidebar: nothing raw', () => {
     const q = { id: 'q1', question: 'Which branch?', choices: [], allow_free_text: true, urgency: 'normal', created_at_ms: 1, expires_at_ms: 9e12, state: 'pending' };
     const c = fakeApi({ asked: { questions: [q] } });
     await render(c);
-    const group = [...host.querySelectorAll('.ck-group')].find((g) => g.querySelector('.ck-caption')?.textContent?.startsWith('Needs you'))!;
+    const group = [...document.querySelectorAll('.ck-group')].find((g) => g.querySelector('.ck-caption')?.textContent?.startsWith('Needs you'))!;
     expect(group.querySelector('.ck-caption-count')!.textContent).toBe('1');
     const row = [...group.querySelectorAll('.ck-row')].find((r) => r.textContent?.includes('Questions from agents'))!;
     expect(row.querySelector('.ck-row-time')!.textContent).toBe('1');
@@ -256,9 +256,9 @@ describe('"+" menu: the folder the person selected is the folder', () => {
     await render(c, s);
     const menu = await openMenu();
     await act(async () => menu.querySelector<HTMLButtonElement>('.ck-chip')!.click());
-    const row = [...host.querySelectorAll<HTMLButtonElement>('.ck-menu-item--project')].find((b) => b.textContent?.includes('site'))!;
+    const row = [...document.querySelectorAll<HTMLButtonElement>('.ck-menu-item--project')].find((b) => b.textContent?.includes('site'))!;
     await act(async () => row.click());
-    await startCodex(host.querySelector<HTMLElement>('[role="menu"]')!);
+    await startCodex(document.querySelector<HTMLElement>('[role="menu"]')!);
     expect(c.newAgent).toHaveBeenCalledWith('codex', undefined, false, 'C:\\work\\site');
   });
 
@@ -270,13 +270,13 @@ describe('"+" menu: the folder the person selected is the folder', () => {
     await render(c, s);
     const menu = await openMenu();
     await act(async () => menu.querySelector<HTMLButtonElement>('.ck-chip')!.click());
-    const text = host.querySelector('[role="menu"]')!.textContent!;
+    const text = document.querySelector('[role="menu"]')!.textContent!;
     expect(text).not.toContain('worktrees');
     expect(text).not.toContain('7d4cb2b3');
-    const row = host.querySelector<HTMLButtonElement>('.ck-menu-item--project')!;
+    const row = document.querySelector<HTMLButtonElement>('.ck-menu-item--project')!;
     expect(row.textContent).toContain('C:\\work\\shop');
     await act(async () => row.click());
-    await startCodex(host.querySelector<HTMLElement>('[role="menu"]')!);
+    await startCodex(document.querySelector<HTMLElement>('[role="menu"]')!);
     expect(c.newAgent).toHaveBeenCalledWith('codex', undefined, false, 'C:\\work\\shop');
   });
 

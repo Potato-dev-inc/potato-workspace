@@ -20,6 +20,7 @@ import {
 import type { SettingsEnv } from '../model';
 import { Btn, FieldInput, Note, SettingBlock, SettingRow, SettingToggle } from '../settings-ui';
 import { nameOf, TelegramPairing } from './TelegramPairing';
+import { readClipboardText } from '../../../lib/clipboardPaste';
 
 // The English wording is the catalog's (i18n/en/settingsTelegram.ts); these exports are what the tests compare against.
 export const TELEGRAM_WARNING = en['telegram.warning'];
@@ -152,6 +153,24 @@ export function TelegramSetup({ env, api = telegramApi }: { env: SettingsEnv; ap
     }
   };
 
+  // One press: read the token from the clipboard and check it by itself (no separate Check press).
+  const pasteToken = async () => {
+    setError(null);
+    let token = '';
+    try {
+      token = await readClipboardText();
+    } catch {
+      setError(t('paste.denied'));
+      return;
+    }
+    if (!token) {
+      setError(t('paste.empty'));
+      return;
+    }
+    setDraft('');
+    void change(() => api.setToken(token));
+  };
+
   // The token leaves the field the moment Check is pressed. It is never kept on screen.
   const check = () => {
     const token = draft.trim();
@@ -197,6 +216,9 @@ export function TelegramSetup({ env, api = telegramApi }: { env: SettingsEnv; ap
                   if (e.key === 'Enter') check();
                 }}
               />
+              <Btn small disabled={!s.storeAvailable || busy} onClick={() => void pasteToken()}>
+                {t('telegram.pasteToken')}
+              </Btn>
               <Btn small disabled={!s.storeAvailable || busy || !draft.trim()} onClick={check}>
                 {t('telegram.check')}
               </Btn>

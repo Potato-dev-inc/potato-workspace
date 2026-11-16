@@ -2,7 +2,7 @@
 // in that pane's chat ("Helper: <task> ... working"). They come from the pane list (`parent_pane_id`), not from the
 // session file, and are placed in the turn during which they were started. Pure, no React.
 import type { ChatTurn } from './sessionChatModel';
-import { liveParentId } from './pane-helpers';
+import { liveParentId, taskTitle } from './pane-helpers';
 
 export type ChatHelperStatus = 'working' | 'needs-you' | 'done' | 'failed';
 
@@ -13,12 +13,14 @@ export interface ChatHelper {
   /** The agent's name, shown beside the title; null when it is the title already. */
   agent: string | null;
   status: ChatHelperStatus;
+  /** `minion`: a small worker (its row opens the read-only view in the details column). Else a helper or spin-off: its row opens its pane. */
+  kind?: 'minion' | 'helper';
   /** When its pane was created (ms since the epoch): puts it in a turn. */
   startedAt: number;
 }
 
 interface PaneLike {
-  info: { id: string; title?: string | null; created_at: number; parent_pane_id?: string | null };
+  info: { id: string; title?: string | null; created_at: number; parent_pane_id?: string | null; started_as?: string | null; origin?: { task?: string | null } | null };
   status: string;
 }
 
@@ -47,13 +49,14 @@ export function chatHelpers<T extends PaneLike>(
   return list
     .filter((p) => liveParentId(list, p.info.id) === parentId)
     .map((p) => {
-      const title = p.info.title?.trim();
+      const title = p.info.title?.trim() || (p.info.started_as === 'minion' ? taskTitle(p.info.origin?.task) : null);
       const agent = agentNameOf(p);
       return {
         id: p.info.id,
         title: title || agent,
         agent: title ? agent : null,
         status: helperStatus(p.status, asking?.has(p.info.id) ?? false),
+        kind: p.info.started_as === 'minion' ? ('minion' as const) : ('helper' as const),
         startedAt: p.info.created_at,
       };
     })

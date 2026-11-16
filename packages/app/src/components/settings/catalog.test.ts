@@ -1,7 +1,7 @@
 // The pages hold every live control of the old Settings, once, under unique ids, on the page and group the 2026-11-13 spec names.
 import { describe, expect, it } from 'vitest';
 import { BASE_SECTIONS, SECTIONS } from './catalog';
-import { collectLabs } from './arrange';
+import { collectLabs, MOVED_TO_AGENT_PAGE } from './arrange';
 import { LABS_SWITCH_KEYS } from './labs-areas';
 import { SECTION_IDS, groupRows, rowLevel, rowMatches, rowScore, searchSections } from './model';
 
@@ -10,14 +10,14 @@ const allRows = SECTIONS.flatMap((s) => s.rows.map((r) => ({ section: s.id, row:
 /** Every row id that existed before the move (115 of them, plus Add an agent and Your agents). */
 const PINNED_IDS = [
   'account-labs', 'accounts', 'agent-browser-labs', 'companion-vault-labs', 'discord-bot-labs', 'agent-rules', 'less-motion', 'speak-results', 'strong-contrast', 'text-size', 'add-agent', 'agent-default-models', 'agent-lane', 'agent-list', 'agent-pack', 'ask-bar', 'assign-issue', 'away-minutes',
-  'bridge-endpoint', 'bring-old-chats', 'budget-minutes', 'budget-turns', 'project-budget', 'right-size', 'chat-addons', 'chat-search-index', 'chat-view', 'done-card',
+  'bridge-endpoint', 'bring-old-chats', 'budget-turns', 'project-budget', 'right-size', 'chat-addons', 'chat-search-index',
   'checkpoints', 'close-helpers-with-agent', 'collision', 'confirm-close', 'copy-offer', 'crews-labs', 'crews-page', 'definitions', 'desktop-potato-labs', 'devices-labs', 'diagnostic-file',
-  'discord-alerts', 'early-versions', 'handoff-mode', 'helper-agents', 'helper-answers', 'helper-default-models', 'helper-tools', 'helpers-in-sidebar', 'hidden-agents',
+  'discord-alerts', 'early-versions', 'handoff-mode', 'started-agents', 'helper-agents', 'helper-answers', 'helper-default-models', 'helper-tools', 'helpers-in-sidebar',
   'individual-window-layout', 'keep-awake', 'language', 'keep-going', 'keep-helpers-open', 'key-anthropic', 'key-openai', 'key-openrouter',
   'lend-labs', 'librarian-indexer', 'linux', 'live-updates', 'loop-guard', 'markup-bar-labs', 'mcp-install', 'mcp-status',
-  'mcp-uninstall', 'message-rail', 'missions', 'mode-switch-animation',
+  'mcp-uninstall', 'missions', 'mode-switch-animation',
   'model-bridge', 'most-helpers-at-once', 'night-shift', 'opencode-automation', 'opencode-keys', 'opencode-model',
-  'opencode-provider', 'package-check', 'preload',
+  'opencode-provider', 'opentunnel-labs', 'package-check', 'preload',
   'pc-notifications', 'project-folder', 'project-guide-labs', 'quiet-hours', 'red-to-green', 'remove-all-keys', 'rust-mcp', 'security-agents-merge',
   'security-ask-before-control', 'security-recent-approvals', 'settings-file', 'settings-recovery', 'setup-check', 'shared-memory',
   'shortcut-agent-board', 'shortcut-ask-aside', 'shortcut-ask-bar', 'shortcut-focus-mode', 'shortcut-mode-toggle', 'shortcut-new-agent', 'shortcut-next-needs-me', 'shortcut-open-inbox',
@@ -37,12 +37,12 @@ const PLACEMENT: [string, string, string[]][] = [
   ['agents', 'Sign in', ['accounts']],
   ['agents', 'Where agents start', ['project-folder', 'copy-offer', 'linux']],
   ['agents', 'Moving work', ['handoff-mode', 'keep-going']],
-  ['agents', 'All agents', ['show-terminals', 'message-rail', 'chat-view', 'done-card', 'preload', 'agent-default-models', 'agent-lane', 'chat-addons', 'hidden-agents', 'versions']],
+  ['agents', 'All agents', ['show-terminals', 'preload', 'versions']],
   ['agents', 'Rules for all agents', ['loop-guard', 'package-check', 'security-ask-before-control', 'security-agents-merge', 'agent-rules', 'security-recent-approvals', 'collision']],
-  ['agents', 'Limits', ['budget-turns', 'budget-minutes', 'project-budget', 'right-size']],
+  ['agents', 'Limits', ['budget-turns', 'project-budget', 'right-size']],
   ['agents', 'Undo and memory', ['checkpoints', 'shared-memory']],
   ['agents', 'Your own agents', ['definitions']],
-  ['helpers', 'How helpers run', ['helper-agents', 'helpers-in-sidebar', 'keep-helpers-open', 'close-helpers-with-agent', 'helper-default-models']],
+  ['helpers', 'How helpers run', ['started-agents', 'helper-agents', 'helpers-in-sidebar', 'keep-helpers-open', 'close-helpers-with-agent', 'helper-default-models']],
   ['helpers', 'Limits', ['most-helpers-at-once', 'stuck-helper-minutes']],
   ['helpers', 'Let agents ask each other', ['agent-pack']],
   ['look', 'Appearance', ['theme', 'mode-switch-animation', 'individual-window-layout', 'usage-bar', 'usage-login-reads']],
@@ -71,13 +71,14 @@ const DANGER: [string, string[]][] = [
 describe('settings catalog', () => {
   it('has exactly the eight pages, in order: Overview, Agents, Helpers, Look and feel, Keys, Shortcuts, Labs, Advanced', () => {
     expect(SECTIONS.map((s) => s.id)).toEqual([...SECTION_IDS]);
-    expect(SECTIONS.map((s) => s.title)).toEqual(['Overview', 'Agents', 'Helpers', 'Look and feel', 'Keys', 'Shortcuts', 'Labs', 'Advanced']);
+    expect(SECTIONS.map((s) => s.title)).toEqual(['Overview', 'Agents', 'Agents that agents start', 'Look and feel', 'Keys', 'Shortcuts', 'Labs', 'Advanced']);
   });
 
   it('every row id that existed before the move still exists exactly once', () => {
     // A plain-switch early feature is not a row on the pages: it is drawn by the Labs page (labs-index).
     // One with more than a switch keeps its own row.
-    const ids = [...allRows.map((r) => r.row.id).filter((id) => id !== 'labs-index'), ...collectLabs(BASE_SECTIONS).filter((r) => LABS_SWITCH_KEYS[r.id]).map((r) => r.id)];
+    // The rows that moved onto each agent's own page are not listed on the Agents page (MOVED_TO_AGENT_PAGE).
+    const ids = [...allRows.map((r) => r.row.id).filter((id) => id !== 'labs-index'), ...MOVED_TO_AGENT_PAGE, ...collectLabs(BASE_SECTIONS).filter((r) => LABS_SWITCH_KEYS[r.id]).map((r) => r.id)];
     expect(new Set(ids).size).toBe(ids.length);
     expect([...ids].sort()).toEqual([...PINNED_IDS].sort());
     expect(BASE_SECTIONS.flatMap((s) => s.rows).map((r) => r.id).sort()).toEqual([...PINNED_IDS].sort());

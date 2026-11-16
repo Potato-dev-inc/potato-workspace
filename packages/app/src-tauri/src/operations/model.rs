@@ -444,6 +444,10 @@ pub struct WorkerPersist {
     /// ask for that. The plain sentence the result and receipt carry.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub headless_forced: Option<String>,
+    /// What the agent that started this run made it (minion, spin-off, or One type's helper) and why; absent when the
+    /// person started it or an old run. Kept so a later `inspect_agent` / `wait_agents` still says it.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub started: Option<crate::agent_run_mode::StartedRecord>,
     /// Which way `run_agent` ran this worker (`lane` auto/terminal/acp) and why, kept so a later `inspect_agent` or
     /// `wait_agents` still says it (`lane_used`, `lane_reason`, `lane_fallback`).
     #[serde(default, skip_serializing_if = "Option::is_none")]

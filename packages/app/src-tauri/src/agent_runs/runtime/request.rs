@@ -75,6 +75,10 @@ pub struct AgentRunRequest {
     pub headless: bool,
     #[serde(default)]
     pub background: bool,
+    /// `minion` | `spin_off`: what the caller wants the started agent to be (Settings > Agents > "When an agent
+    /// starts another agent" can override it; ignored in One type mode). Left out: the person's setting decides.
+    #[serde(default, rename = "as")]
+    pub as_kind: Option<String>,
     #[serde(default)]
     pub read_only: bool,
     #[serde(default)]
@@ -178,6 +182,10 @@ pub struct AgentRunRequest {
     /// runs) keeps the mode it names.
     #[serde(skip)]
     pub(crate) headless_unset: bool,
+    /// Crate-internal: what this new run is (minion, spin-off or One type's helper) and why; decided once by the
+    /// `/agents/run` route (`agent_run_mode::apply_started_as`). Absent: the person started it, or it adopts a pane.
+    #[serde(skip)]
+    pub(crate) started: Option<crate::agent_run_mode::StartedRecord>,
     /// Crate-internal: the caller (an agent) passed `headless: true` and "Helper agents" keeps helpers visible,
     /// so the run was made visible. Set by the `/agents/run` route; the receipt says so.
     #[serde(skip)]

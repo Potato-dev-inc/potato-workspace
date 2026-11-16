@@ -54,7 +54,7 @@ import type { PreviewUrl } from './lib/pane-preview';
 import { AgentsOverview } from './components/mobile/AgentsOverview';
 import { PhoneSearch } from './components/mobile/PhoneSearch';
 import { DockedCard } from './components/mobile/DockedCard';
-import { helpersAskingFor } from './lib/helper-questions';
+import { helpersAskingFor, isMinion } from './lib/helper-questions';
 import { CardSheet } from './components/mobile/CardSheet';
 import { usePushIntents } from './hooks/usePushIntents';
 import { useSharedContent } from './hooks/useSharedContent';
@@ -789,6 +789,8 @@ export default function PwaApp() {
         snapshot={attention}
         paneId={active}
         helperPaneIds={helperPaneIds}
+        paneName={labels.get(active)}
+        minionPaneIds={helperPaneIds.filter((id) => isMinion(registry.paneList.find((p) => p.info.id === id)?.info))}
         bridge={bridge}
         canAnswer={canAnswer}
         autoFocus={deepLinked}

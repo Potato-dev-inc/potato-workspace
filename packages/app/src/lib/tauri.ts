@@ -352,6 +352,8 @@ export const tauri = {
   getTunnelStatus: () => safeInvoke<TunnelStatus | null>('get_tunnel_status', undefined, null, true),
   setTunnelConfig: (input: TunnelConfigInput) => safeInvoke<TunnelStatus>('set_tunnel_config', { input }),
   restartTunnel: () => safeInvoke<TunnelStatus>('restart_tunnel'),
+  /** Delete the fixed phone address (OpenTunnel) on the relay and on this computer, then go back to the automatic address. */
+  forgetOpenTunnelAddress: () => safeInvoke<TunnelStatus>('forget_opentunnel_address'),
   testTunnelConnection: (url?: string) =>
     safeInvoke<TunnelConnectionTest>('test_tunnel_connection', { url: url ?? null }),
 

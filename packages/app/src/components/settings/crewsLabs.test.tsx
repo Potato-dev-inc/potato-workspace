@@ -108,7 +108,7 @@ const pageReady = async () => {
 describe('Settings > Helpers > Crews, through the real Settings screen', () => {
   it('with the switch off there is no Crews page', async () => {
     await mountPanel({ initialTab: 'helpers' });
-    expect(main().querySelector('h1')!.textContent).toBe('Helpers');
+    expect(main().querySelector('h1')!.textContent).toBe('Agents that agents start');
     expect(main().querySelector('[data-row="crews-page"]')).toBeNull();
     expect(main().textContent).not.toContain('A crew is a team of agents');
   });
@@ -140,7 +140,7 @@ describe('Settings > Helpers > Crews, through the real Settings screen', () => {
     expect(rows[0].textContent).toContain('claude, codex');
     expect(rows[1].textContent).toContain('1 role');
     expect(rows[1].textContent).toContain('Cannot be used yet: The agent "gone" for Lead is not set up here.');
-    // The only buttons are the ones that open a crew on the canvas.
-    expect([...main().querySelectorAll('[data-row="crews-page"] button')].map((b) => b.textContent)).toEqual(['Open the canvas', 'Open the canvas']);
+    // The buttons open a crew on the canvas, or open a shared crew file (which saves nothing by itself).
+    expect([...main().querySelectorAll('[data-row="crews-page"] button')].map((b) => b.textContent)).toEqual(['Open the canvas', 'Open the canvas', 'Open a shared crew…']);
   });
 });

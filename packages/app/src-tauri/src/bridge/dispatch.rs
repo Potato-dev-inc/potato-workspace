@@ -406,6 +406,10 @@ fn assign_pane(
     if pane_created {
         // Nested under the pane of the agent that asked for this run, when it ran from one.
         note_pane_parent(registry, operation.owner_session_id.as_deref(), operation.parent_pane_id.as_deref(), &pane_id);
+        // What the agent that started this run made it (Two types): the pane keeps it beside the parent link.
+        if let Some(kind) = operation.worker.started.as_ref().and_then(|s| s.started_as.as_deref()) {
+            crate::pty::pane_parent::set_started_as(registry, &pane_id, kind);
+        }
         crate::pty::pane_origin::note(&pane_id, operation.owner_session_id.as_deref(), &operation.task);
     }
     if pane_created && standby_claim.is_none() {

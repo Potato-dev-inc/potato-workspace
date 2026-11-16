@@ -23,7 +23,7 @@ afterEach(() => {
 });
 
 const trigger = () => host.querySelector<HTMLButtonElement>('[data-testid="chat-composer-attach"]')!;
-const items = () => [...host.querySelectorAll<HTMLButtonElement>('[role="menuitem"]')];
+const items = () => [...document.querySelectorAll<HTMLButtonElement>('[role="menuitem"]')];
 const key = (el: Element, k: string) => act(async () => void el.dispatchEvent(new KeyboardEvent('keydown', { key: k, bubbles: true, cancelable: true })));
 
 function setup(disabled = false) {
@@ -83,7 +83,7 @@ describe('the folder chip', () => {
   it('shows a folder icon, the name and how many files, and can be removed', () => {
     const onRemove = vi.fn();
     act(() => root.render(<AttachmentChips attachments={[folder]} onRemove={onRemove} />));
-    const chip = host.querySelector('[data-testid="attachment-chip"]')!;
+    const chip = document.querySelector('[data-testid="attachment-chip"]')!;
     expect(chip.getAttribute('data-kind')).toBe('folder');
     expect(chip.querySelector('.ck-att-name')!.textContent).toBe('my project');
     expect(chip.querySelector('.ck-att-meta')!.textContent).toBe('42 files');

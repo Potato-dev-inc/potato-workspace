@@ -54,11 +54,11 @@ async function render(props: Partial<Parameters<typeof Sidebar>[0]> = {}) {
   await act(async () => root.render(<Sidebar c={fakeApi()} onOpenPalette={() => {}} ship={ship} {...props} />));
   await act(async () => {});
 }
-const row = () => host.querySelector<HTMLButtonElement>('[data-testid="side-new-agent"]');
-const searchRow = () => host.querySelector<HTMLButtonElement>('[data-testid="side-search"]');
-const inboxRow = () => [...host.querySelectorAll<HTMLButtonElement>('button.ck-row')].find((b) => b.textContent?.includes('Inbox'))!;
+const row = () => document.querySelector<HTMLButtonElement>('[data-testid="side-new-agent"]');
+const searchRow = () => document.querySelector<HTMLButtonElement>('[data-testid="side-search"]');
+const inboxRow = () => [...document.querySelectorAll<HTMLButtonElement>('button.ck-row')].find((b) => b.textContent?.includes('Inbox'))!;
 
-const chev = () => host.querySelector<HTMLButtonElement>('button[aria-label="Quick start menu"]');
+const chev = () => document.querySelector<HTMLButtonElement>('button[aria-label="Quick start menu"]');
 
 describe('sidebar: New agent button', () => {
   it('is the first row at the top; Ctrl N is its tooltip, and a small chevron sits on its right', async () => {
@@ -67,9 +67,9 @@ describe('sidebar: New agent button', () => {
     expect(row()!.getAttribute('title')).toMatch(/Ctrl\+N|Ctrl N|⌘N/);
     expect(row()!.querySelector('.ck-row-hint')).toBeNull();
     expect(row()!.classList.contains('ck-row')).toBe(false); // the pane rows and the Inbox row are found by that class
-    expect(host.querySelector('.ck-side-top')!.firstElementChild!.contains(row())).toBe(true);
-    expect(host.querySelector('.ck-side-head button')).toBeNull(); // no duplicate "+" or search icon in the header
-    expect(host.querySelectorAll('button[aria-label="New agent"]')).toHaveLength(1);
+    expect(document.querySelector('.ck-side-top')!.firstElementChild!.contains(row())).toBe(true);
+    expect(document.querySelector('.ck-side-head button')).toBeNull(); // no duplicate "+" or search icon in the header
+    expect(document.querySelectorAll('button[aria-label="New agent"]')).toHaveLength(1);
     expect(chev()!.getAttribute('title')).toBe('Quick start');
     expect(row()!.contains(chev())).toBe(false); // two buttons, not one inside the other
   });
@@ -80,20 +80,20 @@ describe('sidebar: New agent button', () => {
     act(() => row()!.click());
     expect(onOpenNewAgent).toHaveBeenCalledTimes(1);
     expect(onOpenNewAgent).toHaveBeenCalledWith(); // no project: the page picks its own
-    expect(host.querySelector('[role="menu"]')).toBeNull();
+    expect(document.querySelector('[role="menu"]')).toBeNull();
   });
 
   it('the chevron opens the quick menu, which has no page row any more', async () => {
     const onOpenNewAgent = vi.fn();
     await render({ onOpenNewAgent });
-    expect(host.querySelector('[role="menu"]')).toBeNull();
+    expect(document.querySelector('[role="menu"]')).toBeNull();
     act(() => chev()!.click());
-    expect(host.querySelector('[role="menu"]')).not.toBeNull();
+    expect(document.querySelector('[role="menu"]')).not.toBeNull();
     expect(chev()!.getAttribute('aria-expanded')).toBe('true');
-    expect(host.querySelector('[data-testid="menu-open-page"]')).toBeNull();
+    expect(document.querySelector('[data-testid="menu-open-page"]')).toBeNull();
     expect(onOpenNewAgent).not.toHaveBeenCalled();
     act(() => chev()!.click());
-    expect(host.querySelector('[role="menu"]')).toBeNull();
+    expect(document.querySelector('[role="menu"]')).toBeNull();
   });
 
   it('is the active row while the page is open, and the Inbox row is then not', async () => {
@@ -113,7 +113,7 @@ describe('sidebar: Search row', () => {
     expect(row()!.parentElement!.nextElementSibling).toBe(searchRow());
     expect(searchRow()!.textContent).toContain('Search');
     expect(searchRow()!.querySelector('.ck-row-hint')!.textContent).toMatch(/Ctrl K|⌘K/);
-    expect(host.querySelector('button[aria-label="Search"]')).toBeNull(); // the header icon is gone
+    expect(document.querySelector('button[aria-label="Search"]')).toBeNull(); // the header icon is gone
     act(() => searchRow()!.click());
     expect(onOpenPalette).toHaveBeenCalledTimes(1);
   });

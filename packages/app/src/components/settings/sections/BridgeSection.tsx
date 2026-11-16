@@ -48,16 +48,16 @@ export const bridgeRows: RowDef[] = [
   {
     id: 'mcp-status',
     label: 'Connection check',
-    hint: "Checks the local address, the helper program and each agent's settings.",
+    hint: "Checks the local address, the Potato tools program and each agent's settings.",
     keywords: 'runtime status mcp bridge repair recheck node nodejs npx npm cursor claude desktop codex opencode bridge port mcp.json runtime health',
     group: 'Bridge',
     render: (env) => <McpStatusBlock env={env} />,
   },
   {
     id: 'rust-mcp',
-    label: 'Use the built-in helper program',
-    hint: 'On: agents start the helper that ships with the app. Off: they use npx.',
-    keywords: 'bundled rust mcp binary bundled npx npm node runtime developer',
+    label: 'Use the built-in Potato tools program',
+    hint: 'On: agents use the Potato tools that ship with the app. Off: they use npx.',
+    keywords: 'potato workspace tools bundled rust mcp binary bundled npx npm node runtime developer',
     group: 'Bridge',
     render: (env) => (
       <SettingToggle
@@ -71,7 +71,7 @@ export const bridgeRows: RowDef[] = [
   {
     id: 'mcp-install',
     label: 'Connect Claude, Codex and OpenCode',
-    hint: 'Writes the helper program into their settings.',
+    hint: 'Writes the Potato tools program into their settings.',
     keywords: 'install mcp runtime register claude code codex opencode cursor claude desktop npx node repair mcp.json project global runtime',
     group: 'Install',
     render: (env) => <McpInstallBlock env={env} />,

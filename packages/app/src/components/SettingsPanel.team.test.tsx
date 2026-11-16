@@ -62,7 +62,7 @@ describe('Settings window > Connect > Team', () => {
 
   it('the separate window has a Connect page in its nav, with an icon', async () => {
     await winMount();
-    expect(nav()).toEqual(['Overview', 'Agents', 'Helpers', 'Look and feel', 'Connect', 'Keys', 'Shortcuts', 'Labs', 'Advanced']);
+    expect(nav()).toEqual(['Overview', 'Agents', 'Agents that agents start', 'Look and feel', 'Connect', 'Keys', 'Shortcuts', 'Labs', 'Advanced']);
     expect(navButton('Connect').querySelector('svg')).not.toBeNull();
   });
 

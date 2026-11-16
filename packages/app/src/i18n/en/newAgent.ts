@@ -137,7 +137,7 @@ export const newAgent = {
   "newAgent.preview": "Preview",
   "newAgent.tonight": "Tonight…",
   "newAgent.nightShift": "Night Shift",
-  "newAgent.editList": "Edit list…",
+  "newAgent.editList": "Edit this list…",
   "newAgent.continueTitle": "Continue where you left off",
   "newAgent.continueWhen": "{day}, {time}",
   "newAgent.dayToday": "Today",

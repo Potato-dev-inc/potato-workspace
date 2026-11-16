@@ -212,3 +212,40 @@ fn respawn_repeats_the_same_task_agent_and_model() {
     let parsed: Result<super::super::runtime::AgentRunRequest, _> = serde_json::from_value(body);
     assert!(parsed.is_ok(), "the app can start it");
 }
+
+// ---- the wake-up note for a minion's unanswered ask ----------------------------------------------------------------
+
+mod wake {
+    use super::*;
+    use crate::acp::chat::stall_support::QuietAsk;
+
+    fn ask(since_ms: u64) -> QuietAsk {
+        QuietAsk { pane_id: "m1".into(), parent: "p1".into(), name: "Reviewer".into(), ask_id: 3, since_ms }
+    }
+
+    #[test]
+    fn a_minute_unanswered_with_an_idle_agent_wakes_it_once() {
+        let asks = [ask(0)];
+        let mut tracker = WakeTracker::default();
+        assert!(tracker.due(&asks, 59_000, &|_| true).is_empty(), "not yet");
+        assert_eq!(tracker.due(&asks, 60_000, &|_| true).len(), 1);
+        tracker.mark_sent(&asks[0]);
+        assert!(tracker.due(&asks, 120_000, &|_| true).is_empty(), "one note per ask");
+    }
+
+    #[test]
+    fn an_agent_in_the_middle_of_a_turn_is_woken_only_after_three_minutes() {
+        let asks = [ask(0)];
+        let tracker = WakeTracker::default();
+        assert!(tracker.due(&asks, 120_000, &|_| false).is_empty());
+        assert_eq!(tracker.due(&asks, 180_000, &|_| false).len(), 1);
+    }
+
+    #[test]
+    fn an_answered_ask_is_forgotten_so_the_next_one_gets_its_own_note() {
+        let mut tracker = WakeTracker::default();
+        tracker.mark_sent(&ask(0));
+        tracker.retain_open(&[]);
+        assert_eq!(tracker.due(&[ask(0)], 60_000, &|_| true).len(), 1);
+    }
+}

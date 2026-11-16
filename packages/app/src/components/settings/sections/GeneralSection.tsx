@@ -7,7 +7,7 @@ import { useCallback, useEffect, useState } from 'react';
 import { homeDir } from '@tauri-apps/api/path';
 import { open as openDialog } from '@tauri-apps/plugin-dialog';
 import type { Settings } from '@potato-workspace/shared';
-import { clampAwayMinutes, clampCheckpointsKeep } from '../../../lib/bridge-settings';
+import { clampCheckpointsKeep } from '../../../lib/bridge-settings';
 import { redactSettings } from '../../../lib/secrets';
 import { resolveSettingsFilePath } from '../../../lib/settings';
 import { cockpitApi } from '../../../lib/cockpit-api';
@@ -29,7 +29,7 @@ import { LoopGuardSettingsBlock } from '../blocks/LoopGuardSettings';
 import { SharedMemoryToggle } from '../blocks/SharedMemoryToggle';
 import { START_AT_SIGN_IN_HINT, START_AT_SIGN_IN_LABEL, StartAtSignInSettings } from '../blocks/StartAtSignInSettings';
 import { WhatsNew, WHATS_NEW_LABEL } from '../blocks/WhatsNew';
-import { NumberControl, TextControl } from '../controls';
+import { NumberControl, Popup, TextControl } from '../controls';
 import { LayoutThumbs, ThemeThumbs } from '../previews/Thumbs';
 import type { RowDef, SettingsEnv } from '../model';
 import { PACKAGE_CHECK_LABEL, PACKAGE_CHECK_NOTE, PackageCheckRow } from './PackageCheckRow';
@@ -204,6 +204,21 @@ const WELCOME_LABEL = 'Run setup again';
 
 /** The away setting in words, beside its field. */
 export const awayWords = (minutes: number): string => (minutes <= 0 ? t('lookFeel.away.off') : t('lookFeel.away.after', { count: minutes }));
+
+/** The away digest as a short popup: Off, or after 5, 15 or 30 minutes. A saved value outside those stays listed. */
+export const AWAY_CHOICES = [0, 5, 15, 30];
+function AwayPicker({ minutes, onPick }: { minutes: number; onPick: (minutes: number) => void }) {
+  const options = AWAY_CHOICES.includes(minutes) ? AWAY_CHOICES : [...AWAY_CHOICES, minutes].sort((a, b) => a - b);
+  return (
+    <Popup aria-label={t('lookFeel.away.aria')} value={String(minutes)} onChange={(event) => onPick(Number(event.target.value))}>
+      {options.map((m) => (
+        <option key={m} value={String(m)}>
+          {awayWords(m)}
+        </option>
+      ))}
+    </Popup>
+  );
+}
 
 const SWITCH_STYLES: SwitchStyle[] = ['domino', 'ink', 'off'];
 const SWITCH_HINT = 'How windows move when you switch modes. Off is a quick fade.';
@@ -438,16 +453,7 @@ export const generalRows: RowDef[] = [
     group: 'While agents work',
     render: (env) => (
       <SettingRow label={t('lookFeel.away.label')} description={t('lookFeel.away.hint')}>
-        <NumberControl
-          aria-label={t('lookFeel.away.aria')}
-          min={0}
-          max={1440}
-          value={env.settings.away_minutes ?? 5}
-          normalize={clampAwayMinutes}
-          suffix={t('lookFeel.away.min')}
-          onCommit={(minutes) => env.patch({ away_minutes: minutes })}
-        />
-        <span className="st-aside">{awayWords(env.settings.away_minutes ?? 5)}</span>
+        <AwayPicker minutes={env.settings.away_minutes ?? 5} onPick={(minutes) => env.patch({ away_minutes: minutes })} />
       </SettingRow>
     ),
   },
@@ -756,6 +762,22 @@ export const generalRows: RowDef[] = [
         description={t('settings.row.smaller-updates-labs.hint')}
         checked={env.settings.smaller_updates_enabled ?? false}
         onChange={(value) => void env.patch({ smaller_updates_enabled: value })}
+      />
+    ),
+  },
+  {
+    id: 'opentunnel-labs',
+    label: 'Fixed phone address',
+    hint: 'A fixed phone address from a third-party relay (OpenTunnel). It may change.',
+    keywords: 'fixed phone address opentunnel open tunnel relay stable link url pair once labs early',
+    group: 'Labs',
+    labs: { name: 'Fixed phone address', about: 'A phone address that stays the same, from a third-party relay that may change.' },
+    render: (env) => (
+      <SettingToggle
+        label={t('settings.row.opentunnel-labs.label')}
+        description={t('settings.row.opentunnel-labs.hint')}
+        checked={env.settings.opentunnel_stable_link ?? false}
+        onChange={(value) => void env.patch({ opentunnel_stable_link: value })}
       />
     ),
   },

@@ -9,6 +9,7 @@ import type { RecentProject } from '../../../lib/ship-api';
 import { addonFor, needsInstall, tauriAcpAddonApi, type AcpAddonApi } from '../../../lib/acpAddon';
 import { useAcpAddons } from '../../../hooks/useAcpAddons';
 import { useDismissable } from '../../../hooks/useDismissable';
+import { Menu as SharedMenu, useLayerHost } from '../../common/Floating';
 import { AddonPrompt } from '../../acp/AddonPrompt';
 import { SignInCard } from '../../acp/SignInCard';
 import { useCopyOffered } from '../../../lib/copyOffer';
@@ -244,8 +245,11 @@ export function NewAgentPage({ agents, panes, needs, selectedCwd = null, project
 
   // One shared closing rule (outside press, Escape, focus leaving, page scroll) closes the open menu.
   const menuRoot = useRef<HTMLDivElement>(null);
+  // The chip menus are drawn in the top layer: a press in one of them is inside the composer.
+  const layers = useLayerHost();
   useDismissable(menu !== null, {
     inside: [menuRoot],
+    extra: layers.extra,
     onDismiss: (why) => {
       setMenu(null);
       if (why === 'escape') area.current?.focus();
@@ -461,6 +465,7 @@ export function NewAgentPage({ agents, panes, needs, selectedCwd = null, project
               {t('teamHub.tasks.fromNote', { name: fromTask })}
             </p>
           )}
+          {layers.wrap(
           <div className="ck-na-composer" ref={menuRoot}>
             <div className="ck-na-field">
               <textarea
@@ -487,6 +492,7 @@ export function NewAgentPage({ agents, panes, needs, selectedCwd = null, project
                 id="plus"
                 open={menu === 'plus'}
                 onToggle={() => setMenu(menu === 'plus' ? null : 'plus')}
+                onClose={() => setMenu(null)}
                 label={t('newAgent.addToMessage')}
                 trigger={<IconPlus />}
                 iconOnly
@@ -532,6 +538,7 @@ export function NewAgentPage({ agents, panes, needs, selectedCwd = null, project
                   setMenu(menu === 'folder' ? null : 'folder');
                   api.recent().then((list) => alive.current && setRecent(list)).catch(() => undefined);
                 }}
+                onClose={() => setMenu(null)}
                 label={t('newAgent.projectLabel', { name: folder?.name ?? t('newAgent.noneChosen') })}
                 trigger={
                   <>
@@ -564,6 +571,7 @@ export function NewAgentPage({ agents, panes, needs, selectedCwd = null, project
                 id="agent"
                 open={menu === 'agent'}
                 onToggle={() => setMenu(menu === 'agent' ? null : 'agent')}
+                onClose={() => setMenu(null)}
                 label={t('newAgent.agentLabel', { name: choice?.label ?? t('newAgent.agentNone') })}
                 trigger={
                   <>
@@ -657,6 +665,7 @@ export function NewAgentPage({ agents, panes, needs, selectedCwd = null, project
               </button>
             </div>
           </div>
+          )}
 
           <PinnedLine pins={pins} />
 
@@ -769,6 +778,7 @@ function Pop({
   id,
   open,
   onToggle,
+  onClose,
   label,
   trigger,
   iconOnly = false,
@@ -777,14 +787,18 @@ function Pop({
   id: string;
   open: boolean;
   onToggle: () => void;
+  /** Closes the menu (an outside press, Escape). Separate from `onToggle`, which flips it. */
+  onClose: () => void;
   label: string;
   trigger: ReactNode;
   iconOnly?: boolean;
   children: ReactNode;
 }) {
+  const btn = useRef<HTMLButtonElement>(null);
   return (
     <div className="ck-na-pop">
       <button
+        ref={btn}
         type="button"
         className={`ck-na-chip${iconOnly ? ' ck-na-chip--icon' : ''}`}
         data-testid={`na-${id}`}
@@ -796,9 +810,9 @@ function Pop({
         {trigger}
       </button>
       {open && (
-        <div className="ck-na-menu" role="menu" aria-label={label}>
+        <SharedMenu anchorRef={btn} align="start" className="ck-na-menu" label={label} onClose={onClose}>
           {children}
-        </div>
+        </SharedMenu>
       )}
     </div>
   );

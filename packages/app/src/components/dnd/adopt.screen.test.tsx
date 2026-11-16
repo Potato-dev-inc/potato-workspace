@@ -161,11 +161,11 @@ const click = async (el: HTMLElement) => {
 const undoButton = () => undoBar()!.querySelector<HTMLButtonElement>('.ck-undobar-btn')!;
 
 describe('drag an agent onto another to make it a helper', () => {
-  it('shows "Make helper of Alpha" while the pointer is over the middle of the row, and nothing before', async () => {
+  it('shows "Put under Alpha" while the pointer is over the middle of the row, and nothing before', async () => {
     await render();
     expect(preview()).toBeNull();
     await startDrag('a2', middle(0));
-    expect(preview()?.textContent).toBe('Make helper of Alpha');
+    expect(preview()?.textContent).toBe('Put under Alpha');
     expect(preview()?.classList.contains('is-refused')).toBe(false);
     // Over the edge of the row the preview goes (that is where reordering happens).
     await fire(window, 'pointermove', 60, 2);
@@ -179,7 +179,7 @@ describe('drag an agent onto another to make it a helper', () => {
     await drop(middle(0));
     expect(calls).toEqual([['a2', 'a1']]);
     expect(helpersOf('a1')).toEqual(['h1', 'a2']);
-    expect(undoBar()?.textContent).toContain('Beta now helps Alpha');
+    expect(undoBar()?.textContent).toContain('Beta is now under Alpha');
     expect(preview()).toBeNull();
     await click(undoButton());
     expect(calls[1]).toEqual(['a2', null]);
@@ -191,7 +191,7 @@ describe('drag an agent onto another to make it a helper', () => {
     await render();
     // Alpha (with Helper) onto Beta. Beta is row 2 in document order before the move.
     await startDrag('a1', middle(2));
-    expect(preview()?.textContent).toBe('Make helper of Beta');
+    expect(preview()?.textContent).toBe('Put under Beta');
     await drop(middle(2));
     expect(calls).toEqual([['a1', 'a2']]);
     expect(helpersOf('a2')).toEqual(['a1', 'h1']);
@@ -202,7 +202,7 @@ describe('drag an agent onto another to make it a helper', () => {
   it('refuses another project: a preview that says so, a notice, and nothing changes', async () => {
     await render();
     await startDrag('a2', middle(3));
-    expect(preview()?.textContent).toBe("Can't make helper of Gamma");
+    expect(preview()?.textContent).toBe("Can't put it under Gamma");
     expect(preview()?.classList.contains('is-refused')).toBe(true);
     await drop(middle(3));
     expect(calls).toEqual([]);
@@ -218,15 +218,15 @@ describe('drag an agent onto another to make it a helper', () => {
     expect(preview()?.classList.contains('is-refused')).toBe(true);
     await drop(middle(1));
     expect(calls).toEqual([]);
-    expect(notify).toHaveBeenLastCalledWith('That would make a loop: the other agent already helps this one.');
+    expect(notify).toHaveBeenLastCalledWith('That would loop: another agent is already under this one.');
     // Beta onto Alpha's helper: only a main agent can be given helpers.
     await startDrag('a2', middle(1));
     await drop(middle(1));
-    expect(notify).toHaveBeenLastCalledWith('Only a main agent can be given helpers.');
+    expect(notify).toHaveBeenLastCalledWith('Only a top-level chat can have chats under it.');
     // A helper dragged onto another main agent.
     await startDrag('h1', middle(2));
     await drop(middle(2));
-    expect(notify).toHaveBeenLastCalledWith('This agent is already a helper. Make it a main agent first.');
+    expect(notify).toHaveBeenLastCalledWith('This chat is already under another one. Move it out first.');
     expect(calls).toEqual([]);
   });
 
@@ -276,26 +276,26 @@ describe('the row menu does the same without a mouse', () => {
   const items = () => [...document.querySelectorAll<HTMLElement>('[role="menuitem"]')].map((el) => el.textContent);
   const pick = (label: string) => click([...document.querySelectorAll<HTMLElement>('[role="menuitem"]')].find((el) => el.textContent === label)!);
 
-  it('"Make helper of…" lists the main agents of the same project, and picking one makes the helper', async () => {
+  it('"Put under…" lists the main agents of the same project, and picking one makes the helper', async () => {
     await render();
     await openMenu('a2');
-    expect(items()).toContain('Make helper of…');
+    expect(items()).toContain('Put under…');
     expect(items()).not.toContain('Make it a main agent again');
-    await pick('Make helper of…');
+    await pick('Put under…');
     // Only Alpha: not itself, not Helper (already a helper), not Gamma (another project).
     expect(items()).toEqual(['Alpha']);
     expect(document.activeElement?.textContent).toBe('Alpha');
     await pick('Alpha');
     expect(calls).toEqual([['a2', 'a1']]);
     expect(helpersOf('a1')).toEqual(['h1', 'a2']);
-    expect(undoBar()?.textContent).toContain('Beta now helps Alpha');
+    expect(undoBar()?.textContent).toContain('Beta is now under Alpha');
     expect(document.querySelector('[role="menu"]')).toBeNull();
   });
 
   it('a helper gets "Make it a main agent again" (and Undo puts it back)', async () => {
     await render();
     await openMenu('h1');
-    expect(items()).not.toContain('Make helper of…');
+    expect(items()).not.toContain('Put under…');
     await pick('Make it a main agent again');
     expect(calls).toEqual([['h1', null]]);
     expect(helpersOf('a1')).toEqual([]);

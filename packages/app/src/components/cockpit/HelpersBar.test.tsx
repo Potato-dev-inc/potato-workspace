@@ -63,7 +63,7 @@ describe('helpers bar', () => {
   it('shows only the helpers of the agent in front, never a main agent, and a crumb back to that agent', async () => {
     await show(api(LIST));
     expect(host.querySelector('[data-testid="helpers-bar"]')!.getAttribute('aria-label')).toBeNull();
-    expect(host.querySelector('[role="tablist"]')!.getAttribute('aria-label')).toBe('Helpers');
+    expect(host.querySelector('[role="tablist"]')!.getAttribute('aria-label')).toBe('Started agents');
     expect([...host.querySelectorAll('[data-pane-tab]')].map((e) => e.getAttribute('data-pane-tab'))).toEqual(['h1', 'h2', 'h3', 'h4']);
     expect(host.querySelector('[data-testid="helpers-crumb"]')!.textContent).toBe('Right panel rebuild');
     expect(host.querySelector('[data-testid="helpers-crumb"]')!.getAttribute('title')).toBe('Back to this agent');
@@ -135,7 +135,7 @@ describe('helpers bar', () => {
     await show(api(LIST));
     await act(async () => void chip('h3').dispatchEvent(new MouseEvent('contextmenu', { bubbles: true, cancelable: true, clientX: 40, clientY: 30 })));
     const items = [...host.querySelectorAll('[data-testid="helpers-menu"] [role="menuitem"]')];
-    expect(items.map((i) => i.textContent)).toEqual(['Open beside', 'Rename', 'Stop this helper', 'Keep as standby']);
+    expect(items.map((i) => i.textContent)).toEqual(['Open beside', 'Rename', 'Stop this agent', 'Keep as standby']);
     await act(async () => (items[0] as HTMLButtonElement).click());
     expect(onOpenBeside).toHaveBeenCalledWith('h3');
     expect(host.querySelector('[data-testid="helpers-menu"]')).toBeNull();
@@ -238,7 +238,7 @@ describe('words', () => {
     useChinese();
     await show(api(LIST), 'a', ['a'], [{ id: 's1', agent: 'codex', name: 'Reviewer', state: 'ready' }]);
     expect(host.querySelector('[role="tablist"]')!.getAttribute('aria-label')).toBe(t('hbar.label'));
-    expect(t('hbar.label')).toBe('\u5e6b\u624b');
+    expect(t('hbar.label')).toBe('啟動的 AI 助理');
     expect(chip('h2').textContent).toContain(t('pane.needsYou'));
     expect(chip('h4').textContent).toContain(t('hbar.stopped'));
     expect(host.querySelector('[data-testid="standby-chip"]')!.textContent).toContain(t('hbar.ready'));
@@ -251,7 +251,7 @@ describe('words', () => {
 describe('helpers bar: making standbys', () => {
   beforeEach(() => setHelpersInSidebar(false));
   afterEach(() => setHelpersInSidebar(true));
-  it('the "+" asks the cockpit for the Add a helper popover, with the folder and the agent it goes under', async () => {
+  it('the "+" asks the cockpit for the Add a standby popover, with the folder and the agent it goes under', async () => {
     const seen: unknown[] = [];
     const on = (e: Event) => seen.push((e as CustomEvent).detail);
     window.addEventListener(NEW_STANDBY_EVENT, on);

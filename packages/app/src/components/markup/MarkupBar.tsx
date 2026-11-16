@@ -4,6 +4,7 @@
 import { useRef, type KeyboardEvent, type ReactNode } from 'react';
 import { useT } from '../../i18n';
 import { MARKUP_SPEC, type MarkupState, type ShapeId, type ToolId } from '../../lib/markup/model';
+import { Menu } from '../common/Floating';
 
 const ICONS = MARKUP_SPEC.icons as Record<string, string>;
 
@@ -20,6 +21,8 @@ export interface BarActions {
   shape: (shape: ShapeId) => void;
   color: (color: string) => void;
   popup: (popup: 'shapes' | 'colors' | 'more') => void;
+  /** Close whichever popup is open (an outside press or Escape). Unlike `popup`, it never opens one. */
+  closePopup: () => void;
   undo: () => void;
   clear: () => void;
   send: () => void;
@@ -35,6 +38,9 @@ export function MarkupBar({ state, width, actions, selectDisabled = false }: { s
   const foldUndo = width > 0 && width < MARKUP_SPEC.narrow.foldUndoClear;
   const iconSend = width > 0 && width < MARKUP_SPEC.narrow.sendAsIcon;
   const shapeWord = (s: ShapeId) => t(`markup.shape.${s}` as 'markup.shape.rect');
+  const shapesBtn = useRef<HTMLButtonElement>(null);
+  const colourBtn = useRef<HTMLButtonElement>(null);
+  const moreBtn = useRef<HTMLButtonElement>(null);
 
   // Arrow keys move between the buttons (a toolbar).
   const onKeyDown = (e: KeyboardEvent<HTMLDivElement>) => {
@@ -70,7 +76,7 @@ export function MarkupBar({ state, width, actions, selectDisabled = false }: { s
   let more: ReactNode = null;
   if (state.popup === 'shapes') {
     more = (
-      <div className="mk-pop mk-pop--col" role="menu" style={{ left: 70 }} data-testid="markup-shapes-menu">
+      <Menu anchorRef={shapesBtn} prefer="up" align="start" className="mk-pop mk-pop--col" label={t('markup.tool.moreShapes')} testId="markup-shapes-menu" onClose={actions.closePopup}>
         {MARKUP_SPEC.shapes.map((s) => (
           <button key={s.id} type="button" role="menuitem" data-testid={`markup-shape-${s.id}`} onClick={() => actions.shape(s.id as ShapeId)}>
             <Icon name={s.id} />
@@ -78,21 +84,21 @@ export function MarkupBar({ state, width, actions, selectDisabled = false }: { s
             <kbd>{s.key.toUpperCase()}</kbd>
           </button>
         ))}
-      </div>
+      </Menu>
     );
   } else if (state.popup === 'colors') {
     more = (
-      <div className="mk-pop" role="menu" style={{ left: 120 }} data-testid="markup-colors-menu">
+      <Menu anchorRef={colourBtn} prefer="up" align="start" className="mk-pop" label={t('markup.tool.colour')} testId="markup-colors-menu" onClose={actions.closePopup}>
         {MARKUP_SPEC.colors.map((c) => (
           <button key={c.id} type="button" role="menuitem" className="mk-sw" aria-label={t(`markup.colour.${c.id}` as 'markup.colour.orange')} data-testid={`markup-colour-${c.id}`} onClick={() => actions.color(c.value)}>
             <span className="mk-dot" style={{ background: c.value }} />
           </button>
         ))}
-      </div>
+      </Menu>
     );
   } else if (state.popup === 'more') {
     more = (
-      <div className="mk-pop mk-pop--col" role="menu" style={{ right: 4 }} data-testid="markup-more-menu">
+      <Menu anchorRef={moreBtn} prefer="up" align="end" className="mk-pop mk-pop--col" label={t('markup.tool.more')} testId="markup-more-menu" onClose={actions.closePopup}>
         <button type="button" role="menuitem" disabled={!n} data-testid="markup-undo" onClick={actions.undo}>
           <Icon name="undo" />
           {t('markup.tool.undo')}
@@ -102,7 +108,7 @@ export function MarkupBar({ state, width, actions, selectDisabled = false }: { s
           <Icon name="clear" />
           {t('markup.tool.clear')}
         </button>
-      </div>
+      </Menu>
     );
   }
 
@@ -111,16 +117,16 @@ export function MarkupBar({ state, width, actions, selectDisabled = false }: { s
       {tool('select', 'select', t('markup.tool.select'), state.tool === 'select', selectDisabled, KEY_LABEL.select)}
       {tool('pen', 'pen', t('markup.tool.pen'), state.tool === 'pen', false, KEY_LABEL.pen)}
       {tool('shape', state.shape, t('markup.tool.shape'), state.tool === 'shape', false, 'R A O')}
-      <button type="button" className="mk-tb mk-tb--caret" aria-label={t('markup.tool.moreShapes')} aria-haspopup="menu" aria-expanded={state.popup === 'shapes'} data-testid="markup-shapes" onClick={() => actions.popup('shapes')}>
+      <button ref={shapesBtn} type="button" className="mk-tb mk-tb--caret" aria-label={t('markup.tool.moreShapes')} aria-haspopup="menu" aria-expanded={state.popup === 'shapes'} data-testid="markup-shapes" onClick={() => actions.popup('shapes')}>
         <Icon name="caret" box="0 0 9 9" />
       </button>
       {tool('text', 'text', t('markup.tool.text'), state.tool === 'text', false, KEY_LABEL.text)}
-      <button type="button" className="mk-tb" aria-label={t('markup.tool.colour')} aria-haspopup="menu" aria-expanded={state.popup === 'colors'} title={t('markup.tool.colour')} data-testid="markup-colour" onClick={() => actions.popup('colors')}>
+      <button ref={colourBtn} type="button" className="mk-tb" aria-label={t('markup.tool.colour')} aria-haspopup="menu" aria-expanded={state.popup === 'colors'} title={t('markup.tool.colour')} data-testid="markup-colour" onClick={() => actions.popup('colors')}>
         <span className="mk-dot" style={{ background: state.color }} />
       </button>
       <span className="mk-sep" aria-hidden="true" />
       {foldUndo ? (
-        <button type="button" className="mk-tb" aria-label={t('markup.tool.more')} aria-haspopup="menu" aria-expanded={state.popup === 'more'} title={t('markup.tool.more')} data-testid="markup-more" onClick={() => actions.popup('more')}>
+        <button ref={moreBtn} type="button" className="mk-tb" aria-label={t('markup.tool.more')} aria-haspopup="menu" aria-expanded={state.popup === 'more'} title={t('markup.tool.more')} data-testid="markup-more" onClick={() => actions.popup('more')}>
           <Icon name="more" />
         </button>
       ) : (

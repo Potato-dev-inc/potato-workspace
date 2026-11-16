@@ -1,5 +1,5 @@
 // @vitest-environment jsdom
-// The Chat tab of a pane whose agent started helpers: a compact "Helper: <task>" row per helper, a click opens it.
+// The Chat tab of a pane whose agent started helpers: a compact "Started agent: <task>" row per helper, a click opens it.
 import { act } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
@@ -94,9 +94,9 @@ describe('pane chat: helpers it started', () => {
     );
     await openChat(c, 'p');
     expect(rows().map((r) => r.textContent)).toEqual([
-      'Helper: Map app frontendCodexworking',
-      'Helper: Map app backendCodexdone',
-      'Helper: Check the schemaCodexneeds you',
+      'Started agent: Map app frontendCodexworking',
+      'Started agent: Map app backendCodexdone',
+      'Started agent: Check the schemaCodexneeds you',
     ]);
     await act(async () => rows()[1].querySelector<HTMLButtonElement>('button')!.click());
     expect(c.select).toHaveBeenCalledWith('h2');

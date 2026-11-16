@@ -65,22 +65,22 @@ async function mount(state: GitState, props: Partial<NewAgentPageProps> = {}) {
   await act(async () => {});
   return { onStart };
 }
-const openPlus = async () => act(async () => host.querySelector<HTMLButtonElement>('button[aria-label="Add to your message"]')!.click());
-const copySwitch = () => host.querySelector<HTMLButtonElement>('[role="switch"][aria-labelledby="na-copy-label"]')!;
+const openPlus = async () => act(async () => document.querySelector<HTMLButtonElement>('button[aria-label="Add to your message"]')!.click());
+const copySwitch = () => document.querySelector<HTMLButtonElement>('[role="switch"][aria-labelledby="na-copy-label"]')!;
 async function send() {
-  const box = host.querySelector<HTMLTextAreaElement>('textarea')!;
+  const box = document.querySelector<HTMLTextAreaElement>('textarea')!;
   await act(async () => {
     Object.getOwnPropertyDescriptor(HTMLTextAreaElement.prototype, 'value')!.set!.call(box, 'fix the tests');
     box.dispatchEvent(new Event('input', { bubbles: true }));
   });
-  await act(async () => host.querySelector<HTMLButtonElement>('button[aria-label="Start"]')!.click());
+  await act(async () => document.querySelector<HTMLButtonElement>('button[aria-label="Start"]')!.click());
 }
 
 describe('Work on a copy, for a chat on the New agent page', () => {
   it('is off by default and a chat starts in the folder itself', async () => {
     const { onStart } = await mount('repo');
     await openPlus();
-    expect(host.querySelector('#na-copy-label')?.textContent).toBe('Work on a copy');
+    expect(document.querySelector('#na-copy-label')?.textContent).toBe('Work on a copy');
     expect(copySwitch().getAttribute('aria-checked')).toBe('false');
     expect(copySwitch().disabled).toBe(false);
     await act(async () => copySwitch().click()); // on...
@@ -132,7 +132,7 @@ describe('Settings can hide "Work on a copy" (Offer "Work on a copy")', () => {
     const { onStart } = await mount('repo');
     await openPlus();
     expect(copySwitch()).toBeNull();
-    expect(host.querySelector('#na-copy-label')).toBeNull();
+    expect(document.querySelector('#na-copy-label')).toBeNull();
     await send();
     expect(onStart.mock.calls[0][0]).toMatchObject({ runAs: 'chat', isolated: false });
   });

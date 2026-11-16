@@ -90,12 +90,12 @@ async function mount(addonApi: AcpAddonApi, props: Partial<NewAgentPageProps> = 
   return { onStart, onSignIn };
 }
 
-const input = () => host.querySelector<HTMLTextAreaElement>('textarea[aria-label="What should the agent do?"]')!;
-const sendButton = () => host.querySelector<HTMLButtonElement>('button[aria-label="Start"]')!;
-const runAsButton = (word: 'Chat' | 'Terminal') => [...host.querySelectorAll<HTMLButtonElement>('[role=radio]')].find((b) => b.textContent === word)!;
+const input = () => document.querySelector<HTMLTextAreaElement>('textarea[aria-label="What should the agent do?"]')!;
+const sendButton = () => document.querySelector<HTMLButtonElement>('button[aria-label="Start"]')!;
+const runAsButton = (word: 'Chat' | 'Terminal') => [...document.querySelectorAll<HTMLButtonElement>('[role=radio]')].find((b) => b.textContent === word)!;
 const chooseChat = () => act(async () => runAsButton('Chat').click());
 const chooseTerminal = () => act(async () => runAsButton('Terminal').click());
-const button = (text: string | RegExp) => [...host.querySelectorAll<HTMLButtonElement>('button')].find((b) => (typeof text === 'string' ? b.textContent === text : text.test(b.textContent ?? '')));
+const button = (text: string | RegExp) => [...document.querySelectorAll<HTMLButtonElement>('button')].find((b) => (typeof text === 'string' ? b.textContent === text : text.test(b.textContent ?? '')));
 async function type(value: string) {
   await act(async () => {
     Object.getOwnPropertyDescriptor(HTMLTextAreaElement.prototype, 'value')!.set!.call(input(), value);
@@ -107,11 +107,11 @@ describe('Chat needs the add-on', () => {
   it('Chat is the way even before its add-on is installed: the card asks to install it, with the size, and Send waits; Terminal does not ask', async () => {
     const r = addonRig({ labsEnabled: true, addons: [status()] });
     await mount(r.api);
-    expect(host.querySelector('[data-testid="addon-prompt"]')).not.toBeNull();
+    expect(document.querySelector('[data-testid="addon-prompt"]')).not.toBeNull();
     await chooseTerminal();
-    expect(host.querySelector('[data-testid="addon-prompt"]')).toBeNull();
+    expect(document.querySelector('[data-testid="addon-prompt"]')).toBeNull();
     await chooseChat();
-    expect(host.querySelector('[data-testid="addon-prompt"]')?.textContent).toContain('Chat needs a small add-on for Claude (about 48 MB).');
+    expect(document.querySelector('[data-testid="addon-prompt"]')?.textContent).toContain('Chat needs a small add-on for Claude (about 48 MB).');
     await type('fix the tests');
     expect(sendButton().disabled).toBe(true);
     expect(sendButton().title).toBe('Install the chat add-on first.');
@@ -127,11 +127,11 @@ describe('Chat needs the add-on', () => {
     expect(host.textContent).toContain('Installing the chat add-on for Claude…');
 
     await r.emit(status({ state: 'installing', lines: ['npm http fetch GET 200 https://registry.npmjs.org/x'] }));
-    expect(host.querySelector('[data-testid="addon-progress"]')?.textContent).toContain('registry.npmjs.org');
+    expect(document.querySelector('[data-testid="addon-progress"]')?.textContent).toContain('registry.npmjs.org');
     expect(sendButton().disabled).toBe(true);
 
     await r.emit(status({ state: 'installed', version: '0.74.0' }));
-    expect(host.querySelector('[data-testid="addon-prompt"]')).toBeNull();
+    expect(document.querySelector('[data-testid="addon-prompt"]')).toBeNull();
     expect(sendButton().disabled).toBe(false);
     await act(async () => sendButton().click());
     expect(onStart).toHaveBeenCalledWith(expect.objectContaining({ agentId: 'claude', runAs: 'chat', prompt: 'fix the tests' }));
@@ -143,7 +143,7 @@ describe('Chat needs the add-on', () => {
     await mount(r.api);
     await chooseChat();
     await act(async () => button('Install')!.click());
-    expect(host.querySelector('[data-testid="addon-error"]')?.textContent).toBe('Node.js is needed to install the chat add-on.');
+    expect(document.querySelector('[data-testid="addon-error"]')?.textContent).toBe('Node.js is needed to install the chat add-on.');
     expect(button('Try again')).toBeTruthy();
   });
 
@@ -151,7 +151,7 @@ describe('Chat needs the add-on', () => {
     const r = addonRig({ labsEnabled: true, addons: [status({ state: 'installed', version: '0.74.0' })] });
     await mount(r.api);
     await chooseTerminal();
-    expect(host.querySelector('[data-testid="addon-prompt"]')).toBeNull();
+    expect(document.querySelector('[data-testid="addon-prompt"]')).toBeNull();
     await type('go');
     expect(sendButton().disabled).toBe(false);
   });
@@ -166,8 +166,8 @@ describe('Chat needs the add-on', () => {
     (r.api.list as ReturnType<typeof vi.fn>).mockResolvedValue({ labsEnabled: true, addons: [status()] });
     await act(async () => sendButton().click());
     await act(async () => {});
-    expect(host.querySelector('[data-testid="addon-prompt"]')).not.toBeNull();
-    expect(host.querySelector('[role="alert"]')).toBeNull();
+    expect(document.querySelector('[data-testid="addon-prompt"]')).not.toBeNull();
+    expect(document.querySelector('[role="alert"]')).toBeNull();
   });
 });
 
@@ -180,7 +180,7 @@ describe('Chat needs a sign-in', () => {
     await chooseChat();
     await type('fix the tests');
     await act(async () => sendButton().click());
-    const card = host.querySelector('[data-testid="signin-card"]')!;
+    const card = document.querySelector('[data-testid="signin-card"]')!;
     expect(card.textContent).toContain('Sign in to Claude to use Chat');
     expect(card.textContent).toContain('type /login');
 
@@ -192,7 +192,7 @@ describe('Chat needs a sign-in', () => {
     await act(async () => button(/signed in — try again/)!.click());
     expect(onStart).toHaveBeenCalledTimes(2);
     expect(onStart.mock.calls[1][0]).toMatchObject({ agentId: 'claude', runAs: 'chat', prompt: 'fix the tests' });
-    expect(host.querySelector('[data-testid="signin-card"]')).toBeNull();
+    expect(document.querySelector('[data-testid="signin-card"]')).toBeNull();
   });
 
   it('keeps the message, agent, folder and Chat choice for the trip to the sign-in terminal', async () => {
@@ -209,8 +209,8 @@ describe('Chat needs a sign-in', () => {
     root = createRoot(host);
     await mount(r.api, { onStart: vi.fn(async () => 'pane-1') });
     expect(input().value).toBe('fix the tests');
-    expect(host.querySelector('[data-testid="signin-card"]')).not.toBeNull();
-    expect(host.querySelector('[aria-label^="Project"]')?.textContent).toContain('alpha-app');
+    expect(document.querySelector('[data-testid="signin-card"]')).not.toBeNull();
+    expect(document.querySelector('[aria-label^="Project"]')?.textContent).toContain('alpha-app');
     // The saved trip is used once.
     expect(sessionStorage.getItem('pm.newagent.signin')).toBeNull();
   });

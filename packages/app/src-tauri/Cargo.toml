@@ -51,6 +51,8 @@ tracing-subscriber = { version = "0.3", features = ["env-filter"] }
 thiserror = "1"
 ed25519-dalek = { version = "2", features = ["rand_core"] }
 rand = "0.8"
+# OpenTunnel client for the Labs fixed phone address. Pinned exactly: pre-1.0, MIT, third-party relay.
+opentunnel = "=0.6.2"
 sha2 = "0.10"
 base64 = "0.22"
 tungstenite = { version = "0.24", default-features = false, features = ["handshake", "rustls-tls-webpki-roots"] }

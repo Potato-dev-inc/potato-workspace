@@ -53,6 +53,9 @@ pub struct StartRequest {
     pub parent_pane: Option<String>,
     /// A standby helper asked for by name.
     pub helper_name: Option<String>,
+    /// A ready standby (a spin-off) must not take this start: the agent asked for, or the person's setting makes, a
+    /// minion (`started_as`).
+    pub no_standby: bool,
 }
 
 /// Why a chat session did not start. `fallback`: the terminal is the way to run this agent instead.
@@ -188,7 +191,7 @@ fn start_in(deps: &StartDeps, cfg: AgentConfig, request: StartRequest) -> Result
     // A standby seat the person made that fits this start comes first (agent, folder, account, and a model that agrees). An
     // agent's own seat that is still starting is waited for: the seat takes the task, nothing else is started for it.
     let seat_wait = if request.parent_pane.is_some() { WARM_WAIT } else { std::time::Duration::ZERO };
-    let helper = deps.conversations.as_ref().and_then(|_| crate::acp::warm::claim_helper_for(
+    let helper = deps.conversations.as_ref().filter(|_| !request.no_standby).and_then(|_| crate::acp::warm::claim_helper_for(
             &cfg,
             &crate::acp::warm::HelperClaim { agent: &cfg.id, folder: &folder, account: account_id.as_deref(), model: match_model(&request).as_deref(), caller: request.parent_pane.as_deref(), name: request.helper_name.as_deref() },
             seat_wait,
@@ -434,6 +437,10 @@ pub fn restore_panes(deps: &StartDeps) -> Vec<String> {
         chat.set_handles(handles);
         chat.init_rules();
         chat.set_started_by(record.started_by.as_deref());
+        chat.restore_started(record.started_as.as_deref(), record.as_reason.as_deref());
+        if let Some(kind) = record.started_as.as_deref() {
+            crate::pty::pane_parent::set_started_as(&deps.registry, &id, kind);
+        }
         if let Some(note) = record.lane_note.clone() {
             *chat.lane_note.lock() = Some(note);
         }

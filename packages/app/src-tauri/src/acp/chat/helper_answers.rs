@@ -80,6 +80,44 @@ pub fn needs_person(title: &str, tool_kind: &str, option_kind: &str, project: &P
     outside_project(title, project).map(|path| format!("it reaches {path}, outside the project"))
 }
 
+/// Where a minion's permission ask goes (Two types mode, `started_as = "minion"`; plan 2.4).
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum MinionAsk {
+    /// An ordinary ask: only the agent that started the minion sees it (no card for the person, no push, no Inbox line).
+    Agent,
+    /// A risky ask (the reason is for the card): a card for the person, docked in the parent's chat.
+    Person(String),
+    /// The switch is off: the ask is refused, and the minion is told no. The person is not asked.
+    Refuse,
+}
+
+/// How a minion's ask is routed. `switch_on` is `enabled()`. The classification is `needs_person` for the plain
+/// "allow once" option: the same words as the helper rule, so a risky ask is risky in both modes.
+pub fn minion_route(title: &str, tool_kind: &str, project: &Path, switch_on: bool) -> MinionAsk {
+    if !switch_on {
+        return MinionAsk::Refuse;
+    }
+    match needs_person(title, tool_kind, "allow_once", project) {
+        None => MinionAsk::Agent,
+        Some(why) => MinionAsk::Person(why),
+    }
+}
+
+/// How long a minion's ordinary ask may wait for its agent before the app wakes the agent with a note.
+pub const WAKE_AFTER_MS: u64 = 60_000;
+/// While the agent is in the middle of a turn that can take the line, the note waits this long.
+pub const WAKE_BUSY_AFTER_MS: u64 = 180_000;
+
+/// The one app-written note that wakes the agent of a minion whose ask nobody answered.
+pub fn wake_note(minion: &str, handle: &str) -> String {
+    format!(
+        "[Potato Workspace] Your minion {minion} is waiting for an answer. Read its question with wait_agents or inspect_agent (handle {handle}), then answer it with answer_prompt. The person is not asked about this one."
+    )
+}
+
+/// What the minion's agent is told when the switch is off and an ask is refused.
+pub const REFUSED_NOTE: &str = "the setting that lets agents answer their minions' questions is off, so the minion was told no";
+
 /// A path written in the title that is not inside `project`.
 fn outside_project(title: &str, project: &Path) -> Option<String> {
     let root = norm(&project.to_string_lossy());

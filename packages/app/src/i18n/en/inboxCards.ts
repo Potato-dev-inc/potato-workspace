@@ -23,6 +23,8 @@ export const inboxCards = {
 
   // StuckCard
   'inboxCards.stuck.hint': 'Give it a hint',
+  'inboxCards.stuck.stallTitle': 'Agent {name} has made no progress for {n} min.',
+  'inboxCards.stuck.stallLine': 'No progress for {n} min.',
   'inboxCards.stuck.interrupt': 'Interrupt',
   'inboxCards.stuck.askAnother': 'Ask another agent',
 
@@ -94,8 +96,8 @@ export const inboxCards = {
   'inboxCards.ask.listLabel': 'Answers from your agents',
 
   // HiddenRuns
-  'inboxCards.hidden.title': '{name} helper ran with no window',
-  'inboxCards.hidden.listLabel': 'Helpers that ran with no window',
+  'inboxCards.hidden.title': '{name} agent ran with no window',
+  'inboxCards.hidden.listLabel': 'Agents that ran with no window',
 
   // ImportChatsCard
   'inboxCards.import.title': 'Bring your chats here',
@@ -149,4 +151,8 @@ export const inboxCards = {
 
   // Missions (the progress view's timeline row)
   'inboxCards.mission.openAgent': 'Open agent',
+
+  // A risky ask of a minion, docked in the chat of the agent that started it
+  'inboxCards.minionAsks': 'A minion of {parent} asks',
+  'inboxCards.openMinion': 'See what it is doing',
 } as const;

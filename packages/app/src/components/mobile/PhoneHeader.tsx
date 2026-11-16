@@ -6,7 +6,7 @@ import type { PaneView } from '../../lib/mobile-pane-view';
 import type { PhoneStatus } from '../../lib/phone-status';
 import { PhoneAgentTile } from './PhoneAgentTile';
 import '../../styles/phone-shell.css';
-import { useDismissable } from '../../hooks/useDismissable';
+import { Menu } from '../common/Floating';
 
 export function PhoneHeader({
   title,
@@ -41,13 +41,13 @@ export function PhoneHeader({
   const [open, setOpen] = useState(false);
   const [confirm, setConfirm] = useState(false);
   const rootRef = useRef<HTMLDivElement>(null);
+  const titleBtn = useRef<HTMLButtonElement>(null);
 
   // The little menu closes on Escape, on a tap outside, and when the chat changes.
   useEffect(() => {
     setOpen(false);
     setConfirm(false);
   }, [title]);
-  useDismissable(open, { inside: [rootRef], anchor: rootRef, onDismiss: () => setOpen(false) });
 
   const words = status?.text ?? stateWords ?? null;
   const name = (
@@ -86,14 +86,14 @@ export function PhoneHeader({
       </button>
       <div className="ph-head-mid" ref={rootRef}>
         {peek ? (
-          <button type="button" className="ph-head-title" aria-haspopup="menu" aria-expanded={open} aria-label={`${title}${words ? `. ${words}` : ''}. ${t('phone.header.options')}`} onClick={() => setOpen((v) => !v)}>
+          <button ref={titleBtn} type="button" className="ph-head-title" aria-haspopup="menu" aria-expanded={open} aria-label={`${title}${words ? `. ${words}` : ''}. ${t('phone.header.options')}`} onClick={() => setOpen((v) => !v)}>
             {name}
           </button>
         ) : (
           <div className="ph-head-title ph-head-title--plain">{name}</div>
         )}
         {peek && open && (
-          <div className="ph-peek" role="menu" data-testid="phone-peek">
+          <Menu anchorRef={titleBtn} align="start" className="ph-peek" label={title} testId="phone-peek" onClose={() => (setOpen(false), setConfirm(false))}>
             {!confirm && peek.canSwitch && (
               <button
                 type="button"
@@ -132,7 +132,7 @@ export function PhoneHeader({
                 </div>
               </div>
             )}
-          </div>
+          </Menu>
         )}
       </div>
       <button type="button" className="ph-iconbtn" aria-label={t('phone.newChat')} onClick={onNew} disabled={!bridgeReady}>

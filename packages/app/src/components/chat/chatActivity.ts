@@ -3,6 +3,7 @@
 import type { ToolCallItem, ToolStep, TurnStep } from '../../lib/sessionChatModel';
 import { classifyTool, type ToolKind } from '../../lib/chatToolKinds';
 import { formatDuration, plural } from './chatFormat';
+import { t } from '../../i18n';
 import { questionsOfCall } from './questionCall';
 
 /** A run of tool rows (one activity line), or one other step (text, a notice, a helper row). */
@@ -61,7 +62,7 @@ const WORDS: Record<ToolKind, (count: number) => string> = {
   write: (n) => `Wrote ${plural(n, 'file')}`,
   run: (n) => `Ran ${plural(n, 'command')}`,
   web: (n) => `Used the web ${plural(n, 'time')}`,
-  helper: (n) => `Started ${plural(n, 'helper')}`,
+  helper: (n) => t('minion.activity.started', { count: n }),
   other: (n) => `Used ${plural(n, 'tool')}`,
 };
 

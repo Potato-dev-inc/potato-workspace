@@ -11,7 +11,8 @@ import { Btn, Note, SettingBlock, SettingRow, SettingToggle } from '../settings-
 import '../../../styles/canary.css';
 
 /** `only`: show just this agent's line (its page in Settings > Agents), without the rows that are about every agent. */
-export function AgentVersions({ api = tauriCanaryApi, now = () => Date.now(), only }: { api?: CanaryApi; now?: () => number; only?: string }) {
+/** `noList`: leave out the per-agent lines; each agent's page shows its own (with `only`). */
+export function AgentVersions({ api = tauriCanaryApi, now = () => Date.now(), only, noList = false }: { api?: CanaryApi; now?: () => number; only?: string; noList?: boolean }) {
   const t = useT();
   const { status, refresh } = useCanary(api);
   const [running, setRunning] = useState<Set<string>>(new Set());
@@ -40,6 +41,7 @@ export function AgentVersions({ api = tauriCanaryApi, now = () => Date.now(), on
 
   return (
     <>
+      {!noList && (
       <SettingBlock
         label={only ? t('settings.row.version.label') : t('settings.row.versions.label')}
         description={t('versions.help')}
@@ -85,6 +87,7 @@ export function AgentVersions({ api = tauriCanaryApi, now = () => Date.now(), on
         </ul>
         {error && <Note role="alert">{error}</Note>}
       </SettingBlock>
+      )}
       {!only && (
         <>
           <SettingToggle

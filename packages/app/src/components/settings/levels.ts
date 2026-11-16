@@ -24,6 +24,8 @@ export const BASIC_ROW_IDS: readonly string[] = [
   'accounts',
   'setup-check',
   // Agents: whether helpers an agent starts are shown, whether they stay open, and whether they close with their agent
+  'agent-pack', // the one switch: agents can ask each other for help
+  'started-agents',
   'helper-agents',
   'helper-default-models',
   'keep-helpers-open',

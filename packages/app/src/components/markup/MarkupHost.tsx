@@ -69,7 +69,7 @@ const typingIn = (el: EventTarget | null): boolean => {
   const n = el as HTMLElement | null;
   if (!n || !n.tagName) return false;
   // The agent list is open: its keys (arrows, Enter, Escape) are its own, not the bar's.
-  if (n.closest?.('[role="menu"]')) return true;
+  if (n.closest?.('[role="menu"]')) return true; // a popup in the top layer counts too
   return n.tagName === 'INPUT' || n.tagName === 'TEXTAREA' || n.tagName === 'SELECT' || n.isContentEditable === true;
 };
 
@@ -354,6 +354,7 @@ export function MarkupHost({
     shape: (shape) => apply((s) => setShape(s, shape)),
     color: (color) => apply((s) => setColor(s, color)),
     popup: (popup) => apply((s) => togglePopup(s, popup)),
+    closePopup: () => apply((s) => (s.popup ? { ...s, popup: null } : s)),
     undo: () => apply(undo),
     clear: () => {
       apply(clearMarks);

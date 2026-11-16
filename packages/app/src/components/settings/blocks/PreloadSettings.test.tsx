@@ -2,10 +2,9 @@
 import { act } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { DEFAULT_STANDBY_CONFIG, NOT_TERMINAL_NOTE, NO_WARM_MODE_NOTE } from '../../../lib/standby';
+import { DEFAULT_STANDBY_CONFIG } from '../../../lib/standby';
 import type { StandbyConfig, StandbyStatus } from '../../../lib/tauri-types';
 import { PreloadSettings, type PreloadApi } from './PreloadSettings';
-import { peekAgentRegistry } from '../../../lib/agentRegistry';
 import type { AgentDescriptor } from '../../../lib/agentRegistry';
 
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
@@ -58,6 +57,9 @@ async function render(api: PreloadApi) {
   await act(async () => {
     await Promise.resolve();
   });
+  // The agents and the idle time sit under "Details" (closed on a first look); open it for these tests.
+  const details = [...host.querySelectorAll<HTMLButtonElement>('button')].find((b) => b.textContent?.trim() === 'Details');
+  if (details) await click(details);
 }
 
 const checkbox = (label: string) => host.querySelector<HTMLInputElement>(`input[aria-label="${label}"]`);
@@ -138,116 +140,31 @@ describe('PreloadSettings', () => {
     expect(cold?.textContent).toContain('not warmed: D:\\new-app needs trust once for Claude');
   });
 
-  it('is off by default, explains the cost, and lists visible-capable agents', async () => {
+  it('is off by default, explains the cost, and has no per-agent list (each agent page has its own)', async () => {
     await render(mockApi());
     const master = host.querySelector('[role="switch"]');
     expect(master?.getAttribute('aria-checked')).toBe('false');
     expect(host.textContent).toContain('stays open in the background, which uses memory');
-    expect(checkbox('Keep Claude warm')?.checked).toBe(false);
-    expect(checkbox('Keep Claude warm')?.disabled).toBe(false);
-    // Codex can open a visible pane but has no warm mode yet.
-    expect(checkbox('Keep Codex CLI warm')?.disabled).toBe(true);
-    expect(host.textContent).toContain('no warm mode yet');
+    expect(checkbox('Keep Claude warm')).toBeNull();
+    expect(host.querySelector('[data-testid="preload-providers"]')).toBeNull();
   });
 
-  it('the master switch and a provider tick are saved through the api', async () => {
+  it('the one switch is saved through the api and keeps the first agent that can be warm at one', async () => {
     const api = mockApi();
     await render(api);
     await click(host.querySelector('[role="switch"]'));
     expect(api.setConfig).toHaveBeenLastCalledWith(
-      expect.objectContaining({ preload: { enabled: true, providers: {} } }),
-    );
-    await click(checkbox('Keep Claude warm'));
-    expect(api.setConfig).toHaveBeenLastCalledWith(
       expect.objectContaining({ preload: { enabled: true, providers: { claude: 1 } } }),
     );
-    expect(checkbox('Keep Claude warm')?.checked).toBe(true);
-    await click(checkbox('Keep Claude warm'));
-    expect(api.setConfig).toHaveBeenLastCalledWith(
-      expect.objectContaining({ preload: { enabled: true, providers: {} } }),
-    );
+    await click(host.querySelector('[role="switch"]'));
+    expect(api.setConfig).toHaveBeenLastCalledWith(expect.objectContaining({ preload: expect.objectContaining({ enabled: false }) }));
   });
 
-  it('a ticked provider can keep two warm and the idle timeout is edited in minutes', async () => {
+  it('the idle timeout is edited in minutes under Details', async () => {
     const api = mockApi({ ...DEFAULT_STANDBY_CONFIG, preload: { enabled: true, providers: { claude: 1 } } });
     await render(api);
-    const field = host.querySelector<HTMLInputElement>('input[aria-label="Warm Claude count"]');
-    expect(field?.value).toBe('1');
-    expect(field?.disabled).toBe(false);
-    expect(host.querySelector('select[aria-label="Warm Claude count"]')).toBeNull();
-    expect(host.querySelector<HTMLInputElement>('input[aria-label="Warm Cursor Agent CLI count"]')?.disabled).toBe(true);
     const idle = host.querySelector<HTMLInputElement>('input[aria-label="Preload idle timeout (minutes)"]');
     expect(idle?.value).toBe('20');
-  });
-
-  const press = async (label: string) => {
-    await act(async () => {
-      host.querySelector<HTMLButtonElement>(`button[aria-label="${label}"]`)?.click();
-    });
-    await act(async () => {
-      await Promise.resolve();
-    });
-  };
-  const type = async (label: string, value: string) => {
-    const input = host.querySelector<HTMLInputElement>(`input[aria-label="${label}"]`) as HTMLInputElement;
-    await act(async () => {
-      const setter = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value')?.set;
-      setter?.call(input, value);
-      input.dispatchEvent(new Event('input', { bubbles: true }));
-    });
-    await act(async () => {
-      input.dispatchEvent(new FocusEvent('focusout', { bubbles: true }));
-      input.blur();
-    });
-    await act(async () => {
-      await Promise.resolve();
-    });
-  };
-
-  it('the warm count has - and + steppers from 1 to 10, saves each step, and stops at the ends', async () => {
-    const api = mockApi({ ...DEFAULT_STANDBY_CONFIG, preload: { enabled: true, providers: { claude: 1 } } });
-    await render(api);
-    expect(host.querySelector<HTMLButtonElement>('button[aria-label="Fewer warm Claude"]')?.disabled).toBe(true);
-    await press('More warm Claude');
-    expect(api.setConfig).toHaveBeenLastCalledWith(expect.objectContaining({ preload: expect.objectContaining({ providers: { claude: 2 } }) }));
-    expect(host.querySelector<HTMLInputElement>('input[aria-label="Warm Claude count"]')?.value).toBe('2');
-    await press('Fewer warm Claude');
-    expect(api.setConfig).toHaveBeenLastCalledWith(expect.objectContaining({ preload: expect.objectContaining({ providers: { claude: 1 } }) }));
-  });
-
-  it('typing a number past the range is put back with a plain hint; above 4 it warns about memory', async () => {
-    const api = mockApi({ ...DEFAULT_STANDBY_CONFIG, preload: { enabled: true, providers: { claude: 1 } } });
-    await render(api);
-    expect(host.textContent).not.toContain('Each warm agent uses memory.');
-    await type('Warm Claude count', '99');
-    expect(host.querySelector<HTMLInputElement>('input[aria-label="Warm Claude count"]')?.value).toBe('10');
-    expect(api.setConfig).toHaveBeenLastCalledWith(expect.objectContaining({ preload: expect.objectContaining({ providers: { claude: 10 } }) }));
-    expect(host.textContent).toContain('Use a number from 1 to 10.');
-    expect(host.textContent).toContain('Each warm agent uses memory.');
-    await type('Warm Claude count', '3');
-    expect(host.textContent).not.toContain('Each warm agent uses memory.');
-    await type('Warm Claude count', '0');
-    expect(host.querySelector<HTMLInputElement>('input[aria-label="Warm Claude count"]')?.value).toBe('1');
-  });
-
-  it('shows the experimental tag and says why a non-terminal agent has no warm mode', async () => {
-    const base = peekAgentRegistry().agents.find((agent) => agent.id === 'claude') as AgentDescriptor;
-    registryOverride.agents = [
-      { ...base, id: 'claude', label: 'Claude', standby: { visible: true, headless: false, experimental: false } },
-      { ...base, id: 'myagent', label: 'My Agent', standby: { visible: true, headless: false, experimental: true } },
-      { ...base, id: 'opencode_native', label: 'OpenCode (API)', kind: 'native_protocol', standby: { visible: false, headless: false, experimental: false } },
-    ];
-    await render(mockApi());
-    // Only the experimental agent carries the tag, and it stays ticked-able.
-    expect(host.textContent?.match(/\(experimental\)/g)?.length).toBe(1);
-    const myAgent = host.querySelector<HTMLLabelElement>('input[aria-label="Keep My Agent warm"]')?.closest('label');
-    expect(myAgent?.textContent).toContain('(experimental)');
-    expect(checkbox('Keep My Agent warm')?.disabled).toBe(false);
-    expect(checkbox('Keep Claude warm')?.closest('label')?.textContent).not.toContain('(experimental)');
-    // The API agent explains itself instead of promising a warm mode.
-    expect(checkbox('Keep OpenCode (API) warm')?.disabled).toBe(true);
-    expect(host.textContent).toContain(NOT_TERMINAL_NOTE);
-    expect(host.textContent).not.toContain(NO_WARM_MODE_NOTE);
   });
 
   it('shows a 5 second timeout in seconds without rewriting it on render', async () => {

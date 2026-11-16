@@ -326,13 +326,13 @@ describe('the notice', () => {
 });
 
 describe('the Settings row', () => {
-  it('does not check until Check for updates is pressed, and says when there is nothing new', async () => {
+  it('checks by itself when it opens, checks again when Check for updates is pressed, and says when there is nothing new', async () => {
     const t = transport({ check: vi.fn(async () => null) });
     const h = await mount(<UpdateRow transport={t} />);
-    expect(t.check).not.toHaveBeenCalled();
+    expect(t.check).toHaveBeenCalledTimes(1);
     await click(buttonByText(h, 'Check for updates'));
     await settle();
-    expect(t.check).toHaveBeenCalledTimes(1);
+    expect(t.check).toHaveBeenCalledTimes(2);
     expect(hasText(h, 'You have the newest version.')).toBe(true);
   });
 

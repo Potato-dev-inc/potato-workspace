@@ -137,7 +137,7 @@ describe('AccountsGroup', () => {
     expect(host.querySelector('[role="alert"]')?.textContent).toContain('unknown account');
   });
 
-  it('Run helpers on: shows Ask me by default, with Main login and each account of that agent only', async () => {
+  it('Run started agents on: shows Ask me by default, with Main login and each account of that agent only', async () => {
     await render(
       fakeApi([
         { id: 'acc_1', agent_id: 'claude', label: 'Work', home: 'C:/a' },
@@ -147,7 +147,7 @@ describe('AccountsGroup', () => {
     const select = host.querySelector('#helper-login-claude') as HTMLSelectElement;
     expect(select.value).toBe('ask');
     expect(Array.from(select.options).map((o) => o.textContent)).toEqual(['Ask me', 'Default sign-in', 'Work']);
-    expect(host.querySelector('label[for="helper-login-claude"]')?.textContent).toBe('Run helpers on');
+    expect(host.querySelector('label[for="helper-login-claude"]')?.textContent).toBe('Run started agents on');
     const codex = host.querySelector('#helper-login-codex') as HTMLSelectElement;
     expect(Array.from(codex.options).map((o) => o.textContent)).toEqual(['Ask me', 'Default sign-in', 'Personal']);
   });

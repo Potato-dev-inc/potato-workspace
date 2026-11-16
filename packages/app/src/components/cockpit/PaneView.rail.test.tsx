@@ -88,7 +88,7 @@ describe('session rail in the pane view', () => {
     const c = cockpit([mk('p', 'Refactor auth'), mk('h', 'Check tests', 'p')], 'h');
     await act(async () => root.render(<PaneView c={c} paneId="h" />));
     await flush();
-    expect(rail()?.querySelector('.rp-helper-of')?.textContent).toBe('Helper of Refactor auth');
+    expect(rail()?.querySelector('.rp-helper-of')?.textContent).toBe('Started by Refactor auth');
   });
 
   it('stays in other tabs', async () => {
@@ -96,7 +96,7 @@ describe('session rail in the pane view', () => {
     await act(async () => root.render(<PaneView c={c} paneId="p" />));
     // Receipt sits in the More menu.
     act(() => host.querySelector<HTMLButtonElement>('.ck-pane-head button[aria-haspopup="menu"]')!.click());
-    await act(async () => [...host.querySelectorAll<HTMLElement>('[role="menuitem"]')].find((b) => b.textContent === 'Receipt')!.click());
+    await act(async () => [...document.querySelectorAll<HTMLElement>('[role="menuitem"]')].find((b) => b.textContent === 'Receipt')!.click());
     await flush();
     expect(rail()).not.toBeNull();
   });

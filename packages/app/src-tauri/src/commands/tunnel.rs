@@ -32,3 +32,25 @@ pub async fn test_tunnel_connection(url: Option<String>) -> Result<ConnectionTes
         .await
         .map_err(|err| err.to_string())?
 }
+
+/// Turn on the fixed phone address (OpenTunnel, Labs). Same as saving the `open_tunnel` setting.
+#[tauri::command]
+pub async fn enable_opentunnel(app: AppHandle) -> Result<TunnelStatus, String> {
+    tauri::async_runtime::spawn_blocking(move || mobile_tunnel::apply_tunnel_config(&app, TunnelConfigInput::OpenTunnel))
+        .await
+        .map_err(|err| err.to_string())?
+}
+
+/// Turn the fixed phone address off and go back to the automatic address. The address is kept for next time.
+#[tauri::command]
+pub async fn disable_opentunnel(app: AppHandle) -> Result<TunnelStatus, String> {
+    tauri::async_runtime::spawn_blocking(move || mobile_tunnel::apply_tunnel_config(&app, TunnelConfigInput::Quick))
+        .await
+        .map_err(|err| err.to_string())?
+}
+
+/// Delete the fixed phone address on the relay and on this computer, then go back to the automatic address.
+#[tauri::command]
+pub async fn forget_opentunnel_address(app: AppHandle) -> Result<TunnelStatus, String> {
+    mobile_tunnel::forget_open_tunnel_address(app).await
+}

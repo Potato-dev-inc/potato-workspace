@@ -82,9 +82,7 @@ describe('wording on the real panel', () => {
 
   it('the renamed rows read in plain English', () => {
     const label = (id: string) => rowById(id).label;
-    expect(label('message-rail')).toBe('Jump marks beside the chat');
-    expect(label('done-card')).toBe('Show if build and tests passed');
-    expect(label('agent-lane')).toBe('Chat or terminal');
+    // 'Chat or terminal' is on each agent's own page now (SettingsAgentPage.screen.test.tsx).
     expect(label('away-minutes')).toBe('Tell me what happened while I was away');
     expect(label('bridge-endpoint')).toBe("This app's address");
     expect(label('librarian-indexer')).toBe('Search inside my project');

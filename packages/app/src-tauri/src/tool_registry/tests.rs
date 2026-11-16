@@ -404,7 +404,7 @@ fn prompts_include_status_check() {
 /// constant deliberately when a tool is added or changed; a pure refactor must not move it.
 #[test]
 fn catalog_version_is_pinned() {
-    assert_eq!(catalog_version(), "85-2db49a87834f9999");
+    assert_eq!(catalog_version(), "85-ceaf67f5d1840250");
 }
 
 /// Every tool input that names an agent (`agent_type`, or `backend` on quick_ask) uses the one
@@ -671,8 +671,8 @@ fn run_agent_is_short_and_leads_with_the_launch_and_wait_example() {
         assert!(text.starts_with("Advanced:"), "{field}: {text}");
     }
     // 6_000 before review_by (about 300 more bytes) joined the schema; trust's `detail` field
-    // and the merged schema measured 6_405 bytes; auto_approve and the model note bring it to 6_790; `strict` and the lane hint make 6_840, so the limit was 6_850; the standby `helper` field makes it 7_050.
-    assert!(run.input_schema.to_string().len() < 7_050, "{} bytes", run.input_schema.to_string().len());
+    // and the merged schema measured 6_405 bytes; auto_approve and the model note bring it to 6_790; `strict` and the lane hint make 6_840, so the limit was 6_850; the standby `helper` field makes it 7_050; `as` (minion / spin-off) makes it 7_300.
+    assert!(run.input_schema.to_string().len() < 7_300, "{} bytes", run.input_schema.to_string().len());
 }
 
 #[test]

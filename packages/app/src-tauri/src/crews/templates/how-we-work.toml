@@ -1,0 +1,59 @@
+# Template: "How we work". A lead who plans and reviews, a scout who reads, three workers for easy, medium and hard
+# tasks, and a checker. Every role uses the person's default agent, so it works on any machine. A template is read-only:
+# "Save my own copy" makes it yours.
+name = "How we work"
+budget = { turns = 200, minutes = 480 }
+max_helpers = 8
+fix_loops = 2
+routing_file = "how-we-work.md"
+
+[[roles]]
+id = "lead"
+name = "Lead"
+agent = "{default}"
+permissions = { read = true, write = "none", run = "ask", start_helpers = true, merge = true }
+hands_to = ["scout", "worker-easy", "worker-medium", "worker-hard", "checker"]
+job = "You are the front desk and the lead. Read the person's exact words. Pass those exact words along with your clear version to every role. Pick the cheapest role that can finish the task in one go, using the rules, and tell the person which way you went. Review each report before anything is merged. Never push, publish or delete without the person."
+
+[[roles]]
+id = "scout"
+name = "Scout"
+agent = "{default}"
+parent = "lead"
+permissions = { read = true, write = "none", run = "read-only" }
+job = "Answer \"where is X\" questions about the code in {folder} in at most 20 lines: the files, the functions and what they do. Read only. Never change a file."
+
+[[roles]]
+id = "worker-easy"
+name = "Worker (easy)"
+agent = "{default}"
+parent = "lead"
+permissions = { read = true, write = "worktree", run = "worktree" }
+job = "Do one small task in your own worktree of {folder}: one area, a known pattern. Commit on your branch only. Report what you changed and what you did not check."
+
+[[roles]]
+id = "worker-medium"
+name = "Worker (medium)"
+agent = "{default}"
+parent = "lead"
+permissions = { read = true, write = "worktree", run = "worktree" }
+hands_to = ["worker-hard"]
+job = "Do a task that spans several files in one layer, in your own worktree of {folder}. If you fail or stall, say so plainly, and the task goes to the hard worker. Commit on your branch only."
+
+[[roles]]
+id = "worker-hard"
+name = "Worker (hard)"
+agent = "{default}"
+parent = "lead"
+permissions = { read = true, write = "worktree", run = "worktree" }
+job = "Do the hard tasks in your own worktree of {folder}: work that touches many files, or has an unknown cause. Commit on your branch only. Report what is proven and what is not."
+
+[[roles]]
+id = "checker"
+name = "Checker"
+agent = "{default}"
+parent = "lead"
+check = true
+permissions = { read = true, write = "none", run = "worktree" }
+hands_to = ["lead"]
+job = "Check a finished branch of {folder}: run its tests and look at the change. Say pass or fail. On a fail, hand it back to the lead with what broke. Stop after the allowed fix loops and let the lead decide."

@@ -8,6 +8,7 @@ import type { AttentionSnapshot } from '../../lib/attention';
 import { companionTab } from '../../lib/mobile-agent-tabs';
 import type { CompanionView } from '../../lib/companion';
 import { stateWord } from '../../lib/companion';
+import { Menu } from '../common/Floating';
 import { PhoneAgentTile } from './PhoneAgentTile';
 import { PhoneQuiet } from './PhoneQuiet';
 import { PhoneReadyHelpers } from './PhoneReadyHelpers';
@@ -411,7 +412,17 @@ export function PhoneDrawer({
           )}
         </div>
         {menu && (
-          <div className="ph-rowmenu" role="menu" aria-label={menu.title} data-testid="drawer-row-menu" style={{ top: 96, left: 16 }}>
+          <Menu
+            point={{ x: 16, y: 96 }}
+            align="start"
+            className="ph-rowmenu"
+            label={menu.title}
+            testId="drawer-row-menu"
+            onClose={() => {
+              setMenu(null);
+              setConfirmClose(false);
+            }}
+          >
             {!confirmClose && onStopPane && (
               <button
                 type="button"
@@ -468,7 +479,7 @@ export function PhoneDrawer({
             >
               {t('phone.rowmenu.cancel')}
             </button>
-          </div>
+          </Menu>
         )}
         <footer className="ph-dfoot">
           <div className="ph-dleft">

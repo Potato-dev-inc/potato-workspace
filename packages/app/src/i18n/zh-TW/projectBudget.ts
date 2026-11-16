@@ -13,6 +13,7 @@ export const projectBudget = {
   'settings.row.project-budget.label': '這個專案的額度',
   'settings.row.project-budget.hint': '這個專案一天最多可以用多少。達到上限，新回合就先等著。0 代表不限制。',
   'projectBudget.turnsAria': '這個專案一天的回合數（0 代表不限制）',
+  'projectBudget.presetAria': '這個專案一天可用的用量',
   'projectBudget.minutesAria': '這個專案一天的 AI 助理分鐘數（0 代表不限制）',
   'projectBudget.planAria': '這個專案最多可用方案的百分比（0 代表不限制）',
   'projectBudget.turnsSuffix': '回合／天',

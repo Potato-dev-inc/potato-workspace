@@ -561,6 +561,70 @@ fn with_the_setting_off_a_helpers_question_is_the_persons_alone() {
     assert_eq!(refused.unwrap_err().code, "AGENT_ANSWER_NOT_ALLOWED");
 }
 
+fn make_minion(rig: &Rig) {
+    rig.chat.set_started_by(Some("session-A"));
+    rig.chat.set_started(crate::agent_run_mode::StartedRecord { as_used: "minion".into(), as_reason: "requested".into(), started_as: Some("minion".into()), ..Default::default() });
+}
+
+/// The questions the person could see for this chat's pane (the quiet ones are not listed).
+fn person_sees(rig: &Rig) -> Vec<crate::questions::Question> {
+    crate::questions::store().list_pending(crate::questions::now_ms()).into_iter().filter(|q| q.pane_id.as_deref() == Some(rig.chat.pane_id())).collect()
+}
+
+#[test]
+fn a_minions_ordinary_ask_goes_only_to_its_agent_and_raises_nothing_for_the_person() {
+    let _on = super::helper_answers::test_switch(true);
+    let rig = Rig::new("");
+    let id = rig.id();
+    make_minion(&rig);
+    let asked = call(&rig, "POST", "agents/followup", json!({ "handle": id, "task": "perm", "wait_ms": crate::test_support::wait::slow_ms(20000) }), Some("session-A")).unwrap().unwrap();
+    // The agent that started it is told, as for any helper.
+    assert_eq!(asked["status"], "waiting_input");
+    assert_eq!(asked["prompt"]["answerable_by_agent"], json!(true));
+    // The person is not: the pane reads as working, and no card or Inbox question exists.
+    assert_eq!(rig.chat.state()["status"], "running");
+    assert!(person_sees(&rig).is_empty(), "no card for the person: {:?}", person_sees(&rig));
+    assert_eq!(rig.chat.quiet_asks().len(), 1);
+    let prompt = asked["prompt"]["prompt_id"].as_str().unwrap().to_string();
+    let answered = call(&rig, "POST", "agents/answer", json!({ "handle": id, "prompt_id": prompt, "choice": "allow_once" }), Some("session-A")).unwrap().unwrap();
+    assert_eq!(answered["answered"]["name"], "Allow Once");
+    assert!(wait_until(30, || rig.of_texts_contain("chose:allow_once")), "the choice reached the minion: {:?}", rig.texts());
+}
+
+#[test]
+fn a_minions_risky_ask_is_a_card_for_the_person_and_the_agent_may_only_say_no() {
+    let _on = super::helper_answers::test_switch(true);
+    let rig = Rig::new("");
+    let id = rig.id();
+    make_minion(&rig);
+    let asked = call(&rig, "POST", "agents/followup", json!({ "handle": id, "task": "permwith execute cmd:git push origin main", "wait_ms": crate::test_support::wait::slow_ms(20000) }), Some("session-A")).unwrap().unwrap();
+    assert_eq!(asked["status"], "waiting_input");
+    assert_eq!(rig.chat.state()["status"], "waiting_input", "the person is asked");
+    let cards = person_sees(&rig);
+    assert_eq!(cards.len(), 1, "{cards:?}");
+    assert!(cards[0].question.starts_with("A minion ("), "{}", cards[0].question);
+    assert!(rig.chat.quiet_asks().is_empty(), "the wake-up note is for ordinary asks only");
+    let prompt = asked["prompt"]["prompt_id"].as_str().unwrap().to_string();
+    let refused = call(&rig, "POST", "agents/answer", json!({ "handle": id, "prompt_id": prompt, "choice": "allow_once" }), Some("session-A")).unwrap();
+    assert_eq!(refused.unwrap_err().code, "AGENT_ANSWER_NEEDS_PERSON");
+}
+
+#[test]
+fn with_the_switch_off_a_minions_ask_is_refused_and_the_person_is_not_asked() {
+    let rig = Rig::new("");
+    let id = rig.id();
+    make_minion(&rig);
+    *rig.chat.switch_for_test.lock() = Some(false);
+    let _ = call(&rig, "POST", "agents/followup", json!({ "handle": id, "task": "perm", "wait_ms": crate::test_support::wait::slow_ms(20000) }), Some("session-A"));
+    rig.chat.reconcile_cards();
+    assert!(person_sees(&rig).is_empty(), "no card");
+    assert!(
+        wait_until(30, || rig.chat.items().iter().any(|i| matches!(i, crate::session_chat::ChatItem::Notice { text, .. } if text.contains("minions' questions is off")))),
+        "the chat says why the ask was refused: {:?}",
+        rig.chat.items()
+    );
+}
+
 #[test]
 fn an_agent_may_steer_only_a_chat_it_started() {
     let rig = Rig::new("");

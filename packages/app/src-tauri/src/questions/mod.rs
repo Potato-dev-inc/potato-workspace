@@ -229,6 +229,9 @@ struct Inner {
     items: Vec<Question>,
     /// Bumped on every change.
     revision: u64,
+    /// Questions only an agent answers (a minion's ordinary permission ask): kept for the answer path, but not
+    /// listed as pending, so no Inbox, phone list, count or push shows them to the person.
+    quiet: std::collections::HashSet<String>,
 }
 
 /// The store: a list behind a mutex plus a condvar that wakes blocked `ask_user` calls.
@@ -394,7 +397,17 @@ impl QuestionStore {
         if Self::expire_locked(&mut inner, now) {
             self.bump(&mut inner);
         }
-        inner.items.iter().filter(|q| q.state == QuestionState::Pending).cloned().collect()
+        inner.items.iter().filter(|q| q.state == QuestionState::Pending && !inner.quiet.contains(&q.id)).cloned().collect()
+    }
+
+    /// Marks a question as only for the agent that started the asking chat: it leaves `list_pending` (and so every
+    /// list the person sees). `get` and `answer` still find it.
+    pub fn set_quiet(&self, id: &str, quiet: bool) {
+        let mut inner = self.inner.lock();
+        let changed = if quiet { inner.quiet.insert(id.to_string()) } else { inner.quiet.remove(id) };
+        if changed {
+            self.bump(&mut inner);
+        }
     }
 
     /// Any question, resolved or not (resolved ones are kept for a few minutes).
@@ -601,6 +614,10 @@ impl QuestionStore {
                     true
                 }
             });
+        }
+        if !inner.quiet.is_empty() {
+            let Inner { items, quiet, .. } = &mut *inner;
+            quiet.retain(|id| items.iter().any(|q| &q.id == id));
         }
         changed
     }

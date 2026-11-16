@@ -28,6 +28,7 @@ pub const DEV_LABS_KEYS: &[&str] = &[
     "timeline_day_enabled",
     "smaller_updates_enabled",
     "crews_enabled",
+    "opentunnel_stable_link",
 ];
 
 /// Tests turn the override on through this; it is off in every test unless a test sets it.
@@ -115,6 +116,7 @@ const PATCHABLE_KEYS: &[&str] = &[
     "early_versions_enabled",
     "smaller_updates_enabled",
     "crews_enabled",
+    "opentunnel_stable_link",
     "app_only_failed_for",
 ];
 
@@ -194,6 +196,8 @@ pub fn default_public_settings() -> Value {
         "smaller_updates_enabled": false,
         // Crews (Labs): shows saved crews, read-only, and lets the command line check a crew file. Off until chosen. Rust: crews.
         "crews_enabled": false,
+        // Fixed phone address (Labs): an address from the third-party OpenTunnel relay. Off until chosen. Rust: mobile_tunnel/opentunnel.
+        "opentunnel_stable_link": false,
         // The version whose small update failed; it takes the full package from then on. Written by the app, empty when none.
         "app_only_failed_for": "",
     })
@@ -290,6 +294,7 @@ fn apply_public_settings(effective: &Value) {
     crate::agent_hooks::apply_settings(effective);
     crate::pane_mcp::apply_settings(effective);
     crate::acp::apply_settings(effective);
+    crate::mobile_tunnel::apply_settings(effective);
     crate::show_terminals::apply_settings(effective);
     crate::model_bridge::apply_settings(effective);
     crate::spaces::runtime::apply_settings(effective);

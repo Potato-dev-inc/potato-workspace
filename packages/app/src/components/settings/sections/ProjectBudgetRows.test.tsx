@@ -4,7 +4,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { setLanguagePref, t } from '../../../i18n';
 import { SECTIONS } from '../catalog';
-import { blur, click, mountRows, settle, type as typeInto, type Mounted } from '../test-utils';
+import { blur, click, mountRows, pickOption, settle, type as typeInto, type Mounted } from '../test-utils';
 import { projectBudgetRows } from './ProjectBudgetRows';
 
 const mocks = vi.hoisted(() => ({
@@ -45,6 +45,8 @@ describe('Budget for this project', () => {
     m = await mountRows(projectBudgetRows.filter((r) => r.id === 'project-budget'), { projectPath: 'C:\\work\\demo' });
     await settle();
     expect(m.host.textContent).toContain('For demo');
+    expect((m.host.querySelector('select') as HTMLSelectElement).value).toBe('none');
+    await pickOption(m.host.querySelector('select') as HTMLSelectElement, 'custom');
     const values = [/Turns a day/, /Agent minutes a day/, /Share of the plan/].map((label) => input(label).value);
     expect(values).toEqual(['0', '0', '0']);
   });
@@ -52,6 +54,7 @@ describe('Budget for this project', () => {
   it('saves each limit for this project only, and 0 turns it off again', async () => {
     m = await mountRows(projectBudgetRows.filter((r) => r.id === 'project-budget'), { projectPath: 'C:\\work\\demo' });
     await settle();
+    await pickOption(m.host.querySelector('select') as HTMLSelectElement, 'custom');
     const turns = input(/Turns a day/);
     await typeInto(turns, '12');
     await blur(turns);

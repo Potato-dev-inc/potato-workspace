@@ -32,6 +32,8 @@ import '../../styles/settings.css';
 import '../../styles/settings-rows.css';
 import '../../styles/connect.css';
 
+import type { TunnelApi } from '../settings/TunnelSection';
+
 const TunnelSection = lazy(() => import('../settings/TunnelSection').then((m) => ({ default: m.TunnelSection })));
 
 /** What the page reads and writes. Tests pass fakes; the app uses the defaults. */
@@ -43,6 +45,8 @@ export interface ConnectApi {
   account: AccountApi;
   lend: LendApi;
   team: TeamApi;
+  /** The phone address screen's commands. Tests pass a fake; the app uses the real ones. */
+  tunnel?: TunnelApi;
 }
 
 const DEFAULT_API: ConnectApi = {
@@ -252,7 +256,7 @@ function PhoneTab({ api, env }: { api: ConnectApi; env: SettingsEnv | null }) {
       {address && (
         <Embed testId="connect-tunnel">
           <Suspense fallback={null}>
-            <TunnelSection />
+            <TunnelSection api={api.tunnel} openTunnelOn={env?.settings.opentunnel_stable_link === true} />
           </Suspense>
         </Embed>
       )}

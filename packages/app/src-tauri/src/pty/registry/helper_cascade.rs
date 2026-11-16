@@ -45,8 +45,38 @@ pub(crate) fn helpers_of(registry: &Mutex<PaneRegistry>, root: &str) -> Vec<Stri
     order
 }
 
+/// The minions below `root`: panes started as a minion, reached through minion links only (a minion's own
+/// minions count; a spin-off in the chain stays, with whatever it started). Nearest first.
+pub(crate) fn minions_of(registry: &Mutex<PaneRegistry>, root: &str) -> Vec<String> {
+    let reg = registry.lock();
+    let mut seen: HashSet<String> = HashSet::from([root.to_string()]);
+    let mut order = Vec::new();
+    let mut frontier = vec![root.to_string()];
+    while !frontier.is_empty() {
+        let mut next = Vec::new();
+        for parent in &frontier {
+            let mut children: Vec<&String> = reg
+                .panes
+                .iter()
+                .filter(|(_, pane)| pane.info.parent_pane_id.as_deref() == Some(parent.as_str()) && pane.info.started_as.as_deref() == Some("minion"))
+                .map(|(id, _)| id)
+                .collect();
+            children.sort();
+            for child in children {
+                if seen.insert(child.clone()) {
+                    order.push(child.clone());
+                    next.push(child.clone());
+                }
+            }
+        }
+        frontier = next;
+    }
+    order
+}
+
 /// The rule with its inputs given, so a test can set them: close the helpers only when the setting
-/// is on and the app is not ending.
+/// is on and the app is not ending. A minion is not a helper the person keeps: it stops with its agent
+/// whatever the setting says (a spin-off stays, or follows the setting).
 pub(crate) fn close_with_helpers(
     registry: &Mutex<PaneRegistry>,
     pane_id: &str,
@@ -54,7 +84,14 @@ pub(crate) fn close_with_helpers(
     setting_on: bool,
     app_ending: bool,
 ) -> Result<(), String> {
-    let helpers = if setting_on && !app_ending { helpers_of(registry, pane_id) } else { Vec::new() };
+    let mut helpers = if setting_on && !app_ending { helpers_of(registry, pane_id) } else { Vec::new() };
+    if !app_ending {
+        for minion in minions_of(registry, pane_id) {
+            if !helpers.contains(&minion) {
+                helpers.push(minion);
+            }
+        }
+    }
     kill_pane_with_reason(registry, pane_id, reason)?;
     for helper in helpers {
         let _ = kill_pane_with_reason(registry, &helper, Some(HELPERS_CLOSED_REASON));

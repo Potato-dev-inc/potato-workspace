@@ -54,6 +54,24 @@ pub fn secret_delete(name: String) -> Result<(), String> {
     secrets::backend().delete(&name)
 }
 
+/// Whether a key for this provider is already on this PC (environment). Masked: never the value.
+#[tauri::command]
+pub fn secret_found_on_pc(name: String) -> Result<SecretMask, String> {
+    if !secrets::is_provider_secret(&name) {
+        return Err(format!("'{name}' is not a known secret"));
+    }
+    Ok(secrets::found_mask(&name))
+}
+
+/// Copies the key found on this PC into the credential store. The value never reaches the webview.
+#[tauri::command]
+pub fn secret_use_found(name: String) -> Result<SecretMask, String> {
+    if !secrets::is_provider_secret(&name) {
+        return Err(format!("'{name}' is not a known secret"));
+    }
+    secrets::use_found(&name)
+}
+
 /// INTERNAL: the only command that returns a raw key, and only for one slot: the key of the person's
 /// "Custom AI service". The wizard's writer calls that service from the webview and needs it for the
 /// request header. The provider keys and the sidecar secrets are never handed back.

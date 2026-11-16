@@ -11,6 +11,7 @@ import {
   type DiscordKinds,
 } from '../../../lib/discordAlerts';
 import { SendTest } from '../previews/Previews';
+import { readClipboardText } from '../../../lib/clipboardPaste';
 import { Btn, FieldInput, Note, SettingBlock, SettingToggle } from '../settings-ui';
 
 const MASK = '\u2022'.repeat(24);
@@ -21,6 +22,7 @@ export function DiscordAlertsBlock({ api = tauriDiscordAlertsApi, onSaved }: { a
   const [draft, setDraft] = useState('');
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [sent, setSent] = useState<{ ok: boolean; message: string } | null>(null);
 
   useEffect(() => {
     let live = true;
@@ -56,6 +58,29 @@ export function DiscordAlertsBlock({ api = tauriDiscordAlertsApi, onSaved }: { a
     const link = draft.trim();
     if (!link) return;
     if (await run(() => api.setUrl(link))) setDraft('');
+  };
+
+  // One press: read the link from the clipboard, save it, then send one test alert by itself.
+  const pasteAndTest = async () => {
+    setSent(null);
+    let link = '';
+    try {
+      link = await readClipboardText();
+    } catch {
+      setError(t('paste.denied'));
+      return;
+    }
+    if (!link) {
+      setError(t('paste.empty'));
+      return;
+    }
+    if (!(await run(() => api.setUrl(link)))) return;
+    setDraft('');
+    try {
+      setSent(await api.test());
+    } catch (e) {
+      setSent({ ok: false, message: discordErrorMessage(e) });
+    }
   };
 
   const remove = async () => {
@@ -99,6 +124,9 @@ export function DiscordAlertsBlock({ api = tauriDiscordAlertsApi, onSaved }: { a
           )}
           {!status.saved && (
             <>
+              <Btn small disabled={busy} onClick={() => void pasteAndTest()}>
+                {t('discord.pasteLink')}
+              </Btn>
               <Btn primary disabled={busy || draft.trim() === ''} onClick={() => void save()}>
                 {t('discord.save')}
               </Btn>
@@ -117,6 +145,7 @@ export function DiscordAlertsBlock({ api = tauriDiscordAlertsApi, onSaved }: { a
         </div>
         {status.saved && <Note role="status">{t('discord.savedNote', { tail: status.tail ?? '...' })}</Note>}
         {!status.saved && <Note>{t('discord.notOn')}</Note>}
+        {sent && <Note role={sent.ok ? 'status' : 'alert'}>{sent.message}</Note>}
         {error && <Note role="alert">{error}</Note>}
       </SettingBlock>
       <SettingToggle

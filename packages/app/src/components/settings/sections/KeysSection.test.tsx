@@ -89,7 +89,7 @@ describe('Keys: every control renders', () => {
       expect(byLabel<HTMLInputElement>(m.host, aria), `missing field: ${aria}`).toBeTruthy();
     }
     expect(byLabel(m.host, AUTOMATION)).toBeTruthy();
-    expect(buttonByText(m.host, 'Check keys')).toBeTruthy();
+    expect(buttonByText(m.host, 'Check keys')).toBeUndefined();
     expect(buttonByText(m.host, 'Remove…')).toBeTruthy();
   });
 
@@ -216,12 +216,15 @@ describe('Keys: OpenCode A / B keys', () => {
     expect(m.env.markSaved).not.toHaveBeenCalled();
   });
 
-  it('Check keys asks for the status again', async () => {
+  it('a pasted key is checked by itself: the status is read again, with no Check keys button', async () => {
     await mount();
     const before = vi.mocked(tauri.getOpenCodeKeyStatus).mock.calls.length;
-    await click(buttonByText(m.host, 'Check keys'));
-    await settle();
+    const field = byLabel<HTMLInputElement>(m.host, 'OpenCode key A')!;
+    await typeInto(field, 'sk-oc-a-123');
+    await blur(field);
+    await settle(5);
     expect(vi.mocked(tauri.getOpenCodeKeyStatus).mock.calls.length).toBe(before + 1);
+    expect(buttonByText(m.host, 'Check keys')).toBeUndefined();
   });
 });
 

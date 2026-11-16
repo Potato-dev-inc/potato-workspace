@@ -74,16 +74,16 @@ async function render(onOpenMorning?: () => void) {
   await act(async () => {});
 }
 async function openMenu() {
-  await act(async () => host.querySelector<HTMLButtonElement>('button[aria-label="New agent"]')!.click());
+  await act(async () => document.querySelector<HTMLButtonElement>('button[aria-label="New agent"]')!.click());
   await act(async () => {});
 }
-const tonightItem = () => [...host.querySelectorAll<HTMLElement>('[role="menuitem"]')].find((b) => b.textContent?.includes('Tonight'));
+const tonightItem = () => [...document.querySelectorAll<HTMLElement>('[role="menuitem"]')].find((b) => b.textContent?.includes('Tonight'));
 
 describe('sidebar: Night Shift', () => {
   it('draws the chip once, and Morning opens from it', async () => {
     const open = vi.fn();
     await render(open);
-    const chips = [...host.querySelectorAll('button')].filter((b) => b.textContent === 'NIGHT CHIP');
+    const chips = [...document.querySelectorAll('button')].filter((b) => b.textContent === 'NIGHT CHIP');
     expect(chips).toHaveLength(1);
     act(() => chips[0].click());
     expect(open).toHaveBeenCalledTimes(1);
@@ -108,8 +108,8 @@ describe('sidebar: Night Shift', () => {
     expect(item).toBeTruthy();
     await act(async () => item.click());
     expect(host.textContent).toContain('TONIGHT SHEET');
-    expect(host.querySelector('.ck-menu--wide')).toBeNull();
-    await act(async () => [...host.querySelectorAll('button')].find((b) => b.textContent === 'Close sheet')!.click());
+    expect(document.querySelector('.ck-menu--wide')).toBeNull();
+    await act(async () => [...document.querySelectorAll('button')].find((b) => b.textContent === 'Close sheet')!.click());
     expect(host.textContent).not.toContain('TONIGHT SHEET');
   });
 

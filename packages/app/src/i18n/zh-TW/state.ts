@@ -85,9 +85,9 @@ export const state: Partial<Record<EnglishKey, string>> = {
   'state.usage.forecast': '照這個速度，約 {hit} 會到上限 · {reset} 重設',
   // sidebar
   'state.otherGroup': '其他',
-  'state.helpers_one': '{count} 個幫手',
-  'state.helpers_other': '{count} 個幫手',
-  'state.helperOf': '{title} 的幫手',
+  'state.helpers_one': '{count} 個 AI 助理',
+  'state.helpers_other': '{count} 個 AI 助理',
+  'state.helperOf': '由 {title} 啟動',
   'state.startedBy': '由 {host} 啟動',
   'state.startedByAgent': '由 AI 助理啟動',
   'state.startedByTask': '{who}：{task}',

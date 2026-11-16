@@ -1,8 +1,20 @@
 // Keeps the language in step with the saved setting `ui_language`: read once at start, then follow every window that saves it.
-import { isLanguagePref, setLanguagePref } from './index';
+import { isLanguagePref, setLanguagePref, setTwoTypesWording } from './index';
 
 function inTauri(): boolean {
   return typeof window !== 'undefined' && '__TAURI_INTERNALS__' in window;
+}
+
+/**
+ * Reads "Agents that agents start" once per window, so the Two types wording is right from the start (minions plan 11.4).
+ * A change made in another window shows here after a restart; the Settings window updates its own copy when it saves.
+ */
+export function startTwoTypesSync(): void {
+  if (!inTauri()) return;
+  void import('../lib/agentRunMode')
+    .then(({ tauriStartedAgentsApi }) => tauriStartedAgentsApi.get())
+    .then((view) => setTwoTypesWording(view.types === 'two'))
+    .catch(() => undefined);
 }
 
 /** Call once per window, before the first render. Returns the unsubscribe function. */

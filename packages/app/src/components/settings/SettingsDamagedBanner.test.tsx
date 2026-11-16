@@ -40,7 +40,7 @@ describe('the damaged-settings line', () => {
     const a = api({ damaged: true, hasBackup: true });
     const h = await mount(<SettingsDamagedBanner api={a} />);
     expect(hasText(h, 'Your settings file was damaged')).toBe(true);
-    await click(buttonByText(h, 'Restore the last good settings'));
+    await click(buttonByText(h, 'Undo'));
     await settle(3);
     expect(a.restore).toHaveBeenCalledTimes(1);
     expect(h.textContent).toBe('');
@@ -49,7 +49,7 @@ describe('the damaged-settings line', () => {
   it('cannot restore when no copy exists, and "Keep what I have" hides the line', async () => {
     const a = api({ damaged: true, hasBackup: false });
     const h = await mount(<SettingsDamagedBanner api={a} />);
-    expect(buttonByText(h, 'Restore the last good settings')!.disabled).toBe(true);
+    expect(buttonByText(h, 'Undo')!.disabled).toBe(true);
     expect(hasText(h, 'no saved copy')).toBe(true);
     await click(buttonByText(h, 'Keep what I have'));
     await settle(3);
@@ -60,7 +60,7 @@ describe('the damaged-settings line', () => {
   it('a failed restore says so in plain words and keeps the line', async () => {
     const a = api({ damaged: true, hasBackup: true }, async () => Promise.reject(new Error('Could not bring your settings back: disk full')));
     const h = await mount(<SettingsDamagedBanner api={a} />);
-    await click(buttonByText(h, 'Restore the last good settings'));
+    await click(buttonByText(h, 'Undo'));
     await settle(3);
     expect(hasText(h, 'disk full')).toBe(true);
     expect(hasText(h, 'Your settings file was damaged')).toBe(true);

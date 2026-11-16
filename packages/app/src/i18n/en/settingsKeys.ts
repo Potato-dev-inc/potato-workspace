@@ -1,6 +1,10 @@
 // English messages: settingsKeys. Keys are dotted. Plural: `<key>_one` / `<key>_other`.
 export const settingsKeys = {
   "keys.paste": "Paste your key",
+  "keys.useFound": "Use the key found on this PC",
+  "keys.foundHint": "A key ending in {tail} is already on this PC. Only this app keeps it.",
+  "keys.foundHintNoTail": "A key is already on this PC. Only this app keeps it.",
+  "keys.spareAfterMain": "Add your main key first. Then you can add a spare.",
   "keys.removeTitle": "Remove the {name} key?",
   "keys.removeBody": "Agents that use it lose access until you add a key again.",
   "keys.unknown": "Unknown",
@@ -11,7 +15,6 @@ export const settingsKeys = {
   "keys.spareKey": "Spare key: {state}",
   "keys.ocA": "OpenCode key A",
   "keys.ocB": "OpenCode key B",
-  "keys.check": "Check keys",
   "keys.readFailedOc": "Could not read OpenCode key status: {error}",
   "keys.readFailed": "Could not read key status: {error}",
   "keys.removeAllTitle": "Remove all keys?",

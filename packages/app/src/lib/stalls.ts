@@ -49,6 +49,17 @@ export function useStall(paneId: string | null | undefined): number | null {
   );
 }
 
+/** Every pane that is stuck now (pane id -> minutes). The map is replaced, never changed, so it is a stable snapshot. */
+const EMPTY: ReadonlyMap<string, number> = new Map();
+export function useStalls(): ReadonlyMap<string, number> {
+  useEffect(() => startStallSync(), []);
+  return useSyncExternalStore(
+    subscribe,
+    () => current,
+    () => EMPTY,
+  );
+}
+
 export interface StallApi {
   nudge: (paneId: string) => Promise<void>;
   stop: (paneId: string) => Promise<void>;

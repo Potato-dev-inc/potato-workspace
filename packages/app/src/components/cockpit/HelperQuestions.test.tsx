@@ -83,9 +83,17 @@ describe('HelperQuestions', () => {
     // The click is the permit: it travels as the gesture argument.
     expect(answer.mock.calls[0][4]).toMatchObject({ kind: 'click' });
     const open = host.querySelector<HTMLButtonElement>('[data-ib="open"]')!;
-    expect(open.textContent).toBe('Open helper');
+    expect(open.textContent).toBe('See what it is doing');
     await act(async () => open.click());
     expect(c.select).toHaveBeenCalledWith('H');
+  });
+
+  it('a minion risky ask is "A minion of <agent> asks", with a button that shows what it is doing', async () => {
+    const minion = { ...mk('M', 'waiting_input', 'P', 'codex'), info: { ...mk('M', 'waiting_input', 'P', 'codex').info, started_as: 'minion' } };
+    const c = cockpit([mk('P', 'running'), minion], { M: colour });
+    await act(async () => root.render(<HelperQuestions c={c} ids={['M']} />));
+    expect(host.querySelector('.ib-title')?.textContent).toBe('A minion of Claude asks: Pick a colour');
+    expect(host.querySelector('[data-ib="open"]')?.textContent).toBe('See what it is doing');
   });
 
   it('renders nothing without questions', async () => {

@@ -89,24 +89,24 @@ async function mount(
   return { transport, onOpenCard, onChanged };
 }
 
-const buttonByText = (text: string) => Array.from(host.querySelectorAll<HTMLButtonElement>('button')).find((b) => b.textContent === text);
+const buttonByText = (text: string) => Array.from(document.querySelectorAll<HTMLButtonElement>('button')).find((b) => b.textContent === text);
 
 describe('CompanionHome', () => {
   it('shows the name, the state line and the face with the state word', async () => {
     await mount({ companion: { state: 'working', stateLine: 'Working…' } });
-    expect(host.querySelector('h1')?.textContent).toBe('Mochi');
-    expect(host.querySelector('.ph-comp-state')?.textContent).toBe('Working…');
-    expect(host.querySelector('svg[role="img"]')?.getAttribute('aria-label')).toBe('Mochi, Working');
+    expect(document.querySelector('h1')?.textContent).toBe('Mochi');
+    expect(document.querySelector('.ph-comp-state')?.textContent).toBe('Working…');
+    expect(document.querySelector('svg[role="img"]')?.getAttribute('aria-label')).toBe('Mochi, Working');
   });
 
   it('shows the agent it runs on now, and when a move ends', async () => {
     await mount({ companion: { agentLabel: 'Codex' } });
-    expect(host.querySelector('.ph-comp-agent')?.textContent).toBe('On Codex');
+    expect(document.querySelector('.ph-comp-agent')?.textContent).toBe('On Codex');
     await act(async () => root.unmount());
     root = createRoot(host);
     await mount({ companion: { agentLabel: 'Codex', previousAgent: 'claude', untilMs: new Date(2026, 9, 28, 17, 0, 0).getTime() } });
     // "17:00" today, "Wed 17:00" on another day: the phone's feed clock.
-    expect(host.querySelector('.ph-comp-agent')?.textContent).toMatch(/^On Codex until (\w{3} )?17:00$/);
+    expect(document.querySelector('.ph-comp-agent')?.textContent).toMatch(/^On Codex until (\w{3} )?17:00$/);
   });
 
   it('Open card opens the card the companion waits on', async () => {
@@ -117,7 +117,7 @@ describe('CompanionHome', () => {
 
   it('shows the chat with the companion pane, and passes the phone caps to it', async () => {
     await mount({ abilities: { canType: false, typingNote: 'This phone can watch, not type.' } });
-    const chat = host.querySelector('[data-testid="chat"]');
+    const chat = document.querySelector('[data-testid="chat"]');
     expect(chat?.getAttribute('data-pane')).toBe('companion-mochi');
     expect(chat?.getAttribute('data-can-type')).toBe('false');
     expect(chat?.getAttribute('data-can-watch')).toBe('true');
@@ -125,13 +125,13 @@ describe('CompanionHome', () => {
 
   it('an agent that cannot take chat gets one plain line instead of the chat', async () => {
     await mount({ chatAllowed: false });
-    expect(host.querySelector('[data-testid="chat"]')).toBeNull();
+    expect(document.querySelector('[data-testid="chat"]')).toBeNull();
     expect(host.textContent).toContain("Chat can't send messages to this agent yet.");
   });
 
   it('sleeping shows Wake up {name} in place of the chat, and Wake up sends wake', async () => {
     const { transport, onChanged } = await mount({ companion: { state: 'sleeping', stateLine: 'Sleeping. Wake me when you need me.' } });
-    expect(host.querySelector('[data-testid="chat"]')).toBeNull();
+    expect(document.querySelector('[data-testid="chat"]')).toBeNull();
     const wake = buttonByText('Wake up Mochi')!;
     expect(wake).toBeDefined();
     await act(async () => wake.click());
@@ -141,14 +141,14 @@ describe('CompanionHome', () => {
 
   it('tells the chat it is a companion (no model pill, no read-from-screen line)', async () => {
     await mount();
-    expect(host.querySelector('[data-testid="chat"]')?.getAttribute('data-companion')).toBe('true');
+    expect(document.querySelector('[data-testid="chat"]')?.getAttribute('data-companion')).toBe('true');
   });
 
   it('puts Sleep in the header menu, never floating over the chat', async () => {
     await mount();
     expect(buttonByText('Sleep')).toBeUndefined();
-    await act(async () => (host.querySelector('[data-testid="companion-menu"]') as HTMLElement).click());
-    expect(host.querySelector('.ph-comp-head [role="menu"]')?.textContent).toContain('Sleep');
+    await act(async () => (document.querySelector('[data-testid="companion-menu"]') as HTMLElement).click());
+    expect(document.querySelector('[data-testid="companion-menu-list"]')?.textContent).toContain('Sleep');
   });
 
   it('hides Sleep and Wake up without the control cap', async () => {
@@ -159,7 +159,7 @@ describe('CompanionHome', () => {
 
   it('Sleep sends sleep and passes the new view up', async () => {
     const { transport, onChanged } = await mount();
-    await act(async () => (host.querySelector('[data-testid="companion-menu"]') as HTMLElement).click());
+    await act(async () => (document.querySelector('[data-testid="companion-menu"]') as HTMLElement).click());
     await act(async () => buttonByText('Sleep')!.click());
     expect(transport.calls.map((c) => c.method)).toContain('sleep');
     expect(onChanged).toHaveBeenCalledWith(expect.objectContaining({ id: 'mochi', state: 'sleeping' }));
@@ -169,8 +169,8 @@ describe('CompanionHome', () => {
     const eight = new Date();
     eight.setHours(8, 0, 0, 0);
     await mount({ companion: { nextCheckin: { id: 'c1', label: 'Morning brief', atMs: eight.getTime() } } });
-    expect(host.querySelector('.ph-comp-head')?.textContent).toContain('Next: Morning brief · 8:00');
-    expect(host.querySelector('.ph-comp-foot')).toBeNull();
+    expect(document.querySelector('.ph-comp-head')?.textContent).toContain('Next: Morning brief · 8:00');
+    expect(document.querySelector('.ph-comp-foot')).toBeNull();
   });
 
   it('feed shows only the items newer than the stored mark, and stores the newest one', async () => {
@@ -182,7 +182,7 @@ describe('CompanionHome', () => {
         { id: 'c', atMs: 2000, kind: 'reply', text: 'Newest reply' },
       ],
     });
-    const texts = Array.from(host.querySelectorAll('.ph-comp-feed-row .ph-comp-text')).map((el) => el.textContent);
+    const texts = Array.from(document.querySelectorAll('.ph-comp-feed-row .ph-comp-text')).map((el) => el.textContent);
     expect(texts).toEqual(['Newest reply', 'Asked "Morning brief"']);
     expect(localStorage.getItem(FEED_KEY)).toBe('2000');
   });
@@ -195,8 +195,8 @@ describe('CompanionHome', () => {
       throw new Error('blocked');
     });
     await mount({ feed: [{ id: 'a', atMs: 700, kind: 'reply', text: 'Still here' }] });
-    expect(host.querySelector('.ph-comp-feed-row')?.textContent).toContain('Still here');
-    expect(host.querySelector('[data-testid="chat"]')).not.toBeNull();
+    expect(document.querySelector('.ph-comp-feed-row')?.textContent).toContain('Still here');
+    expect(document.querySelector('[data-testid="chat"]')).not.toBeNull();
   });
 
   it('notes wait for the answer cap: Keep and Don\'t keep are hidden without it', async () => {

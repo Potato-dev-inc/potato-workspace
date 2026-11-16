@@ -1,7 +1,7 @@
 // "Try a task": type a task, see which role it would go to and the way it would travel, and pick another role instead.
 // A dry run: nothing runs and nothing is sent (the note says so). The way is lit on the canvas through `onPath`.
 // 1.1.8 slot (Follow a task): this is where a real task's path would be replayed, box by box, with its hand-overs.
-// 1.1.8 slot (Change the crew by talking): a "tell the front desk" box would sit beside this one.
+// (Change the crew by talking is built: the Talk tab, TalkToCrew.tsx.)
 import { useState } from 'react';
 import { useT } from '../../i18n';
 import { crewErrorText, type Crew, type CrewRoutePreview, type CrewsApi } from '../../lib/crews-api';

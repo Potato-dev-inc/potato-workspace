@@ -120,7 +120,7 @@ describe('Go live sheet', () => {
   it('the helpers button checks a pane\'s helpers', async () => {
     const api = fakeApi();
     await mount(api);
-    await click(button('and its 1 helper'));
+    await click(button('and its 1 started agent'));
     expect(boxes()[1].checked).toBe(true);
     await click(button('Go live'));
     expect(api.start.mock.calls[0][0].paneIds).toEqual(['a', 'h1']);

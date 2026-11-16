@@ -44,6 +44,6 @@ describe('settings search keywords', () => {
 
   it('"chat add-on" finds its row', () => {
     const addon = searchSections(SECTIONS, 'chat add-on').flatMap((h) => h.rows.map((r) => r.id));
-    expect(addon).toContain('chat-addons');
+    expect(addon).toContain('agent-list');
   });
 });

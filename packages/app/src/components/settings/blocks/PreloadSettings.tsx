@@ -24,7 +24,7 @@ import {
 } from '../../../lib/standby';
 import { NumberControl, Popup } from '../controls';
 import { WarmCountStepper } from './WarmCountStepper';
-import { SettingBlock, SettingToggle } from '../settings-ui';
+import { Fold, SettingBlock, SettingToggle } from '../settings-ui';
 
 export interface PreloadApi {
   getStatus: () => Promise<StandbyStatus | null>;
@@ -36,6 +36,7 @@ const DEFAULT_API: PreloadApi = {
   setConfig: (config) => tauri.standbySetConfig(config),
 };
 
+/** One global switch (idle time under Details). Which agents stay ready is each agent page's Keep ready line (KeepReadyRow). */
 export function PreloadSettings({ api = DEFAULT_API, onSaved }: { api?: PreloadApi; onSaved?: () => void }) {
   const t = useT();
   const registry = useAgentRegistry();
@@ -76,61 +77,23 @@ export function PreloadSettings({ api = DEFAULT_API, onSaved }: { api?: PreloadA
         label={t('preload.label')}
         description={t('preload.help')}
         checked={config.preload.enabled}
-        onChange={(value) => void save(withPreloadEnabled(config, value))}
+        onChange={(value) => {
+          if (!value) return void save(withPreloadEnabled(config, false));
+          // One switch: turning it on keeps the first agent that can be kept warm, unless one is already chosen.
+          const chosen = providers.some((p) => preloadCount(config, p.id) > 0);
+          const first = providers.find((p) => p.supported);
+          const on = withPreloadEnabled(config, true);
+          void save(chosen || !first ? on : withPreloadCount(on, first.id, 1));
+        }}
       />
-      <SettingBlock
-        label={t('preload.agentsLabel')}
-        description={t('preload.agentsHelp')}
-      >
-        <div className="space-y-2" data-testid="preload-providers">
-          {providers.map((provider) => {
-            const count = preloadCount(config, provider.id);
-            return (
-              <div key={provider.id} className="flex flex-wrap items-center gap-4 text-sm">
-                <label className="flex w-56 items-center gap-2 font-medium">
-                  <input
-                    type="checkbox"
-                    aria-label={t('preload.keepWarm', { label: provider.label })}
-                    disabled={!provider.supported || !status}
-                    checked={count > 0}
-                    onChange={(event) => void save(withPreloadCount(config, provider.id, event.target.checked ? 1 : 0))}
-                  />
-                  {provider.label}
-                  {provider.experimental && (
-                    <span
-                      className="text-xs font-normal text-pm-muted"
-                      title={t('preload.experimentalTip')}
-                    >
-                      {t('preload.experimental')}
-                    </span>
-                  )}
-                </label>
-                {provider.supported ? (
-                  <label className="flex items-center gap-2 text-pm-muted">
-                    {t('preload.keep')}
-                    <WarmCountStepper
-                      label={provider.label}
-                      disabled={count === 0}
-                      value={count || 1}
-                      onChange={(next) => void save(withPreloadCount(config, provider.id, next))}
-                    />
-                    {t('preload.warm')}
-                  </label>
-                ) : (
-                  <span className="text-xs text-pm-muted">{provider.unsupportedNote}</span>
-                )}
-              </div>
-            );
-          })}
-          {!status && <p className="text-sm text-pm-muted">{t('tunnel.status.desktopOnly')}</p>}
-        </div>
-      </SettingBlock>
+      <Fold label={t('settings.details')}>
       <SettingBlock
         label={t('preload.idle')}
         description={t('preload.idleHelp', { time: formatDuration(config.idle_timeout_secs * 1000) })}
       >
         <IdleTimeoutField config={config} onChange={save} />
       </SettingBlock>
+      </Fold>
       <SettingBlock label={t('preload.status')} description={summarizePreload(status)}>
         <div className="space-y-2 text-sm">
           {error && <p className="text-pm-text">{error}</p>}

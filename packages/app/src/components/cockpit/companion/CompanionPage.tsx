@@ -2,7 +2,7 @@
 // buttons on top; the companion's own chat in the middle; a 280 px rail on the right with the memory, the pending
 // notes, the check-ins and the setup. The chat is the Chat tab's panel for the companion's pane, so its composer
 // is the same one.
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import type { CompanionTransport, CompanionView } from '../../../lib/companion';
 import { stateWord } from '../../../lib/companion';
 import { useCompanionMemory } from '../../../hooks/useCompanions';
@@ -12,6 +12,7 @@ import { SessionChatPanel } from '../../chat/SessionChatPanel';
 import { IconInfo, IconMore } from '../Icons';
 import { useShowTerminals } from '../../../lib/showTerminals';
 import { Sheet } from '../Sheet';
+import { Menu } from '../../common/Floating';
 import { CheckInsCard } from './CheckInsCard';
 import { MemoryCard } from './MemoryCard';
 import { AgentRow } from './AgentRow';
@@ -49,6 +50,8 @@ export function CompanionPage(props: CompanionPageProps) {
   const { companion, transport, onShowTerminal, onOpenCard, onNotify, onChanged, onArchived, companions, onSwitch } = props;
   const t = useT();
   const [switchOpen, setSwitchOpen] = useState(false);
+  const switchBtn = useRef<HTMLButtonElement>(null);
+  const moreBtn = useRef<HTMLButtonElement>(null);
   const several = (companions?.length ?? 0) > 1;
   // The companion's own terminal view is a terminal control: hidden while terminals are.
   const showTerminals = useShowTerminals();
@@ -149,6 +152,7 @@ export function CompanionPage(props: CompanionPageProps) {
                 {companion.isDefault && <span className="ck-companion-badge">{t('companions.default')}</span>}
                 <button
                   type="button"
+                  ref={switchBtn}
                   className="ck-companion-switch-btn"
                   aria-haspopup="menu"
                   aria-expanded={switchOpen}
@@ -157,7 +161,7 @@ export function CompanionPage(props: CompanionPageProps) {
                   {t('companions.switch')} ▾
                 </button>
                 {switchOpen && (
-                  <div className="ck-menu ck-menu--wide ck-menu--start" role="menu" aria-label={t('companions.switch')}>
+                  <Menu anchorRef={switchBtn} align="start" className="ck-menu--wide" label={t('companions.switch')} onClose={() => setSwitchOpen(false)}>
                     {companions!
                       .filter((other) => other.id !== companion.id)
                       .map((other) => (
@@ -174,7 +178,7 @@ export function CompanionPage(props: CompanionPageProps) {
                           {other.name}
                         </button>
                       ))}
-                  </div>
+                  </Menu>
                 )}
               </span>
             )}
@@ -196,11 +200,11 @@ export function CompanionPage(props: CompanionPageProps) {
               </button>
             )}
             <div className="ck-menu-wrap">
-              <button type="button" className="ck-icon-btn" aria-label="More" aria-haspopup="menu" aria-expanded={menuOpen} onClick={() => setMenuOpen((v) => !v)}>
+              <button ref={moreBtn} type="button" className="ck-icon-btn" aria-label="More" aria-haspopup="menu" aria-expanded={menuOpen} onClick={() => setMenuOpen((v) => !v)}>
                 <IconMore />
               </button>
               {menuOpen && (
-                <div className="ck-menu ck-menu--wide" role="menu">
+                <Menu anchorRef={moreBtn} align="end" className="ck-menu--wide" label="More" onClose={() => setMenuOpen(false)}>
                   {several && !companion.isDefault && (
                     <button type="button" className="ck-menu-item" role="menuitem" onClick={() => { setMenuOpen(false); void makeDefault(); }}>
                       {t('companions.makeDefault')}
@@ -212,7 +216,7 @@ export function CompanionPage(props: CompanionPageProps) {
                   <button type="button" className="ck-menu-item" role="menuitem" onClick={() => { setMenuOpen(false); setArchiveOpen(true); }}>
                     Archive
                   </button>
-                </div>
+                </Menu>
               )}
             </div>
             <button

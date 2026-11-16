@@ -86,9 +86,9 @@ async function mount(r: Rig, props: Partial<NewAgentPageProps> = {}) {
   return { onStart, onOpenPane };
 }
 
-const input = () => host.querySelector<HTMLTextAreaElement>('textarea[aria-label="What should the agent do?"]')!;
+const input = () => document.querySelector<HTMLTextAreaElement>('textarea[aria-label="What should the agent do?"]')!;
 const byLabel = (label: string | RegExp) =>
-  [...host.querySelectorAll<HTMLElement>('button, [role=menuitem], [role=menuitemradio], [role=radio]')].find((b) => {
+  [...document.querySelectorAll<HTMLElement>('button, [role=menuitem], [role=menuitemradio], [role=radio]')].find((b) => {
     const text = b.getAttribute('aria-label') ?? b.textContent ?? '';
     return typeof label === 'string' ? text.includes(label) : label.test(text);
   });
@@ -109,13 +109,13 @@ async function key(el: HTMLElement, k: string, init: KeyboardEventInit = {}) {
   });
   return event;
 }
-const send = () => host.querySelector<HTMLButtonElement>('button[aria-label="Start"]')!;
+const send = () => document.querySelector<HTMLButtonElement>('button[aria-label="Start"]')!;
 
 describe('the greeting', () => {
   it('offers "Bring my chats from another agent" and pressing it asks for the Bring panel', async () => {
     const ask = vi.spyOn(chatImport, 'requestBringChats').mockImplementation(() => {});
     await mount(rig());
-    const link = host.querySelector<HTMLButtonElement>('[data-testid="bring-chats-link"]');
+    const link = document.querySelector<HTMLButtonElement>('[data-testid="bring-chats-link"]');
     expect(link?.textContent).toBe('Bring my chats from another agent');
     await act(async () => link!.click());
     expect(ask).toHaveBeenCalledTimes(1);
@@ -124,8 +124,8 @@ describe('the greeting', () => {
 
   it('has one heading only: no greeting over the question', async () => {
     await mount(rig({ name: 'Sam' }));
-    expect(host.querySelector('[data-testid="na-greeting"]')).toBeNull();
-    expect([...host.querySelectorAll('h1, h2')].filter((h) => !h.closest('.ck-na-hc')).map((h) => h.textContent)).toEqual(['What should the agent do?']);
+    expect(document.querySelector('[data-testid="na-greeting"]')).toBeNull();
+    expect([...document.querySelectorAll('h1, h2')].filter((h) => !h.closest('.ck-na-hc')).map((h) => h.textContent)).toEqual(['What should the agent do?']);
   });
 });
 
@@ -137,7 +137,7 @@ describe('the example task', () => {
     const event = await key(input(), 'Tab');
     expect(event.defaultPrevented).toBe(true);
     expect(input().value).toBe(EXAMPLES[0]);
-    expect(host.querySelector('.ck-na-tabhint')).toBeNull();
+    expect(document.querySelector('.ck-na-tabhint')).toBeNull();
   });
 
   it('leaves Tab alone once there is text', async () => {
@@ -226,7 +226,7 @@ describe('the agent picker', () => {
   it('lists the agents with ready or not installed, and an agent that is not installed cannot send', async () => {
     await mount(rig());
     await click(byLabel(/^Agent:/));
-    const menu = host.querySelector('[role=menu][aria-label^="Agent"]')!;
+    const menu = document.querySelector('[role=menu][aria-label^="Agent"]')!;
     expect(menu.textContent).toContain('Alpha');
     expect(menu.textContent).toContain('not installed');
     await click(byLabel('Gone'));
@@ -242,7 +242,7 @@ describe('the agent picker', () => {
 });
 
 const savedProjects = (list: { path: string; name?: string }[]) => localStorage.setItem('pm.sidebar.projects', JSON.stringify(list));
-const menuItems = () => [...host.querySelectorAll<HTMLElement>('.ck-na-menu [role="menuitem"]')].map((b) => b.textContent ?? '');
+const menuItems = () => [...document.querySelectorAll<HTMLElement>('.ck-na-menu [role="menuitem"]')].map((b) => b.textContent ?? '');
 
 describe('the project picker', () => {
   it('starts in the newest recent project (nothing saved) and shows saved projects with a short path', async () => {
@@ -271,7 +271,7 @@ describe('the project picker', () => {
     const items = menuItems();
     expect(items.filter((t) => t.includes('live-one'))).toHaveLength(1);
     expect(items.filter((t) => t.includes('gamma'))).toHaveLength(1);
-    expect(host.querySelector('.ck-na-menu')!.textContent).toContain('Running now');
+    expect(document.querySelector('.ck-na-menu')!.textContent).toContain('Running now');
     await click(byLabel('live-two'));
     await type(input(), 'go');
     await click(send());
@@ -336,14 +336,14 @@ describe('Terminal | Chat', () => {
 
   it('is not drawn without Labs chat, or for an agent with no chat way to run', async () => {
     await mount(rig({ lanes: lanes(false) }));
-    expect(host.querySelector('[aria-label="Run as"]')).toBeNull();
+    expect(document.querySelector('[aria-label="Run as"]')).toBeNull();
     await act(async () => root.unmount());
     root = createRoot(host);
     await mount(rig({ lanes: lanes(true) }));
-    expect(host.querySelector('[aria-label="Run as"]')).not.toBeNull();
+    expect(document.querySelector('[aria-label="Run as"]')).not.toBeNull();
     await click(byLabel(/^Agent:/));
     await click(byLabel('Beta'));
-    expect(host.querySelector('[aria-label="Run as"]')).toBeNull();
+    expect(document.querySelector('[aria-label="Run as"]')).toBeNull();
   });
 
   it('starts on the agent\u2019s saved way and sends the chosen one', async () => {
@@ -377,7 +377,7 @@ describe('home cards', () => {
   it('shows no card until one is added, then Add card pins it and saves the list', async () => {
     const r = rig({ cards: [{ id: 'p', kind: 'running' }] });
     await mount(r);
-    expect(host.querySelectorAll('.ck-na-hc')).toHaveLength(1);
+    expect(document.querySelectorAll('.ck-na-hc')).toHaveLength(1);
     await click(byLabel('Add card'));
     await click(byLabel('Recent projects'));
     expect(host.textContent).toContain('alpha-app');
@@ -391,10 +391,10 @@ describe('home cards', () => {
     await mount(r);
     await click(byLabel('Add card'));
     await click(byLabel('A saved prompt'));
-    await type(host.querySelector<HTMLTextAreaElement>('textarea[aria-label="Saved prompt text"]')!, 'Write short commit messages.');
+    await type(document.querySelector<HTMLTextAreaElement>('textarea[aria-label="Saved prompt text"]')!, 'Write short commit messages.');
     await click(byLabel(/^Pin$/));
     expect((r.saveCards.mock.calls[0][0] as HomeCard[])[1]).toMatchObject({ kind: 'prompt', text: 'Write short commit messages.' });
-    await click(host.querySelector<HTMLElement>('.ck-na-prompt')!);
+    await click(document.querySelector<HTMLElement>('.ck-na-prompt')!);
     expect(input().value).toBe('Write short commit messages.');
   });
 
@@ -411,7 +411,7 @@ describe('home cards', () => {
     await click(byLabel('Customize'));
     expect(byLabel('Done')).toBeDefined();
     await click(byLabel('Remove Running agents'));
-    expect(host.querySelectorAll('.ck-na-hc')).toHaveLength(2);
+    expect(document.querySelectorAll('.ck-na-hc')).toHaveLength(2);
     expect((r.saveCards.mock.calls[0][0] as HomeCard[]).map((c) => c.id)).toEqual(['a', 'c']);
     await click(byLabel('Move Needs you up'));
     expect((r.saveCards.mock.calls[1][0] as HomeCard[]).map((c) => c.id)).toEqual(['c', 'a']);
@@ -428,7 +428,7 @@ describe('home cards', () => {
         ],
       }),
     );
-    const lines = [...host.querySelectorAll<HTMLElement>('.ck-na-line')];
+    const lines = [...document.querySelectorAll<HTMLElement>('.ck-na-line')];
     expect(lines.map((l) => l.textContent)).toEqual(['Alpha 1', 'Beta 2']);
     await click(lines[1]);
     expect(onOpenPane).toHaveBeenCalledWith('p3');
@@ -436,7 +436,7 @@ describe('home cards', () => {
 
   it('the recent card sets the folder', async () => {
     const { onStart } = await mount(rig({ cards: [{ id: 'a', kind: 'recent' }] }));
-    await click([...host.querySelectorAll<HTMLElement>('.ck-na-line')].find((l) => l.textContent?.includes('beta-site')));
+    await click([...document.querySelectorAll<HTMLElement>('.ck-na-line')].find((l) => l.textContent?.includes('beta-site')));
     await type(input(), 'go');
     await click(send());
     expect(onStart.mock.calls[0][0].folder).toBe('/work/beta-site');
@@ -446,22 +446,22 @@ describe('home cards', () => {
     const r = rig();
     await mount(r);
     await act(async () => r.emit({ cards: [{ id: 'z', kind: 'needs' }] }));
-    expect(host.querySelector('.ck-na-hc')!.textContent).toContain('Needs you');
+    expect(document.querySelector('.ck-na-hc')!.textContent).toContain('Needs you');
   });
 });
 
 describe('page words', () => {
   it('the header says New agent and a heading asks what the agent should do', async () => {
     await mount(rig());
-    expect(host.querySelector('.ck-na-top-title')?.textContent).toBe('New agent');
-    expect(host.querySelector('[data-testid="na-ask"]')?.textContent).toBe('What should the agent do?');
-    expect(host.querySelector('h1[data-testid="na-ask"]')).not.toBeNull();
+    expect(document.querySelector('.ck-na-top-title')?.textContent).toBe('New agent');
+    expect(document.querySelector('[data-testid="na-ask"]')?.textContent).toBe('What should the agent do?');
+    expect(document.querySelector('h1[data-testid="na-ask"]')).not.toBeNull();
   });
 
   it('shows three starters under the box; one click fills the box, and Add card shows only after the first pin', async () => {
     const r = rig();
     await mount(r);
-    const starters = host.querySelector('[data-testid="na-starters"]')!;
+    const starters = document.querySelector('[data-testid="na-starters"]')!;
     expect([...starters.querySelectorAll('.ck-na-starter')].map((b) => b.textContent?.replace('›', ''))).toEqual([
       'Explain how this project is organised',
       'Find and fix one small bug',
@@ -479,7 +479,7 @@ describe('page words', () => {
 
   it('the footer strip has the pickers and a Start button that is solid once there is text', async () => {
     await mount(rig());
-    expect(host.querySelector('.ck-na-composer > .ck-na-row .ck-na-send')?.textContent).toBe('Start');
+    expect(document.querySelector('.ck-na-composer > .ck-na-row .ck-na-send')?.textContent).toBe('Start');
     expect(send().disabled).toBe(true);
     await type(input(), 'Do a thing');
     expect(send().disabled).toBe(false);

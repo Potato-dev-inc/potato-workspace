@@ -2,7 +2,7 @@
 // and prepares the files (see lib/attachFiles). It opens upward, because the button sits at the bottom of the box.
 import { useEffect, useRef, useState } from 'react';
 import '../../styles/cockpit-chat-attachments.css';
-import { useDismissable } from '../../hooks/useDismissable';
+import { Menu } from '../common/Floating';
 
 export interface AttachMenuProps {
   onPickFiles: () => void;
@@ -51,35 +51,8 @@ export function AttachMenu({ onPickFiles, onPickFolder, onPickImage, disabled = 
   const trigger = useRef<HTMLButtonElement>(null);
 
   useEffect(() => {
-    if (!open) return;
-    wrap.current?.querySelector<HTMLElement>('[role="menuitem"]')?.focus();
-  }, [open]);
-  // Escape is handled in onKeyDown below (it returns the focus to the button).
-  useDismissable(open, { inside: [wrap], anchor: wrap, ignore: ['escape'], onDismiss: () => setOpen(false) });
-
-  useEffect(() => {
     if (disabled) setOpen(false);
   }, [disabled]);
-
-  const onKeyDown = (e: React.KeyboardEvent) => {
-    const items = [...(wrap.current?.querySelectorAll<HTMLElement>('[role="menuitem"]') ?? [])];
-    const at = items.indexOf(document.activeElement as HTMLElement);
-    if (e.key === 'Escape') {
-      if (!open) return;
-      e.preventDefault();
-      e.stopPropagation();
-      setOpen(false);
-      trigger.current?.focus();
-    } else if (e.key === 'Tab') {
-      setOpen(false);
-    } else if (e.key === 'ArrowDown' && open) {
-      e.preventDefault();
-      items[(at + 1) % items.length]?.focus();
-    } else if (e.key === 'ArrowUp' && open) {
-      e.preventDefault();
-      items[(at - 1 + items.length) % items.length]?.focus();
-    }
-  };
 
   const choose = (run: () => void) => () => {
     setOpen(false);
@@ -88,7 +61,7 @@ export function AttachMenu({ onPickFiles, onPickFolder, onPickImage, disabled = 
   };
 
   return (
-    <div className="ck-menu-rel ck-attach-wrap" ref={wrap} onKeyDown={onKeyDown}>
+    <div className="ck-menu-rel ck-attach-wrap" ref={wrap}>
       <button
         ref={trigger}
         type="button"
@@ -104,7 +77,7 @@ export function AttachMenu({ onPickFiles, onPickFolder, onPickImage, disabled = 
         <PlusIcon />
       </button>
       {open && (
-        <div className="ck-menu ck-menu--compact ck-attach-menu" role="menu" aria-label="Add to your message">
+        <Menu anchorRef={trigger} align="start" prefer="up" className="ck-menu--compact ck-attach-menu" label="Add to your message" onClose={() => setOpen(false)}>
           <button type="button" role="menuitem" className="ck-menu-item" tabIndex={-1} onClick={choose(onPickFiles)}>
             <span className="ck-menu-ic">
               <FileIcon />
@@ -123,7 +96,7 @@ export function AttachMenu({ onPickFiles, onPickFolder, onPickImage, disabled = 
             </span>
             <span>Add image…</span>
           </button>
-        </div>
+        </Menu>
       )}
     </div>
   );

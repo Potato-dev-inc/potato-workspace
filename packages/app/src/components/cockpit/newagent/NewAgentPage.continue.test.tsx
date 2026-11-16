@@ -59,14 +59,14 @@ async function mount() {
     await new Promise((r) => setTimeout(r, 0));
   });
 }
-const card = () => host.querySelector('[data-testid="continue-card"]');
+const card = () => document.querySelector('[data-testid="continue-card"]');
 
 describe('the New agent page shows Continue where you left off', () => {
   it('lists only the real chat, and Hide stays hidden after the page is mounted again', async () => {
     await mount();
     expect(card()).not.toBeNull();
-    expect(host.querySelectorAll('.ck-na-continue-name')).toHaveLength(1);
-    const hide = [...host.querySelectorAll('button')].find((b) => b.textContent === 'Hide')!;
+    expect(document.querySelectorAll('.ck-na-continue-name')).toHaveLength(1);
+    const hide = [...document.querySelectorAll('button')].find((b) => b.textContent === 'Hide')!;
     await act(async () => hide.click());
     expect(card()).toBeNull();
     await act(async () => root.unmount());

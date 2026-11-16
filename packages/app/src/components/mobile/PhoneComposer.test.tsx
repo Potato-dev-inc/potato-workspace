@@ -32,8 +32,8 @@ function mount(props: Partial<Parameters<typeof PhoneComposer>[0]> = {}) {
   return { onSend };
 }
 
-const field = () => host.querySelector('textarea') as HTMLTextAreaElement;
-const send = () => host.querySelector('button[type="submit"]') as HTMLButtonElement;
+const field = () => document.querySelector('textarea') as HTMLTextAreaElement;
+const send = () => document.querySelector('button[type="submit"]') as HTMLButtonElement;
 function type(text: string) {
   const set = Object.getOwnPropertyDescriptor(HTMLTextAreaElement.prototype, 'value')!.set!;
   act(() => {
@@ -45,9 +45,9 @@ function type(text: string) {
 describe('PhoneComposer', () => {
   it('has the plus, the model pill, the mic and Send in one box', () => {
     mount();
-    expect(host.querySelector('[aria-label="Add"]')).not.toBeNull();
-    expect(host.querySelector('.ph-comp-model')?.textContent).toBe('Model: Sonnet 5');
-    expect(host.querySelector('[data-testid="phone-mic"]')).not.toBeNull();
+    expect(document.querySelector('[aria-label="Add"]')).not.toBeNull();
+    expect(document.querySelector('.ph-comp-model')?.textContent).toBe('Model: Sonnet 5');
+    expect(document.querySelector('[data-testid="phone-mic"]')).not.toBeNull();
     expect(send()).not.toBeNull();
     expect(send().disabled).toBe(true);
   });
@@ -85,7 +85,7 @@ describe('PhoneComposer', () => {
     type('hello');
     await act(async () => send().click());
     expect(field().value).toBe('hello');
-    expect(host.querySelector('[data-testid="phone-composer-note"]')?.textContent).toBe('The agent has closed.');
+    expect(document.querySelector('[data-testid="phone-composer-note"]')?.textContent).toBe('The agent has closed.');
   });
 
   it('is off, with the reason, when the chat cannot take a message', () => {
@@ -97,8 +97,8 @@ describe('PhoneComposer', () => {
 
   it('the plus menu lists camera, photos, files and paste, and says so when the PC cannot take files', () => {
     mount();
-    act(() => (host.querySelector('[aria-label="Add"]') as HTMLButtonElement).click());
-    const menu = host.querySelector('[data-testid="phone-plus-menu"]')!;
+    act(() => (document.querySelector('[aria-label="Add"]') as HTMLButtonElement).click());
+    const menu = document.querySelector('[data-testid="phone-plus-menu"]')!;
     expect(menu.textContent).toContain('Camera');
     expect(menu.textContent).toContain('Photos');
     expect(menu.textContent).toContain('Files');
@@ -130,7 +130,7 @@ describe('Step 9 composer states', () => {
     mount({ onSend });
     type('hello');
     await act(async () => send().click());
-    const retry = host.querySelector('[data-testid="phone-retry"]') as HTMLButtonElement;
+    const retry = document.querySelector('[data-testid="phone-retry"]') as HTMLButtonElement;
     expect(retry).not.toBeNull();
     await act(async () => retry.click());
     expect(onSend).toHaveBeenCalledTimes(2);
@@ -145,17 +145,17 @@ describe('Step 9 composer states', () => {
     type('hello');
     await act(async () => send().click());
     expect(field().value).toBe('hello');
-    expect(host.querySelector('[data-testid="phone-composer-note"]')?.textContent).toContain('did not go');
-    expect(host.querySelector('[data-testid="phone-retry"]')).not.toBeNull();
+    expect(document.querySelector('[data-testid="phone-composer-note"]')?.textContent).toContain('did not go');
+    expect(document.querySelector('[data-testid="phone-retry"]')).not.toBeNull();
   });
 
   it('has a placeholder for each state and Send is orange only with text', () => {
     mount({ working: true, onStop: async () => null });
     expect(field().placeholder).toBe('Add to queue');
-    expect(host.querySelector('[data-testid="phone-stop"]')).not.toBeNull();
+    expect(document.querySelector('[data-testid="phone-stop"]')).not.toBeNull();
     type('more');
     expect(send().hasAttribute('data-ready')).toBe(true);
-    expect(host.querySelector('[data-testid="phone-stop-small"]')).not.toBeNull();
+    expect(document.querySelector('[data-testid="phone-stop-small"]')).not.toBeNull();
   });
 
   it('says Type an answer when asked and Offline when the PC is away', () => {

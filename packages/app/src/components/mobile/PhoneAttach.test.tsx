@@ -35,11 +35,11 @@ function mount(upload: ((file: File) => Promise<ChatAttachment>) | null, onSend 
 }
 
 function openMenu() {
-  act(() => (host.querySelector('[aria-label="Add"]') as HTMLButtonElement).click());
+  act(() => (document.querySelector('[aria-label="Add"]') as HTMLButtonElement).click());
 }
 
 async function pick(testId: string, file: File) {
-  const input = host.querySelector(`[data-testid="${testId}"]`) as HTMLInputElement;
+  const input = document.querySelector(`[data-testid="${testId}"]`) as HTMLInputElement;
   Object.defineProperty(input, 'files', { configurable: true, value: [file] });
   await act(async () => {
     input.dispatchEvent(new Event('change', { bubbles: true }));
@@ -52,26 +52,26 @@ function fileOf(name: string, type: string, size = 2048): File {
   return file;
 }
 
-const send = () => host.querySelector('button[type="submit"]') as HTMLButtonElement;
-const note = () => host.querySelector('[data-testid="phone-composer-note"]')?.textContent ?? '';
+const send = () => document.querySelector('button[type="submit"]') as HTMLButtonElement;
+const note = () => document.querySelector('[data-testid="phone-composer-note"]')?.textContent ?? '';
 
 describe('the plus menu', () => {
   it('lists Camera, Photos, Files and Paste, each with a real picker behind it', () => {
     mount(async () => saved('a.png'));
     openMenu();
-    const menu = host.querySelector('[data-testid="phone-plus-menu"]')!;
+    const menu = document.querySelector('[data-testid="phone-plus-menu"]')!;
     for (const word of ['Camera', 'Photos', 'Files', 'Paste']) expect(menu.textContent).toContain(word);
     expect(menu.textContent).not.toContain('Not on this PC yet');
-    const camera = host.querySelector('[data-testid="phone-pick-camera"]') as HTMLInputElement;
+    const camera = document.querySelector('[data-testid="phone-pick-camera"]') as HTMLInputElement;
     expect(camera.getAttribute('capture')).toBe('environment');
     expect(camera.getAttribute('accept')).toBe('image/*');
-    expect((host.querySelector('[data-testid="phone-pick-files"]') as HTMLInputElement).accept).toContain('.pdf');
+    expect((document.querySelector('[data-testid="phone-pick-files"]') as HTMLInputElement).accept).toContain('.pdf');
   });
 
   it('says so when the PC cannot take files, and a click then does nothing', () => {
     mount(null);
     openMenu();
-    const menu = host.querySelector('[data-testid="phone-plus-menu"]')!;
+    const menu = document.querySelector('[data-testid="phone-plus-menu"]')!;
     expect(menu.textContent).toContain('Not on this PC yet');
     expect(menu.querySelector('button')?.getAttribute('aria-disabled')).toBe('true');
   });
@@ -80,9 +80,9 @@ describe('the plus menu', () => {
     mount(async () => saved('a.png'));
     openMenu();
     act(() => {
-      host.querySelector('[data-testid="phone-plus-menu"]')!.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
+      document.querySelector('[data-testid="phone-plus-menu"]')!.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
     });
-    expect(host.querySelector('[data-testid="phone-plus-menu"]')).toBeNull();
+    expect(document.querySelector('[data-testid="phone-plus-menu"]')).toBeNull();
   });
 });
 
@@ -93,7 +93,7 @@ describe('a picked file', () => {
     openMenu();
     await pick('phone-pick-photos', fileOf('screenshot.png', 'image/png'));
     expect(upload).toHaveBeenCalledTimes(1);
-    const chips = host.querySelector('[data-testid="phone-attach-chips"]')!;
+    const chips = document.querySelector('[data-testid="phone-attach-chips"]')!;
     expect(chips.textContent).toContain('screenshot.png');
     expect(chips.textContent).toContain('2 KB');
     expect(onSend).not.toHaveBeenCalled();
@@ -101,7 +101,7 @@ describe('a picked file', () => {
     expect(send().disabled).toBe(false);
     await act(async () => send().click());
     expect(onSend).toHaveBeenCalledWith('', [saved('screenshot.png')]);
-    expect(host.querySelector('[data-testid="phone-attach-chips"]')).toBeNull();
+    expect(document.querySelector('[data-testid="phone-attach-chips"]')).toBeNull();
   });
 
   it('keeps Send off while the file is still on its way', async () => {
@@ -110,7 +110,7 @@ describe('a picked file', () => {
     mount(upload);
     openMenu();
     await pick('phone-pick-files', fileOf('notes.txt', 'text/plain'));
-    expect(host.querySelector('[data-testid="phone-attach-chips"]')!.textContent).toContain('Sending to your PC');
+    expect(document.querySelector('[data-testid="phone-attach-chips"]')!.textContent).toContain('Sending to your PC');
     expect(send().disabled).toBe(true);
     await act(async () => finish(saved('notes.txt')));
     expect(send().disabled).toBe(false);
@@ -126,7 +126,7 @@ describe('a picked file', () => {
     await pick('phone-pick-files', fileOf('run.exe', 'application/octet-stream'));
     expect(note()).toContain('Only pictures, PDF and text files');
     expect(upload).not.toHaveBeenCalled();
-    expect(host.querySelector('[data-testid="phone-attach-chips"]')).toBeNull();
+    expect(document.querySelector('[data-testid="phone-attach-chips"]')).toBeNull();
   });
 
   it('a camera photo with no extension is taken by its picture type', async () => {
@@ -143,11 +143,11 @@ describe('a picked file', () => {
     });
     openMenu();
     await pick('phone-pick-photos', fileOf('a.png', 'image/png'));
-    const chips = host.querySelector('[data-testid="phone-attach-chips"]')!;
+    const chips = document.querySelector('[data-testid="phone-attach-chips"]')!;
     expect(chips.textContent).toContain('The PC could not save the file.');
     expect(send().disabled).toBe(true);
     act(() => (chips.querySelector('.ph-chip-x') as HTMLButtonElement).click());
-    expect(host.querySelector('[data-testid="phone-attach-chips"]')).toBeNull();
+    expect(document.querySelector('[data-testid="phone-attach-chips"]')).toBeNull();
   });
 
   it('takes at most five files on one message', async () => {
@@ -166,7 +166,7 @@ describe('a picked file', () => {
     openMenu();
     await pick('phone-pick-photos', fileOf('a.png', 'image/png'));
     const set = Object.getOwnPropertyDescriptor(HTMLTextAreaElement.prototype, 'value')!.set!;
-    const field = host.querySelector('textarea') as HTMLTextAreaElement;
+    const field = document.querySelector('textarea') as HTMLTextAreaElement;
     act(() => {
       set.call(field, 'Which button is cut off?');
       field.dispatchEvent(new Event('input', { bubbles: true }));
@@ -186,17 +186,17 @@ describe('paste', () => {
       value: { read: async () => [{ types: ['image/png'], getType: async () => blob }] },
     });
     openMenu();
-    const paste = [...host.querySelectorAll('[role="menuitem"]')].find((b) => b.textContent?.includes('Paste')) as HTMLButtonElement;
+    const paste = [...document.querySelectorAll('[role="menuitem"]')].find((b) => b.textContent?.includes('Paste')) as HTMLButtonElement;
     await act(async () => paste.click());
     expect(upload).toHaveBeenCalledTimes(1);
-    expect(host.querySelector('[data-testid="phone-attach-chips"]')).not.toBeNull();
+    expect(document.querySelector('[data-testid="phone-attach-chips"]')).not.toBeNull();
   });
 
   it('says so in one line when the browser cannot read the clipboard', async () => {
     mount(async (file) => saved(file.name));
     Object.defineProperty(navigator, 'clipboard', { configurable: true, value: undefined });
     openMenu();
-    const paste = [...host.querySelectorAll('[role="menuitem"]')].find((b) => b.textContent?.includes('Paste')) as HTMLButtonElement;
+    const paste = [...document.querySelectorAll('[role="menuitem"]')].find((b) => b.textContent?.includes('Paste')) as HTMLButtonElement;
     await act(async () => paste.click());
     expect(note()).toContain('Paste is not available here');
   });

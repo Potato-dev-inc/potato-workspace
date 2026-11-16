@@ -24,7 +24,7 @@ describe('the Labs page', () => {
     setDevLabsOverrideForTests(false);
     m = await mountRows([labsIndex()]);
     await settle(3);
-    expect(areaTitles()).toEqual(['Chat', 'Helpers', 'Devices', 'Team', 'Phone', 'Other']);
+    expect(areaTitles()).toEqual(['Chat', 'Agents that agents start', 'Devices', 'Team', 'Phone', 'Other']);
     expect(hasText(m.host, 'Agents work overnight in copies. You keep or drop each one in the morning.')).toBe(true);
     expect(hasText(m.host, 'Missions')).toBe(true);
   });
@@ -35,7 +35,7 @@ describe('the Labs page', () => {
     await settle(3);
     await typeInto(search(), 'overnight');
     await settle(2);
-    expect(areaTitles()).toEqual(['Helpers']);
+    expect(areaTitles()).toEqual(['Agents that agents start']);
     expect(nightSwitch()).not.toBeNull();
     expect(hasText(m.host, 'Missions')).toBe(false);
     await typeInto(search(), 'zzz-no-match');
@@ -44,7 +44,7 @@ describe('the Labs page', () => {
     expect(hasText(m.host, 'No early feature matches "zzz-no-match".')).toBe(true);
     await typeInto(search(), '');
     await settle(2);
-    expect(areaTitles()).toEqual(['Chat', 'Helpers', 'Devices', 'Team', 'Phone', 'Other']);
+    expect(areaTitles()).toEqual(['Chat', 'Agents that agents start', 'Devices', 'Team', 'Phone', 'Other']);
   });
 
   it('the Lend switch lives on the Labs page, found by searching "lend", and saves lend_enabled', async () => {

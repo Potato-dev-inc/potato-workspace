@@ -1,7 +1,8 @@
-// A helper agent's row ("Helper: {description}") with a small dot face. Open, it shows the prompt it was given and the
+// A minion row ("Minion: {description}") with a small dot face. Open, it shows the prompt it was given and the
 // result it sent back. Its own tool calls are not listed here: the helper's own chat is a separate pane.
 import { useState } from 'react';
 import type { ToolStep } from '../../lib/sessionChatModel';
+import { t } from '../../i18n';
 import { DotSpinner } from '../cockpit/DotSpinner';
 import { CodeBlock, OutputBlock } from './ToolDetail';
 import { STATUS_LABEL } from './ToolRow';
@@ -35,9 +36,9 @@ export function HelperRow({ step, fromScreen, defaultOpen = false }: HelperRowPr
         onClick={() => setToggled(!open)}
         className="flex w-full min-w-0 items-center gap-2 rounded px-1 py-0.5 text-left hover:bg-pm-raised ck-chat-tool ck-chat-helper-row"
       >
-        <DotSpinner status={running ? 'running' : 'idle'} size={3} label={running ? 'Helper working' : 'Helper'} />
+        <DotSpinner status={running ? 'running' : 'idle'} size={3} label={running ? t('minion.row.working') : t('minion.row.minion')} />
         <span className="min-w-0 flex-1 truncate text-pm-text ck-chat-helper-text" title={description}>
-          Helper: {description}
+          {t('minion.row.named', { description })}
         </span>
         {!fromScreen && (
           <span className={`shrink-0 text-[10px] ${status === 'error' ? 'text-pm-err' : 'text-pm-muted'} ck-chat-tool-status`}>

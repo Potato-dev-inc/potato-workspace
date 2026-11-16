@@ -2,11 +2,12 @@
 // wants to keep, the chat with it (PhoneChatView, the same view as an agent's chat), and Sleep / Wake up. Every
 // control needs its device cap: read (`watch`), send (`type`, inside PhoneChatView), keep notes (`answer`), wake or
 // sleep (`control`). Monochrome: the face is the only picture, drawn in the text colour.
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import type { BridgeClient } from '../../lib/bridge-types';
 import type { CompanionTransport, CompanionView, FeedItem, MemoryView, PendingDecision } from '../../lib/companion';
 import type { PhoneAbilities } from '../../lib/phone-abilities';
 import { Avatar } from '../companion/Avatar';
+import { Menu } from '../common/Floating';
 import { CompanionFeed, clockLabel, readFeedMark, writeFeedMark } from './CompanionFeed';
 import { CompanionPending } from './CompanionPending';
 import { CompanionSkills } from './CompanionSkills';
@@ -45,6 +46,7 @@ export function CompanionHome({ companion, bridge, transport, abilities, chatAll
   const [busy, setBusy] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [menuOpen, setMenuOpen] = useState(false);
+  const menuBtn = useRef<HTMLButtonElement>(null);
 
   // The feed and the notes are read on open and on each state change (and when the note count changes).
   useEffect(() => {
@@ -138,7 +140,7 @@ export function CompanionHome({ companion, bridge, transport, abilities, chatAll
         <header className="ph-comp-head">
           {abilities.canControl && !asleep && (
             <div className="ph-home-menu">
-              <button type="button" className="ph-home-menu-btn" aria-label="More" aria-haspopup="menu" aria-expanded={menuOpen} data-testid="companion-menu" onClick={() => setMenuOpen((open) => !open)}>
+              <button ref={menuBtn} type="button" className="ph-home-menu-btn" aria-label="More" aria-haspopup="menu" aria-expanded={menuOpen} data-testid="companion-menu" onClick={() => setMenuOpen((open) => !open)}>
                 <svg viewBox="0 0 24 24" width="20" height="20" fill="currentColor" aria-hidden="true">
                   <circle cx="5" cy="12" r="1.8" />
                   <circle cx="12" cy="12" r="1.8" />
@@ -146,11 +148,11 @@ export function CompanionHome({ companion, bridge, transport, abilities, chatAll
                 </svg>
               </button>
               {menuOpen && (
-                <div className="ph-home-menu-list" role="menu">
+                <Menu anchorRef={menuBtn} align="end" className="ph-home-menu-list" label="More" testId="companion-menu-list" onClose={() => setMenuOpen(false)}>
                   <button type="button" role="menuitem" disabled={busy !== null} onClick={() => toggleAgent('sleep')}>
                     Sleep
                   </button>
-                </div>
+                </Menu>
               )}
             </div>
           )}

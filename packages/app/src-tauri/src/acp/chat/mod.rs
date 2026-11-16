@@ -79,7 +79,7 @@ use super::conversations::Conversations;
 use super::error::AcpError;
 use super::journal::Journal;
 use super::session::{AcpSession, AnswerSource, PromptEndReason, Resolution, SessionEvent, SteerOutcome};
-use super::state::{Phase, Snapshot};
+use super::state::{PermissionWait, Phase, Snapshot};
 use super::writers::Writer;
 use crate::pty::registry::VirtualPaneHandles;
 use crate::pty::status::PaneStatus;
@@ -230,6 +230,8 @@ pub struct AcpChat {
     nested_under: Mutex<Option<String>>,
     /// `{lane_used, lane_reason}` of the `run_agent` that started this chat; also saved with its conversation.
     lane_note: Mutex<Option<serde_json::Value>>,
+    /// What the agent that started this chat made it (`minion` / `spin_off`, or One type's `helper`) and why; the reply says it.
+    started: Mutex<Option<crate::agent_run_mode::StartedRecord>>,
     /// This chat was taken from the warm (ready-made) chats instead of started fresh; the receipt says so.
     warm_claimed: AtomicBool,
     /// The standby seat this chat is the own chat of (`standby::seat_panes`); the tools' answers say a standby took the task.
@@ -253,6 +255,9 @@ pub struct AcpChat {
     drive: Mutex<drive::Drive>,
     /// The latest turn's length and the right-size suggestion that waits (`right_size.rs`).
     right_size: right_size::Slot,
+    /// A test sets the "agents may answer their minions" switch for this chat only (the real one is read on other threads).
+    #[cfg(test)]
+    switch_for_test: Mutex<Option<bool>>,
 }
 
 pub const TOOK_BACK_SENTENCE: &str = "This PC took this chat back. Tap Take over to send.";
@@ -425,11 +430,14 @@ impl AcpChat {
             card_timeout_s: AtomicU64::new(cards::CARD_TIMEOUT_S),
             conversations,
             agent_answering: AtomicBool::new(false),
+            #[cfg(test)]
+            switch_for_test: Mutex::new(None),
             rules: rules::ChatRules::default(),
             waking: AtomicBool::new(false),
             started_by: Mutex::new(None),
             nested_under: Mutex::new(None),
             lane_note: Mutex::new(None),
+            started: Mutex::new(None),
             warm_claimed: AtomicBool::new(false),
             seat: Mutex::new(None),
             run_meta: Mutex::new(receipt::RunMeta::default()),
@@ -498,6 +506,78 @@ impl AcpChat {
         conversations.update(&self.pane_id, |r| {
             r.started_by = started_by.map(str::to_string);
             r.parent_pane_id = parent.map(str::to_string);
+        });
+    }
+
+    /// Remembers (and saves) what the starting agent made this chat. Only Two types sets `started_as`; One type's
+    /// `helper` stays in memory (the reply says it) and nothing is written.
+    pub(crate) fn set_started(&self, started: crate::agent_run_mode::StartedRecord) {
+        if let (Some(conversations), Some(kind)) = (&self.conversations, started.started_as.clone()) {
+            let reason = started.as_reason.clone();
+            conversations.update(&self.pane_id, |r| {
+                r.started_as = Some(kind);
+                r.as_reason = Some(reason);
+            });
+        }
+        *self.started.lock() = Some(started);
+    }
+
+    /// An agent started this chat as a minion (Two types mode): its permission asks go to that agent first.
+    pub fn is_minion(&self) -> bool {
+        self.started.lock().as_ref().and_then(|s| s.started_as.as_deref()) == Some("minion")
+    }
+
+    /// The words a rule or the minion route reads for an ask: its title (else the tool call's), the command and the files.
+    fn ask_words(&self, wait: &PermissionWait) -> String {
+        let title = wait.title.clone().or_else(|| wait.tool_call_id.as_deref().and_then(|id| self.mapper.lock().tool_title(id))).unwrap_or_default();
+        [title, wait.command.clone().unwrap_or_default(), wait.paths.join(" ")].join(" ")
+    }
+
+    fn answers_on(&self) -> bool {
+        #[cfg(test)]
+        if let Some(on) = *self.switch_for_test.lock() {
+            return on;
+        }
+        helper_answers::enabled()
+    }
+
+    /// Where a minion's ask goes (`None`: this chat is not a minion, the usual card applies).
+    fn minion_route(&self, wait: &PermissionWait) -> Option<helper_answers::MinionAsk> {
+        self.is_minion().then(|| helper_answers::minion_route(&self.ask_words(wait), wait.tool_kind.as_deref().unwrap_or(""), self.session.cwd(), self.answers_on()))
+    }
+
+    /// The asks of this minion that only its agent answers: `(ask_id, since_ms)`, for the wake-up note.
+    pub(crate) fn quiet_asks(&self) -> Vec<(u64, u64)> {
+        if self.is_closed() || !self.is_minion() {
+            return Vec::new();
+        }
+        let snapshot = self.session.snapshot();
+        snapshot.permission_waits.iter().filter(|w| self.minion_route(w) == Some(helper_answers::MinionAsk::Agent)).map(|w| (w.ask_id, w.since_ms)).collect()
+    }
+
+    /// The status the person's views see. A minion that waits only on its agent reads as working: no "needs you", no
+    /// Inbox line, no prompt. The agent sees the real state through the run tools.
+    fn person_status(&self, snapshot: &Snapshot) -> PaneStatus {
+        let status = snapshot.pane_status();
+        let only_agent = |w: &PermissionWait| !matches!(self.minion_route(w), Some(helper_answers::MinionAsk::Person(_)) | None);
+        if status == PaneStatus::WaitingInput && self.is_minion() && !snapshot.permission_waits.is_empty() && snapshot.permission_waits.iter().all(only_agent) {
+            return PaneStatus::Running;
+        }
+        status
+    }
+
+    pub fn started(&self) -> Option<crate::agent_run_mode::StartedRecord> {
+        self.started.lock().clone()
+    }
+
+    /// Restores what a saved record said (a chat restarted with the app).
+    pub(crate) fn restore_started(&self, kind: Option<&str>, reason: Option<&str>) {
+        let Some(kind) = kind.and_then(crate::agent_run_mode::StartedAs::parse) else { return };
+        *self.started.lock() = Some(crate::agent_run_mode::StartedRecord {
+            as_used: kind.as_str().into(),
+            as_reason: reason.unwrap_or("restored").into(),
+            started_as: Some(kind.as_str().into()),
+            ..Default::default()
         });
     }
 
@@ -823,7 +903,7 @@ impl AcpChat {
     }
 
     fn apply_status(&self, snapshot: &Snapshot) {
-        let status = snapshot.pane_status();
+        let status = self.person_status(snapshot);
         let changed = {
             let handles = self.handles.lock();
             let Some(handles) = handles.as_ref() else { return };
@@ -852,6 +932,10 @@ impl AcpChat {
         let mut automatic: Vec<(u64, String)> = Vec::new();
         // Asks no card could be made for: answered "no" after the lock is let go.
         let mut unshowable: Vec<u64> = Vec::new();
+        // A minion's asks refused because the switch is off: answered "no" after the lock is let go.
+        let mut refused: Vec<u64> = Vec::new();
+        // Questions of a minion's ordinary asks: made quiet (only its agent sees them) after the lock is let go.
+        let mut quiet: Vec<String> = Vec::new();
         // Asks a fence or Force yes answered (`rules.rs`): sent after the lock is let go.
         let mut ruled: Vec<rules::Ruled> = Vec::new();
         {
@@ -891,7 +975,15 @@ impl AcpChat {
                         continue;
                     }
                 }
+                let route = self.minion_route(wait);
+                if route == Some(helper_answers::MinionAsk::Refuse) {
+                    refused.push(wait.ask_id);
+                    continue;
+                }
                 let (mut new, options) = cards::new_question(&self.pane_id, &self.label, wait, title.as_deref(), kind.as_deref(), &paths);
+                if matches!(route, Some(helper_answers::MinionAsk::Person(_))) {
+                    new.question = cards::minion_question(&self.label, title.as_deref());
+                }
                 new.timeout_s = Some(self.card_timeout_s.load(Ordering::SeqCst));
                 let made = match questions::store().create(new, now) {
                     Ok(question) => Some((question, options)),
@@ -912,8 +1004,13 @@ impl AcpChat {
                 };
                 match made {
                     Some((question, options)) => {
-                        cards.insert(wait.ask_id, Card { question_id: question.id.clone(), options, title: title.clone(), resolved: false });
-                        raised.push(question);
+                        let only_agent = route == Some(helper_answers::MinionAsk::Agent);
+                        cards.insert(wait.ask_id, Card { question_id: question.id.clone(), options, title: title.clone(), resolved: false, quiet: only_agent });
+                        if only_agent {
+                            quiet.push(question.id.clone());
+                        } else {
+                            raised.push(question);
+                        }
                     }
                     None if !cards.contains_key(&wait.ask_id) => unshowable.push(wait.ask_id),
                     None => {}
@@ -926,6 +1023,17 @@ impl AcpChat {
                 let at = now_iso();
                 let mut mapper = self.mapper.lock();
                 let items = mapper.permission_refused("the app could not show the question, so the agent was told no", &at);
+                self.push(items);
+            }
+        }
+        for id in &quiet {
+            questions::store().set_quiet(id, true);
+        }
+        for ask_id in refused {
+            if self.session.cancel_permission(ask_id).is_ok() {
+                let at = now_iso();
+                let mut mapper = self.mapper.lock();
+                let items = mapper.permission_refused(helper_answers::REFUSED_NOTE, &at);
                 self.push(items);
             }
         }
@@ -1405,7 +1513,7 @@ impl AcpChat {
         // The person's switch for this chat answers everything. Without it, the agent that started a helper may answer the safe
         // questions when the setting is on (`helper_answers`).
         let person_allowed = self.agent_answering();
-        if !person_allowed && !(helper_answers::enabled() && self.started_by().is_some()) {
+        if !person_allowed && !(self.answers_on() && self.started_by().is_some()) {
             return Err(AgentAnswerError::NotAllowed);
         }
         self.reconcile_cards();
@@ -1421,7 +1529,7 @@ impl AcpChat {
         if !person_allowed {
             let snapshot = self.session.snapshot();
             if let Some(wait) = snapshot.permission_waits.iter().find(|w| w.ask_id == ask_id) {
-                let words = [wait.title.clone().unwrap_or_default(), wait.command.clone().unwrap_or_default(), wait.paths.join(" ")].join(" ");
+                let words = self.ask_words(wait);
                 if let Some(why) = helper_answers::needs_person(&words, wait.tool_kind.as_deref().unwrap_or(""), &option.kind, self.session.cwd()) {
                     return Err(AgentAnswerError::NeedsPerson(why));
                 }
@@ -1447,7 +1555,7 @@ impl AcpChat {
     pub fn state(&self) -> Value {
         let snapshot = self.session.snapshot();
         let person_allowed = self.agent_answering();
-        let helper_may = helper_answers::enabled() && self.started_by().is_some();
+        let helper_may = self.answers_on() && self.started_by().is_some();
         let cwd = self.session.cwd().to_path_buf();
         let cards = self.cards.lock();
         let permissions: Vec<Value> = snapshot
@@ -1456,13 +1564,15 @@ impl AcpChat {
             .map(|wait| {
                 let card = cards.get(&wait.ask_id);
                 // Which options the agent that started this chat may pick (`helper_answers`), and why not the others.
-                let words = [wait.title.clone().unwrap_or_default(), wait.command.clone().unwrap_or_default(), wait.paths.join(" ")].join(" ");
+                let words = self.ask_words(wait);
                 let agent_options: Vec<Value> = card
                     .map(|c| c.options.iter().filter(|o| person_allowed || (helper_may && helper_answers::needs_person(&words, wait.tool_kind.as_deref().unwrap_or(""), &o.kind, &cwd).is_none())).map(|o| json!(o.choice_id)).collect())
                     .unwrap_or_default();
                 let agent_why = (helper_may && !person_allowed).then(|| card.and_then(|c| c.options.iter().find(|o| o.kind == "allow_once").and_then(|o| helper_answers::needs_person(&words, wait.tool_kind.as_deref().unwrap_or(""), &o.kind, &cwd)))).flatten();
                 json!({
                     "agentOptions": agent_options,
+                    // A minion's ask: `agent` (only its agent answers) or `person` (a risky one, docked in the parent's chat).
+                    "audience": card.filter(|_| self.is_minion()).map(|c| if c.quiet { "agent" } else { "person" }),
                     "agentWhy": agent_why,
                     "askId": wait.ask_id,
                     "title": wait.title,
@@ -1484,7 +1594,7 @@ impl AcpChat {
             "agent": self.agent_id,
             "label": self.label,
             "phase": serde_json::to_value(snapshot.phase).unwrap_or(Value::Null),
-            "status": snapshot.pane_status().as_str(),
+            "status": self.person_status(&snapshot).as_str(),
             "turnInFlight": snapshot.turn_in_flight(),
             "stopping": snapshot.phase == Phase::Cancelling,
             "quietSecs": snapshot.quiet_secs,

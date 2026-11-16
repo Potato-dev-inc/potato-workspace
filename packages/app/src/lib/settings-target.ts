@@ -28,6 +28,10 @@ const ROW_ALIASES: Record<string, string> = {
   security: 'security-ask-before-control',
   plugins: 'agent-pack',
   costs: 'budget-turns',
+  // These rows moved onto each agent's own page; the list of agents is the closest place.
+  'agent-default-models': 'agent-list',
+  'agent-lane': 'agent-list',
+  'chat-addons': 'agent-list',
 };
 
 /** The page and row a name stands for; null when it names nothing. */

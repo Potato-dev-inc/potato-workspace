@@ -23,6 +23,8 @@ export type PaneInfo = {
   title?: string | null;
   /** The pane of the agent that started this one over MCP (a helper); display-only, absent for the person's own panes. */
   parent_pane_id?: string | null;
+  /** `minion` | `spin_off`: what the agent that started this pane made it (Two types). Absent: the person's own chat, or One type. */
+  started_as?: string | null;
   /** Who started this pane over MCP and what for: the calling host ("Claude Code") and the first line of the task. Display-only. */
   origin?: { host?: string | null; task?: string | null } | null;
   /** Where a Linux (WSL) pane runs; absent for a Windows pane. Display only. */
@@ -214,7 +216,7 @@ export interface StandbyStatus {
   supported: { agent_type: string; visible: boolean; headless: boolean; experimental: boolean }[];
 }
 
-export type TunnelMode = 'quick' | 'named' | 'custom' | 'stable';
+export type TunnelMode = 'quick' | 'named' | 'custom' | 'stable' | 'open_tunnel';
 
 /** Saved tunnel setting as the UI may see it: never the token, only whether one is stored. */
 export interface TunnelConfigView {
@@ -251,6 +253,7 @@ export type TunnelConfigInput =
   | { mode: 'quick' }
   | { mode: 'named'; hostname: string; token?: string | null }
   | { mode: 'custom'; url: string }
+  | { mode: 'open_tunnel' }
   | {
       mode: 'stable';
       worker_url: string;

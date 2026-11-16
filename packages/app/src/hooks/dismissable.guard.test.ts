@@ -25,7 +25,11 @@ describe('every dropdown closes through useDismissable', () => {
   });
 
   it('the pickers named in the plan use the shared rule', () => {
-    const uses = (rel: string) => readFileSync(path.join(components, rel), 'utf8').includes('useDismissable');
+    // A menu that moved onto the shared Menu (common/Floating) closes through useDismissable inside it.
+    const uses = (rel: string) => {
+      const text = readFileSync(path.join(components, rel), 'utf8');
+      return text.includes('useDismissable') || text.includes('common/Floating');
+    };
     for (const rel of [
       'cockpit/newagent/NewAgentPage.tsx', // the New agent project picker
       'common/Floating.tsx', // the shared Popover and Menu (the New agent menu and other floating menus)

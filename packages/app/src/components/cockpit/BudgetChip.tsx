@@ -14,6 +14,7 @@ import {
 } from '../../lib/budgets';
 import '../../styles/chips.css';
 import '../../styles/budgets.css';
+import { t } from '../../i18n';
 import { useDismissable } from '../../hooks/useDismissable';
 
 export function BudgetChip({
@@ -80,7 +81,7 @@ export function BudgetChip({
             )}
             {view.helpers.map((helper, i) => (
               <div className="ck-budget-row ck-budget-row--helper" key={i}>
-                <dt>Helper</dt>
+                <dt>{t('minion.budget.label')}</dt>
                 <dd>{helperLine(helper)}</dd>
               </div>
             ))}

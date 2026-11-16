@@ -116,8 +116,10 @@ describe('Settings > Agents > Chat add-ons', () => {
 
   it('the Settings row is always there: chat is always on (no Labs flag gates it)', () => {
     const rowIds = (settings: { acp_chat_enabled?: boolean } | null) => (visibleSections(SECTIONS, settings).find((x) => x.id === 'agents')?.rows ?? []).map((r) => r.id);
-    expect(rowIds(null)).toContain('chat-addons');
-    expect(rowIds({ acp_chat_enabled: false })).toContain('chat-addons');
-    expect(rowIds({ acp_chat_enabled: true })).toContain('chat-addons');
+    // The add-on state is on each agent's own page now (ChatAdapterRow); the Agents page lists the agents.
+    for (const settings of [null, { acp_chat_enabled: false }, { acp_chat_enabled: true }]) {
+      expect(rowIds(settings)).toContain('agent-list');
+      expect(rowIds(settings)).not.toContain('chat-addons');
+    }
   });
 });

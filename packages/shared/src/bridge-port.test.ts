@@ -62,6 +62,9 @@ describe('bridge port discovery', () => {
         'X-Potato-Workspace-Local-Secret': 'abc123',
         'X-Potato-Workspace-Pane': 'pane-7',
       });
+      process.env.POTATO_WORKSPACE_PANE_KEY = 'k-test';
+      expect((await readLocalSecretHeaders(file))['X-Potato-Workspace-Pane-Key']).toBe('k-test');
+      delete process.env.POTATO_WORKSPACE_PANE_KEY;
       delete process.env.POTATO_WORKSPACE_PANE_ID;
       expect(await readLocalSecretHeaders(file)).toEqual({ 'X-Potato-Workspace-Local-Secret': 'abc123' });
     } finally {

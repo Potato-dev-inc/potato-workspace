@@ -1,4 +1,5 @@
 // Settings: the version line and "Check for updates". The same flow as the notice, with a button that says what it found.
+import { useEffect } from 'react';
 import { useT } from '../../../i18n';
 import { tauriUpdateTransport, type UpdateTransport } from '../../../lib/app-update';
 import { ToolsRepairLine } from '../../updates/ToolsMissingNotice';
@@ -10,6 +11,12 @@ export function UpdateRow({ transport = tauriUpdateTransport, versionLine = '' }
   const t = useT();
   const state = useAppUpdate(transport, false);
   const checking = state.phase === 'checking';
+  // The page checks by itself when it opens; the button stays for a second look.
+  const { check } = state;
+  useEffect(() => {
+    void check(false);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
   return (
     <SettingRow
       label={t('overview.version.label')}

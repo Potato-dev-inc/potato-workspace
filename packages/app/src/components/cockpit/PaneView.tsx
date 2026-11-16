@@ -53,7 +53,8 @@ import { useLastTurn } from './away-context';
 import { SegTabs } from './SegTabs';
 import { Sheet } from './Sheet';
 import { paneHeading } from './titles';
-import { helperOfLabel, startedByLabel } from '../../lib/pane-helpers';
+import { helperOfLabel, isMinionPane, startedByLabel } from '../../lib/pane-helpers';
+import { openMinionView } from '../../lib/task-view';
 import { placeLabel, placeTooltip } from '../../lib/wsl-place';
 import { isProseStream, transcriptSpeaker } from '../../lib/transcript-labels';
 import { UntestedChip } from './UntestedChip';
@@ -494,6 +495,12 @@ export function PaneView({
   // person counts as "needs you" whatever the helper's status says.
   const askingPanes = new Set(c.asked.questions.map((q) => q.pane_id).filter((id): id is string => !!id));
   const startedHelpers = chatHelpers(c.registry.paneList, paneId, (p) => c.names.get(p.info.id) ?? p.info.agent_type, askingPanes);
+  // A minion has no pane of its own on screen: its row opens the read-only view in the details column. Any other pane is selected.
+  const openStarted = (id: string) => {
+    const started = c.registry.paneList.find((p) => p.info.id === id);
+    if (started && isMinionPane(started.info)) openMinionView(paneId, id);
+    else c.select(id);
+  };
   const chatDock =
     dockNow || helperAsks.length > 0 || isAcp || check.shown || stalledMin !== null ? (
       <>
@@ -797,7 +804,7 @@ export function PaneView({
                   // "Send now" on a waiting message: stop the turn, the message goes when it ends.
                   onInterrupt: isAcp ? () => void acp.cancel(paneId).catch(() => undefined) : isTerminalChat ? () => void c.interrupt(paneId) : undefined,
                 }}
-                onOpenPane={(id) => c.select(id)}
+                onOpenPane={openStarted}
                 slashCommands={isAcp ? acpState?.commands : undefined}
                 slashAgent={isAcp ? (acpState?.agent || agentType) : undefined}
                 slashWaiting={isAcp && !!acpState && ['starting', 'resuming', 'dormant'].includes(acpState.phase)}
@@ -914,7 +921,7 @@ export function PaneView({
             }}
             onOpenChanges={worktree ? () => setTab('changes') : () => setTab('receipt')}
             onOpenCopy={() => setDetails(true)}
-            onOpenPane={(id) => c.select(id)}
+            onOpenPane={openStarted}
             onStopHelper={(id) => c.interrupt(id)}
             onSaveTeam={() => setSaveTeam(true)}
             onClose={rail.close}

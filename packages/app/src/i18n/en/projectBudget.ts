@@ -13,6 +13,7 @@ export const projectBudget = {
   'settings.row.project-budget.label': 'Budget for this project',
   'settings.row.project-budget.hint': 'What this project may use in a day. At a limit, new turns wait. 0 means no limit.',
   'projectBudget.turnsAria': 'Turns a day for this project (0 is no limit)',
+  'projectBudget.presetAria': 'How much this project may use in a day',
   'projectBudget.minutesAria': 'Agent minutes a day for this project (0 is no limit)',
   'projectBudget.planAria': 'Share of the plan this project may use (0 is no limit)',
   'projectBudget.turnsSuffix': 'turns a day',

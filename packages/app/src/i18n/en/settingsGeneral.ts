@@ -55,7 +55,7 @@ export const settingsGeneral = {
   "labsPage.empty": "No early feature matches \"{query}\".",
   "labsPage.openNamed": "Open {name}",
   "labsPage.area.chat": "Chat",
-  "labsPage.area.helpers": "Helpers",
+  'labsPage.area.helpers': 'Agents that agents start',
   "labsPage.area.devices": "Devices",
   "labsPage.area.team": "Team",
   "labsPage.area.phone": "Phone",

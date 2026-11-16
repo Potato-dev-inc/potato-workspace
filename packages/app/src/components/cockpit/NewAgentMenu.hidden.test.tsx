@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 // The "New agent" menu with hidden agents, as a whole screen: the real Sidebar and the real menu. Only the desktop
-// shell (`invoke`) is mocked. Covers: a hidden agent is gone from the menu; "Edit list…" opens the editor, a tick
+// shell (`invoke`) is mocked. Covers: a hidden agent is gone from the menu; "Edit this list…" opens the editor, a tick
 // shows or hides an agent and Back returns to the menu; the last shown agent cannot be hidden; "Show all" brings
 // everything back.
 import { act } from 'react';
@@ -100,14 +100,14 @@ async function mount() {
   await settle();
 }
 async function openMenu() {
-  await act(async () => host.querySelector<HTMLButtonElement>('button[aria-label="New agent"]')!.click());
+  await act(async () => document.querySelector<HTMLButtonElement>('button[aria-label="New agent"]')!.click());
   await settle();
-  return host.querySelector<HTMLElement>('[role="menu"]')!;
+  return document.querySelector<HTMLElement>('[role="menu"]')!;
 }
-const menu = () => host.querySelector<HTMLElement>('[role="menu"]')!;
+const menu = () => document.querySelector<HTMLElement>('[role="menu"]')!;
 const menuRowLabels = () => [...menu().querySelectorAll<HTMLButtonElement>('button.ck-menu-item')].map((b) => b.querySelector('span:not([data-mark])')?.textContent);
-const editBox = (label: string) => host.querySelector<HTMLInputElement>(`input[aria-label="Show ${label} in the New agent menu"]`);
-const buttonNamed = (label: string) => [...host.querySelectorAll<HTMLButtonElement>('button')].find((b) => b.textContent?.trim() === label);
+const editBox = (label: string) => document.querySelector<HTMLInputElement>(`input[aria-label="Show ${label} in the New agent menu"]`);
+const buttonNamed = (label: string) => [...document.querySelectorAll<HTMLButtonElement>('button')].find((b) => b.textContent?.trim() === label);
 const click = async (el: HTMLElement | null | undefined) => {
   expect(el, 'element to click').toBeTruthy();
   await act(async () => el!.click());
@@ -125,18 +125,18 @@ describe('the New agent menu: hidden agents', () => {
     expect(menuRowLabels()).not.toContain('No chat agent');
   });
 
-  it('"Edit list…" opens the editor; a tick hides an agent in the menu; Back returns to the menu', async () => {
+  it('"Edit this list…" opens the editor; a tick hides an agent in the menu; Back returns to the menu', async () => {
     await mount();
     await openMenu();
     expect(menuRowLabels()).toContain('Addon agent');
-    await click(buttonNamed('Edit list…'));
-    expect(host.querySelector('[data-testid="hidden-agents-editor"]')).toBeTruthy();
+    await click(buttonNamed('Edit this list…'));
+    expect(document.querySelector('[data-testid="hidden-agents-editor"]')).toBeTruthy();
     expect(editBox('Addon agent')!.checked).toBe(true);
     await click(editBox('Addon agent'));
     expect(editBox('Addon agent')!.checked).toBe(false);
     expect(stored()).toEqual(['addonagent']);
     await click(buttonNamed('Back'));
-    expect(host.querySelector('[data-testid="hidden-agents-editor"]')).toBeNull();
+    expect(document.querySelector('[data-testid="hidden-agents-editor"]')).toBeNull();
     expect(menuRowLabels()).not.toContain('Addon agent');
     expect(menuRowLabels()).toContain('Ready agent');
   });
@@ -145,7 +145,7 @@ describe('the New agent menu: hidden agents', () => {
     localStorage.setItem(LS_HIDDEN_AGENTS, JSON.stringify(['readyagent', 'addonagent', 'powershell']));
     await mount();
     await openMenu();
-    await click(buttonNamed('Edit list…'));
+    await click(buttonNamed('Edit this list…'));
     expect(editBox('No chat agent')!.checked).toBe(true);
     expect(editBox('No chat agent')!.disabled).toBe(true);
     await click(editBox('No chat agent'));
@@ -156,7 +156,7 @@ describe('the New agent menu: hidden agents', () => {
     localStorage.setItem(LS_HIDDEN_AGENTS, JSON.stringify(['addonagent', 'nochat']));
     await mount();
     await openMenu();
-    await click(buttonNamed('Edit list…'));
+    await click(buttonNamed('Edit this list…'));
     expect(buttonNamed('Show all')!.disabled).toBe(false);
     await click(buttonNamed('Show all'));
     expect(stored()).toEqual([]);

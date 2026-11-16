@@ -237,8 +237,7 @@
   stroke-linejoin: round;
 }
 .cockpit .mk-pop {
-  position: absolute;
-  bottom: 42px;
+  /* A popup in the top layer: the shared Menu places it above its button (position and offsets are set by script). */
   display: flex;
   gap: 2px;
   padding: 4px;
@@ -247,6 +246,12 @@
   border-radius: 10px;
   box-shadow: 0 8px 24px rgba(0, 0, 0, 0.35);
 }
+.cockpit .mk-pop.ck-menu:not(.mk-pop--col) {
+  min-width: 0;
+  backdrop-filter: none;
+  -webkit-backdrop-filter: none;
+}
+.cockpit .mk-pop--col.ck-menu,
 .cockpit .mk-pop--col {
   flex-direction: column;
   min-width: 150px;

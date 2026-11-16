@@ -40,9 +40,9 @@ afterEach(() => {
   delete (window as { matchMedia?: unknown }).matchMedia;
 });
 
-const modeButtons = () => [...host.querySelectorAll<HTMLButtonElement>('[role="group"] button')];
-const pill = () => host.querySelector<HTMLButtonElement>('button.ck-chat-mode-pill')!;
-const menuItems = () => [...host.querySelectorAll<HTMLButtonElement>('[role="menuitemradio"]')];
+const modeButtons = () => [...document.querySelectorAll<HTMLButtonElement>('[role="group"] button')];
+const pill = () => document.querySelector<HTMLButtonElement>('button.ck-chat-mode-pill')!;
+const menuItems = () => [...document.querySelectorAll<HTMLButtonElement>('[role="menuitemradio"]')];
 
 function render(mode: 'summary' | 'normal' | 'verbose', onChange = vi.fn()) {
   act(() => root.render(<ViewModeToggle mode={mode} onChange={onChange} />));
@@ -56,7 +56,7 @@ describe('ViewModeToggle on the desktop', () => {
     expect(modeButtons()).toHaveLength(0);
     expect(pill().textContent).toBe('View: Summary ▾');
     expect(pill().getAttribute('aria-label')).toBe('Chat view: Summary');
-    expect(host.querySelector('[role="menu"]')).toBeNull();
+    expect(document.querySelector('[role="menu"]')).toBeNull();
   });
 
   it('reports the mode the person picks', () => {
@@ -75,7 +75,7 @@ describe('ViewModeToggle on a phone (under 600 px)', () => {
     expect(modeButtons()).toHaveLength(0);
     expect(pill().textContent).toBe('View: Normal ▾');
     expect(pill().getAttribute('aria-expanded')).toBe('false');
-    expect(host.querySelector('[role="menu"]')).toBeNull();
+    expect(document.querySelector('[role="menu"]')).toBeNull();
   });
 
   it('opens a menu of the three modes and reports the one picked, then closes', () => {
@@ -87,7 +87,7 @@ describe('ViewModeToggle on a phone (under 600 px)', () => {
     expect(menuItems().find((b) => b.textContent === 'Normal')?.getAttribute('aria-checked')).toBe('true');
     act(() => menuItems().find((b) => b.textContent === 'Summary')!.click());
     expect(onChange).toHaveBeenCalledWith('summary');
-    expect(host.querySelector('[role="menu"]')).toBeNull();
+    expect(document.querySelector('[role="menu"]')).toBeNull();
   });
 
   it('closes the menu on Escape', () => {
@@ -98,6 +98,6 @@ describe('ViewModeToggle on a phone (under 600 px)', () => {
     act(() => {
       document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape' }));
     });
-    expect(host.querySelector('[role="menu"]')).toBeNull();
+    expect(document.querySelector('[role="menu"]')).toBeNull();
   });
 });

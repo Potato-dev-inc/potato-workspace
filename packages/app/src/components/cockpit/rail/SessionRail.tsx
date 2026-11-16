@@ -10,6 +10,8 @@ import { useSessionChat } from '../../../hooks/useSessionChat';
 import { usePaneJobs } from '../../../lib/pane-jobs';
 import { FilesCard } from '../../files/FilesCard';
 import { BackgroundSection, type HelperRow } from './BackgroundSection';
+import { TaskColumn } from './TaskColumn';
+import { openMinionView, openTasksPage, useClearedTasks } from '../../../lib/task-view';
 import type { WorktreeItem } from '../../../lib/cockpit-api';
 import { ChangesSection } from './ChangesSection';
 import { ConnectorsSection } from './ConnectorsSection';
@@ -96,10 +98,13 @@ export function SessionRail({
   const jobs = usePaneJobs()[paneId] ?? [];
   const connectors = usePaneConnectors(chat.turns);
   const drift = useToolsDrift();
+  const cleared = useClearedTasks(paneId);
+  const rows = helpers.filter((h) => !cleared.has(h.id));
   const stale = drift.rows.some((r) => r.paneId === paneId);
   const canReconnect = drift.rows.some((r) => r.paneId === paneId && r.canReconnect);
   // Re-read the helpers' usage whenever a status changes: a turn ending is a status change.
-  const usage = usePaneUsage(paneId, helpers.length > 0, [status, ...helpers.map((h) => `${h.id}:${h.status}`)].join('|'));
+  const usage = usePaneUsage(paneId, rows.length > 0, [status, ...rows.map((h) => `${h.id}:${h.status}`)].join('|'));
+  const stopOwnJob = (owner: string, pid: number, startedAtMs: number) => stopJob(jobsApi, owner, pid, startedAtMs);
   const fresh = chat.turns.length === 0;
   const tip = [agentName, chat.model, chat.cliVersion, accountLabel].filter(Boolean).join(' · ');
   return (
@@ -139,10 +144,12 @@ export function SessionRail({
         <OutputsSection paneId={paneId} cwd={cwd} outputs={chat.outputs} />
         <ChangesSection paneId={paneId} status={status} cwd={cwd} outputs={chat.outputs} canCreatePr={canCreatePr} showDone={readsChat} onOpenChanges={onOpenChanges} onNotify={onNotify} worktree={worktree} />
         <BackgroundSection
-          helpers={helpers}
+          helpers={rows}
           usage={usage}
           jobs={jobs}
           onOpenPane={onOpenPane}
+          onOpenTask={(id) => openMinionView(paneId, id)}
+          onOpenPage={() => openTasksPage(paneId)}
           onStopHelper={onStopHelper}
           onStopJob={(pid, startedAtMs) => stopJob(jobsApi, paneId, pid, startedAtMs)}
           onPreview={(port, external) => previewJobPort(paneId, port, external)}
@@ -151,6 +158,7 @@ export function SessionRail({
         />
         <FilesCard paneId={paneId} cwd={cwd} canMention={readsChat} refreshKey={status} />
       </aside>
+      <TaskColumn paneId={paneId} agentName={agentName} agentType={agentType} rows={rows} usage={usage} onOpenPane={onOpenPane} onStopHelper={onStopHelper} onStopJob={stopOwnJob} />
     </>
   );
 }

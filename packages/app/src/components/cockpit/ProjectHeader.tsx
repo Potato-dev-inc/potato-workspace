@@ -1,11 +1,11 @@
 // The header line of a project card in the sidebar: a caret that folds the card, the folder's name, what changed
 // (+ green, - red), a "+" that starts an agent in that folder, and a menu (rename, remove / add). A folded card shows
 // the icons of the agents inside and its loudest signal, so nothing hides.
-import { useEffect, useRef, useState } from 'react';
+import { useRef, useState } from 'react';
 import { AgentLogo } from '../common/AgentLogo';
 import { IconMore, IconPlus } from './Icons';
 import { useT } from '../../i18n';
-import { useDismissable } from '../../hooks/useDismissable';
+import { Menu } from '../common/Floating';
 
 export type ProjectSignal = 'needs' | 'error' | 'working' | null;
 
@@ -48,26 +48,13 @@ export interface ProjectHeaderProps {
 
 export function ProjectHeader({ name, count, folded, needs, changes, agents = [], signal = null, added, hasFolder, onToggle, onNewAgent, onAdd, onRemove, onRename }: ProjectHeaderProps) {
   const t = useT();
-  const [menu, setMenu] = useState<{ x: number; y: number } | null>(null);
+  /** Where the menu opened: the right-click point, or the "..." button (`fromMore`). */
+  const [menu, setMenu] = useState<{ x: number; y: number; fromMore: boolean } | null>(null);
   const [renaming, setRenaming] = useState(false);
   const [draft, setDraft] = useState(name);
-  const menuRef = useRef<HTMLDivElement>(null);
   const moreRef = useRef<HTMLButtonElement>(null);
 
-  useEffect(() => {
-    if (!menu) return;
-    menuRef.current?.querySelector<HTMLElement>('[role="menuitem"]')?.focus();
-  }, [menu]);
-  useDismissable(menu !== null, {
-    inside: [menuRef],
-    anchor: menuRef,
-    onDismiss: (why) => {
-      setMenu(null);
-      if (why === 'escape') moreRef.current?.focus();
-    },
-  });
-
-  const openMenu = (x: number, y: number) => hasFolder && setMenu({ x, y });
+  const openMenu = (x: number, y: number, fromMore = false) => hasFolder && setMenu({ x, y, fromMore });
   const finishRename = (save: boolean) => {
     setRenaming(false);
     if (save) onRename(draft);
@@ -136,7 +123,8 @@ export function ProjectHeader({ name, count, folded, needs, changes, agents = []
             aria-expanded={menu !== null}
             onClick={(e) => {
               const r = e.currentTarget.getBoundingClientRect();
-              openMenu(r.left, r.bottom + 4);
+              if (menu) setMenu(null);
+              else openMenu(r.left, r.bottom + 4, true);
             }}
           >
             <IconMore />
@@ -144,11 +132,16 @@ export function ProjectHeader({ name, count, folded, needs, changes, agents = []
         </>
       )}
       {menu && (
-        <div
-          ref={menuRef}
-          className="ck-menu ck-menu--fixed ck-menu--compact"
-          role="menu"
-          style={{ left: Math.max(4, Math.min(menu.x, window.innerWidth - 190)), top: menu.y }}
+        <Menu
+          anchorRef={menu.fromMore ? moreRef : undefined}
+          point={menu.fromMore ? undefined : { x: menu.x, y: menu.y }}
+          align="start"
+          className="ck-menu--compact"
+          label={t('sidebar.more')}
+          onClose={(back) => {
+            setMenu(null);
+            if (back) moreRef.current?.focus();
+          }}
         >
           {added ? (
             <>
@@ -189,7 +182,7 @@ export function ProjectHeader({ name, count, folded, needs, changes, agents = []
               {t('sidebar.addToSidebar')}
             </button>
           )}
-        </div>
+        </Menu>
       )}
     </div>
   );

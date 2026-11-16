@@ -46,7 +46,7 @@ describe('How to run', () => {
   it('shows what helpers get when nothing was saved, and says why when that is the terminal', async () => {
     await render({ laneGet: async () => ({ labs_enabled: true, agents: [agent({ saved: false, helper_lane: 'acp' })] }), laneSet: vi.fn() });
     expect(popup()?.value).toBe('acp');
-    expect(host.textContent).toContain('Helpers this agent starts run as a chat when it can.');
+    expect(host.textContent).toContain('Agents this agent starts run as a chat when it can.');
     act(() => root.unmount());
     root = createRoot(host);
     await render({ laneGet: async () => ({ labs_enabled: true, agents: [agent({ saved: false, helper_lane: 'terminal', addon_installed: false })] }), laneSet: vi.fn() });
@@ -57,7 +57,7 @@ describe('How to run', () => {
   it('shows the saved choice over the default', async () => {
     await render({ laneGet: async () => ({ labs_enabled: true, agents: [agent({ saved: true, lane: 'terminal', helper_lane: 'terminal' })] }), laneSet: vi.fn() });
     expect(popup()?.value).toBe('terminal');
-    expect(host.textContent).toContain('Helpers and new agents run in a terminal.');
+    expect(host.textContent).toContain('Started agents and new agents run in a terminal.');
   });
 
   it('shows nothing while the Labs switch is off', async () => {
@@ -221,9 +221,11 @@ describe('the settings rows', () => {
     visibleSections(SECTIONS, settings).flatMap((s) => s.rows.map((r) => r.id));
 
   it('the How to run row is always there: chat is always on (the Chat view Labs flag is gone)', () => {
-    expect(ids({})).toContain('agent-lane');
-    expect(ids(null)).toContain('agent-lane');
-    expect(ids({ acp_chat_enabled: false })).toContain('agent-lane');
+    // The row lives on each agent's own page now; the Agents page lists the agents whatever the old saved value says.
+    for (const settings of [{}, null, { acp_chat_enabled: false }]) {
+      expect(ids(settings)).toContain('agent-list');
+      expect(ids(settings)).not.toContain('agent-lane');
+    }
   });
 
   it('there is no Chat view Labs feature any more', () => {

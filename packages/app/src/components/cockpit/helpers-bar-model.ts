@@ -1,8 +1,8 @@
 // What the helpers bar shows: the helpers of the main agent in front, their state, and which chips fit. Pure.
-import { liveParentId } from '../../lib/pane-helpers';
+import { isMinionPane, liveParentId } from '../../lib/pane-helpers';
 
 interface PaneLike {
-  info: { id: string; parent_pane_id?: string | null };
+  info: { id: string; parent_pane_id?: string | null; started_as?: string | null };
   status: string;
 }
 
@@ -19,7 +19,7 @@ export function rootPaneId(list: ReadonlyArray<PaneLike>, id: string): string {
   return at;
 }
 
-/** Every helper under `rootId` (the ones it started, and theirs), nearest first, in list order. */
+/** Every helper under `rootId` (the ones it started, and theirs), nearest first, in list order. A minion is not a chip: it lives in Background tasks. */
 export function helperIdsOf(list: ReadonlyArray<PaneLike>, rootId: string): string[] {
   const out: string[] = [];
   const seen = new Set([rootId]);
@@ -27,7 +27,7 @@ export function helperIdsOf(list: ReadonlyArray<PaneLike>, rootId: string): stri
   while (queue.length) {
     const at = queue.shift()!;
     for (const p of list) {
-      if (seen.has(p.info.id) || liveParentId(list, p.info.id) !== at) continue;
+      if (seen.has(p.info.id) || isMinionPane(p.info) || liveParentId(list, p.info.id) !== at) continue;
       seen.add(p.info.id);
       out.push(p.info.id);
       queue.push(p.info.id);

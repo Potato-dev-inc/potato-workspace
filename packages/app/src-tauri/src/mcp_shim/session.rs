@@ -63,6 +63,10 @@ pub(crate) fn session_headers(id: &str) -> String {
     if let Some(pane) = pane_header(std::env::var(mcp_sessions::PANE_ID_ENV).ok()) {
         headers.push_str(&format!("X-Potato-Workspace-Pane: {pane}\r\n"));
     }
+    // This window's own key (it proves which pane, even when the agent starts this program with a clean tree). Never printed.
+    if let Some(key) = pane_key_header(std::env::var(mcp_sessions::PANE_KEY_ENV).ok()) {
+        headers.push_str(&format!("{}: {key}\r\n", mcp_sessions::PANE_KEY_HEADER));
+    }
     headers.push_str(&format!("X-Potato-Workspace-Catalog: {}\r\n", own_catalog_label()));
     headers
 }
@@ -78,6 +82,12 @@ fn own_catalog_label() -> &'static str {
 /// characters so it can never inject a header line. Sent as a hint for sidebar nesting only.
 pub(crate) fn pane_header(env_value: Option<String>) -> Option<String> {
     mcp_sessions::clean_pane_hint(&env_value?)
+}
+
+/// The pane key from the environment, cut down to plain characters so it can never inject a header line.
+pub(crate) fn pane_key_header(env_value: Option<String>) -> Option<String> {
+    let clean: String = env_value?.trim().chars().filter(|c| c.is_ascii_alphanumeric() || matches!(c, '-' | '_')).take(128).collect();
+    (!clean.is_empty()).then_some(clean)
 }
 
 thread_local! { pub(crate) static MCP_SESSION_ID: RefCell<Option<String>> = const { RefCell::new(None) }; }

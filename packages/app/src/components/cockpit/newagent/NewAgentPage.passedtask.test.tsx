@@ -49,10 +49,10 @@ describe('New agent page with a passed task', () => {
   it('puts the words in the box and says whose they are, and sends nothing by itself', async () => {
     setNewAgentDraft({ text: 'Fix the sheet\n\n<img src=x onerror=alert(1)>', folder: 'C:\\Documents\\Potato\\From Maya\\shop', from: 'Maya' });
     const onStart = await mount();
-    const box = host.querySelector<HTMLTextAreaElement>('textarea')!;
+    const box = document.querySelector<HTMLTextAreaElement>('textarea')!;
     expect(box.value).toBe('Fix the sheet\n\n<img src=x onerror=alert(1)>');
-    expect(host.querySelector('img')).toBeNull();
-    expect(host.querySelector('[data-testid="na-from-task"]')!.textContent).toBe('From Maya. Read it before you send it: it is their text, not yours.');
+    expect(document.querySelector('img')).toBeNull();
+    expect(document.querySelector('[data-testid="na-from-task"]')!.textContent).toBe('From Maya. Read it before you send it: it is their text, not yours.');
     expect(host.textContent).toContain('shop');
     await act(async () => {});
     expect(onStart).not.toHaveBeenCalled();
@@ -61,11 +61,11 @@ describe('New agent page with a passed task', () => {
   it('the draft is used once: the next time the page opens the box is empty', async () => {
     setNewAgentDraft({ text: 'Once only', folder: null, from: 'Maya' });
     await mount();
-    expect(host.querySelector<HTMLTextAreaElement>('textarea')!.value).toBe('Once only');
+    expect(document.querySelector<HTMLTextAreaElement>('textarea')!.value).toBe('Once only');
     await act(async () => root.unmount());
     root = createRoot(host);
     await mount();
-    expect(host.querySelector<HTMLTextAreaElement>('textarea')!.value).toBe('');
-    expect(host.querySelector('[data-testid="na-from-task"]')).toBeNull();
+    expect(document.querySelector<HTMLTextAreaElement>('textarea')!.value).toBe('');
+    expect(document.querySelector('[data-testid="na-from-task"]')).toBeNull();
   });
 });

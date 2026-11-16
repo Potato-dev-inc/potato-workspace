@@ -22,6 +22,8 @@ export function DockedCard({
   onRefresh,
   autoFocus = false,
   helperPaneIds = [],
+  minionPaneIds = [],
+  paneName,
   inChat = false,
 }: {
   snapshot: AttentionSnapshot;
@@ -36,6 +38,10 @@ export function DockedCard({
   autoFocus?: boolean;
   /** The chat of a pane that started helpers: the helpers that ask, whose cards sit under its own. */
   helperPaneIds?: string[];
+  /** Which of those helpers are minions: only a risky ask of a minion gets here (the app keeps the rest from the person), and its lead-in names the agent that started it. */
+  minionPaneIds?: string[];
+  /** The name of this pane's agent, for a minion's lead-in. */
+  paneName?: string;
   /** The card sits inside the conversation: drawn as the chat card (who, one sentence, command, risk line, two big buttons). */
   inChat?: boolean;
 }) {
@@ -81,7 +87,11 @@ export function DockedCard({
       )}
       {helperCards.map((item) => (
         <div key={item.id} className="ph-dock-helper" data-testid="helper-question">
-          <p className="ph-dock-helper-lead">{t('phone.dock.helperAsks', { name: item.pane?.heading ?? t('phone.dock.aHelper') })}</p>
+          <p className="ph-dock-helper-lead">
+            {item.pane && minionPaneIds.includes(item.pane.id)
+              ? t('phone.dock.minionAsks', { parent: paneName ?? t('phone.dock.aParent') })
+              : t('phone.dock.helperAsks', { name: item.pane?.heading ?? t('phone.dock.aHelper') })}
+          </p>
           {inChat ? (
             <PhoneAskCard item={item} bridge={bridge} canAnswer={canAnswer} onOpenPane={onOpenPane} onRefresh={onRefresh} />
           ) : (
@@ -89,7 +99,7 @@ export function DockedCard({
           )}
           {item.pane && (
             <button type="button" className="ph-btn ph-btn--plain" data-role="open-helper" onClick={() => onOpenPane(item.pane!.id)}>
-              {t('phone.dock.openHelper')}
+              {item.pane && minionPaneIds.includes(item.pane.id) ? t('phone.dock.openMinion') : t('phone.dock.openHelper')}
             </button>
           )}
         </div>

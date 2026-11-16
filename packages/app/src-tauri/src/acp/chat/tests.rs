@@ -571,6 +571,8 @@ fn stop_answers_the_open_question_cancelled_takes_the_card_down_and_ends_the_tur
     rig.wait_phase(Phase::Idle);
     assert!(rig.cards().is_empty(), "the card is gone");
     assert_eq!(questions::store().get(&card.id, now_ms()).unwrap().state, QuestionState::Cancelled);
+    // The phase goes idle a moment before the closing item lands; under load the test read in between (flaked once in the 1.1.8 gate).
+    assert!(wait_until(30, || rig.items().last().is_some_and(|i| i["outcome"] == "interrupted")), "the turn did not close as interrupted: {:#?}", rig.kinds());
     let items = rig.items();
     assert_eq!(items.last().unwrap()["outcome"], "interrupted");
     let notice = items.iter().find(|i| i["noticeKind"] == "permission").unwrap();

@@ -1141,6 +1141,11 @@ pub fn add_pane_id(cfg: &mut AgentConfig, pane_id: &str) {
         if !already {
             list.push(json!({ "name": crate::pty::PANE_ID_ENV, "value": pane_id }));
         }
+        // This chat's own key (revoked when the session is removed): the shim proves which window it is by it.
+        let has_key = list.iter().any(|e| e.get("name").and_then(Value::as_str) == Some(crate::agent_authority::pane_keys::KEY_ENV));
+        if !has_key {
+            list.push(json!({ "name": crate::agent_authority::pane_keys::KEY_ENV, "value": crate::agent_authority::pane_keys::mint(pane_id) }));
+        }
     }
 }
 
@@ -1625,6 +1630,11 @@ mod pane_id_tests {
         assert_eq!(pane[0]["value"], json!("acp-123"));
         assert!(own.iter().any(|e| e["name"] == "EXISTING"), "the existing variables stay");
         assert!(cfg.mcp_servers[1]["env"].as_array().unwrap().is_empty(), "another server is not given our pane");
+        // The chat's own key: minted once, names this pane, and only our own server gets it.
+        let keys: Vec<_> = own.iter().filter(|e| e["name"] == crate::agent_authority::pane_keys::KEY_ENV).collect();
+        assert_eq!(keys.len(), 1, "minted once");
+        assert_eq!(crate::agent_authority::pane_keys::pane_for_key(keys[0]["value"].as_str().unwrap()).as_deref(), Some("acp-123"));
+        crate::agent_authority::pane_keys::revoke("acp-123");
     }
 }
 

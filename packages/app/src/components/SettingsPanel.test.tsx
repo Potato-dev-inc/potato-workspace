@@ -22,7 +22,7 @@ vi.mock('./settings/catalog', async () => {
     SECTIONS: [
       { id: 'overview', title: 'Overview', blurb: 'Is everything OK?', rows: [{ id: 'setup-check', label: 'Check my setup', hint: 'What works.', level: 'basic', group: 'Setup', render: () => <SettingRow label="Check my setup" /> }] },
       { id: 'agents', title: 'Agents', blurb: 'Agents.', rows: [{ id: 'accounts', label: 'Sign in', hint: 'Sign in to each agent.', level: 'basic', group: 'Sign in', render: () => <SettingRow label="Sign in" /> }] },
-      { id: 'helpers', title: 'Helpers', blurb: 'Helpers.', rows: [{ id: 'helper-agents', label: 'Helper agents', hint: 'Shown or hidden.', level: 'basic', group: 'How helpers run', render: () => <SettingRow label="Helper agents" /> }] },
+      { id: 'helpers', title: 'Helpers', blurb: 'Helpers.', rows: [{ id: 'helper-agents', label: 'How started agents show', hint: 'Shown or hidden.', level: 'basic', group: 'How they run', render: () => <SettingRow label="How started agents show" /> }] },
       {
         id: 'look',
         title: 'Look and feel',
@@ -179,7 +179,7 @@ describe('a damaged settings file', () => {
     await mount();
     const line = host.querySelector('.st-damaged') as HTMLElement;
     expect(line.textContent).toContain('Your settings file was damaged');
-    await click([...line.querySelectorAll('button')].find((b) => b.textContent === 'Restore the last good settings')!);
+    await click([...line.querySelectorAll('button')].find((b) => b.textContent === 'Undo')!);
     await settle(3);
     expect(recovery.restore).toHaveBeenCalledTimes(1);
     expect(host.querySelector('.st-damaged')).toBeNull();

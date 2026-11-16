@@ -12,6 +12,8 @@ use std::path::{Path, PathBuf};
 use std::sync::Arc;
 use std::thread;
 
+pub(crate) mod tunnel_listener;
+
 const HOST: &str = "127.0.0.1";
 pub const PWA_PORT: u16 = 1420;
 
@@ -112,7 +114,7 @@ pub fn start_pwa_server(
                         let dev_info = dev_info.clone();
                         thread::spawn(move || {
                             if let Err(err) =
-                                handle_connection(stream, &dist_root, &bridge_port_file, &dev_info)
+                                handle_connection(stream, &dist_root, &bridge_port_file, &dev_info, None)
                             {
                                 tracing::debug!(%err, "PWA request failed");
                             }
@@ -127,11 +129,14 @@ pub fn start_pwa_server(
     Ok(PwaServerHandle { _join: join })
 }
 
+/// Serve one connection. `remote` is `Some` only on the tunnel listener (`tunnel_listener.rs`), where every
+/// request is a remote one: its Host is checked against the tunnel's hostname before anything is forwarded.
 fn handle_connection(
     mut stream: TcpStream,
     dist_root: &Path,
     bridge_port_file: &Path,
     dev_info: &DevInfoSupplier,
+    remote: Option<&tunnel_listener::RemoteCtx>,
 ) -> Result<(), String> {
     let Some(_slot) = ConnectionSlot::take(MAX_CONNECTIONS) else {
         return write_text(&mut stream, 503, "Too many connections");
@@ -169,6 +174,23 @@ fn handle_connection(
     let method = parts.next().unwrap_or("GET");
     let target = parts.next().unwrap_or("/");
     let (path, query) = split_target(target);
+    if let Some(remote) = remote {
+        if let Some((status, message)) = remote.gate(method, path, &headers_raw) {
+            let sent = write_text(&mut stream, status, message);
+            // The request's body is still unread. Closing now would reset the connection and the reply could be lost, so read what is left first.
+            let _ = stream.shutdown(std::net::Shutdown::Write);
+            let _ = stream.set_read_timeout(Some(std::time::Duration::from_millis(500)));
+            let mut sink = [0_u8; 4096];
+            let mut drained = 0_usize;
+            while drained < 64 * 1024 {
+                match stream.read(&mut sink) {
+                    Ok(0) | Err(_) => break,
+                    Ok(n) => drained += n,
+                }
+            }
+            return sent;
+        }
+    }
 
     let content_length = parse_content_length(&headers_raw);
     let is_bridge = path == "/bridge" || path.starts_with("/bridge/");
@@ -559,10 +581,13 @@ fn write_bytes(
 ) -> Result<(), String> {
     let reason = match status {
         200 => "OK",
+        400 => "Bad Request",
         403 => "Forbidden",
         404 => "Not Found",
         405 => "Method Not Allowed",
         413 => "Payload Too Large",
+        421 => "Misdirected Request",
+        429 => "Too Many Requests",
         503 => "Service Unavailable",
         502 => "Bad Gateway",
         _ => "Error",
@@ -594,7 +619,7 @@ pub(crate) fn spawn_test_server(dist_root: PathBuf, bridge_port_file: PathBuf) -
             let (dist_root, bridge_port_file, dev_info) =
                 (dist_root.clone(), bridge_port_file.clone(), dev_info.clone());
             thread::spawn(move || {
-                let _ = handle_connection(stream, &dist_root, &bridge_port_file, &dev_info);
+                let _ = handle_connection(stream, &dist_root, &bridge_port_file, &dev_info, None);
             });
         }
     });

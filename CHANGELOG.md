@@ -1,5 +1,38 @@
 # Changelog
 
+## 1.1.8
+
+This is a beta.
+
+- Minions and spin-offs:
+  - "Agents that agents start" in Settings › Agents has a One type / Two types switch.
+  - In Two types, an agent can start a minion (quick work it runs for itself) or a spin-off (its own chat that you can talk to).
+  - Minions live in Background tasks, with a side view and a full page. They have no row in the sidebar.
+  - A minion asks its own agent first. A risky question goes up to you in the parent chat.
+  - The word "helper" is replaced in most of the app's text: started agents, minions, spin-offs and standbys are named plainly.
+- Inbox:
+  - A stuck agent gets one card with Nudge, Stop and Respawn.
+  - "Working now" lists the chats that are busy, with Open chat and Stop.
+  - Group by crew, and "Show in crew" jumps to the box on the canvas. Your choice is remembered.
+- Settings:
+  - Each agent's own page now holds its rows, including "Keep ready".
+  - One switch gives every agent the Potato tools, with Undo and a Fix it button.
+  - Simpler pickers: quiet hours switch, away time, limit presets.
+  - Chat look switches moved to the chat's View menu.
+  - Paste link (Discord) and Paste token (Telegram) read your clipboard.
+  - Use a key found on this PC, and a spare key after the main one.
+  - Linux: a WSL Upgrade button (1 to 2) with a time limit and three tries.
+  - The update check runs when Settings opens.
+- Potato account: sign in to the live account server with Discord or a password. When both use the same verified email they link to one account.
+- OpenTunnel fixed phone address (Labs, off by default). The address stays the same after a restart, and switching it off and on starts it again.
+- Crews (Labs):
+  - Follow a task: pick a task and see its path light up box by box, with the exact hand-overs.
+  - Ready-made crews to start from, a "How we work" page, and share a crew as a file.
+  - Change the crew by talking: say what should change and the front desk proposes it. Nothing changes until you press Apply.
+- Safer agent windows: each agent window has its own secret key for the consent check, and a caller nobody can place needs your OK.
+- 23 menus now use one shared menu, so they open in the same place, close on Escape and stay inside the window.
+- Mark up: the picture is drawn on a canvas, so a page with strict rules can't block it.
+
 ## 1.1.7
 
 This is a beta.

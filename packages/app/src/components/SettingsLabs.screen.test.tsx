@@ -40,7 +40,7 @@ const main = () => host.querySelector('.st-main') as HTMLElement;
 describe('Labs is a real page in the Settings nav', () => {
   it('the nav lists Labs as a page, between Shortcuts and Advanced', async () => {
     await mount();
-    expect(navLabels()).toEqual(['Overview', 'Agents', 'Helpers', 'Look and feel', 'Keys', 'Shortcuts', 'Labs', 'Advanced']);
+    expect(navLabels()).toEqual(['Overview', 'Agents', 'Agents that agents start', 'Look and feel', 'Keys', 'Shortcuts', 'Labs', 'Advanced']);
   });
 
   it('the old cut-off link at the bottom of the nav is gone', async () => {

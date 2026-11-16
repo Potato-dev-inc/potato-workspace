@@ -474,7 +474,7 @@ export function AddChatDialog({
             detect={null}
             detectKey={agent.id}
             hideNotes
-            intro="Chat talks to the agent through a small helper program (the Agent Client Protocol). Nothing is run to find this except the agent's help."
+            intro="Chat talks to the agent through a small add-on program (the Agent Client Protocol). Nothing is run to find this except the agent's help."
             draft={draft}
             onDraft={setDraft}
             nextLabel="Review"

@@ -19,6 +19,8 @@ import {
   useState,
   type CSSProperties,
   type FormEventHandler,
+  type MouseEventHandler,
+  type PointerEventHandler,
   type KeyboardEvent,
   type ReactNode,
   type RefObject,
@@ -121,6 +123,9 @@ export interface FloatProps {
   /** `form` makes the layer itself the form (a card that submits on Enter). */
   as?: 'div' | 'form';
   onSubmit?: FormEventHandler<HTMLElement>;
+  /** Stops a press inside the layer from reaching a drag or pointer handler of the parent (the React tree still bubbles). */
+  onPointerDown?: PointerEventHandler<HTMLElement>;
+  onContextMenu?: MouseEventHandler<HTMLElement>;
   /** Smallest width and tallest height (px), for lists. */
   minWidth?: number;
   maxHeight?: number;
@@ -131,6 +136,10 @@ export interface FloatProps {
 function Float({ menu, role, as = 'div', ...p }: FloatProps & { menu: boolean }) {
   const parent = useContext(LayerContext);
   const ref = useRef<HTMLElement | null>(null);
+  // One stable callback: a new one each render would clear the element before a child (autoFocus) takes the focus.
+  const setRef = useRef((el: HTMLElement | null) => {
+    ref.current = el;
+  }).current;
   const [place, setPlace] = useState<FloatPlace | null>(null);
   const close = useRef(p.onClose);
   close.current = p.onClose;
@@ -198,9 +207,7 @@ function Float({ menu, role, as = 'div', ...p }: FloatProps & { menu: boolean })
   const node = createElement(
     as,
     {
-      ref: (el: HTMLElement | null) => {
-        ref.current = el;
-      },
+      ref: setRef,
       id: p.id,
       className: cls,
       role: menu ? 'menu' : role,
@@ -210,10 +217,12 @@ function Float({ menu, role, as = 'div', ...p }: FloatProps & { menu: boolean })
       style,
       onKeyDown,
       onSubmit: p.onSubmit,
+      onPointerDown: p.onPointerDown,
+      onContextMenu: p.onContextMenu,
     },
     <LayerContext.Provider value={layer}>{p.children}</LayerContext.Provider>,
   );
-  return createPortal(node, document.querySelector('.cockpit') ?? document.body);
+  return createPortal(node, document.querySelector('.cockpit, .pwa-shell') ?? document.body);
 }
 
 /** A card in the top layer: a warning, a form, a list. Role `dialog` unless told. */

@@ -107,6 +107,52 @@ pub trait Source {
 }
 
 
+/// Which ordinary asks of a minion got their wake-up note. Pure: the sampler feeds it the open asks and the clock.
+#[derive(Debug, Default)]
+pub struct WakeTracker {
+    sent: std::collections::HashSet<(String, u64)>,
+}
+
+impl WakeTracker {
+    /// The asks that are due a note now: waiting at least `WAKE_AFTER_MS` while the minion's agent is between turns, or
+    /// `WAKE_BUSY_AFTER_MS` while it is in the middle of one. An ask that already got its note is never due again.
+    pub fn due<'a>(&self, asks: &'a [crate::acp::chat::stall_support::QuietAsk], now_ms: u64, parent_idle: &dyn Fn(&str) -> bool) -> Vec<&'a crate::acp::chat::stall_support::QuietAsk> {
+        use crate::acp::chat::helper_answers::{WAKE_AFTER_MS, WAKE_BUSY_AFTER_MS};
+        asks.iter()
+            .filter(|ask| {
+                let age = now_ms.saturating_sub(ask.since_ms);
+                !self.sent.contains(&(ask.pane_id.clone(), ask.ask_id)) && (age >= WAKE_BUSY_AFTER_MS || (age >= WAKE_AFTER_MS && parent_idle(&ask.parent)))
+            })
+            .collect()
+    }
+
+    pub fn mark_sent(&mut self, ask: &crate::acp::chat::stall_support::QuietAsk) {
+        self.sent.insert((ask.pane_id.clone(), ask.ask_id));
+    }
+
+    /// Forgets asks that are gone (answered, or the minion ended).
+    pub fn retain_open(&mut self, asks: &[crate::acp::chat::stall_support::QuietAsk]) {
+        self.sent.retain(|(pane, id)| asks.iter().any(|a| &a.pane_id == pane && a.ask_id == *id));
+    }
+}
+
+static WAKES: once_cell::sync::Lazy<Mutex<WakeTracker>> = once_cell::sync::Lazy::new(|| Mutex::new(WakeTracker::default()));
+
+/// One look at the minions' ordinary asks: an ask nobody answered for a minute wakes the agent that started the minion
+/// with one app-written note (never typed into the minion, never shown to the person as a card).
+fn wake_unanswered_minions() {
+    let asks = crate::acp::chat::stall_support::quiet_asks();
+    let mut tracker = WAKES.lock();
+    tracker.retain_open(&asks);
+    let due: Vec<_> = tracker.due(&asks, now_ms(), &crate::acp::chat::stall_support::parent_idle).into_iter().cloned().collect();
+    for ask in due {
+        let note = crate::acp::chat::helper_answers::wake_note(&ask.name, &ask.pane_id);
+        if crate::acp::chat::stall_support::wake_parent(&ask.parent, &note) {
+            tracker.mark_sent(&ask);
+        }
+    }
+}
+
 #[derive(Debug, Default)]
 struct Entry {
     fingerprint: Option<u64>,
@@ -313,7 +359,11 @@ pub fn spawn(registry: Arc<Mutex<crate::pty::PaneRegistry>>, app: tauri::AppHand
                 );
             }
         }
+        wake_unanswered_minions();
         let changed = TRACKER.lock().tick(&samples, &source, now_ms());
+        if !changed.is_empty() {
+            crate::attention::on_changed();
+        }
         for (pane_id, minutes) in changed {
             let _ = app.emit("pane-stall", json!({ "pane_id": pane_id, "minutes": minutes }));
         }

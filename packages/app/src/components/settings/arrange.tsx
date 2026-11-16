@@ -28,6 +28,12 @@ export const LABS_INDEX_ID = 'labs-index';
 /** The group that catches a row nobody placed. */
 export const OTHER_GROUP = 'Other';
 
+/**
+ * Rows that now live on each agent's own page (Settings > Agents > <agent>) and are no longer listed on the Agents page.
+ * Their definitions stay (deep links, the agent page blocks); a link to one opens the agent list (see settings-target.ts).
+ */
+export const MOVED_TO_AGENT_PAGE: readonly string[] = ['agent-default-models', 'agent-lane', 'chat-addons'];
+
 /** Early features list in this order; one added later (a new row with `labs`) is listed after them. */
 const LABS_ORDER = ['ask-bar', 'simple-mode', 'live-updates', 'opencode-automation'];
 
@@ -43,7 +49,7 @@ export interface PageMeta {
 export const PAGES: PageMeta[] = [
   { id: 'overview', title: 'Overview', blurb: 'Is everything OK?' },
   { id: 'agents', title: 'Agents', blurb: 'Your agents, how they sign in and what they may do.' },
-  { id: 'helpers', title: 'Helpers', blurb: 'When an agent asks another agent for help.' },
+  { id: 'helpers', title: 'Agents that agents start', blurb: 'When an agent starts another agent.' },
   { id: 'look', title: 'Look and feel', blurb: 'How the app looks and behaves.' },
   { id: 'keys', title: 'Keys', blurb: 'API keys. Kept in your system keychain when there is one.' },
   { id: 'shortcuts', title: 'Shortcuts', blurb: 'Click the keys to change them. Shortcuts work while Potato Workspace is in front, except those tagged Any app.' },
@@ -62,18 +68,18 @@ export const LAYOUT: Record<SectionId, LayoutGroup[]> = {
     { group: SIGN_IN.group, rows: ['accounts'] },
     { group: 'Where agents start', rows: ['project-folder', 'copy-offer', 'linux'] },
     { group: 'Moving work', rows: ['handoff-mode', 'keep-going'] },
-    { group: 'All agents', rows: ['show-terminals', 'message-rail', 'chat-view', 'done-card', 'preload', 'agent-default-models', 'agent-lane', 'chat-addons', 'hidden-agents', 'versions'] },
+    { group: 'All agents', rows: ['show-terminals', 'preload', 'versions'] },
     { group: 'Standby helpers', rows: ['standby-helpers', 'helper-answers'] },
     {
       group: 'Rules for all agents',
       rows: ['security-ask-before-control', 'security-agents-merge', 'agent-rules', 'loop-guard', 'package-check', 'collision', 'security-recent-approvals'],
     },
-    { group: 'Limits', rows: ['budget-turns', 'budget-minutes', 'project-budget', 'right-size'] },
+    { group: 'Limits', rows: ['budget-turns', 'project-budget', 'right-size'] },
     { group: 'Undo and memory', rows: ['checkpoints', 'shared-memory'] },
     { group: 'Your own agents', rows: ['definitions'] },
   ],
   helpers: [
-    { group: 'How helpers run', rows: ['helper-agents', 'helpers-in-sidebar', 'helper-default-models', 'keep-helpers-open', 'close-helpers-with-agent'] },
+    { group: 'How helpers run', rows: ['started-agents', 'helper-agents', 'helpers-in-sidebar', 'helper-default-models', 'keep-helpers-open', 'close-helpers-with-agent'] },
     { group: 'Limits', rows: ['most-helpers-at-once', 'stuck-helper-minutes'] },
     { group: 'Crews', rows: ['crews-page'] },
     { group: 'Let agents ask each other', rows: ['agent-pack'] },
@@ -161,7 +167,7 @@ export function unplacedRowIds(base: BaseSectionDef[], layout: Partial<Record<Se
   return base
     .filter((s) => !wholeSections.has(s.id))
     .flatMap((s) => s.rows)
-    .filter((r) => !claimed.has(r.id) && !(collected && r.labs))
+    .filter((r) => !claimed.has(r.id) && !MOVED_TO_AGENT_PAGE.includes(r.id) && !(collected && r.labs))
     .map((r) => r.id);
 }
 

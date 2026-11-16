@@ -2,7 +2,7 @@
 // Main agents live in the sidebar. The bar holds a way back to the agent in front (the crumb), the helpers that agent
 // started, and the person's standby helpers. No helpers and no standbys: nothing is drawn.
 // Nothing here names an agent: logos come from the registry, states from the pane status.
-import { useDismissable } from '../../hooks/useDismissable';
+import { Menu } from '../common/Floating';
 import { useEffect, useRef, useState, type KeyboardEvent, type MouseEvent } from 'react';
 import type { CockpitApi } from '../../hooks/useCockpit';
 import { isBusyStatus } from '../../lib/close-policy';
@@ -106,9 +106,6 @@ export function HelpersBar({
     setWidth(el.getBoundingClientRect().width);
     return () => ro.disconnect();
   });
-  const menuRef = useRef<HTMLDivElement>(null);
-  // The chip menu closes on a press outside it, Escape, focus leaving or the page scrolling (one shared rule).
-  useDismissable(menu !== null, { inside: [menuRef], onDismiss: () => setMenu(null) });
 
   const helperIds = applyOrder(helperIdsOf(list, rootId), (id) => id, order);
   if (!root || (helperIds.length === 0 && parked.length === 0)) return null;
@@ -326,7 +323,7 @@ export function HelpersBar({
         </div>
       )}
       {menu && (
-        <div ref={menuRef} className="ck-menu ck-menu--fixed ck-menu--compact ck-hbar-menu" role="menu" style={{ left: menu.x, top: menu.y }} onPointerDown={(e) => e.stopPropagation()} data-testid="helpers-menu">
+        <Menu point={{ x: menu.x, y: menu.y }} align="start" className="ck-menu--compact ck-hbar-menu" label={menu.more ? t('hbar.moreAria', { n: more.length }) : titleOf(menu.id)} testId="helpers-menu" onPointerDown={(e) => e.stopPropagation()} onClose={() => setMenu(null)}>
           {menu.standby ? (
             <button
               type="button"
@@ -375,7 +372,7 @@ export function HelpersBar({
                   </button>,
                 ] : [],
               )}
-        </div>
+        </Menu>
       )}
     </div>
   );

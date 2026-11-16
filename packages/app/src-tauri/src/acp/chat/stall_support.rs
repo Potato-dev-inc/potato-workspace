@@ -26,6 +26,45 @@ pub(crate) fn run_state(pane_id: &str) -> Option<ChatRun> {
     Some(ChatRun { running: snapshot.phase == Phase::Working, waiting: snapshot.phase == Phase::NeedsInput })
 }
 
+/// One ordinary ask of a minion that only its agent answers (`AcpChat::quiet_asks`).
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub(crate) struct QuietAsk {
+    pub pane_id: String,
+    /// The pane of the agent that started the minion.
+    pub parent: String,
+    pub name: String,
+    pub ask_id: u64,
+    pub since_ms: u64,
+}
+
+/// Every open ask of every minion that waits only on its agent.
+pub(crate) fn quiet_asks() -> Vec<QuietAsk> {
+    let mut out = Vec::new();
+    for chat in super::all() {
+        let Some(parent) = chat.nested_under() else { continue };
+        for (ask_id, since_ms) in chat.quiet_asks() {
+            out.push(QuietAsk { pane_id: chat.pane_id().to_string(), parent: parent.clone(), name: chat.label().to_string(), ask_id, since_ms });
+        }
+    }
+    out
+}
+
+/// The agent of the minion is a chat that is between turns (nobody waits on the minion through a tool).
+pub(crate) fn parent_idle(parent: &str) -> bool {
+    get(parent).is_some_and(|chat| chat.readiness() == Readiness::Ready)
+}
+
+/// Sends the app-written wake-up note to the minion's agent: as the next message when it is idle, into the turn when it
+/// works and takes text. `false`: it could not go now (the next look tries again).
+pub(crate) fn wake_parent(parent: &str, text: &str) -> bool {
+    let Some(chat) = get(parent) else { return false };
+    match chat.steer(text) {
+        Some(result) => result.is_ok(),
+        None if chat.readiness() == Readiness::Ready => chat.send_quiet(text, &[]).is_ok(),
+        None => false,
+    }
+}
+
 /// Nudge: the one short line, as a steer into the turn that runs (the way `send_message` does).
 pub(crate) fn nudge(pane_id: &str, text: &str) -> Result<(), String> {
     let chat = get(pane_id).ok_or_else(|| "NOT_FOUND: this chat is gone".to_string())?;

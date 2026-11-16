@@ -29,6 +29,7 @@ export const settingsTelegram = {
   "telegram.tokenReplace": "Paste a new token to replace it",
   "telegram.tokenHere": "Paste the token here",
   "telegram.check": "Check",
+  "telegram.pasteToken": "Paste token",
   "telegram.tokenSaved": "Token saved",
   "telegram.keptIn": "kept in {store}",
   "telegram.step2": "Step 2 · Connect your chat",

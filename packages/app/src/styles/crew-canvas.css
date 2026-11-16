@@ -108,6 +108,17 @@
   stroke: var(--label-3);
   stroke-dasharray: 5 4;
 }
+.crewc-line.is-changed {
+  stroke: var(--accent);
+  stroke-width: 3;
+}
+.crewc-arrow-changed {
+  fill: var(--accent);
+}
+.crewc-box.is-touched {
+  background: var(--accent-soft);
+  border-color: var(--accent-line);
+}
 .crewc-arrow {
   fill: var(--label-3);
 }
@@ -410,4 +421,179 @@
 .crewc-field .mp-chip {
   width: 100%;
   justify-content: space-between;
+}
+
+/* 1.1.8 Follow a task: the path of a real task lit on the canvas, and the steps beside it. Colour tokens only; no side stripes. */
+.crewc-box.is-now {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 2px var(--accent-line);
+}
+.crewc-line.is-lit {
+  stroke: var(--accent);
+  stroke-width: 2.5;
+}
+.crewc-follow,
+.crewc-talk {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+.crewc-follow-tasks {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.crewc-follow-task {
+  display: grid;
+  grid-template-columns: 16px 1fr;
+  gap: 2px 8px;
+  width: 100%;
+  padding: 6px 8px;
+  border: 1px solid var(--sep);
+  border-radius: 8px;
+  background: var(--bg-raised);
+  color: var(--label);
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+.crewc-follow-task:hover {
+  background: var(--fill-hover);
+}
+.crewc-follow-task.is-on {
+  background: var(--fill-active);
+}
+.crewc-follow-check {
+  grid-row: span 2;
+  color: var(--accent-text);
+}
+.crewc-follow-brief {
+  overflow-wrap: anywhere;
+}
+.crewc-follow-meta {
+  color: var(--label-3);
+  font-size: 12px;
+}
+.crewc-follow-bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+.crewc-follow-bar h4 {
+  margin: 0;
+}
+.crewc-follow-steps {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.crewc-follow-steps > li {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 6px 8px;
+  border: 1px solid var(--sep);
+  border-radius: 8px;
+  color: var(--label-3);
+}
+.crewc-follow-steps > li.is-lit {
+  background: var(--accent-soft);
+  color: var(--label);
+}
+.crewc-follow-step {
+  padding: 0;
+  border: 0;
+  background: none;
+  color: inherit;
+  font: inherit;
+  font-weight: 600;
+  text-align: left;
+  cursor: pointer;
+}
+.crewc-follow-words {
+  overflow-wrap: anywhere;
+}
+.crewc-follow-label {
+  color: var(--label-3);
+}
+.crewc-link {
+  padding: 0;
+  border: 0;
+  background: none;
+  color: var(--accent-text);
+  font: inherit;
+  text-decoration: underline;
+  cursor: pointer;
+}
+@media (prefers-reduced-motion: no-preference) {
+  .crewc-follow-steps > li {
+    transition: background-color 0.2s ease;
+  }
+}
+
+/* 1.1.8 Open a shared crew: the sheet that shows what a file would set up. */
+.crewc-modal--wide {
+  width: min(640px, calc(100vw - 32px));
+}
+.crewc-import-roles {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.crewc-import-text {
+  margin: 4px 0 0;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  font: inherit;
+  color: var(--label-2);
+}
+.crewc-changes {
+  margin: 0;
+  padding-left: 18px;
+}
+.crewc-seg {
+  display: flex;
+  gap: 4px;
+}
+.crewc-seg button {
+  flex: 1;
+  padding: 5px 8px;
+  border: 1px solid var(--sep);
+  border-radius: 6px;
+  background: transparent;
+  color: var(--label-2);
+  font: inherit;
+  cursor: pointer;
+}
+.crewc-seg button.is-on {
+  background: var(--bg-raised);
+  color: var(--label);
+  border-color: var(--accent-line);
+}
+.crewc-ruledif {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  font-size: 12px;
+}
+.crewc-ruledif li.is-added {
+  color: var(--label);
+}
+.crewc-ruledif li.is-removed {
+  color: var(--label-3);
+  text-decoration: line-through;
+}
+.crewc-talk-actions {
+  display: flex;
+  gap: 8px;
 }

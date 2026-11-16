@@ -74,25 +74,25 @@ const lanes = (over: Partial<AcpLaneView> = {}): AcpLaneView => ({
 async function openMenu(c: CockpitApi, acp: ReturnType<typeof fakeAcpApi>) {
   await act(async () => root.render(<Sidebar c={c} onOpenPalette={() => {}} ship={ship} acp={acp} startModeApi={{ get: async () => 'chat', set: async () => undefined }} />));
   await act(async () => {});
-  await act(async () => host.querySelector<HTMLButtonElement>('button[aria-label="New agent"]')!.click());
+  await act(async () => document.querySelector<HTMLButtonElement>('button[aria-label="New agent"]')!.click());
   await act(async () => {});
 }
-const seg = (label: string) => [...host.querySelectorAll<HTMLButtonElement>('.ck-lane-seg-btn')].find((b) => b.textContent === label)!;
-const agentRow = (label: string) => [...host.querySelectorAll<HTMLButtonElement>('button.ck-menu-item')].find((b) => b.textContent?.startsWith(label))!;
+const seg = (label: string) => [...document.querySelectorAll<HTMLButtonElement>('.ck-lane-seg-btn')].find((b) => b.textContent === label)!;
+const agentRow = (label: string) => [...document.querySelectorAll<HTMLButtonElement>('button.ck-menu-item')].find((b) => b.textContent?.startsWith(label))!;
 
 describe('Sidebar "+" menu with chat sessions', () => {
   it('has no Terminal | Chat switch while Labs is off', async () => {
     const { c } = cockpit();
     await openMenu(c, fakeAcpApi({ laneGet: async () => lanes({ labs_enabled: false }) }));
-    expect(host.querySelector('.ck-lane-seg')).toBeNull();
+    expect(document.querySelector('.ck-lane-seg')).toBeNull();
   });
 
   it('has one switch at the top, on Chat, and none on a row', async () => {
     const { c } = cockpit();
     await openMenu(c, fakeAcpApi({ laneGet: async () => lanes() }));
-    expect(host.querySelectorAll('.ck-lane-seg')).toHaveLength(1);
+    expect(document.querySelectorAll('.ck-lane-seg')).toHaveLength(1);
     expect(seg('Chat').getAttribute('aria-pressed')).toBe('true');
-    expect(host.querySelector('[data-testid^="lane-row-"]')).toBeNull();
+    expect(document.querySelector('[data-testid^="lane-row-"]')).toBeNull();
   });
 
   it('Terminal starts the agent as before', async () => {
@@ -116,7 +116,7 @@ describe('Sidebar "+" menu with chat sessions', () => {
     expect(select).toHaveBeenCalledWith('chat-9');
     expect(newAgent).not.toHaveBeenCalled();
     // The menu is closed.
-    expect(host.querySelector('[role="menu"]')).toBeNull();
+    expect(document.querySelector('[role="menu"]')).toBeNull();
   });
 
   it('a chat that cannot start says why and offers the terminal', async () => {
@@ -127,8 +127,8 @@ describe('Sidebar "+" menu with chat sessions', () => {
     await openMenu(c, fakeAcpApi({ laneGet: async () => lanes({ agents: [{ id: 'codex', label: 'Codex', lane: 'acp', effective_lane: 'acp', disabled: false, disabled_note: null }] }), start }));
     await act(async () => agentRow('Codex').click());
     await act(async () => {});
-    expect(host.querySelector('[data-testid="chat-start-failed"]')?.textContent).toContain('The terminal can run this agent instead.');
-    const fallback = [...host.querySelectorAll<HTMLButtonElement>('[data-testid="chat-start-failed"] button')].find((b) => b.textContent === 'Start in terminal')!;
+    expect(document.querySelector('[data-testid="chat-start-failed"]')?.textContent).toContain('The terminal can run this agent instead.');
+    const fallback = [...document.querySelectorAll<HTMLButtonElement>('[data-testid="chat-start-failed"] button')].find((b) => b.textContent === 'Start in terminal')!;
     await act(async () => fallback.click());
     expect(newAgent.mock.calls[0][0]).toBe('codex');
   });
@@ -162,6 +162,6 @@ describe('Sidebar chat start: the starting skeleton is announced at once', () =>
     expect(beginChatStart).toHaveBeenCalledTimes(1);
     expect(endChatStart).toHaveBeenCalledTimes(1);
     expect(select).not.toHaveBeenCalled();
-    expect(host.querySelector('[data-testid="chat-start-failed"]')?.textContent).toContain('The terminal can run this agent instead.');
+    expect(document.querySelector('[data-testid="chat-start-failed"]')?.textContent).toContain('The terminal can run this agent instead.');
   });
 });

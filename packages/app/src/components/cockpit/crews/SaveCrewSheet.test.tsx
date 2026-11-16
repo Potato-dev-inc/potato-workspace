@@ -117,7 +117,7 @@ describe('SaveCrewSheet', () => {
 
   it('says how many helpers did not fit', async () => {
     await render(api({}, 3));
-    expect(host.querySelector('[data-testid="crew-omitted"]')?.textContent).toBe('3 more helpers were left out. A crew holds at most 8 agents.');
+    expect(host.querySelector('[data-testid="crew-omitted"]')?.textContent).toBe('3 more agents were left out. A crew holds at most 8 agents.');
   });
 
   it('shows the error when the pane cannot be read', async () => {

@@ -44,7 +44,7 @@ describe('Default model per agent', () => {
     expect(row[0].hint).toBe(AGENT_MODELS_HINT);
     for (const word of ['model', 'default']) {
       expect(rowMatches(row[0], word), word).toBe(true);
-      expect(searchSections(SECTIONS, word).flatMap((h) => h.rows.map((r) => r.id))).toContain('agent-default-models');
+      expect(searchSections(SECTIONS, word).flatMap((h) => h.rows.map((r) => r.id))).toContain('agent-list'); // the row moved onto each agent's page
     }
   });
 

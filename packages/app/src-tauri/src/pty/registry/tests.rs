@@ -389,6 +389,7 @@ origin: None,
         place: None,
         lane: None,
         standby_seat: None,
+        started_as: None,
     };
     assert_eq!(
         serde_json::to_string(&info).unwrap(),
@@ -427,6 +428,7 @@ origin: None,
         place: None,
         lane: None,
         standby_seat: None,
+        started_as: None,
     };
     info.place = Some(crate::wsl::model::PanePlace {
         kind: "linux".into(),

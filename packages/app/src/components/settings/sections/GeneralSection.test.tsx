@@ -206,25 +206,30 @@ describe('General: each control saves a partial patch', () => {
     expect(m.env.patches).toEqual([{ night_shift_enabled: true }]);
   });
 
-  it('Away minutes clamps on blur', async () => {
+  it('the away digest is a popup of Off, 5, 15 and 30 minutes, and saves the pick', async () => {
     await mount();
-    const away = byLabel<HTMLInputElement>(m.host, 'Minutes away before I hear what happened (0 is off)')!;
-    await typeInto(away, '-4');
-    await blur(away);
-    expect(m.env.patches).toEqual([{ away_minutes: 0 }]);
+    const away = m.host.querySelector<HTMLSelectElement>('select[aria-label="Minutes away before I hear what happened (0 is off)"]')!;
+    expect([...away.options].map((o) => o.value)).toEqual(['0', '5', '15', '30']);
+    await pickOption(away, '15');
+    expect(m.env.patches).toEqual([{ away_minutes: 15 }]);
   });
 
-  it('Budgets are off by default (0) and save a partial patch each', async () => {
+  it('Budgets are off by default (0): one preset picker, and Custom opens the two numbers', async () => {
     await mount();
+    const preset = m.host.querySelector<HTMLSelectElement>('select[aria-label="How much an agent may use"]')!;
+    expect(preset.value).toBe('none');
+    expect(byLabel(m.host, 'Turns an agent may use (0 is no limit)')).toBeNull();
+    await pickOption(preset, 'light');
+    expect(m.env.patches).toEqual([{ budget_default_turns: 50, budget_default_minutes: 30 }]);
+    await pickOption(preset, 'custom');
     const turns = byLabel<HTMLInputElement>(m.host, 'Turns an agent may use (0 is no limit)')!;
     const time = byLabel<HTMLInputElement>(m.host, 'Time an agent may use (0 is no limit)')!;
-    expect([turns.value, time.value]).toEqual(['0', '0']);
     await typeInto(turns, '20');
     await blur(turns);
     await typeInto(time, '99999');
     await blur(time);
-    expect(m.env.patches).toEqual([{ budget_default_turns: 20 }, { budget_default_minutes: 10080 }]);
-    expect(hasText(m.host, 'Pause an agent after this many turns')).toBe(true);
+    expect(m.env.patches.at(-1)).toMatchObject({ budget_default_minutes: 10080 });
+    expect(hasText(m.host, 'How much an agent may use')).toBe(true);
   });
 
   it('Default project folder saves after a pause through onProjectPathChange, not as a whole snapshot', async () => {

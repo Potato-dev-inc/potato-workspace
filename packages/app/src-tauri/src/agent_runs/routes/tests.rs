@@ -35,6 +35,7 @@ origin: None,
         place: None,
         lane: None,
         standby_seat: None,
+        started_as: None,
     };
     let entry = pane_worker_entry(&pane, Some("mcp-session"));
     assert_eq!(entry["worker_id"], pane.id);

@@ -234,7 +234,7 @@ pub(super) fn run_worker_entry(
             .into_iter()
             .find(|pane| pane.id == id)
     });
-    json!({
+    let mut entry = json!({
         "worker_id": view.handle,
         "handle": view.handle,
         "name": snapshot.worker.name,
@@ -250,13 +250,24 @@ pub(super) fn run_worker_entry(
             .as_ref()
             .map(|pane| pane.status != "error")
             .unwrap_or(owned || !grant_required),
-    })
+    });
+    // What the agent that started it made it; a hidden run from before the field is a minion (Two types only).
+    let kind = pane.as_ref().and_then(crate::agent_run_mode::listed_started_as).or_else(|| {
+        let started = snapshot.worker.started.as_ref()?.started_as.clone();
+        started
+            .and_then(|k| crate::agent_run_mode::StartedAs::parse(&k))
+            .map(|k| k.as_str())
+    });
+    if let (Some(kind), Some(map)) = (kind, entry.as_object_mut()) {
+        map.insert("started_as".into(), json!(kind));
+    }
+    entry
 }
 
 pub(super) fn pane_worker_entry(pane: &crate::pty::PaneInfo, session_id: Option<&str>) -> Value {
     let grant_required = session_id
         .is_some_and(|session| !crate::mcp_sessions::session_controls_pane(session, &pane.id));
-    json!({
+    let mut entry = json!({
         "worker_id": pane.id,
         "handle": pane.id,
         "pane_id": pane.id,
@@ -268,7 +279,11 @@ pub(super) fn pane_worker_entry(pane: &crate::pty::PaneInfo, session_id: Option<
         "grant_required": grant_required,
         "read_only_supported": crate::agent_runs::capabilities::read_only_supported_for(&pane.agent_type, Some(&pane.id)),
         "adoptable": pane.status != "error",
-    })
+    });
+    if let (Some(kind), Some(map)) = (crate::agent_run_mode::listed_started_as(pane), entry.as_object_mut()) {
+        map.insert("started_as".into(), json!(kind));
+    }
+    entry
 }
 
 #[cfg(test)]

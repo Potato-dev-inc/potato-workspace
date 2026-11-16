@@ -41,11 +41,11 @@ const sections = () => [...host.querySelectorAll<HTMLElement>('[data-turn-id]')]
 const rowsIn = (el: HTMLElement) => [...el.querySelectorAll<HTMLElement>('[data-testid="pane-helper-row"]')];
 
 describe('Potato Workspace helpers in the chat', () => {
-  it('shows "Helper: <task>" with the agent and a live status, in the turn it was started in', () => {
+  it('shows "Started agent: <task>" with the agent and a live status, in the turn it was started in', () => {
     render([helper('h1', 'Map app frontend', 'working', '2026-10-30T10:01:00Z'), helper('h2', 'Run the tests', 'needs-you', '2026-10-30T11:02:00Z')]);
     const [first, second] = sections();
-    expect(rowsIn(first).map((r) => r.textContent)).toEqual(['Helper: Map app frontendCodexworking']);
-    expect(rowsIn(second).map((r) => r.textContent)).toEqual(['Helper: Run the testsCodexneeds you']);
+    expect(rowsIn(first).map((r) => r.textContent)).toEqual(['Started agent: Map app frontendCodexworking']);
+    expect(rowsIn(second).map((r) => r.textContent)).toEqual(['Started agent: Run the testsCodexneeds you']);
     // Before the turn's end line, and the turn's own tool activity is still there.
     expect(first.textContent).toContain('Worked for');
     expect(first.innerHTML.indexOf('pane-helper-rows')).toBeLessThan(first.innerHTML.indexOf('ck-chat-end'));
@@ -57,7 +57,7 @@ describe('Potato Workspace helpers in the chat', () => {
     const rows = rowsIn(sections()[0]);
     expect(rows.map((r) => r.getAttribute('data-status'))).toEqual(['done', 'failed']);
     expect(rows[0].textContent).toContain('done');
-    expect(rows[1].textContent).toBe('Helper: Bfailed');
+    expect(rows[1].textContent).toBe('Started agent: Bfailed');
   });
 
   it('opens the helper pane on a click', () => {

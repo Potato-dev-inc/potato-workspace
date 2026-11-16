@@ -54,19 +54,19 @@ async function mount(lanes: 'chat' | 'terminal', onStart = vi.fn(async (_r: Star
   return onStart;
 }
 
-const chip = () => host.querySelector<HTMLButtonElement>('[data-testid="na-model"]');
+const chip = () => document.querySelector<HTMLButtonElement>('[data-testid="na-model"]');
 const click = async (el: Element | null | undefined) => {
   if (!el) throw new Error('element not found');
   await act(async () => (el as HTMLElement).click());
 };
 const option = (text: string) => [...document.querySelectorAll<HTMLElement>('[role=option]')].find((o) => o.textContent?.includes(text));
 async function send(text = 'fix it') {
-  const area = host.querySelector<HTMLTextAreaElement>('textarea')!;
+  const area = document.querySelector<HTMLTextAreaElement>('textarea')!;
   await act(async () => {
     Object.getOwnPropertyDescriptor(HTMLTextAreaElement.prototype, 'value')!.set!.call(area, text);
     area.dispatchEvent(new Event('input', { bubbles: true }));
   });
-  await click(host.querySelector('button[aria-label="Start"]'));
+  await click(document.querySelector('button[aria-label="Start"]'));
 }
 
 describe('New agent page: model picker', () => {

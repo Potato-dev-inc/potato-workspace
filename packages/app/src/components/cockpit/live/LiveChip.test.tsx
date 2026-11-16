@@ -47,9 +47,9 @@ async function render(props: { paneId: string; status: LiveStatus | null; api: L
   });
 }
 
-const chip = () => host.querySelector('.ck-live-chip') as HTMLButtonElement | null;
+const chip = () => document.querySelector('.ck-live-chip') as HTMLButtonElement | null;
 const menuItem = (text: string) =>
-  Array.from(host.querySelectorAll<HTMLButtonElement>('[role="menuitem"]')).find((b) => b.textContent === text);
+  Array.from(document.querySelectorAll<HTMLButtonElement>('[role="menuitem"]')).find((b) => b.textContent === text);
 const click = async (el: HTMLElement | null | undefined) => {
   await act(async () => {
     el?.click();
@@ -94,7 +94,7 @@ describe('LiveChip', () => {
     await click(chip());
     await click(menuItem('Pause'));
     expect(api.pause).toHaveBeenCalledTimes(1);
-    expect(host.querySelector('[role="menu"]')).toBeNull();
+    expect(document.querySelector('[role="menu"]')).toBeNull();
   });
 
   it('Stop in the menu calls the api and reports it', async () => {

@@ -2,8 +2,10 @@
 //! one, save it with its rules, try a task on it (a dry run), and apply it (keep its helpers ready).
 //! Errors that are not a crew problem read `CODE: message` like the other crew commands.
 
-use crate::crews::{apply, live, model::Crew, routing, store, templates, validate, CrewError};
+use super::AppState;
+use crate::crews::{apply, follow, live, model::Crew, routing, share, starters, store, templates, validate, CrewError};
 use serde::Serialize;
+use tauri::State;
 
 fn internal(error: impl std::fmt::Display) -> String {
     format!("INTERNAL: {error}")
@@ -31,9 +33,11 @@ pub async fn crews_templates() -> Result<Vec<store::Summary>, String> {
 pub async fn crews_open(slug: String) -> Result<Opened, String> {
     tauri::async_runtime::spawn_blocking(move || {
         let dir = store::dir();
-        let (kind, crew, routing_text) = match templates::lookup(&slug) {
-            Some(crew) => ("template", crew, templates::routing_text(&slug).unwrap_or_default().to_string()),
-            None => ("saved", store::load(&dir, &slug)?, store::load_routing(&dir, &slug).unwrap_or_default()),
+        // A ready-made crew (a template or a starter) is read-only until the person saves a copy.
+        let (kind, crew, routing_text) = match (templates::lookup(&slug), starters::lookup(&slug)) {
+            (Some(crew), _) => ("template", crew, templates::routing_text(&slug).unwrap_or_default().to_string()),
+            (None, Some(crew)) => ("template", crew, String::new()),
+            (None, None) => ("saved", store::load(&dir, &slug)?, store::load_routing(&dir, &slug).unwrap_or_default()),
         };
         let problems = validate::validate_with(&validate::normalized(&crew), &live::agent_state, &live::model_ok);
         Ok(Opened { slug, kind, crew, routing_text, problems })
@@ -139,4 +143,45 @@ pub async fn crews_apply(crew: Crew, folder: String, raise_limit: Option<bool>) 
     })
     .await
     .map_err(internal)
+}
+
+/// Follow a task: the tasks the lead of this crew was given and the hand-overs of each, newest first. Read only.
+#[tauri::command]
+pub async fn crews_follow(state: State<'_, AppState>, crew: Crew) -> Result<Vec<follow::Task>, String> {
+    let registry = state.registry.clone();
+    tauri::async_runtime::spawn_blocking(move || follow::build(&validate::normalized(&crew), &follow::live_facts(&registry))).await.map_err(internal)
+}
+
+/// Share: write the crew and its rules to the file the person chose. Nothing else is written.
+#[tauri::command]
+pub async fn crews_export_file(crew: Crew, routing_text: String, target: String) -> Result<String, String> {
+    tauri::async_runtime::spawn_blocking(move || {
+        if target.trim().is_empty() {
+            return Err("CREW_FILE_INVALID: Pick where to save the file.".to_string());
+        }
+        let redact = |text: &str| crate::redact::strict(text).into_inner();
+        let text = share::export(&crew, &routing_text, &redact).map_err(|e| e.to_string())?;
+        std::fs::write(&target, text).map_err(|e| format!("CREW_WRITE_FAILED: Could not save the file: {e}"))?;
+        Ok(target)
+    })
+    .await
+    .map_err(internal)?
+}
+
+/// Open a shared crew: read the file and describe what it would set up. Nothing is saved, started or run; saving
+/// goes through the normal crew save and its validator.
+#[tauri::command]
+pub async fn crews_import_read(source: String) -> Result<share::Preview, String> {
+    tauri::async_runtime::spawn_blocking(move || {
+        let path = std::path::Path::new(&source);
+        let too_big = || "CREW_FILE_TOO_BIG: This file is too big to be a shared crew.".to_string();
+        let size = std::fs::metadata(path).map_err(|_| "CREW_NOT_FOUND: That file cannot be read.".to_string())?.len();
+        if size > share::MAX_SHARE_BYTES as u64 {
+            return Err(too_big());
+        }
+        let text = std::fs::read_to_string(path).map_err(|_| "CREW_SHARE_INVALID: This is not a shared crew file.".to_string())?;
+        share::read(&text, &live::agent_state, &live::model_ok).map_err(|e| e.to_string())
+    })
+    .await
+    .map_err(internal)?
 }

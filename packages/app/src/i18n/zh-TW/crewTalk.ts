@@ -1,0 +1,31 @@
+// Traditional Chinese (Taiwan) for ../en/crewTalk.ts (same keys). Term choices are listed at the top of ../zh-TW.ts.
+import type { EnglishKey } from '../en';
+
+export const crewTalk: Partial<Record<EnglishKey, string>> = {
+  'crewcanvas.tab.talk': '對話',
+  'crewtalk.label': '告訴總機要改什麼',
+  'crewtalk.placeholder': '例如：把測試修正交給簡單任務的工人',
+  'crewtalk.ask': '問總機',
+  'crewtalk.busy': '詢問中…',
+  'crewtalk.note': '總機就是這個小組的領頭者。它只能改「誰把工作交給誰」和分派規則。按下「套用」之前，什麼都不會改變。',
+  'crewtalk.readonly': '這是現成的小組。先存成自己的副本才能修改。',
+  'crewtalk.failed': '總機沒有回答。請再試一次。',
+  'crewtalk.proposal': '會改變什麼',
+  'crewtalk.view': '顯示小組',
+  'crewtalk.before': '之前',
+  'crewtalk.after': '之後',
+  'crewtalk.legendBefore': '畫粗的線是會被拿掉的。',
+  'crewtalk.legendAfter': '畫粗的線是新增的。',
+  'crewtalk.rules': '分派規則的變更',
+  'crewtalk.change.handoffAdded': '{from} 會把工作交給 {to}。',
+  'crewtalk.change.handoffRemoved': '{from} 不再把工作交給 {to}。',
+  'crewtalk.change.ruleAdded': '{role} 的新規則：「{text}」',
+  'crewtalk.change.ruleRemoved': '{role} 拿掉的規則：「{text}」',
+  'crewtalk.apply': '套用',
+  'crewtalk.discard': '先不要',
+  'crewtalk.stale': '提議之後小組又有變動。請再問一次。',
+  'crewtalk.asked': '由 {agent} 回答。',
+  'crewtalk.applied': '已套用在畫布上。按「儲存」才會保留。',
+  'crewtalk.undo': '復原',
+  'crewtalk.undone': '已恢復原樣。',
+};

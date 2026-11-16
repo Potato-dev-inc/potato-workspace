@@ -1,7 +1,7 @@
 // Row building blocks for the Settings window (macOS System Settings style). Everything here is a row
 // inside a grouped inset list (`.st-list`); the panel supplies the list, the groups and the "Saved" tick.
 // Monochrome: no colour, no badges. Styles live in styles/settings.css.
-import { createContext, useContext, type ButtonHTMLAttributes, type InputHTMLAttributes, type ReactNode, type SelectHTMLAttributes } from 'react';
+import { createContext, useContext, useState, type ButtonHTMLAttributes, type InputHTMLAttributes, type ReactNode, type SelectHTMLAttributes } from 'react';
 import { useT } from '../../i18n';
 import { Popup, Switch } from './controls';
 
@@ -146,5 +146,21 @@ export function CodeBlock({ title, code }: { title: string; code: string }) {
         <pre>{code}</pre>
       </div>
     </SettingBlock>
+  );
+}
+
+/**
+ * A closed "Details" fold. Its children are not in the page until it is opened, so a field inside it is not on
+ * screen (and not in the DOM) on a first look.
+ */
+export function Fold({ label, children }: { label: string; children: ReactNode }) {
+  const [open, setOpen] = useState(false);
+  return (
+    <div className="st-fold">
+      <Btn small aria-expanded={open} onClick={() => setOpen((value) => !value)}>
+        {label}
+      </Btn>
+      {open && <div className="st-fold-body">{children}</div>}
+    </div>
   );
 }

@@ -6,7 +6,9 @@
 // React: `const t = useT()` re-renders the component when the language changes.
 import { useCallback, useSyncExternalStore } from 'react';
 import { en, type MessageKey, type PluralKey } from './en';
+import { twoTypesEn } from './en/twoTypes';
 import { zhTW } from './zh-TW';
+import { twoTypesZh } from './zh-TW/twoTypes';
 
 export type LanguagePref = 'auto' | 'en' | 'zh-TW';
 export type Language = 'en' | 'zh-TW';
@@ -18,6 +20,9 @@ export const LANGUAGE_STORAGE_KEY = 'pm-ui-language';
 export type Vars = Record<string, string | number>;
 
 const catalogs: Record<Language, Partial<Record<string, string>>> = { en, 'zh-TW': zhTW };
+// "Two types" wording (minions plan 11.4): merged over the base texts only while the setting "Agents that agents start" is Two types.
+const overlays: Record<Language, Partial<Record<string, string>>> = { en: twoTypesEn, 'zh-TW': twoTypesZh };
+let twoTypes = false;
 
 let pref: LanguagePref = 'auto';
 let systemLanguage: string | null = null;
@@ -94,13 +99,34 @@ function interpolate(text: string, vars?: Vars): string {
   return text.replace(/\{(\w+)\}/g, (whole, name: string) => (name in vars ? String(vars[name]) : whole));
 }
 
-function lookup(lang: Language, key: string, count: number | undefined): string | undefined {
-  const table = catalogs[lang];
+function lookupIn(table: Partial<Record<string, string>>, lang: Language, key: string, count: number | undefined): string | undefined {
   if (count !== undefined) {
     const plural = table[`${key}_${count === 1 && lang === 'en' ? 'one' : 'other'}`];
     if (plural !== undefined) return plural;
   }
   return table[key];
+}
+
+function lookup(lang: Language, key: string, count: number | undefined): string | undefined {
+  if (twoTypes) {
+    const overlaid = lookupIn(overlays[lang], lang, key, count);
+    if (overlaid !== undefined) return overlaid;
+  }
+  return lookupIn(catalogs[lang], lang, key, count);
+}
+
+/**
+ * Switch the "Two types" wording on or off (minions plan 11.4). Live: every mounted label re-renders.
+ * Called once per window at start (sync.ts) and after the setting is saved in Settings.
+ */
+export function setTwoTypesWording(on: boolean): void {
+  if (on === twoTypes) return;
+  twoTypes = on;
+  listeners.forEach((l) => l());
+}
+
+export function twoTypesWording(): boolean {
+  return twoTypes;
 }
 
 /** Translate. A key missing in the current language falls back to English; a key missing everywhere gives the key. */

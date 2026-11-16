@@ -42,6 +42,22 @@ function parentIn<T extends PaneLike>(byId: ReadonlyMap<string, T>, id: string):
   return parent;
 }
 
+/**
+ * A minion: a pane an agent started as its own small worker (Two types). It is never a sidebar row: it shows under
+ * its agent's Background tasks and opens in the details column. Only the recorded kind counts, so a helper from
+ * before the kinds, or any helper in One type, stays what it was.
+ */
+export function isMinionPane(info: { started_as?: string | null }): boolean {
+  return info.started_as === 'minion';
+}
+
+/** The first words of a task, for a row's name when the pane has no title yet (null when there is no task). */
+export function taskTitle(task: string | null | undefined, max = 40): string | null {
+  const text = task?.replace(/\s+/g, ' ').trim();
+  if (!text) return null;
+  return text.length > max ? `${text.slice(0, max - 1).trimEnd()}…` : text;
+}
+
 /** The live pane a helper belongs under: its recorded parent when that pane is still listed. */
 export function liveParentId(list: ReadonlyArray<PaneLike>, id: string): string | null {
   return parentIn(new Map(list.map((p) => [p.info.id, p] as const)), id);

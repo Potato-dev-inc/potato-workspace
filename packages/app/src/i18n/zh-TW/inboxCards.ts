@@ -25,6 +25,8 @@ export const inboxCards: Partial<Record<EnglishKey, string>> = {
 
   // StuckCard
   'inboxCards.stuck.hint': '給它提示',
+  'inboxCards.stuck.stallTitle': 'AI 助理 {name} 已 {n} 分鐘沒有進展。',
+  'inboxCards.stuck.stallLine': '已 {n} 分鐘沒有進展。',
   'inboxCards.stuck.interrupt': '中斷',
   'inboxCards.stuck.askAnother': '問其他 AI 助理',
 
@@ -96,8 +98,8 @@ export const inboxCards: Partial<Record<EnglishKey, string>> = {
   'inboxCards.ask.listLabel': 'AI 助理的回答',
 
   // HiddenRuns
-  'inboxCards.hidden.title': '{name} 的幫手在背景執行過（沒有視窗）',
-  'inboxCards.hidden.listLabel': '在背景執行過的幫手',
+  'inboxCards.hidden.title': '{name} 這個 AI 助理在沒有視窗的情況下執行過',
+  'inboxCards.hidden.listLabel': '在沒有視窗的情況下執行過的 AI 助理',
 
   // ImportChatsCard
   'inboxCards.import.title': '把對話帶過來',
@@ -151,4 +153,8 @@ export const inboxCards: Partial<Record<EnglishKey, string>> = {
 
   // Missions (the progress view's timeline row)
   'inboxCards.mission.openAgent': '開啟 AI 助理',
+
+  // A risky ask of a minion, docked in the chat of the agent that started it
+  'inboxCards.minionAsks': '{parent} 的小代理想問',
+  'inboxCards.openMinion': '看看它在做什麼',
 };

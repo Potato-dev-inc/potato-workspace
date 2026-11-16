@@ -68,12 +68,12 @@ const drawer = (over: Partial<React.ComponentProps<typeof PhoneDrawer>> = {}) =>
     {...over}
   />
 );
-const row = (id: string) => [...host.querySelectorAll('.ph-drow')].find((el) => el.textContent?.includes(labels.get(id) ?? '???')) as HTMLButtonElement;
+const row = (id: string) => [...document.querySelectorAll('.ph-drow')].find((el) => el.textContent?.includes(labels.get(id) ?? '???')) as HTMLButtonElement;
 
 describe('P20: a lock on the drawer row', () => {
   it('shows a lock with words for an agent the PC limits, and none for the others', async () => {
     await render(drawer({ locks: { [PANE_CODEX]: 'watch' } }));
-    const locks = host.querySelectorAll('.ph-lock');
+    const locks = document.querySelectorAll('.ph-lock');
     expect(locks).toHaveLength(1);
     expect(locks[0].getAttribute('aria-label')).toBe('Watch only on this phone');
     expect(row(PANE_CODEX).querySelector('.ph-lock')).not.toBeNull();
@@ -81,7 +81,7 @@ describe('P20: a lock on the drawer row', () => {
 
   it('says so for a switched-off agent', async () => {
     await render(drawer({ locks: { [PANE_CODEX]: 'off' } }));
-    expect(host.querySelector('.ph-lock')?.getAttribute('aria-label')).toBe('Remote control is off for this agent');
+    expect(document.querySelector('.ph-lock')?.getAttribute('aria-label')).toBe('Remote control is off for this agent');
   });
 });
 
@@ -95,16 +95,16 @@ describe('P9: long press on a drawer row', () => {
     // A short tap opens the chat.
     await act(async () => { el.dispatchEvent(new MouseEvent('pointerdown', { bubbles: true })); el.dispatchEvent(new MouseEvent('pointerup', { bubbles: true })); el.click(); });
     expect(onSelect).toHaveBeenCalledWith(PANE_CODEX);
-    expect(host.querySelector('[data-testid="drawer-row-menu"]')).toBeNull();
+    expect(document.querySelector('[data-testid="drawer-row-menu"]')).toBeNull();
     // A long press opens the menu and does not open the chat.
     onSelect.mockClear();
     await act(async () => { el.dispatchEvent(new MouseEvent('pointerdown', { bubbles: true })); });
     await act(async () => { await vi.advanceTimersByTimeAsync(LONG_PRESS_MS + 20); });
-    expect(host.querySelector('[data-testid="drawer-row-menu"]')).not.toBeNull();
+    expect(document.querySelector('[data-testid="drawer-row-menu"]')).not.toBeNull();
     await act(async () => { el.dispatchEvent(new MouseEvent('pointerup', { bubbles: true })); el.click(); });
     expect(onSelect).not.toHaveBeenCalled();
     // Stop.
-    await act(async () => { ([...host.querySelectorAll('[role="menuitem"]')].find((b) => b.textContent === 'Stop') as HTMLButtonElement).click(); await Promise.resolve(); });
+    await act(async () => { ([...document.querySelectorAll('[role="menuitem"]')].find((b) => b.textContent === 'Stop') as HTMLButtonElement).click(); await Promise.resolve(); });
     expect(onStopPane).toHaveBeenCalledWith(PANE_CODEX);
   });
 
@@ -112,26 +112,26 @@ describe('P9: long press on a drawer row', () => {
     const onClosePane = vi.fn();
     await render(drawer({ onStopPane: async () => null, onClosePane }));
     await act(async () => { row(PANE_CODEX).dispatchEvent(new MouseEvent('contextmenu', { bubbles: true, cancelable: true })); });
-    const close = ([...host.querySelectorAll('[role="menuitem"]')].find((b) => b.textContent === 'Close') as HTMLButtonElement);
+    const close = ([...document.querySelectorAll('[role="menuitem"]')].find((b) => b.textContent === 'Close') as HTMLButtonElement);
     await act(async () => close.click());
     expect(onClosePane).not.toHaveBeenCalled();
-    expect(host.textContent).toContain('Close this chat? The agent stops.');
-    await act(async () => { ([...host.querySelectorAll('[role="menuitem"]')].find((b) => b.textContent === 'Close it') as HTMLButtonElement).click(); });
+    expect(document.body.textContent).toContain('Close this chat? The agent stops.');
+    await act(async () => { ([...document.querySelectorAll('[role="menuitem"]')].find((b) => b.textContent === 'Close it') as HTMLButtonElement).click(); });
     expect(onClosePane).toHaveBeenCalledWith(PANE_CODEX);
   });
 
   it('shows why when the PC refuses the stop', async () => {
     await render(drawer({ onStopPane: async () => 'This phone may not stop this agent.', onClosePane: () => undefined }));
     await act(async () => { row(PANE_CODEX).dispatchEvent(new MouseEvent('contextmenu', { bubbles: true, cancelable: true })); });
-    await act(async () => { ([...host.querySelectorAll('[role="menuitem"]')].find((b) => b.textContent === 'Stop') as HTMLButtonElement).click(); await Promise.resolve(); });
-    expect(host.querySelector('[role="alert"]')?.textContent).toBe('This phone may not stop this agent.');
+    await act(async () => { ([...document.querySelectorAll('[role="menuitem"]')].find((b) => b.textContent === 'Stop') as HTMLButtonElement).click(); await Promise.resolve(); });
+    expect(document.querySelector('[role="alert"]')?.textContent).toBe('This phone may not stop this agent.');
   });
 });
 
 describe('P18: the connection line', () => {
   it('says nothing while connected, and one plain line for each trouble', async () => {
     await render(<PhoneLinkLine kind="connected" recovered={false} />);
-    expect(host.querySelector('[data-testid="phone-link-line"]')).toBeNull();
+    expect(document.querySelector('[data-testid="phone-link-line"]')).toBeNull();
     const words: Array<[Parameters<typeof PhoneLinkLine>[0]['kind'], string]> = [
       ['reconnecting', 'Reconnecting…'],
       ['asleep', 'Your PC is asleep, or Potato Workspace is closed.'],
@@ -140,19 +140,19 @@ describe('P18: the connection line', () => {
     ];
     for (const [kind, line] of words) {
       await render(<PhoneLinkLine kind={kind} recovered={false} />);
-      expect(host.querySelector('[data-testid="phone-link-line"]')?.textContent).toContain(line);
+      expect(document.querySelector('[data-testid="phone-link-line"]')?.textContent).toContain(line);
     }
   });
 
   it('shows Connected for a moment after a trouble ended', async () => {
     await render(<PhoneLinkLine kind="connected" recovered />);
-    expect(host.querySelector('[data-testid="phone-link-line"]')?.textContent).toBe('Connected');
+    expect(document.querySelector('[data-testid="phone-link-line"]')?.textContent).toBe('Connected');
   });
 
   it('a changed link offers Pair again', async () => {
     const onPairAgain = vi.fn();
     await render(<PhoneLinkLine kind="changed" recovered={false} onPairAgain={onPairAgain} />);
-    await act(async () => { (host.querySelector('.ph-link-btn') as HTMLButtonElement).click(); });
+    await act(async () => { (document.querySelector('.ph-link-btn') as HTMLButtonElement).click(); });
     expect(onPairAgain).toHaveBeenCalled();
   });
 });
@@ -161,7 +161,7 @@ describe('P8: the back arrow after a jump', () => {
   it('the header shows a back arrow with the chat to go back to', async () => {
     const go = vi.fn();
     await render(<PhoneHeader title="Fix login" stateWords={null} waiting={0} bridgeReady onMenu={() => undefined} onNew={() => undefined} onBack={{ label: 'Billing tests', go }} />);
-    const back = host.querySelector('[data-testid="phone-back"]') as HTMLButtonElement;
+    const back = document.querySelector('[data-testid="phone-back"]') as HTMLButtonElement;
     expect(back.getAttribute('aria-label')).toBe('Back to Billing tests');
     await act(async () => back.click());
     expect(go).toHaveBeenCalled();
@@ -181,7 +181,7 @@ describe('P19: three steps after pairing', () => {
     removeSubscription: async () => undefined,
     ...over,
   });
-  const steps = () => [...host.querySelectorAll('[data-testid="phone-setup"] > li')];
+  const steps = () => [...document.querySelectorAll('[data-testid="phone-setup"] > li')];
 
   it('has three steps and shows iPhone help on an iPhone', async () => {
     await render(<PhoneSetupSteps baseUrl="http://x" onDone={() => undefined} deps={deps()} env={env({ isIOS: true })} platform="ios" />);
@@ -199,7 +199,7 @@ describe('P19: three steps after pairing', () => {
   it('Allow notifications asks the browser and sends the subscription to the PC', async () => {
     const d = deps();
     await render(<PhoneSetupSteps baseUrl="http://x" onDone={() => undefined} deps={d} env={env()} platform="android" />);
-    await act(async () => { ([...host.querySelectorAll('button')].find((b) => b.textContent === 'Allow notifications') as HTMLButtonElement).click(); });
+    await act(async () => { ([...document.querySelectorAll('button')].find((b) => b.textContent === 'Allow notifications') as HTMLButtonElement).click(); });
     await act(async () => { await vi.advanceTimersByTimeAsync(10); });
     expect(d.requestPermission).toHaveBeenCalled();
     expect(d.sendSubscription).toHaveBeenCalled();
@@ -208,7 +208,7 @@ describe('P19: three steps after pairing', () => {
 
   it('on an iPhone that is not on the Home Screen yet, notifications wait for step 1', async () => {
     await render(<PhoneSetupSteps baseUrl="http://x" onDone={() => undefined} deps={deps()} env={env({ isIOS: true })} platform="ios" />);
-    const button = [...host.querySelectorAll('button')].find((b) => b.textContent === 'Allow notifications') as HTMLButtonElement;
+    const button = [...document.querySelectorAll('button')].find((b) => b.textContent === 'Allow notifications') as HTMLButtonElement;
     expect(button.disabled).toBe(true);
     expect(steps()[1].textContent).toContain('do step 1 first');
   });
@@ -216,7 +216,7 @@ describe('P19: three steps after pairing', () => {
   it('the test button shows a notification and says so', async () => {
     const sendTest = vi.fn(async () => 'sent' as const);
     await render(<PhoneSetupSteps baseUrl="http://x" onDone={() => undefined} deps={deps()} env={env()} platform="android" sendTest={sendTest} />);
-    await act(async () => { ([...host.querySelectorAll('button')].find((b) => b.textContent === 'Send a test notification') as HTMLButtonElement).click(); await Promise.resolve(); });
+    await act(async () => { ([...document.querySelectorAll('button')].find((b) => b.textContent === 'Send a test notification') as HTMLButtonElement).click(); await Promise.resolve(); });
     expect(sendTest).toHaveBeenCalled();
     expect(steps()[2].textContent).toContain('Sent. Did you see it?');
   });
@@ -224,7 +224,7 @@ describe('P19: three steps after pairing', () => {
   it('Done closes it', async () => {
     const onDone = vi.fn();
     await render(<PhoneSetupSteps baseUrl="http://x" onDone={onDone} deps={deps()} env={env()} platform="android" />);
-    await act(async () => { ([...host.querySelectorAll('button')].find((b) => b.className.includes('ph-step-done')) as HTMLButtonElement).click(); });
+    await act(async () => { ([...document.querySelectorAll('button')].find((b) => b.className.includes('ph-step-done')) as HTMLButtonElement).click(); });
     expect(onDone).toHaveBeenCalled();
   });
 });
@@ -248,17 +248,17 @@ describe('P19: Help in the phone settings', () => {
 
   it('lists the last connection events, newest first, with a time', async () => {
     await render(menu({ linkEvents: [{ at: 1_700_000_000_000, kind: 'asleep' }, { at: 1_700_000_100_000, kind: 'connected' }] }));
-    const items = [...host.querySelectorAll('[data-testid="phone-link-events"] li')];
+    const items = [...document.querySelectorAll('[data-testid="phone-link-events"] li')];
     expect(items).toHaveLength(2);
     expect(items[0].textContent).toContain('Connected');
     expect(items[1].textContent).toContain('Your PC is asleep');
-    expect(host.querySelector('time')?.textContent).toMatch(/\d/);
+    expect(document.querySelector('time')?.textContent).toMatch(/\d/);
   });
 
   it('Send a test notification runs the test and shows what happened', async () => {
     const onTestNotification = vi.fn(async () => 'Sent. Did you see it?');
     await render(menu({ linkEvents: [], onTestNotification }));
-    await act(async () => { (host.querySelector('[data-testid="phone-test-push"]') as HTMLButtonElement).click(); await Promise.resolve(); });
+    await act(async () => { (document.querySelector('[data-testid="phone-test-push"]') as HTMLButtonElement).click(); await Promise.resolve(); });
     expect(onTestNotification).toHaveBeenCalled();
     expect(host.textContent).toContain('Sent. Did you see it?');
   });
@@ -266,7 +266,7 @@ describe('P19: Help in the phone settings', () => {
   it('opens the setup steps again', async () => {
     const onOpenSetup = vi.fn();
     await render(menu({ onOpenSetup }));
-    await act(async () => { ([...host.querySelectorAll('button')].find((b) => b.textContent === 'Set up this phone again') as HTMLButtonElement).click(); });
+    await act(async () => { ([...document.querySelectorAll('button')].find((b) => b.textContent === 'Set up this phone again') as HTMLButtonElement).click(); });
     expect(onOpenSetup).toHaveBeenCalled();
   });
 });
@@ -281,9 +281,9 @@ describe('P20: the notice on the PC', () => {
 
   it('shows "<phone> asks for control" with Allow 15 min and No when an ask comes in', async () => {
     await render(<ControlAskNotice names={new Map([[PANE_CODEX, 'Billing tests']])} />);
-    expect(host.querySelector('[data-testid="control-ask-notice"]')).toBeNull();
+    expect(document.querySelector('[data-testid="control-ask-notice"]')).toBeNull();
     await act(async () => { tauriMock.listeners.forEach((cb) => cb(ask)); });
-    const notice = host.querySelector('[data-testid="control-ask-notice"]')!;
+    const notice = document.querySelector('[data-testid="control-ask-notice"]')!;
     expect(notice.textContent).toContain('Ren phone asks for control');
     expect(notice.textContent).toContain('Billing tests');
     expect([...notice.querySelectorAll('button')].map((b) => b.textContent)).toEqual(['No', 'Allow 15 min']);
@@ -293,16 +293,16 @@ describe('P20: the notice on the PC', () => {
     tauriMock.asks = [ask];
     await render(<ControlAskNotice names={new Map()} />);
     await act(async () => { await Promise.resolve(); });
-    await act(async () => { ([...host.querySelectorAll('button')].find((b) => b.textContent === 'Allow 15 min') as HTMLButtonElement).click(); });
+    await act(async () => { ([...document.querySelectorAll('button')].find((b) => b.textContent === 'Allow 15 min') as HTMLButtonElement).click(); });
     expect(tauriMock.answer).toHaveBeenCalledWith('ask-1', true);
-    expect(host.querySelector('[data-testid="control-ask-notice"]')).toBeNull();
+    expect(document.querySelector('[data-testid="control-ask-notice"]')).toBeNull();
   });
 
   it('No sends allow = false', async () => {
     tauriMock.asks = [ask];
     await render(<ControlAskNotice names={new Map()} />);
     await act(async () => { await Promise.resolve(); });
-    await act(async () => { ([...host.querySelectorAll('button')].find((b) => b.textContent === 'No') as HTMLButtonElement).click(); });
+    await act(async () => { ([...document.querySelectorAll('button')].find((b) => b.textContent === 'No') as HTMLButtonElement).click(); });
     expect(tauriMock.answer).toHaveBeenCalledWith('ask-1', false);
   });
 });

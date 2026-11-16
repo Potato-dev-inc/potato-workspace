@@ -49,12 +49,17 @@ pub fn files_dir() -> PathBuf {
 
 /// The server entry for a pane, or `None` when this build has no MCP server to start (a dev run
 /// that never built it): then no pane gets a dangling entry that fails at start.
-pub fn server_for(pane_id: &str) -> Option<PaneMcpServer> {
+pub fn server_for(pane_id: &str, pane_key: Option<&str>) -> Option<PaneMcpServer> {
     if !crate::mcp_runtime::using_bundled_mcp() {
         return None;
     }
     let launch = crate::mcp_runtime::mcp_launch_spec();
-    Some(server_with(launch.command, launch.args, pane_id, crate::app_paths::bridge_port_file_env_value()))
+    let mut server = server_with(launch.command, launch.args, pane_id, crate::app_paths::bridge_port_file_env_value());
+    // The pane's own key, so the MCP connection proves which window it is even when the agent starts it with a clean environment.
+    if let Some(key) = pane_key {
+        server.env.push((crate::agent_authority::pane_keys::KEY_ENV.to_string(), key.to_string()));
+    }
+    Some(server)
 }
 
 fn server_with(command: String, args: Vec<String>, pane_id: &str, port_file: String) -> PaneMcpServer {
@@ -71,11 +76,11 @@ fn server_with(command: String, args: Vec<String>, pane_id: &str, port_file: Str
 
 /// What `pane_id`'s launch adds so its agent has the helper tools. Empty when the switch is off, the
 /// agent has no way to take a server for one launch, or anything is missing; never fails a spawn.
-pub fn prepare(profile: &dyn TuiProfile, pane_id: &str, user_args: &[String]) -> PaneMcpLaunch {
+pub fn prepare(profile: &dyn TuiProfile, pane_id: &str, user_args: &[String], pane_key: Option<&str>) -> PaneMcpLaunch {
     if !enabled() {
         return PaneMcpLaunch::default();
     }
-    let Some(server) = server_for(pane_id) else { return PaneMcpLaunch::default() };
+    let Some(server) = server_for(pane_id, pane_key) else { return PaneMcpLaunch::default() };
     prepare_in(profile, pane_id, user_args, &server, &files_dir())
 }
 

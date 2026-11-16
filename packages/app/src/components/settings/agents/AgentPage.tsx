@@ -17,6 +17,7 @@ import { AgentDefaultModels } from '../blocks/AgentDefaultModels';
 import { AgentLaneRows } from '../blocks/AgentLaneRows';
 import { AgentVersions } from '../blocks/AgentVersions';
 import { HelperDefaultModels } from '../blocks/HelperModels';
+import { KeepReadyRow } from '../blocks/KeepReadyRow';
 import type { SettingsEnv } from '../model';
 import { Btn, InfoRow, Note, SettingBlock, SettingRow } from '../settings-ui';
 import { AgentNotifyRows } from '../NotifyRows';
@@ -189,6 +190,8 @@ export function AgentPage({ row, env, onBack, onCheck, apis = defaultPageApis }:
       {cli ? <InfoRow label={t('agentPage.howOpens')} description={t('agentPage.inTerminal')} value={t('agentPage.terminal')} /> : <AgentLaneRows only={row.id} noAdapter />}
 
       <ChatAdapterRow agent={row} api={apis.chat} />
+
+      <KeepReadyRow agentId={row.id} label={row.label} />
 
       <AgentNotifyRows agentId={row.id} label={row.label} />
 

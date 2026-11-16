@@ -21,12 +21,15 @@ pub mod agents;
 pub mod apply;
 pub mod config_format;
 pub mod draft;
+pub mod follow;
 pub mod live;
 pub mod model;
 pub mod routing;
+pub mod share;
 pub mod start;
 pub mod starters;
 pub mod store;
+pub mod talk;
 pub mod templates;
 pub mod validate;
 pub mod view;
@@ -49,6 +52,10 @@ pub fn wants_new_pane(idempotency_key: &str) -> bool {
 
 #[cfg(test)]
 mod base_tests;
+#[cfg(test)]
+mod follow_tests;
+#[cfg(test)]
+mod share_tests;
 #[cfg(test)]
 mod starter_tests;
 #[cfg(test)]

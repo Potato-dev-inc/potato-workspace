@@ -11,9 +11,14 @@ pub const PREFIX: &str = "template:";
 
 /// The draft routing file of "Our way": how work is routed, in plain words.
 pub const DIFFICULTY_MD: &str = include_str!("templates/difficulty.md");
+/// The routing file of "How we work".
+pub const HOW_WE_WORK_MD: &str = include_str!("templates/how-we-work.md");
 
 /// (id, crew file text, routing file text).
-const SOURCES: [(&str, &str, &str); 1] = [("our-way", include_str!("templates/our-way.toml"), DIFFICULTY_MD)];
+const SOURCES: [(&str, &str, &str); 2] = [
+    ("our-way", include_str!("templates/our-way.toml"), DIFFICULTY_MD),
+    ("how-we-work", include_str!("templates/how-we-work.toml"), HOW_WE_WORK_MD),
+];
 
 /// Every template as (slug, crew).
 pub fn all() -> Vec<(String, Crew)> {

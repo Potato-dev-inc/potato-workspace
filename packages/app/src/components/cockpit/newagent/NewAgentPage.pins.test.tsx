@@ -56,14 +56,14 @@ async function mount(pins: EffectivePins, onStart = vi.fn(async (_r: StartReques
   await act(async () => {});
   return { onStart, effective };
 }
-const line = () => host.querySelector('[data-testid="na-pinned"]');
+const line = () => document.querySelector('[data-testid="na-pinned"]');
 async function send() {
-  const area = host.querySelector<HTMLTextAreaElement>('textarea')!;
+  const area = document.querySelector<HTMLTextAreaElement>('textarea')!;
   await act(async () => {
     Object.getOwnPropertyDescriptor(HTMLTextAreaElement.prototype, 'value')!.set!.call(area, 'fix it');
     area.dispatchEvent(new Event('input', { bubbles: true }));
   });
-  await act(async () => host.querySelector<HTMLButtonElement>('button[aria-label="Start"]')!.click());
+  await act(async () => document.querySelector<HTMLButtonElement>('button[aria-label="Start"]')!.click());
 }
 
 describe('New agent page: pins', () => {
@@ -90,7 +90,7 @@ describe('New agent page: pins', () => {
     window.addEventListener('pm:open-settings', listener);
     await mount({ ...NO_PINS, fences: ['secrets'] });
     expect(line()?.textContent).toContain('1 fence');
-    await act(async () => host.querySelector<HTMLButtonElement>('[data-testid="na-pinned-change"]')!.click());
+    await act(async () => document.querySelector<HTMLButtonElement>('[data-testid="na-pinned-change"]')!.click());
     window.removeEventListener('pm:open-settings', listener);
     expect(seen).toContain('agent-rules');
   });

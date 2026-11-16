@@ -126,7 +126,7 @@ describe('the tour', () => {
     expect(dialog().textContent).toContain('Drag an agent to split');
     expect(dialog().querySelector('[data-demo="split"]')).not.toBeNull();
     key('ArrowRight');
-    expect(dialog().textContent).toContain('Helpers on standby');
+    expect(dialog().textContent).toContain('Standbys');
     key('ArrowLeft');
     expect(dialog().textContent).toContain('Drag an agent to split');
     for (let i = 0; i < 4; i++) key('ArrowRight');

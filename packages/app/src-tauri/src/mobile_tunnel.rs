@@ -21,6 +21,7 @@ use crate::app_paths;
 use crate::pwa_server::{self, DevInfoPayload};
 use crate::tunnel_config::{self, TunnelConfigInput, TunnelConfigView};
 
+pub(crate) mod opentunnel;
 pub(crate) mod stable_link;
 use stable_link::LinkState;
 
@@ -41,6 +42,8 @@ struct TunnelState {
     tunnel_provider: Option<String>,
     bridge_direct_url: Option<String>,
     cloudflared_child: Option<Child>,
+    /// The OpenTunnel client and its listener (Labs). At most one: a launch drops the old one first.
+    opentunnel: Option<opentunnel::Running>,
     pwa_server: Option<pwa_server::PwaServerHandle>,
     /// Effective mode after the env override: env | quick | named | custom | stable.
     mode: &'static str,
@@ -124,6 +127,7 @@ impl TunnelState {
             tunnel_provider: None,
             bridge_direct_url: None,
             cloudflared_child: None,
+            opentunnel: None,
             pwa_server: None,
             mode: "quick",
             stable: None,
@@ -162,12 +166,83 @@ impl TunnelState {
             let _ = child.kill();
             let _ = child.wait();
         }
+        // Stops the OpenTunnel client and its listener too.
+        self.opentunnel = None;
     }
 }
 
 /// Where the phone server answers on this computer, or `None` when it is not running (it never bound a port).
 fn local_phone_url() -> Option<String> {
     pwa_server::bound_pwa_port().map(|port| format!("http://127.0.0.1:{port}"))
+}
+
+/// The Labs switch `opentunnel_stable_link` (off by default; on in a development build like every Labs switch).
+pub const OPENTUNNEL_SWITCH: &str = "opentunnel_stable_link";
+
+fn switch_in(settings: &serde_json::Value) -> bool {
+    settings.get(OPENTUNNEL_SWITCH).and_then(serde_json::Value::as_bool).unwrap_or(false)
+}
+
+fn opentunnel_switch_on(app: &AppHandle) -> bool {
+    switch_in(&crate::settings_store::read_public_settings(app))
+}
+
+/// What a settings change means for the OpenTunnel address.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum SettingsAction {
+    Nothing,
+    /// The Labs switch went off: close the client and its listener.
+    Stop,
+    /// The Labs switch is on and the saved setting asks for the fixed address, but it is not running: start it.
+    Start,
+}
+
+fn settings_action(switch_on: bool, wants_open_tunnel: bool, has_opentunnel: bool, mode: &str, phase: Phase, phone_server_up: bool) -> SettingsAction {
+    if !switch_on {
+        return if has_opentunnel || mode == "open_tunnel" && phase != Phase::Stopped { SettingsAction::Stop } else { SettingsAction::Nothing };
+    }
+    // Running, starting or failed with this mode: leave it. A failed start is retried by "Restart", not by every setting.
+    let running_as_open_tunnel = mode == "open_tunnel" && phase != Phase::Stopped;
+    if wants_open_tunnel && phone_server_up && !running_as_open_tunnel {
+        SettingsAction::Start
+    } else {
+        SettingsAction::Nothing
+    }
+}
+
+/// Kept so a settings change (which has no app handle) can start the address again.
+static APP: OnceCell<AppHandle> = OnceCell::new();
+
+/// Settings changed. With the Labs switch off, a running OpenTunnel address stops (the client and its listener
+/// close). With it on again and the fixed address saved as the choice, it starts again in this same run.
+pub fn apply_settings(effective: &serde_json::Value) {
+    let switch_on = switch_in(effective);
+    let wants = tunnel_config::load(&tunnel_config::tunnel_file()) == tunnel_config::TunnelConfig::OpenTunnel;
+    let state = tunnel_state();
+    let action = {
+        let mut guard = state.lock();
+        let action = settings_action(switch_on, wants, guard.opentunnel.is_some(), guard.mode, guard.phase, guard.pwa_server.is_some());
+        if action == SettingsAction::Stop {
+            guard.opentunnel = None;
+            guard.generation += 1;
+            guard.tunnel_url = None;
+            guard.phase = Phase::Stopped;
+            guard.last_error = None;
+            tracing::info!("the fixed phone address was switched off in Early features; its client stopped");
+        }
+        action
+    };
+    if action == SettingsAction::Start && is_tunnel_enabled() && custom_public_url().is_none() {
+        if let Some(app) = APP.get().cloned() {
+            tracing::info!("the fixed phone address was switched on in Early features; starting it");
+            // Off the settings thread: the start reads settings itself.
+            thread::spawn(move || {
+                if let Err(err) = launch_tunnel(&app) {
+                    tracing::warn!(%err, "could not start the fixed phone address");
+                }
+            });
+        }
+    }
 }
 
 /// What the person reads when a tunnel is asked for while the phone server is not running.
@@ -182,6 +257,23 @@ fn tunnel_state() -> Arc<Mutex<TunnelState>> {
 /// Stop the tunnel program (cloudflared) so an uninstall can delete it. Own child only.
 pub fn stop_for_uninstall() {
     tunnel_state().lock().kill_child();
+}
+
+/// "Forget this address": stop the OpenTunnel client, delete the address on the relay and on this computer, and go
+/// back to the automatic address. When the relay cannot be reached nothing is deleted and the answer says so.
+pub async fn forget_open_tunnel_address(app: AppHandle) -> Result<TunnelStatus, String> {
+    {
+        let state = tunnel_state();
+        let mut guard = state.lock();
+        guard.opentunnel = None;
+        guard.generation += 1;
+        guard.tunnel_url = None;
+        guard.phase = Phase::Stopped;
+    }
+    opentunnel::forget_address().await?;
+    tauri::async_runtime::spawn_blocking(move || apply_tunnel_config(&app, TunnelConfigInput::Quick))
+        .await
+        .map_err(|err| err.to_string())?
 }
 
 pub fn is_tunnel_enabled() -> bool {
@@ -226,6 +318,7 @@ pub fn start_mobile_tunnel(app: &AppHandle, bridge_direct_url: String) -> Result
         return Ok(());
     }
 
+    let _ = APP.set(app.clone());
     let dist_root = resolve_pwa_dist_root(app)?;
     let bridge_port_file = app_paths::bridge_port_file();
     let state = tunnel_state();
@@ -272,6 +365,9 @@ pub fn apply_tunnel_config(
 ) -> Result<TunnelStatus, String> {
     let path = tunnel_config::tunnel_file();
     let current = tunnel_config::load(&path);
+    if matches!(input, TunnelConfigInput::OpenTunnel) && !opentunnel_switch_on(app) {
+        return Err("Turn on \"Fixed phone address\" in Early features first.".into());
+    }
     let next = tunnel_config::config_from_input(input.clone(), &current)?;
     let reveal = secret_to_reveal(&input, &current, &next);
     // A new secret replaces the old one: ask the Worker to forget the old one first (best effort).
@@ -296,7 +392,7 @@ pub fn apply_tunnel_config(
 fn launch_tunnel(app: &AppHandle) -> Result<(), String> {
     let state = tunnel_state();
     let config = tunnel_config::load(&tunnel_config::tunnel_file());
-    let plan = tunnel_config::resolve_plan(custom_public_url(), &config);
+    let plan = tunnel_config::resolve_plan(custom_public_url(), &config, opentunnel_switch_on(app));
 
     let generation = {
         let mut guard = state.lock();
@@ -316,11 +412,12 @@ fn launch_tunnel(app: &AppHandle) -> Result<(), String> {
                 tunnel_config::TunnelPlan::Quick => "cloudflared",
                 tunnel_config::TunnelPlan::Named { .. } => "cloudflared-named",
                 tunnel_config::TunnelPlan::Stable { .. } => "cloudflared-stable",
+                tunnel_config::TunnelPlan::OpenTunnel => "opentunnel",
                 _ => "custom",
             }
             .into(),
         );
-        if plan.runs_cloudflared() {
+        if plan.runs_cloudflared() || plan.runs_opentunnel() {
             guard.phase = Phase::Starting;
         } else {
             guard.phase = Phase::Running;
@@ -340,6 +437,21 @@ fn launch_tunnel(app: &AppHandle) -> Result<(), String> {
         guard.last_error = Some(message.clone());
         message
     };
+
+    if plan.runs_opentunnel() {
+        let dist_root = resolve_pwa_dist_root(app).map_err(&fail)?;
+        opentunnel::begin(
+            state.clone(),
+            generation,
+            opentunnel::StartCtx {
+                dist_root,
+                bridge_port_file: app_paths::bridge_port_file(),
+                dev_info: Arc::new(|| get_mobile_tunnel_info()),
+            },
+        );
+        tracing::info!("starting the OpenTunnel fixed phone address");
+        return Ok(());
+    }
 
     let cloudflared_bin = resolve_cloudflared_bin(app).map_err(&fail)?;
     let local_target = local_phone_url().ok_or_else(|| fail(PHONE_SERVER_DOWN.into()))?;
@@ -670,6 +782,26 @@ fn cloudflared_bin(resource_dir: Option<&Path>, exe_dir: Option<&Path>, from_env
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn switching_the_fixed_address_off_and_on_starts_it_again_without_a_restart() {
+        use SettingsAction::{Nothing, Start, Stop};
+        // Running, switch goes off: stop.
+        assert_eq!(settings_action(false, true, true, "open_tunnel", Phase::Running, true), Stop);
+        // Off already and stopped: nothing to do on later settings changes.
+        assert_eq!(settings_action(false, true, false, "open_tunnel", Phase::Stopped, true), Nothing);
+        // Switch back on: the saved choice is the fixed address and it is stopped, so start it.
+        assert_eq!(settings_action(true, true, false, "open_tunnel", Phase::Stopped, true), Start);
+        // While off, the saved choice ran as the automatic address; on again must start the fixed one.
+        assert_eq!(settings_action(true, true, false, "quick", Phase::Running, true), Start);
+        // Already starting, running or failed as the fixed address: later settings changes leave it alone.
+        for phase in [Phase::Starting, Phase::Running, Phase::Error] {
+            assert_eq!(settings_action(true, true, true, "open_tunnel", phase, true), Nothing);
+        }
+        // Not chosen, or no phone server (dev build): never start.
+        assert_eq!(settings_action(true, false, false, "quick", Phase::Running, true), Nothing);
+        assert_eq!(settings_action(true, true, false, "open_tunnel", Phase::Stopped, false), Nothing);
+    }
 
     #[test]
     fn custom_public_url_strips_bridge_suffix() {

@@ -8,6 +8,7 @@ export function RailSection({
   title,
   summary,
   testId,
+  action,
   children,
 }: {
   id: RailSectionId;
@@ -15,6 +16,8 @@ export function RailSection({
   /** What shows at the right of the label while the section is folded. */
   summary?: ReactNode;
   testId?: string;
+  /** A small button at the right of the heading while the section is open (it opens the section's own page). */
+  action?: { label: string; onClick: () => void };
   children: ReactNode;
 }) {
   const [closed, setClosed] = useRailClosed(id);
@@ -28,6 +31,13 @@ export function RailSection({
           </svg>
           {closed && summary != null && <span className="rp-sum">{summary}</span>}
         </button>
+        {!closed && action && (
+          <button type="button" className="rp-sec-open" aria-label={action.label} title={action.label} onClick={action.onClick}>
+            <svg viewBox="0 0 16 16" aria-hidden="true">
+              <path d="M9.5 3H13v3.5M13 3 8.5 7.5M6.5 3H4a1 1 0 0 0-1 1v8a1 1 0 0 0 1 1h8a1 1 0 0 0 1-1V9.5" />
+            </svg>
+          </button>
+        )}
       </h3>
       {!closed && <div className="rp-rows">{children}</div>}
     </section>

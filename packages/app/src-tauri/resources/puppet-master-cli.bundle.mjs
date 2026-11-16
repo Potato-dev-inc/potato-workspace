@@ -6,13 +6,13 @@ var __export = (target, all) => {
     __defProp(target, name, { get: all[name], enumerable: true });
 };
 
-// packages/cli/src/index.ts
+// ../cli/src/index.ts
 import { spawn as spawn2 } from "node:child_process";
-import { existsSync as existsSync2, readFileSync as readFileSync2 } from "node:fs";
+import { existsSync as existsSync2, readFileSync as readFileSync3 } from "node:fs";
 import { fileURLToPath as fileURLToPath2 } from "node:url";
-import { dirname as dirname3, join as join3, resolve as resolve2 } from "node:path";
+import { dirname as dirname3, join as join3, resolve as resolve3 } from "node:path";
 
-// node_modules/zod/v3/external.js
+// ../../node_modules/zod/v3/external.js
 var external_exports = {};
 __export(external_exports, {
   BRAND: () => BRAND,
@@ -124,7 +124,7 @@ __export(external_exports, {
   void: () => voidType
 });
 
-// node_modules/zod/v3/helpers/util.js
+// ../../node_modules/zod/v3/helpers/util.js
 var util;
 (function(util2) {
   util2.assertEqual = (_) => {
@@ -258,7 +258,7 @@ var getParsedType = (data) => {
   }
 };
 
-// node_modules/zod/v3/ZodError.js
+// ../../node_modules/zod/v3/ZodError.js
 var ZodIssueCode = util.arrayToEnum([
   "invalid_type",
   "invalid_literal",
@@ -376,7 +376,7 @@ ZodError.create = (issues) => {
   return error;
 };
 
-// node_modules/zod/v3/locales/en.js
+// ../../node_modules/zod/v3/locales/en.js
 var errorMap = (issue, _ctx) => {
   let message;
   switch (issue.code) {
@@ -479,7 +479,7 @@ var errorMap = (issue, _ctx) => {
 };
 var en_default = errorMap;
 
-// node_modules/zod/v3/errors.js
+// ../../node_modules/zod/v3/errors.js
 var overrideErrorMap = en_default;
 function setErrorMap(map) {
   overrideErrorMap = map;
@@ -488,7 +488,7 @@ function getErrorMap() {
   return overrideErrorMap;
 }
 
-// node_modules/zod/v3/helpers/parseUtil.js
+// ../../node_modules/zod/v3/helpers/parseUtil.js
 var makeIssue = (params) => {
   const { data, path, errorMaps, issueData } = params;
   const fullPath = [...path, ...issueData.path || []];
@@ -598,14 +598,14 @@ var isDirty = (x) => x.status === "dirty";
 var isValid = (x) => x.status === "valid";
 var isAsync = (x) => typeof Promise !== "undefined" && x instanceof Promise;
 
-// node_modules/zod/v3/helpers/errorUtil.js
+// ../../node_modules/zod/v3/helpers/errorUtil.js
 var errorUtil;
 (function(errorUtil2) {
   errorUtil2.errToObj = (message) => typeof message === "string" ? { message } : message || {};
   errorUtil2.toString = (message) => typeof message === "string" ? message : message?.message;
 })(errorUtil || (errorUtil = {}));
 
-// node_modules/zod/v3/types.js
+// ../../node_modules/zod/v3/types.js
 var ParseInputLazyPath = class {
   constructor(parent, value, path, key) {
     this._cachedPath = [];
@@ -4053,14 +4053,14 @@ var coerce = {
 };
 var NEVER = INVALID;
 
-// packages/shared/dist/agents.js
+// ../shared/dist/agents.js
 var AGENT_ID_PATTERN = /^[a-z][a-z0-9_]{1,31}$/;
 var AgentTypeSchema = external_exports.string().regex(AGENT_ID_PATTERN, "agent_type must match ^[a-z][a-z0-9_]{1,31}$");
 function getDefaultTerminalAgentType(_platform) {
   return "opencode_native";
 }
 
-// packages/shared/dist/protocol.js
+// ../shared/dist/protocol.js
 var PaneStatusSchema = external_exports.enum(["running", "waiting_input", "error", "idle"]);
 var PanePlaceSchema = external_exports.object({
   kind: external_exports.string(),
@@ -4089,6 +4089,8 @@ var PaneInfoSchema = external_exports.object({
   title: external_exports.string().nullable().optional(),
   /** The pane of the agent that started this one over MCP (a helper); absent for a pane nobody's agent started. Display-only. */
   parent_pane_id: external_exports.string().nullable().optional(),
+  /** `minion` | `spin_off`: what the agent that started this pane made it (Two types mode). Absent: a chat the person started, or One type. */
+  started_as: external_exports.string().nullable().optional(),
   /** Linux Inside: the pane runs inside WSL. Absent for a Windows pane. */
   place: PanePlaceSchema.optional(),
   /** `acp`: a chat session over the Agent Client Protocol (no terminal behind the pane). Absent for a terminal pane. */
@@ -4128,9 +4130,11 @@ var DEFAULT_BRIDGE_PORT_FILE = "potato-workspace.bridge.port";
 var BRIDGE_LOCAL_SECRET_FILE = "potato-workspace.bridge.secret";
 var BRIDGE_LOCAL_SECRET_HEADER = "X-Potato-Workspace-Local-Secret";
 var BRIDGE_PANE_HEADER = "X-Potato-Workspace-Pane";
+var BRIDGE_PANE_KEY_HEADER = "X-Potato-Workspace-Pane-Key";
+var BRIDGE_PANE_KEY_ENV = "POTATO_WORKSPACE_PANE_KEY";
 var BRIDGE_HTTP_PORT_RANGE = { min: 17421, max: 17499 };
 
-// packages/shared/dist/schemas.js
+// ../shared/dist/schemas.js
 var SettingsSchema = external_exports.object({
   anthropic_api_key: external_exports.string().optional(),
   openai_api_key: external_exports.string().optional(),
@@ -4211,6 +4215,8 @@ var SettingsSchema = external_exports.object({
   lend_enabled: external_exports.boolean().optional(),
   /** Devices (Settings > General > Labs): pair two Workspaces and run a chat or terminal on the other one. Off unless chosen. Rust: device_link. */
   devices_enabled: external_exports.boolean().optional(),
+  /** Potato account (Settings > General > Labs): sign in once and see your devices on each other. Off unless chosen. Rust: account. */
+  account_enabled: external_exports.boolean().optional(),
   /** Desktop Potato (Settings > General > Labs): a small pet window on the desktop. Off unless chosen. Rust: pet. */
   desktop_pet_enabled: external_exports.boolean().optional(),
   agent_browser_enabled: external_exports.boolean().optional(),
@@ -4232,6 +4238,10 @@ var SettingsSchema = external_exports.object({
   early_versions_enabled: external_exports.boolean().optional(),
   /** Smaller updates (Labs): an update may take the app-only package and leave the built-in tools alone. Off unless chosen. Rust: commands/update_plan. */
   smaller_updates_enabled: external_exports.boolean().optional(),
+  /** Crews (Settings > General > Labs): shows saved crews, read-only, and lets the command line check a crew file. Off unless chosen. Rust: crews. */
+  crews_enabled: external_exports.boolean().optional(),
+  /** Fixed phone address (Settings > Early features): an address from the third-party OpenTunnel relay. Off unless chosen. Rust: mobile_tunnel/opentunnel. */
+  opentunnel_stable_link: external_exports.boolean().optional(),
   /** The version whose small update failed (written by the app); that version takes the full package. */
   app_only_failed_for: external_exports.string().optional(),
   /** The first-switch sheet for Individual mode was shown and (with "Don't show again") dismissed for good. Absent: show it. */
@@ -4270,7 +4280,7 @@ var SettingsSchema = external_exports.object({
   agent_default_models: external_exports.record(external_exports.string().max(120)).optional()
 });
 
-// packages/shared/dist/mobile-pairing.js
+// ../shared/dist/mobile-pairing.js
 var PairingQrPayloadSchema = external_exports.object({
   v: external_exports.literal(1),
   /** PWA origin or `/bridge` base URL the phone should use. */
@@ -4324,7 +4334,7 @@ var PairingSessionInfoSchema = external_exports.object({
   bridge_url: external_exports.string().url()
 });
 
-// packages/shared/dist/orchestrator-panes.js
+// ../shared/dist/orchestrator-panes.js
 var ORCHESTRATOR_PANE_PREFIX = "potato-workspace-orchestrator-";
 function isOrchestratorPaneId(paneId) {
   return paneId.startsWith(ORCHESTRATOR_PANE_PREFIX);
@@ -4342,14 +4352,14 @@ function findReusableWorkerPane(panes, agentType) {
   return matches.sort((a, b) => b.created_at - a.created_at)[0];
 }
 
-// packages/cli/src/launch-worker.ts
+// ../cli/src/launch-worker.ts
 import { spawn } from "node:child_process";
 import { existsSync } from "node:fs";
 import { createConnection } from "node:net";
 import { dirname as dirname2, join as join2, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
-// packages/shared/dist/bridge-port.js
+// ../shared/dist/bridge-port.js
 import { readFile, stat } from "node:fs/promises";
 import { homedir } from "node:os";
 import { dirname, join } from "node:path";
@@ -4420,7 +4430,12 @@ async function readBridgePort(filePath) {
 }
 async function readLocalSecretHeaders(filePath) {
   const pane = (process.env.POTATO_WORKSPACE_PANE_ID ?? "").trim();
-  return { ...await readSecretHeader(filePath), ...pane ? { [BRIDGE_PANE_HEADER]: pane.slice(0, 64) } : {} };
+  const key = (process.env[BRIDGE_PANE_KEY_ENV] ?? "").trim();
+  return {
+    ...await readSecretHeader(filePath),
+    ...pane ? { [BRIDGE_PANE_HEADER]: pane.slice(0, 64) } : {},
+    ...key ? { [BRIDGE_PANE_KEY_HEADER]: key.slice(0, 128) } : {}
+  };
 }
 async function readSecretHeader(filePath) {
   for (const candidate of [...new Set(bridgePortCandidates(filePath))]) {
@@ -4440,7 +4455,7 @@ async function readSecretHeader(filePath) {
   return {};
 }
 
-// packages/cli/src/launch-worker.ts
+// ../cli/src/launch-worker.ts
 var __dirname = dirname2(fileURLToPath(import.meta.url));
 var VITE_DEV_PORT = 1442;
 function repoRoot() {
@@ -4617,7 +4632,7 @@ function waitForChild(child) {
   });
 }
 
-// packages/cli/src/watch.ts
+// ../cli/src/watch.ts
 var EXIT_COMPLETED = 0;
 var EXIT_FAILED = 1;
 var EXIT_NEEDS_INPUT = 2;
@@ -4697,7 +4712,7 @@ function watchLine(snapshot, operationId, projectPath) {
 function isDone(status) {
   return TERMINAL.has(status) || NEEDS_INPUT.has(status);
 }
-var sleep = (ms) => new Promise((resolve3) => setTimeout(resolve3, Math.max(0, ms)));
+var sleep = (ms) => new Promise((resolve4) => setTimeout(resolve4, Math.max(0, ms)));
 async function resolveOperation(idOrHandle, projectPath) {
   const query = new URLSearchParams();
   if (projectPath) query.set("project_path", projectPath);
@@ -4846,7 +4861,7 @@ async function runWatch(options) {
   return failedAny ? EXIT_FAILED : EXIT_COMPLETED;
 }
 
-// packages/cli/src/watch-args.ts
+// ../cli/src/watch-args.ts
 var WATCH_USAGE = "usage: potato-workspace watch <operation_id|handle> [--project-path P] [--timeout-ms N] [--stream]";
 var WATCH_FLAGS = /* @__PURE__ */ new Set(["project-path", "project", "timeout-ms", "stream", "help", "h"]);
 function validateWatchFlags(flags) {
@@ -4865,7 +4880,7 @@ function validateWatchFlags(flags) {
   return null;
 }
 
-// packages/cli/src/pair-link.ts
+// ../cli/src/pair-link.ts
 var PWA_INFO_URL = "http://127.0.0.1:1442/__puppet_master_dev__.json";
 function isLoopbackHost2(origin) {
   try {
@@ -4957,8 +4972,8 @@ async function runPairLink() {
   }
 }
 
-// packages/cli/src/args.ts
-var CONFIG_COMMANDS = /* @__PURE__ */ new Set(["settings", "labs", "status", "agents", "models", "projects", "standby", "config"]);
+// ../cli/src/args.ts
+var CONFIG_COMMANDS = /* @__PURE__ */ new Set(["settings", "labs", "status", "agents", "models", "projects", "standby", "config", "crew"]);
 var CONFIG_USAGE = `usage:
   potato-workspace status
   potato-workspace settings list | get KEY | set KEY VALUE [KEY VALUE ...] | reset KEY
@@ -4968,6 +4983,7 @@ var CONFIG_USAGE = `usage:
   potato-workspace projects list
   potato-workspace standby list | add --name N --agent A [--model M] [--project P] [--after wait|close] | remove NAME | close NAME
   potato-workspace config export [--out FILE] | diff FILE | import FILE
+  potato-workspace crew list | show ID | validate FILE
 standby: "remove" only takes a standby off its agent (it keeps running); "close" stops it.
 config: the file holds allowed settings, Labs switches, model defaults and standbys. Secrets, logins, lending and devices are never in it.
 flags: --json  --yes (apply a change)  --dry-run (show only)  --wait-ms N (wait for the Allow card)
@@ -5020,10 +5036,10 @@ function isKeyName(text) {
   return /^[a-z][a-z0-9_]{0,63}$/.test(text);
 }
 
-// packages/cli/src/config-cli.ts
+// ../cli/src/config-cli.ts
 import { createInterface } from "node:readline/promises";
 
-// packages/cli/src/bridge.ts
+// ../cli/src/bridge.ts
 var EXIT = {
   ok: 0,
   failed: 1,
@@ -5047,7 +5063,7 @@ function retryDelay(body) {
   return Math.min(Math.max(asked, MIN_RETRY_MS), MAX_RETRY_MS);
 }
 function createBridge(options) {
-  const sleep2 = options.sleep ?? ((ms) => new Promise((resolve3) => setTimeout(resolve3, ms)));
+  const sleep2 = options.sleep ?? ((ms) => new Promise((resolve4) => setTimeout(resolve4, ms)));
   const now = options.now ?? Date.now;
   async function once(method, path, body) {
     let host;
@@ -5116,7 +5132,7 @@ function createBridge(options) {
   };
 }
 
-// packages/cli/src/output.ts
+// ../cli/src/output.ts
 var SECRETISH = /(secret|token|password|passwd|api_?key|credential|private_?key)/i;
 function looksSecret(key) {
   return SECRETISH.test(key);
@@ -5140,7 +5156,7 @@ function table(rows) {
   return rows.map((r) => r.map((cell, col) => col === r.length - 1 ? cell : cell.padEnd(widths[col])).join("  ").trimEnd());
 }
 
-// packages/cli/src/commands/settings.ts
+// ../cli/src/commands/settings.ts
 async function loadCatalog(bridge) {
   return bridge.get("/settings/catalog");
 }
@@ -5327,7 +5343,7 @@ async function runLabs(ctx) {
   }
 }
 
-// packages/cli/src/commands/plan.ts
+// ../cli/src/commands/plan.ts
 async function makePlan(ctx, ops) {
   return ctx.bridge.post("/config/plan", { ops });
 }
@@ -5366,7 +5382,7 @@ async function planAndApply(ctx, ops) {
   return EXIT.ok;
 }
 
-// packages/cli/src/commands/standby.ts
+// ../cli/src/commands/standby.ts
 var USAGE = "usage: potato-workspace standby list | add --name N --agent A [--model M] [--project P] [--after wait|close] | remove NAME | close NAME";
 function oneName(args, rest, verb) {
   if (rest.length !== 1) throw new CliError(EXIT.failed, `usage: potato-workspace standby ${verb} NAME`);
@@ -5419,7 +5435,111 @@ async function runStandby(ctx) {
   }
 }
 
-// packages/cli/src/commands/read.ts
+// ../cli/src/commands/crew.ts
+import { readFileSync, statSync } from "node:fs";
+import { resolve as resolve2 } from "node:path";
+var USAGE2 = "usage: potato-workspace crew list | show ID | validate FILE";
+var MAX_FILE_BYTES = 64 * 1024;
+async function runCrew(ctx) {
+  const [sub, target, ...extra] = ctx.args.positional;
+  if (extra.length > 0) throw new CliError(EXIT.failed, USAGE2);
+  switch (sub) {
+    case "list":
+      if (target !== void 0) throw new CliError(EXIT.failed, USAGE2);
+      return list(ctx);
+    case "show":
+      if (!target) throw new CliError(EXIT.failed, USAGE2);
+      return show2(ctx, target);
+    case "validate":
+      if (!target) throw new CliError(EXIT.failed, USAGE2);
+      return validate(ctx, target);
+    default:
+      throw new CliError(EXIT.failed, USAGE2);
+  }
+}
+async function list({ bridge, io, args }) {
+  const view = await bridge.get("/crews");
+  const crews = view.crews ?? [];
+  const templates = view.templates ?? [];
+  if (args.json) {
+    io.out(JSON.stringify({ crews, templates }));
+    return EXIT.ok;
+  }
+  const row = (kind, s) => [s.slug, kind, s.name, String(s.roles), s.agents.join(", "), s.problem ? `problem: ${s.problem}` : "ok"];
+  const rows = [["ID", "KIND", "NAME", "ROLES", "AGENTS", "STATUS"], ...crews.map((s) => row("saved", s)), ...templates.map((s) => row("template", s))];
+  for (const line of table(rows)) io.out(line);
+  if (crews.length === 0) io.out("No saved crews yet. The template can be read with: potato-workspace crew show template:our-way");
+  return EXIT.ok;
+}
+function permissionWords(p) {
+  if (!p) return "-";
+  const parts = [p.read === false ? "no read" : "read"];
+  parts.push(p.write && p.write !== "none" ? `write ${p.write === "scoped" ? `in ${p.write_scope ?? "?"}` : p.write}` : "no write");
+  parts.push(p.run && p.run !== "none" ? `run ${p.run}` : "no run");
+  if (p.start_helpers) parts.push("starts helpers");
+  if (p.merge) parts.push("merges");
+  return parts.join(", ");
+}
+function problemLines(problems, indent = "") {
+  return problems.map((p) => `${indent}- ${p.code}${p.role ? ` (${p.role})` : ""}: ${p.message}`);
+}
+async function show2({ bridge, io, args }, id) {
+  const view = await bridge.get(`/crews/${encodeURIComponent(id).replace(/%3A/gi, ":")}`);
+  if (args.json) {
+    io.out(JSON.stringify(view));
+    return EXIT.ok;
+  }
+  const { crew } = view;
+  io.out(`${crew.name} (${view.kind === "template" ? "template, read-only" : "saved crew"})`);
+  if (crew.routing_file) io.out(`routing file: ${crew.routing_file}`);
+  if (crew.budget) io.out(`budget: ${[crew.budget.turns != null ? `${crew.budget.turns} turns` : "", crew.budget.minutes != null ? `${crew.budget.minutes} minutes` : ""].filter(Boolean).join(", ")}`);
+  if (crew.max_helpers != null) io.out(`most helpers at once: ${crew.max_helpers}`);
+  if (crew.fix_loops != null) io.out(`most fix loops: ${crew.fix_loops}`);
+  const rows = [
+    ["ROLE", "AGENT", "MODEL", "UNDER", "WARM", "HANDS TO", "MAY"],
+    ...crew.roles.map((r) => [
+      r.id || r.name,
+      r.agent_type,
+      r.model ?? "-",
+      r.parent ?? "-",
+      String(r.standbys ?? 0),
+      [...r.hands_to ?? []].join(", ") || "-",
+      permissionWords(r.permissions)
+    ])
+  ];
+  for (const line of table(rows)) io.out(line);
+  if (view.problems.length === 0) io.out("problems: none");
+  else {
+    io.out("problems:");
+    for (const line of problemLines(view.problems, "  ")) io.out(line);
+  }
+  return EXIT.ok;
+}
+async function validate({ bridge, io, args }, file) {
+  const path = resolve2(file);
+  let text;
+  try {
+    if (statSync(path).size > MAX_FILE_BYTES) throw new CliError(EXIT.failed, `${file} is too big to be a crew file (the limit is 64 KB).`);
+    text = readFileSync(path, "utf8");
+  } catch (err) {
+    if (err instanceof CliError) throw err;
+    throw new CliError(EXIT.failed, `Cannot read ${file}: ${err.code === "ENOENT" ? "no such file" : err.message}`);
+  }
+  const result = await bridge.post("/crews/validate", { text });
+  if (args.json) {
+    io.out(JSON.stringify(result));
+    return result.ok ? EXIT.ok : EXIT.failed;
+  }
+  for (const crew of result.crews) {
+    io.out(`${crew.id}: ${crew.name || "(no name)"}, ${crew.roles} roles, ${crew.problems.length === 0 ? "ok" : `${crew.problems.length} problem${crew.problems.length === 1 ? "" : "s"}`}`);
+    for (const line of problemLines(crew.problems, "  ")) io.out(line);
+  }
+  for (const line of problemLines(result.problems)) io.out(line);
+  io.out(result.ok ? "This crew file is fine. Nothing was changed." : "This crew file has problems. Nothing was changed.");
+  return result.ok ? EXIT.ok : EXIT.failed;
+}
+
+// ../cli/src/commands/read.ts
 async function runStatus(ctx) {
   const { bridge, io, args, cliVersion } = ctx;
   const health = await bridge.get("/health");
@@ -5512,10 +5632,10 @@ async function runProjects(ctx) {
   return EXIT.ok;
 }
 
-// packages/cli/src/commands/config.ts
-import { readFileSync, writeFileSync } from "node:fs";
+// ../cli/src/commands/config.ts
+import { readFileSync as readFileSync2, writeFileSync } from "node:fs";
 
-// packages/cli/src/commands/config-file.ts
+// ../cli/src/commands/config-file.ts
 var CONFIG_VERSION = 1;
 var FOLDER = "{folder}";
 var EXPORTABLE_SETTINGS = [
@@ -5997,7 +6117,7 @@ function same(a, b) {
   return JSON.stringify(a ?? null) === JSON.stringify(b ?? null);
 }
 
-// packages/cli/src/commands/config.ts
+// ../cli/src/commands/config.ts
 var CONFIG_FILE_USAGE = "usage: potato-workspace config export [--out FILE] | diff FILE | import FILE [--yes] [--dry-run]";
 var DEFAULT_CONFIG_FILE = "potato-workspace.toml";
 async function openFolders(bridge) {
@@ -6020,7 +6140,7 @@ function asCliError(err) {
 function readDoc(file) {
   let text;
   try {
-    text = readFileSync(file, "utf8");
+    text = readFileSync2(file, "utf8");
   } catch (err) {
     throw new CliError(EXIT.failed, `Could not read ${file}: ${err.message}`);
   }
@@ -6101,7 +6221,7 @@ async function runConfig(ctx) {
   }
 }
 
-// packages/cli/src/config-cli.ts
+// ../cli/src/config-cli.ts
 function terminalIo() {
   const inAgentWindow = Boolean((process.env.POTATO_WORKSPACE_PANE_ID ?? "").trim());
   return {
@@ -6148,6 +6268,8 @@ async function runConfigCli(argv, io, cliVersion, makeBridge = createBridge) {
         return await runModels(ctx);
       case "projects":
         return await runProjects(ctx);
+      case "crew":
+        return await runCrew(ctx);
       case "standby":
         return await runStandby(ctx);
       case "config":
@@ -6166,7 +6288,7 @@ async function runConfigCli(argv, io, cliVersion, makeBridge = createBridge) {
   }
 }
 
-// packages/cli/src/index.ts
+// ../cli/src/index.ts
 var __dirname2 = dirname3(fileURLToPath2(import.meta.url));
 var BOOLEAN_FLAGS = /* @__PURE__ */ new Set(["help", "h", "version", "v", "force-new", "new", "force_new", "stream"]);
 function parseArgs(argv) {
@@ -6225,6 +6347,7 @@ Usage:
   potato-workspace config diff FILE             What importing the file would change (nothing is touched).
   potato-workspace config import FILE [--yes] [--dry-run]
                                 Apply the file through the same plan: shows the changes, applies only with --yes.
+  potato-workspace crew ...        list | show ID | validate FILE (read-only; checks a crew file, saves nothing)
   potato-workspace version         Print version
   potato-workspace --help          Show this help
 
@@ -6236,9 +6359,10 @@ Worker examples:
 `);
 }
 function readVersion() {
+  if ("0.2.2") return "0.2.2";
   try {
     const pkgPath = join3(__dirname2, "..", "package.json");
-    const pkg = JSON.parse(readFileSync2(pkgPath, "utf-8"));
+    const pkg = JSON.parse(readFileSync3(pkgPath, "utf-8"));
     return String(pkg.version);
   } catch {
     return "0.0.0";
@@ -6248,7 +6372,7 @@ function printVersion() {
   console.log(readVersion());
 }
 async function launchGui(projectPath) {
-  const repoRoot2 = resolve2(__dirname2, "..", "..", "..");
+  const repoRoot2 = resolve3(__dirname2, "..", "..", "..");
   const args = ["run", "tauri", "--workspace=@potato-workspace/app", "dev"];
   if (projectPath) {
     args.push("--", "--project", projectPath);
@@ -6265,8 +6389,8 @@ async function launchGui(projectPath) {
 }
 async function runMcp() {
   const candidates = [
-    resolve2(__dirname2, "..", "..", "mcp-server", "dist", "index.js"),
-    resolve2(__dirname2, "..", "..", "..", "packages", "mcp-server", "dist", "index.js")
+    resolve3(__dirname2, "..", "..", "mcp-server", "dist", "index.js"),
+    resolve3(__dirname2, "..", "..", "..", "packages", "mcp-server", "dist", "index.js")
   ];
   const target = candidates.find((p) => existsSync2(p));
   if (!target) {

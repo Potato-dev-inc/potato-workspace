@@ -37,7 +37,11 @@ export function CanvasSurface({
   agentName,
   modelName,
   path,
+  now,
+  hops,
   readOnly,
+  changed,
+  touched,
 }: {
   crew: Crew;
   selected: number | null;
@@ -48,7 +52,15 @@ export function CanvasSurface({
   modelName: ModelNamer;
   /** Role ids a "Try a task" would pass through, in order (empty: none shown). */
   path: string[];
+  /** The box a followed task is at in a replay (shown stronger than the rest of the way). */
+  now?: string | null;
+  /** Hand-overs of a followed task as "from>to" role ids; the lines between them are lit. */
+  hops?: string[];
   readOnly: boolean;
+  /** Lines (`from>to` role keys) drawn thick: what a proposal adds or takes away ("Change the crew by talking"). */
+  changed?: string[];
+  /** Boxes whose routing rules a proposal changes. */
+  touched?: string[];
 }) {
   const t = useT();
   const spots = layout(crew);
@@ -148,14 +160,17 @@ export function CanvasSurface({
                 <marker id="crewc-arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
                   <path d="M 0 0 L 10 5 L 0 10 z" className="crewc-arrow" />
                 </marker>
+                <marker id="crewc-arrow-changed" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="9" markerHeight="9" markerUnits="userSpaceOnUse" orient="auto-start-reverse">
+                  <path d="M 0 0 L 10 5 L 0 10 z" className="crewc-arrow-changed" />
+                </marker>
               </defs>
               {lines.map((l) => (
                 <path
                   key={`${l.from}>${l.to}`}
                   d={curve(at(l.from), at(l.to))}
-                  className={`crewc-line is-${l.kind}`}
+                  className={`crewc-line is-${l.kind}${hops?.includes(`${l.from}>${l.to}`) || hops?.includes(`${l.to}>${l.from}`) ? ' is-lit' : ''}${changed?.includes(`${l.from}>${l.to}`) ? ' is-changed' : ''}`}
                   data-edge={l.kind}
-                  markerEnd={l.kind === 'team' ? undefined : 'url(#crewc-arrow)'}
+                  markerEnd={changed?.includes(`${l.from}>${l.to}`) ? 'url(#crewc-arrow-changed)' : l.kind === 'team' ? undefined : 'url(#crewc-arrow)'}
                 />
               ))}
             </svg>
@@ -164,7 +179,7 @@ export function CanvasSurface({
               const spot = at(k);
               const own = problemsOf(problems, role);
               const step = path.indexOf(k);
-              const classes = ['crewc-box', selected === index ? 'is-selected' : '', step >= 0 ? 'is-on-path' : '', own.length ? 'has-problem' : '', drag?.index === index ? 'is-dragging' : '']
+              const classes = ['crewc-box', selected === index ? 'is-selected' : '', step >= 0 ? 'is-on-path' : '', now === k ? 'is-now' : '', touched?.includes(k) ? 'is-touched' : '', own.length ? 'has-problem' : '', drag?.index === index ? 'is-dragging' : '']
                 .filter(Boolean)
                 .join(' ');
               const model = modelName(role.agent_type, role.model);

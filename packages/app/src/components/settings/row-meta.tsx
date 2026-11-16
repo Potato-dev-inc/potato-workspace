@@ -49,7 +49,6 @@ export const ROW_META: Record<string, Meta> = {
   checkpoints: { keys: ['checkpoints_enabled'] },
   'budget-turns': { keys: ['budget_default_turns'], valueText: (s) => t('settings.value.turns', { value: turnsWords(s.budget_default_turns) }) },
   'right-size': { keys: ['right_size_suggest'] },
-  'budget-minutes': { keys: ['budget_default_minutes'], valueText: (s) => t('settings.value.time', { value: minutesWords(s.budget_default_minutes) }) },
   'handoff-mode': {
     keys: ['handoff_mode'],
     valueText: (s) => t('settings.value.handoff', { value: HANDOFF_MODES.find((m) => m.value === s.handoff_mode)?.label ?? HANDOFF_MODES[0].label }),
@@ -79,6 +78,7 @@ export const ROW_META: Record<string, Meta> = {
   'timeline-labs': { keys: ['timeline_day_enabled'] },
   'smaller-updates-labs': { keys: ['smaller_updates_enabled'] },
   'crews-labs': { keys: ['crews_enabled'] },
+  'opentunnel-labs': { keys: ['opentunnel_stable_link'] },
   'early-versions': { keys: ['early_versions_enabled'] },
   'show-developer-settings': { keys: ['show_developer_settings'] },
 };
@@ -88,7 +88,7 @@ export const ROW_META: Record<string, Meta> = {
  * draws today. Every other row's words are edited where the row is defined.
  */
 const COPY_FOR_OTHER_FILES: Record<string, { from: string; label: string; hint: string }> = {
-  'helper-tools': { from: 'Potato Workspace helpers inside agents', label: 'Helper tools in every agent', hint: 'Agents you open here get the helper tools with no setup.' },
+  'helper-tools': { from: 'Potato tools in every agent', label: 'Potato tools in every agent', hint: 'Agents you open here get the Potato tools with no setup.' },
   'live-updates': { from: 'Live updates', label: 'Live updates', hint: 'Claude and Codex tell the app when they start, ask and finish.' },
 };
 

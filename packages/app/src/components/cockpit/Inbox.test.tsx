@@ -539,7 +539,7 @@ describe('the Inbox look: one title line, flat rows, a brand icon and one kind c
     const bar = host.querySelector('header.ck-inbox-bar')!;
     expect(bar.querySelector('h1')!.firstChild!.textContent).toBe('Inbox');
     expect(bar.querySelector('.ck-inbox-count')!.textContent).toBe(String(cards().length));
-    expect(Array.from(bar.querySelectorAll('button')).map((b) => b.textContent)).toEqual(['Keys']);
+    expect(Array.from(bar.querySelectorAll('button')).map((b) => b.textContent)).toEqual(['By urgency', 'By crew', 'Keys']);
     expect(host.querySelector('.ck-doto')).toBeNull();
     expect(host.querySelector('.ck-sub')).toBeNull();
   });

@@ -16,6 +16,7 @@ import {
 import { errText } from '../../../lib/toolbelt';
 import { ChooseHost } from './ChooseHost';
 import { btn, btnPrimary, overlay, sheet } from '../toolbelt/styles';
+import { Switch } from '../controls';
 
 const fileText = (kind: FileKind): string => t(`pack.file.${kind}`);
 
@@ -251,6 +252,8 @@ export function AgentPackGroup({ api = agentPackApi }: { api?: AgentPackApi }) {
   const t = useT();
   const [reviewing, setReviewing] = useState(false);
   const [recorded, setRecorded] = useState(0);
+  const [pending, setPending] = useState(0);
+  const [working, setWorking] = useState(false);
   const [found, setFound] = useState<string[] | null>(null);
   const [cantSetUp, setCantSetUp] = useState<string[]>([]);
   const [notice, setNotice] = useState<string | null>(null);
@@ -261,6 +264,7 @@ export function AgentPackGroup({ api = agentPackApi }: { api?: AgentPackApi }) {
     try {
       const r = await api.preview();
       setRecorded(r.recorded);
+      setPending(pendingCount(visibleRows(groupAgents(r.agents)).filter((x) => x.installed)));
       setFound(visibleRows(groupAgents(r.agents)).filter((x) => x.installed).map(names));
       setCantSetUp((r.unsupported ?? []).filter((u) => u.installed).map((u) => u.label));
       setError(null);
@@ -291,6 +295,31 @@ export function AgentPackGroup({ api = agentPackApi }: { api?: AgentPackApi }) {
     }
   };
 
+  // One switch. On: every installed agent is set up with the defaults (the job "Review and install" does), then a
+  // one-line notice and Undo. Off: Undo. "Fix it" runs the same job again when an agent drifted or was added later.
+  const setUp = async () => {
+    setWorking(true);
+    setError(null);
+    try {
+      const done = await api.apply();
+      const written = visibleRows(groupAgents(done.agents)).filter((r) => r.skills?.written || r.mcp?.written);
+      const failed = done.agents.filter((a) => a.skills?.status === 'error' || a.mcp?.status === 'error');
+      setNotice(
+        written.length === 0
+          ? t('pack.everyHas')
+          : t('pack.setUpFor', { names: written.map(names).join(', '), failed: failed.length > 0 ? ` ${t('pack.couldNotWrite', { n: failed.length })}` : '' }),
+      );
+      setRecorded(done.recorded);
+      await refresh();
+    } catch (e) {
+      setError(errText(e));
+    } finally {
+      setWorking(false);
+    }
+  };
+  const on = recorded > 0;
+  const drifted = on && pending > 0;
+
   return (
     <section aria-label={t('settings.row.agent-pack.label')} className="rounded-xl border border-pm-border bg-pm-panel p-4">
       <div className="flex flex-wrap items-start justify-between gap-3">
@@ -299,16 +328,29 @@ export function AgentPackGroup({ api = agentPackApi }: { api?: AgentPackApi }) {
           <p className="mt-1 max-w-xl text-sm leading-6 text-pm-muted">{t('pack.groupHelp')}</p>
         </div>
         <div className="flex flex-wrap items-center gap-2">
-          {recorded > 0 && (
+          {drifted && (
+            <button type="button" className={btnPrimary} disabled={working} onClick={() => void setUp()}>
+              {working ? t('pack.installing') : t('pack.fixIt')}
+            </button>
+          )}
+          {on && (
             <button type="button" className={btn} onClick={() => void undo()} disabled={undoing}>
               {undoing ? t('pack.undoing') : t('pack.undo')}
             </button>
           )}
-          <button type="button" className={btnPrimary} onClick={() => setReviewing(true)}>
-            {t('pack.review')}
-          </button>
+          <Switch checked={on} disabled={working || undoing || found === null} label={t('pack.switchLabel')} onChange={(next) => void (next ? setUp() : undo())} />
         </div>
       </div>
+      {drifted && (
+        <p className="mt-3 text-xs leading-5 text-pm-text" data-testid="pack-drift">
+          {t('pack.drift')}
+        </p>
+      )}
+      <p className="mt-3 text-xs leading-5 text-pm-muted">
+        <button type="button" className="underline" onClick={() => setReviewing(true)}>
+          {t('pack.review')}
+        </button>
+      </p>
       {found && <p className="mt-3 text-xs leading-5 text-pm-muted">{found.length > 0 ? t('pack.found', { names: found.join(', ') }) : t('pack.noneYet')}</p>}
       {cantSetUp.length > 0 && <p className="mt-1 text-xs leading-5 text-pm-muted">{t('pack.cantSetUp', { names: cantSetUp.join(', ') })}</p>}
       {error && (

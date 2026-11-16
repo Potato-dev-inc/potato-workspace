@@ -106,6 +106,8 @@ export const SettingsSchema = z.object({
   smaller_updates_enabled: z.boolean().optional(),
   /** Crews (Settings > General > Labs): shows saved crews, read-only, and lets the command line check a crew file. Off unless chosen. Rust: crews. */
   crews_enabled: z.boolean().optional(),
+  /** Fixed phone address (Settings > Early features): an address from the third-party OpenTunnel relay. Off unless chosen. Rust: mobile_tunnel/opentunnel. */
+  opentunnel_stable_link: z.boolean().optional(),
   /** The version whose small update failed (written by the app); that version takes the full package. */
   app_only_failed_for: z.string().optional(),
   /** The first-switch sheet for Individual mode was shown and (with "Don't show again") dismissed for good. Absent: show it. */

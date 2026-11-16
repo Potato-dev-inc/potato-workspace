@@ -18,6 +18,7 @@
 
 mod agent_model;
 mod helper_model;
+mod started_as;
 mod store;
 #[cfg(test)]
 mod tests;
@@ -29,6 +30,8 @@ use serde_json::{json, Value};
 
 pub use agent_model::{agent_default_for, apply_agent_default_model, migrate_legacy_defaults_once, terminal_default_flags};
 pub use helper_model::{apply_helper_model, helper_default_for, HELPER_MODEL_NOTE};
+pub use started_as::{decide as decide_started_as, legacy_kind, parse_asked, StartedAgentKind, StartedAgentTypes, StartedAs, StartedRecord};
+pub use store::{set_started_agent_kind, set_started_agent_types, started_agent_kind, started_agent_types};
 pub use store::{close_helpers_with_agent, helper_visibility, keep_helpers_open, most_helpers_at_once, set_close_helpers_with_agent, set_most_helpers_at_once, set_stall_minutes, stall_minutes, set_for_agent, set_helper_visibility, set_keep_helpers_open, setting_for};
 #[cfg(test)]
 pub use store::{with_test_env, TestEnv};
@@ -154,6 +157,45 @@ pub(crate) fn apply(request: &mut crate::agent_runs::AgentRunRequest) -> Decisio
     let decision = decide(setting, verified, possible);
     request.headless = decision.headless;
     decision
+}
+
+/// Decides what a new `run_agent` is (`as`, the two settings, the table in the plan's 5.1) and stores it on the
+/// request. Only a brand-new first turn started by an agent counts: follow-ups, adopted panes and the app's own
+/// runs keep what they are. A value of `as` that is not `minion` / `spin_off` is the caller's mistake.
+pub(crate) fn apply_started_as(request: &mut crate::agent_runs::AgentRunRequest, started_by_agent: bool) -> Result<(), crate::operations::OperationError> {
+    apply_started_as_with(request, started_by_agent, started_agent_types(), started_agent_kind())
+}
+
+pub(crate) fn apply_started_as_with(
+    request: &mut crate::agent_runs::AgentRunRequest,
+    started_by_agent: bool,
+    types: StartedAgentTypes,
+    setting: StartedAgentKind,
+) -> Result<(), crate::operations::OperationError> {
+    let asked = parse_asked(request.as_kind.as_deref()).map_err(|message| crate::operations::OperationError::new("INVALID_ARGUMENT", message, false))?;
+    request.started = None;
+    if !started_by_agent
+        || request.turn_index > 0
+        || request.pane_id.is_some()
+        || request.worker_id.is_some()
+        || request.handle.is_some()
+        || request.agent_run_id.is_some()
+        || request.join_worktree.is_some()
+        || request.quick
+    {
+        return Ok(());
+    }
+    request.started = Some(decide_started_as(types, setting, asked));
+    Ok(())
+}
+
+/// The `started_as` a listing shows for a pane: its own, else (Two types only) the migration rule for a helper pane
+/// that was open before the field existed (a spin-off). In One type nothing is shown: `started_as` is never set there.
+pub fn listed_started_as(info: &crate::pty::PaneInfo) -> Option<&'static str> {
+    if let Some(kind) = info.started_as.as_deref().and_then(StartedAs::parse) {
+        return Some(kind.as_str());
+    }
+    (started_agent_types() == StartedAgentTypes::Two).then(|| info.effective_started_as()).flatten().map(StartedAs::as_str)
 }
 
 /// What a run result says when an agent's `headless: true` was not honoured.

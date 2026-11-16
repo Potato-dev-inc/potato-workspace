@@ -1,7 +1,7 @@
 // English messages: sidebar (the cockpit sidebar, project cards, footer and row menus). Keys are dotted (`sidebar.something`). Plural: `<key>_one` / `<key>_other`.
 export const sidebar = {
   'sidebar.errorIn': 'Error · {where}',
-  'sidebar.helperOf': 'Helper of {name} · {detail}',
+  'sidebar.helperOf': 'Started by {name} · {detail}',
   'sidebar.rowNeedsYou': '{name}, needs you',
   'sidebar.hasPreviewAt': 'Has a preview · {address}',
   'sidebar.hasPreview': 'Has a preview',
@@ -13,9 +13,9 @@ export const sidebar = {
   'sidebar.ended': 'Ended',
   'sidebar.moreFor': 'More for {name}',
   'sidebar.more': 'More',
-  'sidebar.helpersOf': 'Helpers of {name}',
-  'sidebar.hideHelpers': 'Hide helpers',
-  'sidebar.showHelpers': 'Show helpers',
+  'sidebar.helpersOf': 'Agents {name} started',
+  'sidebar.hideHelpers': 'Hide started agents',
+  'sidebar.showHelpers': 'Show started agents',
   'sidebar.questionsFromAgents': 'Questions from agents',
   'sidebar.projects': 'Projects',
   'sidebar.statusHeading': 'Status',
@@ -81,7 +81,7 @@ export const sidebar = {
   'sidebar.dragLive': 'Dragging {name}. Drop on the left or right side. Esc cancels.',
   'sidebar.dropLeft': 'Open on the left',
   'sidebar.dropRight': 'Open on the right',
-  'sidebar.helperCount': '{count} helpers',
+  'sidebar.helperCount': '{count} started agents',
   // The ... menu's three groups (item 16): each caption names where its rows go.
   'sidebar.groupGoTo': 'Go to',
   'sidebar.groupTools': 'Tools',

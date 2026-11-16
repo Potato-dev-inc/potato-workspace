@@ -191,20 +191,17 @@
 .cockpit .ck-attach-wrap {
   flex: none;
 }
-.cockpit .ck-attach-wrap .ck-attach-menu {
-  top: auto;
-  right: auto;
-  bottom: calc(100% + 6px);
-  left: 0;
+/* The menu is in the top layer (a portal): it is placed by script above the button, so only its width and items are styled here. */
+.cockpit .ck-attach-menu {
   min-width: 168px;
 }
-.cockpit .ck-attach-wrap .ck-attach-menu .ck-menu-item {
+.cockpit .ck-attach-menu .ck-menu-item {
   color: var(--label);
   font: 13px var(--font-ui);
   text-align: left;
   cursor: pointer;
 }
-.cockpit .ck-attach-wrap .ck-attach-menu .ck-menu-item:focus-visible {
+.cockpit .ck-attach-menu .ck-menu-item:focus-visible {
   outline: none;
   background: var(--fill-active);
 }

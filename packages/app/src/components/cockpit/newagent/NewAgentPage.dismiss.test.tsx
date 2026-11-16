@@ -55,7 +55,7 @@ const optionsShown = () => document.querySelectorAll('[role=option]').length > 0
 
 describe('New agent page menus close like every other dropdown', () => {
   const openModelMenu = async () => {
-    await click(host.querySelector('[data-testid="na-model"]'));
+    await click(document.querySelector('[data-testid="na-model"]'));
     expect(optionsShown()).toBe(true);
   };
 

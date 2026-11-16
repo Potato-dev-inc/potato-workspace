@@ -254,6 +254,63 @@ pub fn migrate_on_startup() {
     crate::toolbelt::store::migrate_on_startup();
 }
 
+// ---------- "Use the key found on this PC" ----------
+
+/// The environment variable a provider key is usually kept in on a developer PC.
+pub fn env_var_for(name: &str) -> Option<&'static str> {
+    match name {
+        "anthropic_api_key" => Some("ANTHROPIC_API_KEY"),
+        "openai_api_key" => Some("OPENAI_API_KEY"),
+        "openrouter_api_key" => Some("OPENROUTER_API_KEY"),
+        _ => None,
+    }
+}
+
+/// A key already on this PC (the person's environment variables), trimmed. `lookup` reads one variable;
+/// tests pass a fake so no real environment is touched. The value is returned only to Rust callers.
+pub fn found_on_pc_with(name: &str, lookup: &dyn Fn(&str) -> Option<String>) -> Option<String> {
+    let var = env_var_for(name)?;
+    lookup(var).map(|v| v.trim().to_string()).filter(|v| !v.is_empty())
+}
+
+/// The masked answer for the UI: whether a key was found and its last 4 characters. Never the value.
+/// A found key equal to the one already stored is not offered again.
+pub fn found_mask_with(b: &dyn SecretBackend, name: &str, lookup: &dyn Fn(&str) -> Option<String>) -> SecretMask {
+    let Some(found) = found_on_pc_with(name, lookup) else { return mask(None) };
+    if b.get(name).ok().flatten().as_deref() == Some(found.as_str()) {
+        return mask(None);
+    }
+    mask(Some(&found))
+}
+
+/// Copies the found key into the credential store (never anywhere else) and reads it back. Refuses when the
+/// store is unavailable, so a key never lands in a plain file. Returns the masked result.
+pub fn use_found_with(b: &dyn SecretBackend, name: &str, lookup: &dyn Fn(&str) -> Option<String>) -> Result<SecretMask, String> {
+    if !b.available() {
+        return Err("there is no safe place for the key on this PC".into());
+    }
+    let Some(found) = found_on_pc_with(name, lookup) else {
+        return Err("no key was found on this PC".into());
+    };
+    b.set(name, &found)?;
+    match b.get(name)? {
+        Some(back) if back == found => Ok(mask(Some(&back))),
+        _ => Err("the credential store did not keep the key".into()),
+    }
+}
+
+fn process_env(var: &str) -> Option<String> {
+    std::env::var(var).ok()
+}
+
+pub fn found_mask(name: &str) -> SecretMask {
+    found_mask_with(backend(), name, &process_env)
+}
+
+pub fn use_found(name: &str) -> Result<SecretMask, String> {
+    use_found_with(backend(), name, &process_env)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -376,4 +433,30 @@ mod tests {
         assert_eq!(b.get("openai_api_key").unwrap(), None);
         b.delete("openai_api_key").unwrap();
     }
+
+    #[test]
+    fn a_key_found_on_this_pc_is_masked_and_kept_only_in_the_store() {
+        let lookup = |var: &str| (var == "OPENAI_API_KEY").then(|| "  sk-found-key-123456789-ABCD 
+".to_string());
+        let b = MemoryBackend::new();
+        let found = found_mask_with(&b, "openai_api_key", &lookup);
+        assert!(found.set);
+        assert_eq!(found.last4.as_deref(), Some("ABCD"));
+        assert!(!found_mask_with(&b, "anthropic_api_key", &lookup).set, "other providers read other variables");
+        assert!(!found_mask_with(&b, "custom_ai_key", &lookup).set);
+        let used = use_found_with(&b, "openai_api_key", &lookup).unwrap();
+        assert_eq!(used.last4.as_deref(), Some("ABCD"));
+        assert_eq!(b.get("openai_api_key").unwrap().as_deref(), Some("sk-found-key-123456789-ABCD"));
+        assert!(!found_mask_with(&b, "openai_api_key", &lookup).set, "the stored key is not offered again");
+        assert!(use_found_with(&b, "anthropic_api_key", &lookup).is_err());
+    }
+
+    #[test]
+    fn a_found_key_is_refused_when_there_is_no_safe_store() {
+        let lookup = |_: &str| Some("sk-found-key-123456789-ABCD".to_string());
+        let b = MemoryBackend::unavailable();
+        let error = use_found_with(&b, "openai_api_key", &lookup).unwrap_err();
+        assert!(!error.contains("sk-found"), "the error never holds the key");
+    }
+
 }

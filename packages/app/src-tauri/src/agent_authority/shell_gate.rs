@@ -43,7 +43,7 @@ fn exempt(segments: &[&str]) -> bool {
             | ["operations", _, "wait"]
             // Asking the person a question is not a change (answering one has its own rules).
             | ["questions", ..]
-            // The existing "a helper started from a pane is nested under it" flow (`launch-worker`).
+            // A helper started from a pane (`launch-worker`): free for a proven agent window, a card for anyone else (`is_pane_spawn`).
             | ["panes"]
             | ["panes", _, "detach"]
             // Public routes with their own one-shot credential.
@@ -141,6 +141,15 @@ pub fn check_session_call(session: &str, method: &str, segments: &[&str], body: 
     Ok(())
 }
 
+/// `POST /panes`: an agent window starting a pane of its own (a helper, nested under it). It stays free
+/// for a caller the app can PROVE is an agent window (its key, or its process tree); anyone else asks.
+pub fn is_pane_spawn(method: &str, segments: &[&str]) -> bool {
+    method == "POST" && matches!(crate::mobile_pairing::normalize_bridge_segments(segments), ["panes"])
+}
+
+/// Who an unproven local caller is told to be on the card, and the session its card is kept under.
+const UNKNOWN_SESSION: &str = "local:unknown";
+
 /// The verdict for a call known to come from agent pane `pane`.
 pub fn check_agent_call(
     pane: &str,
@@ -154,15 +163,37 @@ pub fn check_agent_call(
     if !is_changing(method, segments) {
         return Ok(());
     }
-    let route = format!("{method} /{}", segments.join("/"));
     let requester = registry
         .and_then(|r| r.lock().panes.get(pane).map(|p| p.info.agent_type.clone()))
         .map(|t| gate::agent_label(&t))
         .unwrap_or_else(|| gate::UNKNOWN_REQUESTER.to_string());
+    ask_and_record(Some(pane), method, segments, body, requester, now)
+}
+
+/// The verdict for a local call nobody could place: no valid key, no pane in its process tree, and not the app
+/// itself (an orphan that left its window, a stolen or stale key, a tool the person never started). It is never
+/// treated as the app: a call that changes something, or starts a pane, asks the person first.
+pub fn check_unknown_call(method: &str, segments: &[&str], body: &Value, now: u64) -> Result<(), OperationError> {
+    let segments = crate::mobile_pairing::normalize_bridge_segments(segments);
+    if !is_changing(method, segments) && !is_pane_spawn(method, segments) {
+        return Ok(());
+    }
+    ask_and_record(None, method, segments, body, gate::UNKNOWN_REQUESTER.to_string(), now)
+}
+
+fn ask_and_record(
+    pane: Option<&str>,
+    method: &str,
+    segments: &[&str],
+    body: &Value,
+    requester: String,
+    now: u64,
+) -> Result<(), OperationError> {
+    let route = format!("{method} /{}", segments.join("/"));
     let ask = Ask {
-        session: format!("pane:{pane}"),
+        session: pane.map(|p| format!("pane:{p}")).unwrap_or_else(|| UNKNOWN_SESSION.to_string()),
         subject: route.clone(),
-        pane_id: Some(pane.to_string()),
+        pane_id: pane.map(str::to_string),
         action: Action::ConfigChange,
         prompt_key: body_key(body),
         requester: requester.clone(),
@@ -172,17 +203,106 @@ pub fn check_agent_call(
     };
     let target = ask.target.clone();
     gate::run(ask, now)?;
+    let (who, how) = match pane {
+        Some(pane) => (Who::Agent(format!("pane:{pane}")), "from a command"),
+        None => (Who::Agent(UNKNOWN_SESSION.to_string()), "from a command it could not place"),
+    };
     audit::record(
         Kind::Consent,
-        Who::Agent(format!("pane:{pane}")),
-        &format!("{requester} changed {target} from a command, after you allowed it"),
+        who,
+        &format!("{requester} changed {target} {how}, after you allowed it"),
         json!({ "pane_id": pane, "route": route, "via": "shell" }),
     );
     Ok(())
 }
 
+/// Where a request that changes something comes from, as far as the app can prove.
+#[derive(Debug, PartialEq, Eq)]
+pub enum Caller {
+    /// This agent window's own key, or its process tree, names the pane.
+    Pane(String),
+    /// The pane header only (a claim): makes the call stricter, never looser.
+    Claimed(String),
+    /// The app itself (its webview, or something the person started at their desktop).
+    App,
+    /// Nobody could place it.
+    Unknown,
+}
+
+/// Name the caller. Order: the pane's key, then the process tree, then a header claim, then "is it the app".
+/// A caller that cannot be placed is `Unknown` on Windows (where the connection's owner can be read); where the OS
+/// cannot say who owns a connection at all (another OS), it stays the app, as before, because nothing could ever
+/// tell the app's UI from anyone else. A connection whose peer could not be read at all (never a real socket) also stays the app.
+#[allow(clippy::too_many_arguments)]
+pub fn identify_caller(
+    registry: &Registry,
+    owner: &dyn TcpOwner,
+    snapshot: &dyn Fn() -> Option<Vec<ProcEntry>>,
+    peer: Option<Peer>,
+    headers: &str,
+    app_pid: u32,
+    fail_closed: bool,
+) -> Caller {
+    if let Some(pane) = super::pane_keys::pane_from_headers(headers) {
+        return Caller::Pane(pane);
+    }
+    if let Some(pane) = crate::companion::peer::caller_pane(registry, owner, snapshot, peer) {
+        return Caller::Pane(pane);
+    }
+    if let Some(pane) = claimed_pane(headers) {
+        return Caller::Claimed(pane);
+    }
+    match crate::companion::peer::caller_is_the_app(owner, snapshot, peer, app_pid) {
+        Some(true) => Caller::App,
+        Some(false) => Caller::Unknown,
+        None if fail_closed && peer.is_some() => Caller::Unknown,
+        None => Caller::App,
+    }
+}
+
+/// The router's check for a request that carries an MCP session header. A session is a caller's own claim: the app
+/// does not issue it, any local process can make one up (the first call with a new id creates it). So the header
+/// proves nothing. A session call from a proven agent window or from the app itself goes on to the MCP rules
+/// (`mcp_sessions::authorize`) as before; one nobody could place (an orphan with no key, a process that is nowhere in
+/// the app's or the desktop's tree) is an unknown local caller and asks like a shell command does.
+#[allow(clippy::too_many_arguments)]
+pub fn check_session_request(
+    registry: &Registry,
+    owner: &dyn TcpOwner,
+    snapshot: &dyn Fn() -> Option<Vec<ProcEntry>>,
+    peer: Option<Peer>,
+    headers: &str,
+    method: &str,
+    segments: &[&str],
+    body: &Value,
+) -> Result<(), OperationError> {
+    check_session_request_as(registry, owner, snapshot, peer, headers, method, segments, body, std::process::id(), cfg!(windows))
+}
+
+/// `check_session_request` with the app's process id and the fail-closed choice passed in (the tests).
+#[allow(clippy::too_many_arguments)]
+pub fn check_session_request_as(
+    registry: &Registry,
+    owner: &dyn TcpOwner,
+    snapshot: &dyn Fn() -> Option<Vec<ProcEntry>>,
+    peer: Option<Peer>,
+    headers: &str,
+    method: &str,
+    segments: &[&str],
+    body: &Value,
+    app_pid: u32,
+    fail_closed: bool,
+) -> Result<(), OperationError> {
+    if !is_changing(method, segments) && !is_pane_spawn(method, segments) {
+        return Ok(());
+    }
+    match identify_caller(registry, owner, snapshot, peer, headers, app_pid, fail_closed) {
+        Caller::Unknown => check_unknown_call(method, segments, body, gate::questions_now()),
+        Caller::Pane(_) | Caller::Claimed(_) | Caller::App => Ok(()),
+    }
+}
+
 /// The router's check for a request from a session-less local caller (not a phone, not a forwarder).
-/// No pane from the OS and no header claim means the app's own UI: no prompt.
 #[allow(clippy::too_many_arguments)]
 pub fn check_request(
     registry: &Registry,
@@ -194,13 +314,36 @@ pub fn check_request(
     segments: &[&str],
     body: &Value,
 ) -> Result<(), OperationError> {
-    if !is_changing(method, segments) {
+    check_request_as(registry, owner, snapshot, peer, headers, method, segments, body, std::process::id(), cfg!(windows))
+}
+
+/// `check_request` with the app's process id and the fail-closed choice passed in (the tests).
+#[allow(clippy::too_many_arguments)]
+pub fn check_request_as(
+    registry: &Registry,
+    owner: &dyn TcpOwner,
+    snapshot: &dyn Fn() -> Option<Vec<ProcEntry>>,
+    peer: Option<Peer>,
+    headers: &str,
+    method: &str,
+    segments: &[&str],
+    body: &Value,
+    app_pid: u32,
+    fail_closed: bool,
+) -> Result<(), OperationError> {
+    if !is_changing(method, segments) && !is_pane_spawn(method, segments) {
         return Ok(());
     }
-    let pane = crate::companion::peer::caller_pane(registry, owner, snapshot, peer).or_else(|| claimed_pane(headers));
-    match pane {
-        Some(pane) => check_agent_call(&pane, method, segments, body, Some(registry), gate::questions_now()),
-        None => Ok(()),
+    let now = gate::questions_now();
+    match identify_caller(registry, owner, snapshot, peer, headers, app_pid, fail_closed) {
+        // A proven agent window may start a pane of its own; anything else it changes asks.
+        Caller::Pane(_) if is_pane_spawn(method, segments) => Ok(()),
+        Caller::Pane(pane) => check_agent_call(&pane, method, segments, body, Some(registry), now),
+        // A claim proves nothing: for a pane start it asks like a stranger.
+        Caller::Claimed(_) if is_pane_spawn(method, segments) => check_unknown_call(method, segments, body, now),
+        Caller::Claimed(pane) => check_agent_call(&pane, method, segments, body, Some(registry), now),
+        Caller::App => Ok(()),
+        Caller::Unknown => check_unknown_call(method, segments, body, now),
     }
 }
 
@@ -209,6 +352,7 @@ mod tests {
     use super::*;
     use crate::agent_authority::consent::{CHOICE_DENY, CHOICE_ONCE};
     use crate::questions::{self, now_ms};
+    use crate::agent_authority::pane_keys;
 
     fn pane() -> String {
         format!("pane-{}", uuid::Uuid::new_v4())
@@ -286,30 +430,149 @@ mod tests {
         check_agent_call(&pane, "POST", &["config", "plan"], &body, None, now_ms()).expect("planning needs no card");
     }
 
-    struct Nobody;
-    impl TcpOwner for Nobody {
-        fn owner_pid(&self, _: &Peer) -> Option<u32> {
-            None
-        }
-    }
-
     fn registry() -> Registry {
         Arc::new(Mutex::new(PaneRegistry::new()))
     }
 
+    /// A fake owner: the process that owns the client end of the connection.
+    struct Owner(Option<u32>);
+    impl TcpOwner for Owner {
+        fn owner_pid(&self, _: &Peer) -> Option<u32> {
+            self.0
+        }
+    }
+
+    const APP: u32 = 7;
+    const DESKTOP: u32 = 50;
+
+    fn proc(pid: u32, parent: u32) -> ProcEntry {
+        ProcEntry { pid, parent, image: "x.exe".into() }
+    }
+
+    /// The app (7) has the webview 500 under it. An agent pane's process 100 hangs off the desktop shell with its
+    /// shell 102. An orphan 600 left that tree: its parent 999 has exited.
+    fn table() -> Vec<ProcEntry> {
+        vec![ProcEntry { pid: DESKTOP, parent: 999_999, image: "explorer.exe".into() }, proc(500, APP), proc(100, DESKTOP), proc(102, 100), proc(600, 999)]
+    }
+
+    fn peer() -> Option<Peer> {
+        Some(Peer { local: "127.0.0.1:17360".parse().unwrap(), remote: "127.0.0.1:50123".parse().unwrap() })
+    }
+
+    const PLAIN: &str = "Host: 127.0.0.1:1\r\n";
+
+    fn call(owner: Option<u32>, headers: &str, method: &str, segments: &[&str]) -> Result<(), OperationError> {
+        check_request_as(&registry(), &Owner(owner), &|| Some(table()), peer(), headers, method, segments, &json!({"x": 1}), APP, true)
+    }
+
     #[test]
     fn the_apps_own_ui_call_passes_with_no_prompt() {
-        // The OS names no pane for the webview and it sends no pane header.
+        // The webview's process hangs off this app: it is the app, not an unknown caller.
         let headers = "Host: 127.0.0.1:1\r\nOrigin: http://tauri.localhost\r\n";
-        check_request(&registry(), &Nobody, &|| None, None, headers, "PATCH", &["settings"], &json!({"x": 1})).expect("UI passes");
+        call(Some(500), headers, "PATCH", &["settings"]).expect("UI passes");
+        // What the person runs in their own terminal (its chain reaches the desktop shell) is the person's.
+        call(Some(DESKTOP), PLAIN, "PATCH", &["settings"]).expect("the person's own desktop passes");
+    }
+
+    #[test]
+    fn an_unknown_local_caller_needs_consent_and_is_never_treated_as_the_app() {
+        // An orphan that left every window's tree, with no key and no header.
+        let error = call(Some(600), PLAIN, "PATCH", &["settings"]).unwrap_err();
+        let id = pending_id(&error);
+        assert!(error.context["pane_id"].is_null(), "no pane could be named");
+        let card = questions::store().get(&id, now_ms()).unwrap();
+        assert_eq!(card.question, "Allow another agent to change your settings?");
+        // Where nobody can say who owns the connection at all (the OS table is silent), Windows still asks.
+        pending_id(&call(None, PLAIN, "PATCH", &["settings"]).unwrap_err());
+        // Only another OS, where nothing could ever tell the UI apart, keeps today's behaviour.
+        check_request_as(&registry(), &Owner(None), &|| None, peer(), PLAIN, "PATCH", &["settings"], &json!({"y": 1}), APP, false).expect("no detection at all");
+        // A read is never asked.
+        call(Some(600), PLAIN, "GET", &["settings"]).expect("reads pass");
+    }
+
+    #[test]
+    fn an_orphan_that_carries_its_panes_key_is_that_pane_not_the_app() {
+        let name = pane();
+        let key = pane_keys::mint(&name);
+        let headers = format!("{PLAIN}{}: {key}\r\n", pane_keys::KEY_HEADER);
+        // The process escaped its window's tree (600), yet the key names the pane.
+        assert_eq!(
+            identify_caller(&registry(), &Owner(Some(600)), &|| Some(table()), peer(), &headers, APP, true),
+            Caller::Pane(name.clone())
+        );
+        let error = call(Some(600), &headers, "PATCH", &["settings"]).unwrap_err();
+        assert_eq!(pending_id(&error), pending_id(&call(Some(600), &headers, "PATCH", &["settings"]).unwrap_err()));
+        assert_eq!(error.context["pane_id"], name.as_str(), "the card is raised for the pane the key names");
+        // A key beats a claim in the pane header.
+        let both = format!("{headers}{PANE_HEADER}: some-other-pane\r\n");
+        assert_eq!(identify_caller(&registry(), &Owner(Some(600)), &|| Some(table()), peer(), &both, APP, true), Caller::Pane(name));
+    }
+
+    #[test]
+    fn a_closed_panes_key_is_rejected_and_the_caller_is_unknown_again() {
+        let name = pane();
+        let key = pane_keys::mint(&name);
+        let headers = format!("{PLAIN}{}: {key}\r\n", pane_keys::KEY_HEADER);
+        pane_keys::revoke(&name);
+        assert_eq!(identify_caller(&registry(), &Owner(Some(600)), &|| Some(table()), peer(), &headers, APP, true), Caller::Unknown);
+        let error = call(Some(600), &headers, "PATCH", &["settings"]).unwrap_err();
+        pending_id(&error);
+        assert!(error.context["pane_id"].is_null());
+        // A made-up key is no better than none, even from inside the app's own tree.
+        let forged = format!("{PLAIN}{}: not-a-real-key\r\n", pane_keys::KEY_HEADER);
+        call(Some(500), &forged, "PATCH", &["settings"]).expect("a bad key does not make the app's own UI an agent");
+        pending_id(&call(Some(600), &forged, "PATCH", &["settings"]).unwrap_err());
+    }
+
+
+    #[test]
+    fn a_made_up_mcp_session_header_does_not_skip_the_consent_check() {
+        let forged = format!("{PLAIN}X-Potato-Workspace-Session: made-up-{}\r\n", uuid::Uuid::new_v4());
+        let session_call = |owner: u32, headers: &str, method: &str, segments: &[&str]| {
+            check_session_request_as(&registry(), &Owner(Some(owner)), &|| Some(table()), peer(), headers, method, segments, &json!({"s": 1}), APP, true)
+        };
+        // An orphan with a made-up session and no key: asked, for a change and for starting a pane.
+        pending_id(&session_call(600, &forged, "POST", &["agents", "run"]).unwrap_err());
+        pending_id(&session_call(600, &forged, "POST", &["panes"]).unwrap_err());
+        // Reads are never asked.
+        session_call(600, &forged, "GET", &["panes"]).expect("reads pass");
+        // The same session id from the app's own tree, or from a window by its key, goes on to the MCP rules as before.
+        session_call(500, &forged, "POST", &["agents", "run"]).expect("the app's own tools");
+        let name = pane();
+        let key = pane_keys::mint(&name);
+        let keyed = format!("{forged}{}: {key}\r\n", pane_keys::KEY_HEADER);
+        session_call(600, &keyed, "POST", &["agents", "run"]).expect("a keyed window's MCP shim");
+        pane_keys::revoke(&name);
+        pending_id(&session_call(600, &keyed, "POST", &["agents", "run"]).unwrap_err());
+    }
+    #[test]
+    fn starting_a_pane_needs_a_key_or_consent() {
+        assert!(is_pane_spawn("POST", &["panes"]));
+        assert!(is_pane_spawn("POST", &["bridge", "panes"]));
+        assert!(!is_pane_spawn("GET", &["panes"]) && !is_pane_spawn("POST", &["panes", "p1", "input"]));
+        // A stranger, and a bare pane claim, ask first.
+        let error = call(Some(600), PLAIN, "POST", &["panes"]).unwrap_err();
+        pending_id(&error);
+        assert_eq!(error.context["action"], "config_change");
+        pending_id(&call(Some(600), &format!("{PLAIN}{PANE_HEADER}: pane-1\r\n"), "POST", &["panes"]).unwrap_err());
+        // The pane's own key (even from an orphan) starts a pane with no card.
+        let name = pane();
+        let key = pane_keys::mint(&name);
+        call(Some(600), &format!("{PLAIN}{}: {key}\r\n", pane_keys::KEY_HEADER), "POST", &["panes"]).expect("a keyed window starts a helper");
+        // The app itself, and a pane's other changes (the key does not unlock them), behave as before.
+        call(Some(500), PLAIN, "POST", &["panes"]).expect("the app starts panes");
+        pending_id(&call(Some(600), &format!("{PLAIN}{}: {key}\r\n", pane_keys::KEY_HEADER), "PATCH", &["settings"]).unwrap_err());
+        pane_keys::revoke(&name);
     }
 
     #[test]
     fn a_pane_header_claim_makes_the_call_an_agent_call_and_can_never_loosen_it() {
         let name = pane();
         let headers = format!("Host: 127.0.0.1:1\r\n{PANE_HEADER}: {name}\r\n");
-        let error = check_request(&registry(), &Nobody, &|| None, None, &headers, "PATCH", &["settings"], &json!({"x": 1})).unwrap_err();
+        // Even from inside the app's own tree the claim makes it stricter.
+        let error = call(Some(500), &headers, "PATCH", &["settings"]).unwrap_err();
         pending_id(&error);
+        assert_eq!(error.context["pane_id"], name.as_str());
         assert_eq!(claimed_pane(&headers).as_deref(), Some(name.as_str()));
         assert_eq!(claimed_pane("Host: x\r\n"), None);
         assert_eq!(claimed_pane(&format!("{PANE_HEADER}:   \r\n")), None);

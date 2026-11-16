@@ -87,12 +87,12 @@ async function render(c: CockpitApi, extra: { onOpenToSide?: (id: string) => voi
 }
 
 function rowOf(name: string): HTMLButtonElement {
-  const row = [...host.querySelectorAll<HTMLButtonElement>('button.ck-row')].find((b) => b.querySelector('.ck-row-title')?.textContent === name);
+  const row = [...document.querySelectorAll<HTMLButtonElement>('button.ck-row')].find((b) => b.querySelector('.ck-row-title')?.textContent === name);
   if (!row) throw new Error(`no row named ${name}`);
   return row;
 }
 const rightClick = (el: HTMLElement, x = 40, y = 50) => el.dispatchEvent(new MouseEvent('contextmenu', { bubbles: true, cancelable: true, clientX: x, clientY: y }));
-const items = () => [...host.querySelectorAll<HTMLButtonElement>('[role="menuitem"]')];
+const items = () => [...document.querySelectorAll<HTMLButtonElement>('[role="menuitem"]')];
 const labels = () => items().map((b) => b.textContent!.replace('⌃C', ''));
 const item = (label: string) => items().find((b) => b.textContent!.replace('⌃C', '') === label)!;
 
@@ -100,10 +100,10 @@ describe('the pane row menu', () => {
   it('is one compact menu: view item, the pane actions, then Close last, no duplicates, grouped by separators', async () => {
     await render(fakeApi(), { onOpenToSide: vi.fn() });
     await act(async () => rightClick(rowOf('Codex two')));
-    expect(labels()).toEqual(['Open to the side', 'Pin', 'Make helper of…', 'Rename', 'Reflow', 'Interrupt', 'Handoff from here', 'Add a helper', 'Details', 'Close']);
-    expect(host.querySelectorAll('[role="menu"]')).toHaveLength(1);
-    expect(host.querySelector('[role="menu"]')!.classList.contains('ck-menu')).toBe(true);
-    const kids = [...host.querySelector('[role="menu"]')!.children].map((n) => n.getAttribute('role'));
+    expect(labels()).toEqual(['Open to the side', 'Pin', 'Put under…', 'Rename', 'Reflow', 'Interrupt', 'Handoff from here', 'Add a standby', 'Details', 'Close']);
+    expect(document.querySelectorAll('[role="menu"]')).toHaveLength(1);
+    expect(document.querySelector('[role="menu"]')!.classList.contains('ck-menu')).toBe(true);
+    const kids = [...document.querySelector('[role="menu"]')!.firstElementChild!.children].map((n) => n.getAttribute('role'));
     expect(kids).toEqual(['menuitem', 'separator', ...Array(8).fill('menuitem'), 'separator', 'menuitem']);
   });
 
@@ -125,7 +125,7 @@ describe('the pane row menu', () => {
       expect(p2).toHaveBeenCalledWith(action);
       expect(p1).not.toHaveBeenCalled();
       expect(c.select).toHaveBeenLastCalledWith('p2');
-      expect(host.querySelector('[role="menu"]')).toBeNull();
+      expect(document.querySelector('[role="menu"]')).toBeNull();
       off1();
       off2();
     }
@@ -162,54 +162,61 @@ describe('the pane row menu', () => {
     await act(async () => item('Open to the side').dispatchEvent(new KeyboardEvent('keydown', { key: 'ArrowUp', bubbles: true })));
     expect(document.activeElement).toBe(item('Close'));
     await act(async () => item('Close').dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true })));
-    expect(host.querySelector('[role="menu"]')).toBeNull();
+    expect(document.querySelector('[role="menu"]')).toBeNull();
     expect(document.activeElement).toBe(row);
   });
 
   it('is drawn in a portal on the cockpit root, outside the sidebar, and has no Copy selection', async () => {
     await render(fakeApi());
     await act(async () => rightClick(rowOf('Codex')));
-    const menu = host.querySelector('[role="menu"]')!;
+    const menu = document.querySelector('[role="menu"]')!;
     expect(menu.parentElement).toBe(host);
-    expect(host.querySelector('.ck-side')!.contains(menu)).toBe(false);
+    expect(document.querySelector('.ck-side')!.contains(menu)).toBe(false);
     expect(labels()).not.toContain('Copy selection');
   });
 
+  // The menu is placed by the shared layer (components/common/Floating): 6 px under the pointer, 8 px from the window edge.
   describe('placement (jsdom has no layout, so the menu size is faked)', () => {
     const W = 160;
     const H = 130;
-    const size = () =>
-      vi.spyOn(HTMLElement.prototype, 'getBoundingClientRect').mockImplementation(function (this: HTMLElement) {
-        const menu = this.getAttribute?.('role') === 'menu';
-        return { x: 0, y: 0, left: 0, top: 0, right: menu ? W : 0, bottom: menu ? H : 0, width: menu ? W : 0, height: menu ? H : 0, toJSON() {} } as DOMRect;
+    const size = () => {
+      vi.spyOn(HTMLElement.prototype, 'offsetWidth', 'get').mockImplementation(function (this: HTMLElement) {
+        return this.getAttribute?.('role') === 'menu' ? W : 0;
       });
+      vi.spyOn(Element.prototype, 'scrollHeight', 'get').mockImplementation(function (this: Element) {
+        return this.getAttribute?.('role') === 'menu' ? H : 0;
+      });
+    };
     const place = () => {
-      const st = (host.querySelector('[role="menu"]') as HTMLElement).style;
+      const st = (document.querySelector('[role="menu"]') as HTMLElement).style;
       return { left: parseFloat(st.left), top: parseFloat(st.top) };
     };
     beforeEach(() => {
       Object.assign(window, { innerWidth: 1000, innerHeight: 600 });
+    });
+    afterEach(() => {
+      vi.restoreAllMocks();
     });
 
     it('opens at the pointer when it fits', async () => {
       size();
       await render(fakeApi());
       await act(async () => rightClick(rowOf('Codex'), 40, 50));
-      expect(place()).toEqual({ left: 40, top: 50 });
+      expect(place()).toEqual({ left: 40, top: 56 });
     });
 
     it('is clamped inside the window on the right edge', async () => {
       size();
       await render(fakeApi());
       await act(async () => rightClick(rowOf('Codex'), 990, 50));
-      expect(place()).toEqual({ left: 1000 - W - 4, top: 50 });
+      expect(place()).toEqual({ left: 1000 - W - 8, top: 56 });
     });
 
     it('flips upward when there is no room below the pointer', async () => {
       size();
       await render(fakeApi());
       await act(async () => rightClick(rowOf('Codex'), 40, 580));
-      expect(place()).toEqual({ left: 40, top: 580 - H });
+      expect(place()).toEqual({ left: 40, top: 580 - 6 - H });
     });
 
     it('stays inside the window when it fits neither above nor below (tiny window)', async () => {
@@ -217,15 +224,15 @@ describe('the pane row menu', () => {
       Object.assign(window, { innerHeight: 100 });
       await render(fakeApi());
       await act(async () => rightClick(rowOf('Codex'), 40, 60));
-      expect(place().top).toBe(4);
+      expect(place().top).toBe(8);
     });
   });
 
   it('a click outside closes it', async () => {
     await render(fakeApi());
     await act(async () => rightClick(rowOf('Codex')));
-    expect(host.querySelector('[role="menu"]')).not.toBeNull();
+    expect(document.querySelector('[role="menu"]')).not.toBeNull();
     await act(async () => document.body.dispatchEvent(new MouseEvent('mousedown', { bubbles: true })));
-    expect(host.querySelector('[role="menu"]')).toBeNull();
+    expect(document.querySelector('[role="menu"]')).toBeNull();
   });
 });

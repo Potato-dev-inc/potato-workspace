@@ -282,6 +282,16 @@ pub fn caller_pane(
     decide(&panes, Some(&procs), Some(pid), None).verified
 }
 
+/// Whether the process on the other end of this connection is this app itself or something the person started
+/// at their desktop: its chain of parents is intact up to this app's own process or the desktop shell.
+/// `Some(false)` is a process whose chain is broken (an orphan that left its window) or that is placed nowhere.
+/// `None` when it cannot be told (the OS names no owner, or there is no process table: another OS).
+pub fn caller_is_the_app(owner: &dyn TcpOwner, snapshot: &dyn Fn() -> Option<Vec<ProcEntry>>, peer: Option<Peer>, app_pid: u32) -> Option<bool> {
+    let pid = owner.owner_pid(&peer?)?;
+    let procs = snapshot()?;
+    Some(placed_in_the_session(&procs, pid, app_pid))
+}
+
 /// The router's check for a request from a local (token-less) caller, over the real process table. `peer` is the
 /// connection; `None` when it could not be read.
 pub fn check(

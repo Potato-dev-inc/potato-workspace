@@ -41,6 +41,8 @@ const cockpit = vi.hoisted(() => ({
   extraIds: [] as string[],
   // A helper's parent: { p2: 'p1' } makes p2 a helper of p1 (the helpers bar then shows it).
   parents: {} as Record<string, string>,
+  // What a pane was started as ({ p2: 'minion' }); absent = a helper or the person's own chat.
+  startedAs: {} as Record<string, string>,
   // Panes that are working or need you (status by id); the rest are idle.
   statuses: {} as Record<string, string>,
   // The first-switch sheet the (mocked) hook reports, and what Switch / Cancel did.
@@ -116,7 +118,7 @@ vi.mock('./hooks/useCockpit', async () => {
     useCockpit: () => {
       const [selectedId, setSelectedId] = useState<string | null>('p1');
       const ids = ['p1', 'p2', ...cockpit.extraIds];
-      const infoOf = (id: string) => ({ id, cwd: `/proj/${id}`, agent_type: `agent-${id}`, parent_pane_id: cockpit.parents[id] ?? null });
+      const infoOf = (id: string) => ({ id, cwd: `/proj/${id}`, agent_type: `agent-${id}`, parent_pane_id: cockpit.parents[id] ?? null, started_as: cockpit.startedAs[id] ?? null });
       return {
         selectedId,
         // Like the real hook: picking a pane keeps a running spawn and clears a failed one.
@@ -498,6 +500,7 @@ beforeEach(async () => {
   cockpit.newAgents = [];
   cockpit.ready = false;
   cockpit.parents = {};
+  cockpit.startedAs = {};
   cockpit.statuses = {};
   live.status = { live: false, paused: false, viewers: 0, endsAtMs: 0, paneIds: [], hidden: 0, stopped: null };
   live.listeners = [];
@@ -1686,6 +1689,19 @@ describe('CockpitApp helpers bar', () => {
     expect(host.querySelector('[data-testid="helper-dot"]')).not.toBeNull();
   });
 
+  it('a minion is not a chip (it lives in Background tasks); a spin-off and a helper still are', async () => {
+    cockpit.extraIds = ['p3', 'p4'];
+    cockpit.parents = { p2: 'p1', p3: 'p1', p4: 'p1' };
+    cockpit.startedAs = { p2: 'minion', p3: 'spin_off' };
+    await rerender('minion');
+    expect(chips()).toEqual(['p3', 'p4']);
+    // With only a minion under it, the agent has no bar at all.
+    cockpit.extraIds = [];
+    cockpit.parents = { p2: 'p1' };
+    await rerender('minion-only');
+    expect(bar()).toBeNull();
+  });
+
   it('a chip opens that helper in the front pane, and the crumb brings the main agent back', async () => {
     cockpit.parents = { p2: 'p1' };
     await rerender('h2');
@@ -1785,7 +1801,7 @@ describe('CockpitApp: more than one companion', () => {
     expect(host.querySelector('.ck-companion-name')?.textContent).toBe('Mochi');
     expect(host.querySelector('.ck-companion-badge')?.textContent).toBe('Default');
     clickButton('Switch companion ▾');
-    const bit = [...host.querySelectorAll<HTMLButtonElement>('.ck-companion-switch [role="menuitem"]')].find((b) => b.textContent === 'Bit')!;
+    const bit = [...document.querySelectorAll<HTMLButtonElement>('[role="menuitem"]')].find((b) => b.textContent === 'Bit')!;
     act(() => bit.click());
     await act(async () => {});
     expect(host.querySelector('.ck-companion-name')?.textContent).toBe('Bit');

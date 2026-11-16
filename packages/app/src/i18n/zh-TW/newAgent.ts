@@ -139,7 +139,7 @@ export const newAgent: Partial<Record<EnglishKey, string>> = {
   'newAgent.preview': '預覽',
   'newAgent.tonight': '今晚…',
   'newAgent.nightShift': '夜班',
-  'newAgent.editList': '編輯清單…',
+  'newAgent.editList': '編輯這份清單…',
   'newAgent.continueTitle': '接著上次的進度',
   'newAgent.continueWhen': '{day} {time}',
   'newAgent.dayToday': '今天',

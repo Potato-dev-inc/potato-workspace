@@ -30,7 +30,7 @@ afterEach(() => {
 /** The header's "View: … ▾" dropdown: open it, pick one mode. */
 function pickMode(label: string): void {
   click(host.querySelector<HTMLButtonElement>('.ck-chat-mode-pill')!);
-  click([...host.querySelectorAll<HTMLButtonElement>('[role="menuitemradio"]')].find((b) => b.textContent === label)!);
+  click([...document.querySelectorAll<HTMLButtonElement>('[role="menuitemradio"]')].find((b) => b.textContent === label)!);
 }
 
 function render(items: ChatItem[], props: Partial<SessionChatViewProps> = {}) {
@@ -124,7 +124,7 @@ describe('the activity line', () => {
     render(items);
     expect(lines()).toHaveLength(0);
     const helper = host.querySelector('[data-testid="helper-row"]')!;
-    expect(helper.textContent).toContain('Helper: Check the tests');
+    expect(helper.textContent).toContain('Minion: Check the tests');
     click(helper.querySelector('button'));
     expect(helper.textContent).toContain('Run the suite.');
     expect(helper.textContent).toContain('All green.');

@@ -87,6 +87,8 @@ export const tauriWslApi = {
   check: (distro: string) => call<DistroView>('wsl_check', { distro }),
   placesGet: () => call<AgentPlaceRow[]>('wsl_places_get'),
   placeSet: (agentId: string, distro: string | null) => call<AgentPlaceRow>('wsl_place_set', { agentId, distro }),
+  /** Moves one WSL 1 distro to WSL 2 (a person's click only). Returns the fresh distro list. */
+  upgrade: (distro: string) => call<WslStatus>('wsl_upgrade', { distro }),
   /** Starts a pane for one agent in the given distro, whatever the saved setting says. */
   spawnInLinux: (args: SpawnPaneArgs, distro: string) => call<string>('spawn_pane_in_linux', { args, distro }),
 };
@@ -108,6 +110,10 @@ export function wslPlacesGet(api: WslApi = tauriWslApi): Promise<AgentPlaceRow[]
 /** `distro: null` sets the agent back to Windows (always allowed). */
 export function wslPlaceSet(agentId: string, distro: string | null, api: WslApi = tauriWslApi): Promise<AgentPlaceRow> {
   return api.placeSet(agentId, distro);
+}
+
+export function wslUpgrade(distro: string, api: WslApi = tauriWslApi): Promise<WslStatus> {
+  return api.upgrade(distro);
 }
 
 export function spawnPaneInLinux(args: SpawnPaneArgs, distro: string, api: WslApi = tauriWslApi): Promise<string> {

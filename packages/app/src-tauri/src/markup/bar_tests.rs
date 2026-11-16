@@ -90,3 +90,88 @@ fn the_state_pushed_to_the_bar_is_one_json_string() {
     let js = set_script("k", &json!({ "theme": "dark", "status": "a\"b" }));
     assert!(js.contains(".set(\"") && js.contains("theme"), "{js}");
 }
+
+#[test]
+fn the_picture_is_drawn_from_bytes_not_loaded_by_address() {
+    // A page's img-src rule blocks `<img src="data:...">`; the bar keeps the picture in a canvas it paints itself.
+    let js = BAR_JS;
+    assert!(!js.contains("el('img')") && !js.contains("createElement('img')") && !js.contains("setAttribute('src'"));
+    assert!(js.contains("createImageBitmap") && js.contains("el('canvas')"));
+    // Looks are set through the style object (allowed under style-src), never as markup or a style element.
+    assert!(!js.contains("<style") && !js.contains("createElement('style')") && !js.contains("el('style')") && !js.contains("setAttribute('style'"));
+}
+
+/// A loopback page that sets `Content-Security-Policy: default-src 'none'`.
+fn strict_page() -> (std::net::SocketAddr, std::sync::Arc<std::sync::atomic::AtomicBool>) {
+    use std::io::{Read, Write};
+    use std::sync::atomic::{AtomicBool, Ordering};
+    let listener = std::net::TcpListener::bind(("127.0.0.1", 0)).unwrap();
+    let addr = listener.local_addr().unwrap();
+    let stop = std::sync::Arc::new(AtomicBool::new(false));
+    let flag = stop.clone();
+    std::thread::spawn(move || {
+        for stream in listener.incoming().flatten() {
+            if flag.load(Ordering::SeqCst) {
+                break;
+            }
+            let mut stream = stream;
+            let mut buf = [0_u8; 2048];
+            let _ = stream.read(&mut buf);
+            let body = "<!doctype html><title>strict</title><body style=\"margin:0\"><p>strict page</p></body>";
+            let head = format!(
+                "HTTP/1.1 200 OK\r\nContent-Type: text/html\r\nContent-Security-Policy: default-src 'none'\r\nContent-Length: {}\r\nConnection: close\r\n\r\n",
+                body.len()
+            );
+            let _ = stream.write_all(head.as_bytes());
+            let _ = stream.write_all(body.as_bytes());
+        }
+    });
+    (addr, stop)
+}
+
+fn find_chromium() -> Option<std::path::PathBuf> {
+    let mut candidates = vec![
+        r"C:\Program Files\Google\Chrome\Application\chrome.exe",
+        r"C:\Program Files (x86)\Microsoft\Edge\Application\msedge.exe",
+        r"C:\Program Files\Microsoft\Edge\Application\msedge.exe",
+        "/usr/bin/google-chrome",
+        "/usr/bin/chromium",
+        "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome",
+    ];
+    candidates.retain(|p| std::path::Path::new(p).is_file());
+    candidates.first().map(std::path::PathBuf::from)
+}
+
+#[test]
+fn the_picture_shows_on_a_page_that_forbids_everything_with_content_security_policy() {
+    use std::sync::atomic::Ordering;
+    let Some(browser) = find_chromium() else {
+        eprintln!("skipped: no Chrome or Edge on this computer");
+        return;
+    };
+    let node = if cfg!(windows) { "node.exe" } else { "node" };
+    if crate::proc_util::hidden_command(node).arg("--version").output().is_err() {
+        eprintln!("skipped: no node on this computer");
+        return;
+    }
+    let dir = std::env::temp_dir().join(format!("pm-markup-csp-{}", std::process::id()));
+    std::fs::create_dir_all(&dir).unwrap();
+    let key = "__pm_0123456789abcdef";
+    let bar = dir.join("bar.js");
+    std::fs::write(&bar, script(key, 0)).unwrap();
+    let checker = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("src/markup/csp_check.mjs");
+    let (addr, stop) = strict_page();
+    // Headless: no window opens.
+    let out = crate::proc_util::hidden_command(node)
+        .arg(&checker)
+        .arg(&browser)
+        .arg(&bar)
+        .arg(format!("http://127.0.0.1:{}/", addr.port()))
+        .arg(key)
+        .output()
+        .expect("run the check");
+    stop.store(true, Ordering::SeqCst);
+    let _ = std::net::TcpStream::connect(addr);
+    let said = String::from_utf8_lossy(&out.stdout);
+    assert!(said.starts_with("OK "), "{said} {}", String::from_utf8_lossy(&out.stderr));
+}

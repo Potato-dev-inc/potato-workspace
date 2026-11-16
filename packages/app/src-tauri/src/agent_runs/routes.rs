@@ -301,6 +301,10 @@ fn prepare_run(
     let mut request = parse::<AgentRunRequest>(body).ok()?;
     // The caller left `headless` out (or null): the agent's run-mode setting may decide.
     request.headless_unset = headless_left_out(body);
+    // What the started agent is (minion, spin-off, or One type's helper): `as` and the person's settings decide.
+    if let Err(error) = crate::agent_run_mode::apply_started_as(&mut request, session_id.is_some()) {
+        return Some(Err(error));
+    }
     // "Helper agents": the person's choice decides whether the helper is shown or runs in the background.
     crate::agent_run_mode::apply_helper_visibility(&mut request);
     // "Keep helpers open when they finish": a pane this helper opens is not closed when it ends.
@@ -346,6 +350,11 @@ fn chat_view_of(body: &[u8], request: &AgentRunRequest) -> Vec<u8> {
     };
     map.insert("headless".into(), Value::Bool(headless));
     map.insert("task".into(), Value::String(request.task.clone()));
+    // What the started agent is (a caller's own `started` key never counts).
+    map.remove("started");
+    if let Some(started) = &request.started {
+        map.insert("started".into(), serde_json::to_value(started).unwrap_or(Value::Null));
+    }
     if request.model_from_helper_default {
         if let Some(model) = &request.model {
             map.insert("model".into(), Value::String(model.clone()));

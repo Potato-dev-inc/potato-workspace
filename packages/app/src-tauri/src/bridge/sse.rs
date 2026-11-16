@@ -94,6 +94,13 @@ mod tests {
     use base64::Engine;
 
     #[test]
+    fn an_idle_event_stream_sends_a_comment_line_far_inside_the_relay_idle_reset() {
+        // OpenTunnel resets a connection that is silent for 901 s. A comment line is ignored by EventSource.
+        assert!(super::SSE_KEEPALIVE_EVERY.as_secs() * 10 < 901);
+        assert!(super::SSE_KEEPALIVE_FRAME.starts_with(':') && super::SSE_KEEPALIVE_FRAME.ends_with("\n\n"));
+    }
+
+    #[test]
     fn terminal_payload_carries_base64_not_a_number_array() {
         let bytes = [0_u8, 27, 91, 255, 10];
         let payload = terminal_payload("p1", &bytes, None).expect("payload");
@@ -460,12 +467,23 @@ pub(super) fn handle_sse(
     let (tx, rx) = std::sync::mpsc::sync_channel::<String>(64);
     register_client(tx, viewer);
 
-    for payload in rx {
-        if stream.write_all(payload.as_bytes()).is_err() {
+    // A comment line every 20 seconds: a public relay resets a connection that is silent for 15 minutes
+    // (OpenTunnel resets at 901 s), and the phone's stream must outlive a quiet hour.
+    loop {
+        let frame = match rx.recv_timeout(SSE_KEEPALIVE_EVERY) {
+            Ok(payload) => payload,
+            Err(std::sync::mpsc::RecvTimeoutError::Timeout) => SSE_KEEPALIVE_FRAME.to_string(),
+            Err(std::sync::mpsc::RecvTimeoutError::Disconnected) => break,
+        };
+        if stream.write_all(frame.as_bytes()).is_err() {
             break;
         }
     }
 }
+
+/// How often an idle event stream sends a comment line. Far below the 15 minutes a relay allows.
+const SSE_KEEPALIVE_EVERY: std::time::Duration = std::time::Duration::from_secs(20);
+const SSE_KEEPALIVE_FRAME: &str = ": keepalive\n\n";
 
 pub fn push_settings_sse(settings: &serde_json::Value) {
     if let Ok(json) = serde_json::to_string(settings) {

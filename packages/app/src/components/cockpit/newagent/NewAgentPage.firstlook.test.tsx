@@ -62,7 +62,7 @@ async function mount(onStart = vi.fn(async (_r: StartRequest) => undefined)) {
   return onStart;
 }
 
-const chip = () => host.querySelector<HTMLButtonElement>('[data-testid="na-model"]');
+const chip = () => document.querySelector<HTMLButtonElement>('[data-testid="na-model"]');
 const click = async (el: Element | null | undefined) => {
   if (!el) throw new Error('element not found');
   await act(async () => (el as HTMLElement).click());
@@ -87,12 +87,12 @@ describe("New agent page: first look at a chat agent's models", () => {
     const onStart = await mount();
     await click(chip());
     await click(options().find((o) => o.textContent?.includes('Gemini Flash')));
-    const area = host.querySelector<HTMLTextAreaElement>('textarea')!;
+    const area = document.querySelector<HTMLTextAreaElement>('textarea')!;
     await act(async () => {
       Object.getOwnPropertyDescriptor(HTMLTextAreaElement.prototype, 'value')!.set!.call(area, 'hi');
       area.dispatchEvent(new Event('input', { bubbles: true }));
     });
-    await click(host.querySelector('button[aria-label="Start"]'));
+    await click(document.querySelector('button[aria-label="Start"]'));
     expect(onStart.mock.calls[0][0]).toMatchObject({ model: 'flash' });
   });
 

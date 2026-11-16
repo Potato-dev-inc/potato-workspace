@@ -408,3 +408,17 @@ fn a_prompt_that_wraps_differently_after_the_phone_resized_the_pane_keeps_its_fi
     // But another command is another prompt id, and the fingerprint follows it.
     assert_ne!(wide.fingerprint(4), PromptRec { prompt_id: Some("other-id".into()), ..narrow }.fingerprint(4));
 }
+
+#[test]
+fn a_stalled_helper_and_a_loop_signal_on_one_pane_are_one_stuck_item() {
+    let ids = crate::attention::union_stuck(vec!["a".into()], vec!["a".into(), "b".into()]);
+    assert_eq!(ids, ["a", "b"]);
+    let mut store = Store::default();
+    let mut f = facts(vec![pane("a", "running"), pane("b", "running")]);
+    f.stuck_pane_ids = ids;
+    store.recompute(&f, 1_000);
+    let mut keys = open_keys(&store);
+    keys.sort();
+    assert_eq!(keys, ["stuck:a", "stuck:b"]);
+    assert_eq!(store.counts().blocking, 2);
+}

@@ -65,7 +65,6 @@ export const MOVED_FILES: readonly string[] = [
   'components/settings/agents/CapChips.tsx',
   'components/settings/pack/AgentPackGroup.tsx',
   'components/settings/pack/ChooseHost.tsx',
-  'components/settings/blocks/HiddenAgentsRow.tsx',
   'components/settings/blocks/HelperModels.tsx',
   'components/settings/blocks/AgentDefaultModels.tsx',
   'components/settings/blocks/QuickHandoffRows.tsx',

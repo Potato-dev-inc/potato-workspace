@@ -242,6 +242,8 @@ pub(in crate::agent_runs) fn build_followup_request(
         join_worktree: None,
         // A follow-up continues in the mode of its run; the setting is never read again.
         headless_unset: false,
+        started: None,
+        as_kind: None,
         headless_ignored: false,
         headless_forced: false,
         lane_note: None,

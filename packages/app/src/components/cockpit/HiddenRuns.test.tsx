@@ -68,7 +68,7 @@ describe('HiddenRuns', () => {
   it('names the agent and the task of a hidden helper in plain words', async () => {
     await render(fakeApi([run()]).api);
     const card = host.querySelector('[data-testid="hidden-run"]');
-    expect(card?.textContent).toContain('Claude helper ran with no window');
+    expect(card?.textContent).toContain('Claude agent ran with no window');
     expect(card?.textContent).toContain('count the files in src');
     expect(card?.textContent).toContain('Running with no window');
     expect(host.textContent).not.toContain('Claude Code');

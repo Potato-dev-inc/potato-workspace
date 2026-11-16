@@ -75,7 +75,7 @@ async function open(fake: DevicesFake, extra: { onAddDevice?: () => void; onStar
     ),
   );
   await settle(4);
-  await click(host.querySelector('button[aria-label="Quick start menu"]'));
+  await click(document.querySelector('button[aria-label="Quick start menu"]'));
   await settle(4);
 }
 
@@ -94,7 +94,7 @@ describe('New agent: Where', () => {
     expect(laptop.disabled).toBe(true);
     expect(laptop.textContent).toContain('Offline.');
     // The usual menu is still there under it.
-    expect(host.textContent).toContain('Codex');
+    expect(document.body.textContent).toContain('Codex');
   });
 
   it('after picking the Mac mini the agents and the projects are the Mac mini\'s own', async () => {
@@ -138,6 +138,6 @@ describe('New agent: Where', () => {
   it('is not drawn while the Labs switch is off', async () => {
     await open(new DevicesFake({ enabled: false, devices: [MAC_MINI] }));
     expect(q('[data-testid="where"]')).toBeNull();
-    expect(host.textContent).toContain('Codex');
+    expect(document.body.textContent).toContain('Codex');
   });
 });

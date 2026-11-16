@@ -1,6 +1,7 @@
 // "Save this team": the pane and the helpers under it, as a crew you can start again in any folder. The draft comes from
 // the live panes (folder -> {folder}, secrets and personal folder names taken out); the person edits names and tasks here
 // before anything is saved. "Copy to My crews" passes a starter in as `initial` instead: the same editor, nothing saved yet.
+import { t } from '../../../i18n';
 import { useEffect, useRef, useState } from 'react';
 import { crewErrorText, crewsApi, type Crew, type CrewProblem, type CrewsApi } from '../../../lib/crews-api';
 import { Sheet } from '../Sheet';
@@ -162,7 +163,7 @@ export function SaveCrewSheet({
           </ul>
           {omitted > 0 && (
             <p className="ck-sub" data-testid="crew-omitted">
-              {omitted} more {omitted === 1 ? 'helper was' : 'helpers were'} left out. A crew holds at most 8 agents.
+              {t('crew.leftOut', { count: omitted })}
             </p>
           )}
         </>

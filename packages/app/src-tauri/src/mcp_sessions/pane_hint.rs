@@ -16,6 +16,11 @@ use std::sync::Mutex;
 pub use crate::pty::pane_parent::clean_hint as clean_pane_hint;
 pub use crate::pty::PANE_ID_ENV;
 
+/// The variable that carries this pane's own secret key (`agent_authority::pane_keys`), and the header the shim sends it in.
+/// The shim only forwards it; the app decides what it proves. Never print or log the value.
+pub const PANE_KEY_ENV: &str = "POTATO_WORKSPACE_PANE_KEY";
+pub const PANE_KEY_HEADER: &str = "X-Potato-Workspace-Pane-Key";
+
 static SESSION_PANES: Lazy<Mutex<HashMap<String, String>>> = Lazy::new(|| Mutex::new(HashMap::new()));
 
 /// Remember the pane a connection named (cleaned; an empty or malformed value is dropped).

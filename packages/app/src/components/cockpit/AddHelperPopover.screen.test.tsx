@@ -1,5 +1,5 @@
 // @vitest-environment jsdom
-// The "Add a helper" popover: Agent + Model + Enter is enough, a role is optional, "Same as before" is one click, the limit
+// The "Add a standby" popover: Agent + Model + Enter is enough, a role is optional, "Same as before" is one click, the limit
 // is said in words, and only installed agents are offered. Opened the way the sidebar and What's new open it.
 import { act } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
@@ -53,7 +53,7 @@ async function open(api: StandbyHelpersApi, front: { id: string; cwd: string | n
   await flush();
 }
 
-describe('Add a helper popover', () => {
+describe('Add a standby popover', () => {
   it('opens with no role chosen, the agent in front picked, and Add focused; Enter alone adds "<Agent>"', async () => {
     const api = mkApi(view(0));
     await open(api);
@@ -105,7 +105,7 @@ describe('Add a helper popover', () => {
   it('at the limit Add is off and the line says why', async () => {
     await open(mkApi(view(4, 4)));
     expect(pop()!.querySelector<HTMLButtonElement>('[data-testid="add-helper-add"]')!.disabled).toBe(true);
-    expect(pop()!.textContent).toContain('You have 4 helpers on standby, the most allowed. Remove one first.');
+    expect(pop()!.textContent).toContain('You have 4 standbys, the most allowed. Remove one first.');
   });
 
   it('a refusal from the backend is shown and the popover stays', async () => {

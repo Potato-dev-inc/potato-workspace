@@ -13,11 +13,11 @@ const byId = (id: string) => (rows.find((r) => r.row.id === id) ?? baseRows.find
 const COPY: Record<string, [string, string]> = {
   toolbelt: ['Tools for every agent', "Add a tool once. It is written into each agent's settings."],
   'agent-pack': ['Let agents ask each other for help', 'Teaches each agent when to ask another. Review first; Undo puts it back.'],
-  'helper-tools': ['Helper tools in every agent', 'Agents you open here get the helper tools with no setup.'],
+  'helper-tools': ['Potato tools in every agent', 'Agents you open here get the Potato tools with no setup.'],
   'bridge-endpoint': ["This app's address", 'Where other tools reach this app on this computer. Found by itself.'],
-  'mcp-status': ['Connection check', "Checks the local address, the helper program and each agent's settings."],
-  'rust-mcp': ['Use the built-in helper program', 'On: agents start the helper that ships with the app. Off: they use npx.'],
-  'mcp-install': ['Connect Claude, Codex and OpenCode', 'Writes the helper program into their settings.'],
+  'mcp-status': ['Connection check', "Checks the local address, the Potato tools program and each agent\'s settings."],
+  'rust-mcp': ['Use the built-in Potato tools program', 'On: agents use the Potato tools that ship with the app. Off: they use npx.'],
+  'mcp-install': ['Connect Claude, Codex and OpenCode', 'Writes the Potato tools program into their settings.'],
   'snippet-claude-desktop': ['Set up Claude Desktop by hand', "Copy this into Claude Desktop's settings. The app won't write it."],
   'snippet-codex': ['Set up Codex by hand', 'Copy this to set it up by hand.'],
   'mcp-uninstall': ['Disconnect agents from Potato Workspace', 'Removes the app from agent settings. The app stays. Restart the agents.'],
@@ -42,6 +42,7 @@ const COPY: Record<string, [string, string]> = {
   'timeline-labs': ['Today page', 'See every change agents made today on one line, and go back to any point.'],
   'project-guide-labs': ['Project guide', 'Your agent writes a short guide to a project, only when you ask.'],
   'smaller-updates-labs': ['Smaller updates', 'Updates download only the app, about a third of the size. Built-in tools stay.'],
+  'opentunnel-labs': ['Fixed phone address', 'A fixed phone address from a third-party relay (OpenTunnel). It may change.'],
   'opencode-automation': ['Switch OpenCode keys at the limit', "Uses your other key when one is limited. Check your provider's terms."],
 };
 

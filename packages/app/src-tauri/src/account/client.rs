@@ -9,7 +9,7 @@ use std::time::Duration;
 
 /// The address of the account server. `POTATO_ACCOUNT_URL` overrides it (staging, or a local server on this PC).
 /// Empty until the production address exists: the window then says the service is not ready yet.
-pub const DEFAULT_ACCOUNT_URL: &str = "";
+pub const DEFAULT_ACCOUNT_URL: &str = "https://potato-workspace-auth.up.railway.app";
 
 #[derive(Debug, PartialEq, Eq)]
 pub enum ApiError {

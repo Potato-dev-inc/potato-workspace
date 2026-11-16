@@ -26,6 +26,10 @@ export interface SecretsApi {
   getMasked(name: SecretName): Promise<SecretMask>;
   set(name: SecretName, value: string): Promise<void>;
   remove(name: SecretName): Promise<void>;
+  /** A key for this provider already on this PC (environment). Masked: never the value. */
+  foundOnPc?(name: ProviderSecretName): Promise<SecretMask>;
+  /** Copies the found key into the credential store. The value never reaches the webview. */
+  useFound?(name: ProviderSecretName): Promise<SecretMask>;
 }
 
 export const secretsApi: SecretsApi = {
@@ -33,6 +37,8 @@ export const secretsApi: SecretsApi = {
   getMasked: (name) => invoke<SecretMask>('secret_get_masked', { name }),
   set: (name, value) => invoke<void>('secret_set', { name, value }),
   remove: (name) => invoke<void>('secret_delete', { name }),
+  foundOnPc: (name) => invoke<SecretMask>('secret_found_on_pc', { name }),
+  useFound: (name) => invoke<SecretMask>('secret_use_found', { name }),
 };
 
 /** The custom AI service key, or '' when none is set or no credential store is there. */

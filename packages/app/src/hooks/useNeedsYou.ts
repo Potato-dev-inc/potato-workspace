@@ -6,11 +6,15 @@ import { attentionMismatch, deriveNeedsYou, isBlockingKind, type AttentionInput,
 import { useAttention } from './useAttention';
 import { tauriAskbarApi, useAskNotices, type AskbarApi } from '../lib/askbar';
 import { useLoopGuard } from '../lib/loop-guard';
+import { useStalls } from '../lib/stalls';
 import type { CockpitApi } from './useCockpit';
 
 export const NeedsYouContext = createContext<NeedsYouItem[] | null>(null);
 
 type CockpitState = Pick<CockpitApi, 'registry' | 'prompts' | 'asked' | 'statusSince'>;
+
+/** A pane the loop guard flagged and a helper with no progress are one problem: one id, so one card and one count. */
+const stuckIds = (signals: Record<string, unknown>, stalls: ReadonlyMap<string, number>): string[] => [...new Set([...Object.keys(signals), ...stalls.keys()])];
 
 type MissionFacts = AttentionInput['missions'];
 
@@ -44,7 +48,8 @@ export function useNeedsYouSource(
   lendRequests?: AttentionInput['lendRequests'],
 ): NeedsYouItem[] {
   const { notices } = useAskNotices(askbar);
-  const items = useMemo(() => derive(c, Object.keys(signals), notices, missions, companions, teamRed, lendRequests), [c.registry.paneList, c.prompts, c.asked.questions, c.statusSince, signals, notices, missions, companions, teamRed, lendRequests]); // eslint-disable-line react-hooks/exhaustive-deps
+  const stalls = useStalls();
+  const items = useMemo(() => derive(c, stuckIds(signals, stalls), notices, missions, companions, teamRed, lendRequests), [c.registry.paneList, c.prompts, c.asked.questions, c.statusSince, signals, stalls, notices, missions, companions, teamRed, lendRequests]); // eslint-disable-line react-hooks/exhaustive-deps
   useShadowCheck(items);
   return items;
 }
@@ -71,6 +76,7 @@ function useShadowCheck(items: NeedsYouItem[]): void {
 export function useNeedsYou(c: CockpitState): NeedsYouItem[] {
   const shared = useContext(NeedsYouContext);
   const { signals } = useLoopGuard();
-  const local = useMemo(() => derive(c, Object.keys(signals), []), [c.registry.paneList, c.prompts, c.asked.questions, c.statusSince, signals]); // eslint-disable-line react-hooks/exhaustive-deps
+  const stalls = useStalls();
+  const local = useMemo(() => derive(c, stuckIds(signals, stalls), []), [c.registry.paneList, c.prompts, c.asked.questions, c.statusSince, signals, stalls]); // eslint-disable-line react-hooks/exhaustive-deps
   return shared ?? local;
 }

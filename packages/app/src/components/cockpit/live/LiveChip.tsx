@@ -4,7 +4,7 @@ import { useEffect, useRef, useState } from 'react';
 import { liveRoomApi, type LiveRoomApi, type LiveStatus } from '../../../lib/live-room';
 import { errorText, useLiveRoom, type LiveSubscribe } from './useLiveRoom';
 import '../../../styles/cockpit-live.css';
-import { useDismissable } from '../../../hooks/useDismissable';
+import { Menu } from '../../common/Floating';
 
 export function LiveChip({
   paneId,
@@ -25,9 +25,8 @@ export function LiveChip({
   const refresh = own.refresh;
   const [open, setOpen] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const wrap = useRef<HTMLSpanElement>(null);
+  const btn = useRef<HTMLButtonElement>(null);
 
-  useDismissable(open, { inside: [wrap], anchor: wrap, onDismiss: () => setOpen(false) });
 
   if (!status?.live || !status.paneIds.includes(paneId)) return null;
 
@@ -43,8 +42,9 @@ export function LiveChip({
   };
 
   return (
-    <span className="ck-live-chip-wrap" ref={wrap}>
+    <span className="ck-live-chip-wrap">
       <button
+        ref={btn}
         type="button"
         className="ck-chip-label ck-live-chip"
         aria-haspopup="menu"
@@ -55,7 +55,7 @@ export function LiveChip({
         LIVE
       </button>
       {open && (
-        <div className="ck-live-chip-menu" role="menu" aria-label="Live Room">
+        <Menu anchorRef={btn} align="end" className="ck-live-chip-menu" label="Live Room" onClose={() => setOpen(false)}>
           {status.paused ? (
             <button type="button" role="menuitem" className="ck-live-menu-item" onClick={() => run(() => api.resume())}>
               Resume
@@ -68,7 +68,7 @@ export function LiveChip({
           <button type="button" role="menuitem" className="ck-live-menu-item is-stop" onClick={() => run(() => api.stop(), onStopped)}>
             Stop
           </button>
-        </div>
+        </Menu>
       )}
       {error && (
         <span className="ck-live-error" role="alert">

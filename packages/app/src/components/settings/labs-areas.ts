@@ -21,6 +21,7 @@ const AREA_OF: Record<string, LabsArea> = {
   'lend-labs': 'Devices',
   'spaces-labs': 'Team',
   'discord-bot-labs': 'Phone',
+  'opentunnel-labs': 'Phone',
   telegram: 'Phone',
 };
 
@@ -50,4 +51,5 @@ export const LABS_SWITCH_KEYS: Partial<Record<string, keyof Settings>> = {
   'markup-bar-labs': 'markup_bar_enabled',
   'smaller-updates-labs': 'smaller_updates_enabled',
   'crews-labs': 'crews_enabled',
+  'opentunnel-labs': 'opentunnel_stable_link',
 };

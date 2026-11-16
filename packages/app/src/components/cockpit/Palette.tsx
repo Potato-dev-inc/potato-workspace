@@ -212,8 +212,8 @@ export function Palette({
         id: 'new:companion',
         group: 'New agent',
         title: 'New companion',
-        desc: 'An always-on helper that runs on your agent',
-        keywords: 'companion helper',
+        desc: t('companion.newDesc'),
+        keywords: 'companion assistant helper',
         icon: <IconPlus />,
         run: onNewCompanion,
       });
@@ -428,7 +428,7 @@ export function Palette({
         group: 'Actions',
         title: 'Start crew…',
         desc: 'Start a saved team of agents in a folder',
-        keywords: 'crew team helpers saved template',
+        keywords: 'crew team helpers minions saved template',
         icon: <IconLayers />,
         run: onStartCrew,
       });

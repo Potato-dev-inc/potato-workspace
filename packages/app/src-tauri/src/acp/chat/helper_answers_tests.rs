@@ -50,3 +50,34 @@ fn the_setting_is_on_unless_it_says_off() {
     let _off = test_switch(false);
     assert!(!enabled());
 }
+
+// ---- a minion's asks (Two types mode, plan 2.4) ------------------------------------------------------------------
+
+fn route(title: &str, tool: &str, on: bool) -> MinionAsk {
+    minion_route(title, tool, Path::new(PROJECT), on)
+}
+
+#[test]
+fn an_ordinary_minion_ask_goes_only_to_its_agent() {
+    assert_eq!(route("Run cargo test", "execute", true), MinionAsk::Agent);
+    assert_eq!(route(r"Write D:\work\app\src\main.rs", "edit", true), MinionAsk::Agent);
+}
+
+#[test]
+fn a_risky_minion_ask_becomes_a_card_for_the_person_with_the_reason() {
+    for (title, tool) in [("Delete old.txt", "delete"), ("Run rm -rf build", "execute"), ("Run git push origin main", "execute"), (r"Write C:\Users\me\.ssh\config", "edit")] {
+        assert!(matches!(route(title, tool, true), MinionAsk::Person(why) if !why.is_empty()), "{title}");
+    }
+}
+
+#[test]
+fn with_the_switch_off_every_minion_ask_is_refused_and_none_goes_to_the_person() {
+    assert_eq!(route("Run cargo test", "execute", false), MinionAsk::Refuse);
+    assert_eq!(route("Delete old.txt", "delete", false), MinionAsk::Refuse);
+}
+
+#[test]
+fn the_wake_up_note_names_the_minion_and_its_handle_and_never_asks_the_person() {
+    let note = wake_note("Reviewer", "pane-7");
+    assert!(note.contains("Reviewer") && note.contains("pane-7") && note.contains("answer_prompt"));
+}

@@ -5,6 +5,8 @@ import {
   BRIDGE_LOCAL_SECRET_FILE,
   BRIDGE_LOCAL_SECRET_HEADER,
   BRIDGE_PANE_HEADER,
+  BRIDGE_PANE_KEY_ENV,
+  BRIDGE_PANE_KEY_HEADER,
   BRIDGE_PORT_FILE_ENV,
   DEFAULT_BRIDGE_PORT_FILE,
 } from './protocol.js';
@@ -98,7 +100,13 @@ export async function readLocalSecretHeaders(filePath?: string): Promise<Record<
   // changing call as that agent's (it asks the person) instead of as the app. A hint only; the app also
   // finds the pane from the connection itself.
   const pane = (process.env.POTATO_WORKSPACE_PANE_ID ?? '').trim();
-  return { ...(await readSecretHeader(filePath)), ...(pane ? { [BRIDGE_PANE_HEADER]: pane.slice(0, 64) } : {}) };
+  // The window's own key proves which pane this is, even for a process that left the window's process tree.
+  const key = (process.env[BRIDGE_PANE_KEY_ENV] ?? '').trim();
+  return {
+    ...(await readSecretHeader(filePath)),
+    ...(pane ? { [BRIDGE_PANE_HEADER]: pane.slice(0, 64) } : {}),
+    ...(key ? { [BRIDGE_PANE_KEY_HEADER]: key.slice(0, 128) } : {}),
+  };
 }
 
 async function readSecretHeader(filePath?: string): Promise<Record<string, string>> {

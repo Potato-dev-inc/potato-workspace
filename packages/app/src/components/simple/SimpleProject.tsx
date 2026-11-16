@@ -16,6 +16,7 @@ import { DotSpinner } from '../cockpit/DotSpinner';
 import { IconMore } from '../cockpit/Icons';
 import { SegTabs } from '../cockpit/SegTabs';
 import { Sheet } from '../cockpit/Sheet';
+import { Menu } from '../common/Floating';
 import { spinnerStatus } from '../cockpit/model';
 import { useRunData } from '../cockpit/PaneView';
 import { useLastTurn } from '../cockpit/away-context';
@@ -95,6 +96,7 @@ export function SimpleProject({
 
   const [tab, setTab] = useState<Tab>('preview');
   const [menu, setMenu] = useState(false);
+  const menuBtn = useRef<HTMLButtonElement>(null);
   const [screenOpen, setScreenOpen] = useState(false);
   const [blocked, setBlocked] = useState<{ what: string; stoppable: boolean } | null>(null);
   const [sheet, setSheet] = useState<'keep' | 'throw' | null>(null);
@@ -278,11 +280,11 @@ export function SimpleProject({
           <span>{stateWords(status)}</span>
         </div>
         <div className="ck-menu-wrap">
-          <button type="button" className="ck-icon-btn" aria-label={T.more} aria-haspopup="menu" aria-expanded={menu} onClick={() => setMenu((m) => !m)}>
+          <button ref={menuBtn} type="button" className="ck-icon-btn" aria-label={T.more} aria-haspopup="menu" aria-expanded={menu} onClick={() => setMenu((m) => !m)}>
             <IconMore />
           </button>
           {menu && (
-            <div className="ck-menu" role="menu">
+            <Menu anchorRef={menuBtn} align="end" className="ck-menu" label={T.more} onClose={() => setMenu(false)}>
               <button
                 type="button"
                 role="menuitem"
@@ -296,7 +298,7 @@ export function SimpleProject({
                   {T.details} · {showScreen && screenOpen ? T.hideScreen : T.agentScreen}
                 </span>
               </button>
-            </div>
+            </Menu>
           )}
         </div>
       </header>

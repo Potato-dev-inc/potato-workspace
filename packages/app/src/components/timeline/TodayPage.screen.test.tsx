@@ -108,7 +108,7 @@ describe('Today page: the line', () => {
   it('hides a mission step until "Show helpers\' own steps" is on', async () => {
     await show(rig());
     const before = marks().length;
-    await click([...host.querySelectorAll('label')].find((l) => l.textContent?.includes("helpers' own steps"))!.querySelector('input'));
+    await click([...host.querySelectorAll('label')].find((l) => l.textContent?.includes("started agents' own steps"))!.querySelector('input'));
     expect(marks().length).toBe(before + 1);
   });
 

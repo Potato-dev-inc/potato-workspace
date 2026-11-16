@@ -4,7 +4,7 @@ import { useT } from '../../i18n';
 import { BELL_LEVELS, type BellLevel, type QuietHours } from '../../lib/notify-levels';
 import { useBellLevel, usePcNotifications, useQuietHours } from '../../lib/notify-store';
 import { Popup, Switch } from './controls';
-import { SettingRow } from './settings-ui';
+import { Fold, SettingRow } from './settings-ui';
 
 const LEVEL_KEY = {
   everything: 'notify.level.everything',
@@ -29,20 +29,27 @@ export function QuietHoursRow({ onSaved }: { onSaved?: () => void }) {
     setQuiet(next);
     onSaved?.();
   };
+  // One switch, named by its window ("Quiet at night (22:00 to 08:00)"). The two time fields sit behind
+  // "Change times" so a first look shows no time field.
+  const window = t('notify.quiet.summary', { from: toClock(quiet.start), to: toClock(quiet.end) });
   return (
-    <SettingRow label={t('notify.quiet.label')} description={t('notify.quiet.hint')}>
-      <span className="st-quiet" data-testid="quiet-hours">
-        {quiet.enabled && (
-          <>
+    <>
+      <SettingRow label={window} description={t('notify.quiet.hint')}>
+        <span data-testid="quiet-hours">
+          <Switch checked={quiet.enabled} label={window} onChange={(enabled) => save({ ...quiet, enabled })} />
+        </span>
+      </SettingRow>
+      {quiet.enabled && (
+        <Fold label={t('notify.quiet.change')}>
+          <span className="st-quiet" data-testid="quiet-times">
             <span className="st-aside">{t('notify.quiet.from')}</span>
             <input type="time" className="st-popup" aria-label={t('notify.quiet.fromAria')} value={toClock(quiet.start)} onChange={(e) => save({ ...quiet, start: fromClock(e.target.value, quiet.start) })} />
             <span className="st-aside">{t('notify.quiet.to')}</span>
             <input type="time" className="st-popup" aria-label={t('notify.quiet.toAria')} value={toClock(quiet.end)} onChange={(e) => save({ ...quiet, end: fromClock(e.target.value, quiet.end) })} />
-          </>
-        )}
-        <Switch checked={quiet.enabled} label={t('notify.quiet.on')} onChange={(enabled) => save({ ...quiet, enabled })} />
-      </span>
-    </SettingRow>
+          </span>
+        </Fold>
+      )}
+    </>
   );
 }
 

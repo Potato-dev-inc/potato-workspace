@@ -1,6 +1,6 @@
 // How the eight pages are laid out: group titles, Advanced > Early features (Labs), the rules for all agents, and the catch-all.
 import { describe, expect, it } from 'vitest';
-import { ADVANCED_CLOSED_GROUPS, LABS_GROUP, LABS_INDEX_ID, LAYOUT, OTHER_GROUP, arrangeSections, collectLabs, layoutRowIds, unplacedRowIds } from './arrange';
+import { ADVANCED_CLOSED_GROUPS, LABS_GROUP, LABS_INDEX_ID, LAYOUT, MOVED_TO_AGENT_PAGE, OTHER_GROUP, arrangeSections, collectLabs, layoutRowIds, unplacedRowIds } from './arrange';
 import { BASE_SECTIONS, SECTIONS } from './catalog';
 import { LABS_SWITCH_KEYS } from './labs-areas';
 import { SECTION_IDS, groupRows, type BaseSectionDef, type RowDef } from './model';
@@ -26,7 +26,7 @@ describe('the layout names real rows', () => {
   it('arranging loses no row: a plain-switch early feature lives on the Labs page, and only the Labs overview is added', () => {
     const features = new Set(collectLabs(BASE_SECTIONS).filter((r) => LABS_SWITCH_KEYS[r.id]).map((r) => r.id));
     const before = BASE_SECTIONS.flatMap((s) => s.rows.map((r) => r.id))
-      .filter((id) => !features.has(id))
+      .filter((id) => !features.has(id) && !MOVED_TO_AGENT_PAGE.includes(id))
       .sort();
     const after = SECTIONS.flatMap((s) => s.rows)
       .filter((r) => r.id !== LABS_INDEX_ID)
@@ -87,7 +87,7 @@ describe('groups inside the pages', () => {
   });
 
   it('Helpers starts with how helpers run; "Let agents ask each other" is a group with the agent pack', () => {
-    expect(section('helpers').rows[0].id).toBe('helper-agents');
+    expect(section('helpers').rows[0].id).toBe('started-agents');
     expect(rowIn('helpers', 'agent-pack')?.group).toBe('Let agents ask each other');
   });
 });
@@ -100,7 +100,7 @@ describe('Advanced > Early features (Labs)', () => {
     expect(labsRows().filter((r) => LABS_SWITCH_KEYS[r.id])).toEqual([]);
     expect(collectLabs(BASE_SECTIONS).map((r) => r.id)).toEqual([
       'ask-bar', 'simple-mode', 'live-updates', 'opencode-automation', 'missions', 'assign-issue', 'night-shift',
-      'red-to-green', 'spaces-labs', 'lend-labs', 'devices-labs', 'account-labs', 'desktop-potato-labs', 'agent-browser-labs', 'companion-vault-labs', 'discord-bot-labs', 'timeline-labs', 'project-guide-labs', 'markup-bar-labs', 'smaller-updates-labs', 'crews-labs',
+      'red-to-green', 'spaces-labs', 'lend-labs', 'devices-labs', 'account-labs', 'desktop-potato-labs', 'agent-browser-labs', 'companion-vault-labs', 'discord-bot-labs', 'timeline-labs', 'project-guide-labs', 'markup-bar-labs', 'smaller-updates-labs', 'opentunnel-labs', 'crews-labs',
     ]);
     // They were defined in different files: Agents, Keys, Phone, General, Models.
     const homes = new Set(BASE_SECTIONS.filter((s) => s.rows.some((r) => r.labs)).map((s) => s.id));
@@ -133,7 +133,7 @@ describe('Advanced > Early features (Labs)', () => {
     const arranged = arrangeSections(base);
     expect(arranged.find((s) => s.id === 'labs')!.rows.filter((r) => r.group === LABS_GROUP).map((r) => r.id)).toEqual([LABS_INDEX_ID, 'ask-bar', 'live-updates', 'opencode-automation', 'assign-issue', 'red-to-green', 'later-feature']);
     const labs = collectLabs(base).map((r) => r.id);
-    expect(labs.slice(-15)).toEqual(['red-to-green', 'spaces-labs', 'lend-labs', 'devices-labs', 'account-labs', 'desktop-potato-labs', 'agent-browser-labs', 'companion-vault-labs', 'discord-bot-labs', 'timeline-labs', 'project-guide-labs', 'markup-bar-labs', 'smaller-updates-labs', 'crews-labs', 'later-feature']);
+    expect(labs.slice(-16)).toEqual(['red-to-green', 'spaces-labs', 'lend-labs', 'devices-labs', 'account-labs', 'desktop-potato-labs', 'agent-browser-labs', 'companion-vault-labs', 'discord-bot-labs', 'timeline-labs', 'project-guide-labs', 'markup-bar-labs', 'smaller-updates-labs', 'opentunnel-labs', 'crews-labs', 'later-feature']);
     expect(arranged.find((s) => s.id === 'look')!.rows.some((r) => r.id === 'later-feature')).toBe(false);
   });
 

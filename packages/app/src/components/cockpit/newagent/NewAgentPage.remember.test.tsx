@@ -106,21 +106,21 @@ async function remount(setup: Setup = {}) {
   return mount(setup);
 }
 
-const chip = (id: string) => host.querySelector<HTMLElement>(`[data-testid="na-${id}"]`);
-const runAs = (word: 'Terminal' | 'Chat') => [...host.querySelectorAll<HTMLButtonElement>('[role=radio]')].find((b) => b.textContent === word);
+const chip = (id: string) => document.querySelector<HTMLElement>(`[data-testid="na-${id}"]`);
+const runAs = (word: 'Terminal' | 'Chat') => [...document.querySelectorAll<HTMLButtonElement>('[role=radio]')].find((b) => b.textContent === word);
 const click = async (el: Element | null | undefined) => {
   if (!el) throw new Error('element not found');
   await act(async () => (el as HTMLElement).click());
 };
-const menuItem = (text: string, role = 'menuitemradio') => [...host.querySelectorAll<HTMLElement>(`[role=${role}]`)].find((b) => b.textContent?.includes(text));
+const menuItem = (text: string, role = 'menuitemradio') => [...document.querySelectorAll<HTMLElement>(`[role=${role}]`)].find((b) => b.textContent?.includes(text));
 const option = (text: string) => [...document.querySelectorAll<HTMLElement>('[role=option]')].find((o) => o.textContent?.includes(text));
 async function send(text = 'fix it') {
-  const area = host.querySelector<HTMLTextAreaElement>('textarea')!;
+  const area = document.querySelector<HTMLTextAreaElement>('textarea')!;
   await act(async () => {
     Object.getOwnPropertyDescriptor(HTMLTextAreaElement.prototype, 'value')!.set!.call(area, text);
     area.dispatchEvent(new Event('input', { bubbles: true }));
   });
-  await click(host.querySelector('button[aria-label="Start"]'));
+  await click(document.querySelector('button[aria-label="Start"]'));
 }
 
 describe('New agent page: starts on Chat', () => {

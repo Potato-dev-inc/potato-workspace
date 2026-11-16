@@ -198,7 +198,7 @@ describe('the bar', () => {
     const prepare = events(api).find((e) => e.kind === 'prepare') as { marks: Array<{ type: string; near: { tag: string } | null }>; vw: number };
     expect(prepare.marks).toEqual([{ type: 'rect', near: expect.objectContaining({ tag: 'a' }) }]);
     api.set(JSON.stringify({ thumb: 'data:image/png;base64,AAAA', taking: false }));
-    expect(q('img')!.getAttribute('src')).toBe('data:image/png;base64,AAAA');
+    expect(q<HTMLCanvasElement>('canvas[role="img"]')!.style.display).toBe('block'); // the picture is drawn into a canvas (no img src for a page policy to block)
     // The person writes what should change and presses Send in the row.
     const req = q<HTMLInputElement>('input[aria-label="request"]')!;
     req.value = 'make it bigger';

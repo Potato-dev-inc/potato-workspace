@@ -31,6 +31,7 @@ export const settingsTelegram: Partial<Record<EnglishKey, string>> = {
   'telegram.tokenReplace': '貼上新的憑證即可取代',
   'telegram.tokenHere': '在這裡貼上憑證',
   'telegram.check': '檢查',
+  'telegram.pasteToken': '貼上憑證',
   'telegram.tokenSaved': '憑證已儲存',
   'telegram.keptIn': '存放在 {store}',
   'telegram.step2': '步驟 2 · 連結你的對話',

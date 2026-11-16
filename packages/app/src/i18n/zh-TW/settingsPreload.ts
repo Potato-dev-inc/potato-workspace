@@ -2,7 +2,13 @@
 import type { EnglishKey } from '../en';
 
 export const settingsPreload: Partial<Record<EnglishKey, string>> = {
-  'preload.label': '預先載入 AI 助理',
+  'preload.label': '保持一個 AI 助理待命',
+  'limits.none': '不限制',
+  'limits.light': '輕量',
+  'limits.normal': '一般',
+  'limits.heavy': '大量',
+  'limits.custom': '自訂',
+  'limits.help': '輕量、一般、大量會一起設定回合數和時間。自訂則分別設定。',
   'preload.help': '預設為關閉。每個準備好的 AI 助理會在背景保持開啟，這會佔用記憶體，有些服務商還會把它算成一個開啟中的對話。關閉這個功能會把它們全部關掉。',
   'preload.agentsLabel': '要保持待命的 AI 助理',
   'preload.agentsHelp': '待命的 AI 助理會在你正在工作的資料夾啟動：也就是你上次執行或你開啟的視窗所屬的專案（在那之前則用你的專案資料夾設定）。開啟其他資料夾的視窗會照常啟動。它們絕不會回答信任或登入提示：出現提示的 AI 助理會被丟掉（請先自己開啟一次）。',
@@ -79,6 +85,7 @@ export const settingsPreload: Partial<Record<EnglishKey, string>> = {
   'budget.turnsAria': 'AI 助理可用的回合數（0 代表不限制）',
   'budget.turnsSuffix': '回合',
   'budget.minutesAria': 'AI 助理可用的時間（0 代表不限制）',
+  'budget.presetAria': 'AI 助理的用量上限',
   'budget.minSuffix': '分鐘',
   'packageCheck.offNote': '名稱相近的套件仍會在這台電腦上檢查。',
 };

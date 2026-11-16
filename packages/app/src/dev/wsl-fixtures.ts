@@ -48,6 +48,8 @@ export function wslMock(s: WslScenario | undefined, cmd: string, args: Record<st
       const base = row ?? { agentId: String(args.agentId), label: String(args.agentId), found: null, whyNot: null };
       return { handled: true, value: { ...base, distro: (args.distro as string | null) ?? null } };
     }
+    case 'wsl_upgrade':
+      return { handled: true, value: s?.status ?? { state: 'ready', distros: [] } };
     default:
       return { handled: false };
   }

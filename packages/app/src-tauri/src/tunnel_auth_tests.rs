@@ -21,6 +21,10 @@ struct Rig {
     bridge: SocketAddr,
     /// `pwa_server`, reached the way a tunnel caller reaches it.
     pwa: SocketAddr,
+    /// The OpenTunnel listener (`pwa_server/tunnel_listener.rs`), which answers for the host `localhost`:
+    /// the worst case, where a tunnelled caller's `Host` looks like this machine's own.
+    tunnel: SocketAddr,
+    _tunnel_listener: crate::pwa_server::tunnel_listener::TunnelListener,
     /// A valid paired-device bearer token.
     token: String,
 }
@@ -48,8 +52,10 @@ fn rig() -> &'static Rig {
         let bridge = crate::bridge::spawn_gate_listener();
         let port_file = dir.join("bridge.port");
         std::fs::write(&port_file, format!("{bridge}\n")).unwrap();
-        let pwa = crate::pwa_server::spawn_test_server(dir.clone(), port_file);
-        Rig { bridge, pwa, token }
+        let pwa = crate::pwa_server::spawn_test_server(dir.clone(), port_file.clone());
+        let listener = crate::pwa_server::tunnel_listener::test_support::start(dir.clone(), port_file, "localhost");
+        let tunnel = SocketAddr::from(([127, 0, 0, 1], listener.port()));
+        Rig { bridge, pwa, tunnel, _tunnel_listener: listener, token }
     })
 }
 
@@ -68,6 +74,20 @@ fn send(addr: SocketAddr, request: &str) -> (u16, String) {
         .unwrap_or(0);
     let body = text.split_once("\r\n\r\n").map(|(_, b)| b).unwrap_or("").to_string();
     (status, body)
+}
+
+/// Send `request` the way OpenTunnel does: a PROXY v2 header naming `sni`, then the request. (status, body)
+fn send_tunnelled(addr: SocketAddr, sni: &str, request: &str) -> (u16, String) {
+    let mut bytes = crate::pwa_server::tunnel_listener::test_support::v2_header([203, 0, 113, 9], sni);
+    bytes.extend_from_slice(request.as_bytes());
+    let mut stream = TcpStream::connect(addr).expect("connect tunnel listener");
+    stream.set_read_timeout(Some(Duration::from_secs(10))).unwrap();
+    stream.write_all(&bytes).unwrap();
+    let mut raw = Vec::new();
+    let _ = stream.read_to_end(&mut raw);
+    let text = String::from_utf8_lossy(&raw).into_owned();
+    let status = text.split_whitespace().nth(1).and_then(|code| code.parse().ok()).unwrap_or(0);
+    (status, text.split_once("\r\n\r\n").map(|(_, b)| b).unwrap_or("").to_string())
 }
 
 fn get(path: &str, extra_headers: &[&str]) -> String {
@@ -535,4 +555,42 @@ fn requests_that_came_through_the_stable_link_worker_need_the_paired_token() {
     }
     // the public health route stays reachable (the Test connection button needs it)
     assert_eq!(status_of(&send_full(r.pwa, &via_worker("/bridge/health", &[]))), 200);
+}
+
+// ---- OpenTunnel: the tunnel listener (a loopback peer, the visitor's own Host, no forwarder headers) ----
+
+#[test]
+fn a_tunnelled_request_that_says_localhost_is_never_treated_as_the_local_app() {
+    let r = rig();
+    // The relay hands the app a loopback peer; the visitor chose `Host: localhost` and a forged forwarder header.
+    let request = "GET /bridge/panes HTTP/1.1\r\nHost: localhost\r\nX-Forwarded-For: 127.0.0.1\r\nConnection: close\r\n\r\n";
+    let (status, body) = send_tunnelled(r.tunnel, "localhost", request);
+    assert_eq!(status, 401, "an anonymous tunnelled caller must not reach a pane route: {body}");
+    assert_eq!(json(&body)["error"], "pairing_required");
+    // The same request with no forwarder header at all: still remote, because the listener says so, not the headers.
+    let bare = "GET /bridge/panes HTTP/1.1\r\nHost: localhost\r\nConnection: close\r\n\r\n";
+    let (status, body) = send_tunnelled(r.tunnel, "localhost", bare);
+    assert_eq!(status, 401, "{body}");
+    // And the local-only routes stay closed.
+    let invite = "POST /bridge/pair/invite HTTP/1.1\r\nHost: localhost\r\nContent-Type: application/json\r\nContent-Length: 2\r\nConnection: close\r\n\r\n{}";
+    let (status, _) = send_tunnelled(r.tunnel, "localhost", invite);
+    assert!(matches!(status, 401 | 403), "pairing invites are for the local app only, got {status}");
+}
+
+#[test]
+fn a_tunnelled_paired_phone_is_authorized_but_is_not_the_local_app() {
+    let r = rig();
+    let request = format!("GET /bridge/panes HTTP/1.1\r\nHost: localhost\r\nAuthorization: Bearer {}\r\nConnection: close\r\n\r\n", r.token);
+    let (status, body) = send_tunnelled(r.tunnel, "localhost", &request);
+    assert_eq!(status, 200, "{body}");
+    assert_eq!(json(&body)["local_app"], false);
+}
+
+#[test]
+fn the_tunnel_listener_refuses_a_host_that_is_not_its_own() {
+    let r = rig();
+    // A Host that does not match the name in the PROXY header gets 421 and never reaches the bridge.
+    let request = "GET /bridge/health HTTP/1.1\r\nHost: 127.0.0.1\r\nConnection: close\r\n\r\n";
+    let (status, _) = send_tunnelled(r.tunnel, "localhost", request);
+    assert_eq!(status, 421);
 }

@@ -1,7 +1,7 @@
 //! A person closes an agent's pane: its helpers (and theirs) close with it, unless the setting is off
 //! or the app is ending. Stub panes only; no agent is started.
 
-use super::helper_cascade::{close_with_helpers, helpers_of};
+use super::helper_cascade::{close_with_helpers, helpers_of, minions_of};
 use super::*;
 
 fn registry_with(panes: &[(&str, Option<&str>)]) -> Mutex<PaneRegistry> {
@@ -86,4 +86,28 @@ fn the_public_entry_reads_the_setting() {
     let off = registry_with(&[("boss", None), ("h", Some("boss"))]);
     with_test_env(TestEnv { close_helpers_with_agent: Some(false), ..TestEnv::default() }, || kill_pane_and_helpers(&off, "boss", None).unwrap());
     assert_eq!(ids(&off), vec!["h"]);
+}
+
+fn mark(registry: &Mutex<PaneRegistry>, id: &str, kind: &str) {
+    registry.lock().panes.get_mut(id).unwrap().info.started_as = Some(kind.to_string());
+}
+
+#[test]
+fn closing_the_parent_stops_its_minions_even_with_the_setting_off() {
+    let registry = registry_with(&[("boss", None), ("m1", Some("boss")), ("m1-sub", Some("m1")), ("spin", Some("boss")), ("spin-minion", Some("spin"))]);
+    mark(&registry, "m1", "minion");
+    mark(&registry, "m1-sub", "minion");
+    mark(&registry, "spin", "spin_off");
+    mark(&registry, "spin-minion", "minion");
+    assert_eq!(minions_of(&registry, "boss"), vec!["m1", "m1-sub"], "a minion's minions follow; a spin-off's stay behind it");
+    close_with_helpers(&registry, "boss", Some("test"), false, false).unwrap();
+    assert_eq!(ids(&registry), vec!["spin", "spin-minion"], "the spin-off lives on with its own minion");
+}
+
+#[test]
+fn minions_are_left_to_the_app_while_it_ends() {
+    let registry = registry_with(&[("boss", None), ("m1", Some("boss"))]);
+    mark(&registry, "m1", "minion");
+    close_with_helpers(&registry, "boss", Some("test"), true, true).unwrap();
+    assert_eq!(ids(&registry), vec!["m1"], "quitting keeps chats restorable");
 }

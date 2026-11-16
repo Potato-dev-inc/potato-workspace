@@ -4,7 +4,7 @@
 //! default: a visible pane. Only agents that were changed are listed, so the file stays tiny and a
 //! newer build's extra values are simply ignored by an older one.
 
-use super::{HelperVisibility, RunMode};
+use super::{HelperVisibility, RunMode, StartedAgentKind, StartedAgentTypes};
 use serde::{Deserialize, Serialize};
 use std::collections::BTreeMap;
 use std::path::Path;
@@ -34,6 +34,24 @@ pub(super) struct StoreFile {
     most_helpers_at_once: Option<u32>,
     /// "Tell me when a helper is stuck": minutes with no progress (0 = off); absent means the default.
     stall_minutes: Option<u32>,
+    /// "When an agent starts another agent": `agent_chooses` | `minion` | `spin_off`. Text, so an unknown value from a
+    /// newer build means the default. Empty: carried over from `helper_visibility` (see `kind_in`).
+    started_agent_kind: String,
+    /// "Agents that agents start": `one` (helpers, today) | `two` (minions and spin-offs). Empty means `one`.
+    started_agent_types: String,
+}
+
+/// The kind a file means: its own value, else carried over from the older "Helper agents" choice
+/// (`always_background` -> Minion; `always_show` and `agent_chooses` -> Let it choose).
+fn kind_in(file: &StoreFile) -> StartedAgentKind {
+    StartedAgentKind::parse(&file.started_agent_kind).unwrap_or(match visibility_in(file) {
+        HelperVisibility::AlwaysBackground => StartedAgentKind::Minion,
+        _ => StartedAgentKind::AgentChooses,
+    })
+}
+
+fn types_in(file: &StoreFile) -> StartedAgentTypes {
+    StartedAgentTypes::parse(&file.started_agent_types).unwrap_or_default()
 }
 
 /// How many helpers one `run_agents` call runs together unless the person changed it.
@@ -96,6 +114,9 @@ pub struct TestEnv {
     pub most_helpers_at_once: Option<u32>,
     /// `None` = the default ([`crate::agent_runs::stall::DEFAULT_MINUTES`]).
     pub stall_minutes: Option<u32>,
+    /// `None` = carried over from `helper_visibility` (the migration rule).
+    pub started_agent_kind: Option<StartedAgentKind>,
+    pub started_agent_types: StartedAgentTypes,
 }
 
 #[cfg(test)]
@@ -155,6 +176,99 @@ pub fn helper_visibility() -> HelperVisibility {
     #[cfg(not(test))]
     {
         visibility_in(&loaded())
+    }
+}
+
+/// "When an agent starts another agent" (Two types mode); "Let it choose" unless the person changed it.
+pub fn started_agent_kind() -> StartedAgentKind {
+    #[cfg(test)]
+    {
+        TEST_ENV.with(|slot| {
+            slot.borrow()
+                .as_ref()
+                .map(|env| {
+                    env.started_agent_kind.unwrap_or(match env.helper_visibility {
+                        HelperVisibility::AlwaysBackground => StartedAgentKind::Minion,
+                        _ => StartedAgentKind::AgentChooses,
+                    })
+                })
+                .unwrap_or_default()
+        })
+    }
+    #[cfg(not(test))]
+    {
+        kind_in(&loaded())
+    }
+}
+
+/// "Agents that agents start": One type unless the person turned on Two types.
+pub fn started_agent_types() -> StartedAgentTypes {
+    #[cfg(test)]
+    {
+        TEST_ENV.with(|slot| slot.borrow().as_ref().map(|env| env.started_agent_types).unwrap_or_default())
+    }
+    #[cfg(not(test))]
+    {
+        types_in(&loaded())
+    }
+}
+
+/// Writes the two choices into the file at `target`; either may be left alone.
+pub(super) fn save_started_at(target: &Path, kind: Option<StartedAgentKind>, types: Option<StartedAgentTypes>) -> Result<StoreFile, String> {
+    let mut file = read_file(target);
+    file.version = FILE_VERSION;
+    if let Some(kind) = kind {
+        file.started_agent_kind = kind.as_str().to_string();
+    }
+    if let Some(types) = types {
+        file.started_agent_types = types.as_str().to_string();
+    }
+    let text = serde_json::to_vec_pretty(&file).map_err(|e| e.to_string())?;
+    crate::settings_patch::write_atomic(target, &text).map_err(|e| format!("could not save: {e}"))?;
+    Ok(file)
+}
+
+#[cfg(test)]
+pub(super) fn started_at(target: &Path) -> (StartedAgentKind, StartedAgentTypes) {
+    let file = read_file(target);
+    (kind_in(&file), types_in(&file))
+}
+
+/// Saves "When an agent starts another agent".
+pub fn set_started_agent_kind(value: StartedAgentKind) -> Result<(), String> {
+    #[cfg(test)]
+    {
+        TEST_ENV.with(|slot| {
+            if let Some(env) = slot.borrow_mut().as_mut() {
+                env.started_agent_kind = Some(value);
+            }
+        });
+        Ok(())
+    }
+    #[cfg(not(test))]
+    {
+        let file = save_started_at(&path(), Some(value), None)?;
+        *CACHE.write() = Some(file);
+        Ok(())
+    }
+}
+
+/// Saves "Agents that agents start". Nothing else changes, so switching back loses nothing.
+pub fn set_started_agent_types(value: StartedAgentTypes) -> Result<(), String> {
+    #[cfg(test)]
+    {
+        TEST_ENV.with(|slot| {
+            if let Some(env) = slot.borrow_mut().as_mut() {
+                env.started_agent_types = value;
+            }
+        });
+        Ok(())
+    }
+    #[cfg(not(test))]
+    {
+        let file = save_started_at(&path(), None, Some(value))?;
+        *CACHE.write() = Some(file);
+        Ok(())
     }
 }
 

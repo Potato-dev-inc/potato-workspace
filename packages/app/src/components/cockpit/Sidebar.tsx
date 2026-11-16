@@ -51,7 +51,7 @@ import { groupByProject, useFoldedProjects, useGroupBy, useSidebarProjects } fro
 import { formatElapsed, spinnerStatus } from './model';
 import { splitPinned, usePinnedPanes } from '../../lib/pinnedPanes';
 import { useHelpersInSidebar } from '../../lib/helpersInSidebar';
-import { descendants, groupHelperTree, readFoldedParents, writeFoldedParents, liveParentId, type HelperNode } from '../../lib/pane-helpers';
+import { descendants, groupHelperTree, isMinionPane, readFoldedParents, writeFoldedParents, liveParentId, type HelperNode } from '../../lib/pane-helpers';
 import { markStandbyOpen, openNewStandby, tauriStandbyHelpersApi, useStandbyHelpers, type StandbyHelpersApi } from '../../lib/standbyHelpers';
 import { placeHelpers, type StandbyRow } from './standby-rows';
 import { SidebarStandbyRow, type StandbyRowActions } from './SidebarStandbyRow';
@@ -82,7 +82,7 @@ import { DeviceGroups } from '../devices/DeviceGroups';
 import { NewAgentWhere, type WhereProps } from '../devices/NewAgentWhere';
 import type { DeviceGroup, RemoteRow } from '../devices/useDeviceGroups';
 import { useDismissable } from '../../hooks/useDismissable';
-import { useLayerHost } from '../common/Floating';
+import { Menu, useLayerHost } from '../common/Floating';
 import { openBrowserWindow } from '../../lib/browser-check';
 
 export function Sidebar({
@@ -216,7 +216,8 @@ export function Sidebar({
     void standbyApi.get().then(applyStandby).catch(() => {});
   }, [seatChats]); // eslint-disable-line react-hooks/exhaustive-deps
   // A chat that is a standby's own never counts as an agent row.
-  const panes = list.filter((p) => !isCompanionPaneId(p.info.id) && !placement.hiddenPanes.has(p.info.id));
+  // A minion is never a row here: it lives in its agent's Background tasks.
+  const panes = list.filter((p) => !isCompanionPaneId(p.info.id) && !placement.hiddenPanes.has(p.info.id) && !isMinionPane(p.info));
   // The same list the Inbox badge and the Doto counter use, so the three numbers always agree.
   const needs = useNeedsYou(c);
   const questionPanes = needsYouPaneIds(needs);
@@ -333,6 +334,7 @@ export function Sidebar({
   useEffect(() => setStored(readStoredCopyPreference(projectKey)), [projectKey]);
   const isolated = copyDefault(stored);
   const menuRef = useRef<HTMLDivElement>(null);
+  const menuBtn = useRef<HTMLButtonElement>(null);
   // Chat sessions (ACP, Labs): the agents with a Terminal | Chat switch in the menu. Read when the menu opens.
   const laneView = useAcpLanes(menuOpen, acp);
   const chatAgents = chatCapable(laneView);
@@ -876,6 +878,7 @@ export function Sidebar({
           </button>
           <button
             type="button"
+            ref={menuBtn}
             data-testid="side-new-agent-menu"
             className="ck-side-new-chev"
             aria-label={t('sidebar.quickStartMenu')}
@@ -887,7 +890,7 @@ export function Sidebar({
             <IconChevronDown />
           </button>
           {menuOpen && layers.wrap(
-            <div className="ck-menu ck-menu--left ck-menu--wide" role="menu">
+            <Menu anchorRef={menuBtn} align="start" className="ck-menu--left ck-menu--wide" label={t('sidebar.quickStartMenu')} onClose={() => setMenuOpen(false)}>
               <NewAgentWhere
                 where={
                   devices?.where
@@ -962,7 +965,7 @@ export function Sidebar({
                 }
               />
               </NewAgentWhere>
-            </div>,
+            </Menu>,
           )}
         </div>
         <button type="button" data-testid="side-search" className="ck-side-new" onClick={onOpenPalette}>

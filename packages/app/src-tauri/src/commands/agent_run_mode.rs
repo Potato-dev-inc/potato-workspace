@@ -129,3 +129,32 @@ pub fn hidden_runs_list() -> Vec<crate::hidden_runs::HiddenRunView> {
 pub fn hidden_runs_dismiss(app: tauri::AppHandle, handle: String) -> bool {
     crate::hidden_runs::dismiss(&handle, Some(&app))
 }
+
+/// `{types: "one" | "two", kind: "agent_chooses" | "minion" | "spin_off"}`: "Agents that agents start" (default One
+/// type) and "When an agent starts another agent" (default Let it choose; only used in Two types).
+#[tauri::command]
+pub fn started_agents_get() -> Value {
+    serde_json::json!({
+        "types": agent_run_mode::started_agent_types().as_str(),
+        "kind": agent_run_mode::started_agent_kind().as_str(),
+    })
+}
+
+/// Saves either choice (the other is left alone). Like "Helper agents", only the Settings window writes it: neither an
+/// agent nor a phone has a route to it, so an agent cannot decide what its own helpers are.
+#[tauri::command]
+pub fn started_agents_set(types: Option<String>, kind: Option<String>) -> Result<Value, String> {
+    let types = types
+        .map(|text| agent_run_mode::StartedAgentTypes::parse(&text).ok_or_else(|| format!("INVALID_ARGUMENT: unknown value {text}")))
+        .transpose()?;
+    let kind = kind
+        .map(|text| agent_run_mode::StartedAgentKind::parse(&text).ok_or_else(|| format!("INVALID_ARGUMENT: unknown value {text}")))
+        .transpose()?;
+    if let Some(types) = types {
+        agent_run_mode::set_started_agent_types(types)?;
+    }
+    if let Some(kind) = kind {
+        agent_run_mode::set_started_agent_kind(kind)?;
+    }
+    Ok(started_agents_get())
+}

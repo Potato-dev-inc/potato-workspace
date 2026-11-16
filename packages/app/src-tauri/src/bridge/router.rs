@@ -189,6 +189,21 @@ pub(super) fn route_authorized(
         )
         .map_err(operation_http_error)?;
     }
+    // A session header is only a caller's own claim (any local process can make one up), so it proves nothing: a session
+    // call nobody can place (no key, not in a window's tree, not the app) asks like a shell command does.
+    if session.is_some() && !mobile_pairing::requires_pairing_token(headers, peer_loopback) {
+        crate::agent_authority::shell_gate::check_session_request(
+            registry,
+            &crate::companion::peer::SystemTcp,
+            &crate::pty::agent_proc::snapshot,
+            peer,
+            headers,
+            method,
+            segments,
+            &request_body,
+        )
+        .map_err(operation_http_error)?;
+    }
     if let Some(reply) = crate::questions::routes::handle(
         method,
         segments,
@@ -215,12 +230,10 @@ pub(super) fn route_authorized(
     };
     // A helper started from a pane is nested under that pane: the process on the other end of the connection says which.
     let _caller = (is_helper_start_route(method, segments) && !mobile_pairing::requires_pairing_token(headers, peer_loopback)).then(|| {
-        crate::pty::pane_parent::RequestCaller::enter(crate::companion::peer::caller_pane(
-            registry,
-            &crate::companion::peer::SystemTcp,
-            &crate::pty::agent_proc::snapshot,
-            peer,
-        ))
+        // The pane's own key first (it also names a process that left its window), then the process tree.
+        crate::pty::pane_parent::RequestCaller::enter(crate::agent_authority::pane_keys::pane_from_headers(headers).or_else(|| {
+            crate::companion::peer::caller_pane(registry, &crate::companion::peer::SystemTcp, &crate::pty::agent_proc::snapshot, peer)
+        }))
     });
     routes::dispatch(&cx).unwrap_or_else(|| {
         Err((

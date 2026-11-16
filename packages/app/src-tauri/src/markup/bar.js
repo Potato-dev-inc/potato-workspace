@@ -26,6 +26,11 @@
   var listen = EventTarget.prototype.addEventListener;
   var setT = window.setTimeout.bind(window);
   var clearT = window.clearTimeout.bind(window);
+  // For the picture: decoded from bytes in memory, so a page's img-src / style-src rules never apply to it.
+  var decode64 = window.atob.bind(window);
+  var makeBitmap = window.createImageBitmap ? window.createImageBitmap.bind(window) : null;
+  var Bytes = Uint8Array;
+  var Blobby = Blob;
   var parse = JSON.parse;
   var stringify = JSON.stringify;
   var NS = 'http://www.w3.org/2000/svg';
@@ -91,6 +96,26 @@
     var s = svgEl('svg', { viewBox: '0 0 20 20', width: size || 17, height: size || 17, 'aria-hidden': 'true', fill: 'none', stroke: 'currentColor', 'stroke-width': '1.7', 'stroke-linecap': 'round', 'stroke-linejoin': 'round' });
     svgEl('path', { d: SPEC.icons[name] }, s);
     return s;
+  }
+  // Draws the picture into the small canvas from its bytes (a data: URL carrying a PNG). Nothing is loaded by
+  // address, so a strict Content-Security-Policy on the page cannot block it.
+  var drawn = '';
+  function drawThumb(url) {
+    if (url === drawn || !ui || !makeBitmap) return;
+    drawn = url;
+    try {
+      var comma = url.indexOf(',');
+      var bin = decode64(url.slice(comma + 1));
+      var bytes = new Bytes(bin.length);
+      for (var i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
+      makeBitmap(new Blobby([bytes], { type: 'image/png' })).then(function (bmp) {
+        if (drawn !== url) return;
+        ui.thumb.width = bmp.width;
+        ui.thumb.height = bmp.height;
+        ui.thumb.getContext('2d').drawImage(bmp, 0, 0);
+        if (bmp.close) bmp.close();
+      }, function () {});
+    } catch (e) {}
   }
   function one(s, n) {
     s = String(s == null ? '' : s).replace(/\s+/g, ' ').trim();
@@ -683,7 +708,9 @@
 
     // the send row
     ui.row = css(el('div'), 'display:none;gap:8px;width:min(520px,calc(100% - 32px));padding:8px;border-radius:12px;pointer-events:auto;box-sizing:border-box;position:relative');
-    ui.thumb = css(el('img'), 'flex:none;align-self:center;width:92px;max-height:80px;object-fit:contain;border-radius:6px');
+    ui.thumb = css(el('canvas'), 'flex:none;align-self:center;width:92px;max-height:80px;object-fit:contain;border-radius:6px');
+    ui.thumb.setAttribute('role', 'img');
+    ui.thumb.setAttribute('aria-label', S.shotOf);
     ui.thumbNone = css(el('div'), 'flex:none;align-self:center;width:92px;min-height:52px;display:grid;place-items:center;text-align:center;font-size:11px;border-radius:6px;padding:4px;box-sizing:border-box');
     var col = css(el('div'), 'flex:1;display:flex;flex-direction:column;gap:5px;min-width:0');
     ui.req = css(el('input'), 'width:100%;box-sizing:border-box;padding:6px 8px;border-radius:7px;background:transparent;font:inherit;outline:none');
@@ -884,11 +911,11 @@
     css(ui.row, 'display:' + (showRow ? 'flex' : 'none') + ';gap:8px;width:min(520px,calc(100% - 32px));padding:8px;border-radius:12px;pointer-events:auto;box-sizing:border-box;position:relative;background:' + T.bar + ';border:1px solid ' + T.line + ';color:' + T.text + ';box-shadow:0 8px 24px rgba(0,0,0,.35)');
     if (showRow) {
       if (st.thumb) {
-        ui.thumb.setAttribute('src', st.thumb);
-        ui.thumb.setAttribute('alt', S.shotOf);
+        drawThumb(st.thumb);
         ui.thumb.style.display = 'block';
         ui.thumbNone.style.display = 'none';
       } else {
+        drawn = '';
         ui.thumb.style.display = 'none';
         ui.thumbNone.style.display = 'grid';
         ui.thumbNone.textContent = st.taking ? S.taking : st.noPicture ? S.noPicture : '';

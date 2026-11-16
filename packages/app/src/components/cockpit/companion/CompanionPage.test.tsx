@@ -57,7 +57,7 @@ const view = (over: Partial<CompanionView> = {}): CompanionView => ({
   ...over,
 });
 
-const button = (label: string) => [...host.querySelectorAll<HTMLButtonElement>('button')].find((b) => b.textContent?.trim() === label);
+const button = (label: string) => [...document.querySelectorAll<HTMLButtonElement>('button')].find((b) => b.textContent?.trim() === label);
 
 async function render(companion: CompanionView, over: Partial<CompanionPageProps> = {}, feed: FeedItem[] = [], journal?: JournalView | null) {
   const transport = fakeCompanionTransport({
@@ -87,19 +87,19 @@ describe('CompanionPage', () => {
     localStorage.clear();
     localStorage.setItem('pm.companion.speak.memory', JSON.stringify({ muted: ['usage'] }));
     await render(view());
-    const row = host.querySelector('[data-testid="speak-muted"]');
+    const row = document.querySelector('[data-testid="speak-muted"]');
     expect(row?.textContent).toContain("You said 'Too much' to: usage warnings");
     await act(async () => button('Turn back on')!.click());
-    expect(host.querySelector('[data-testid="speak-muted"]')).toBeNull();
+    expect(document.querySelector('[data-testid="speak-muted"]')).toBeNull();
     expect(JSON.parse(localStorage.getItem('pm.companion.speak.memory')!).muted).toEqual([]);
     localStorage.clear();
   });
 
   it('shows the face, the name and the state line, and the chat for its own pane', async () => {
     await render(view());
-    expect(host.querySelector('.ck-companion-name')?.textContent).toBe('Mochi');
-    expect(host.querySelector('.ck-companion-stateline')?.textContent).toBe('Here. Ask me anything.');
-    expect(host.querySelector('[data-testid="chat"]')?.textContent).toBe('companion-mochi');
+    expect(document.querySelector('.ck-companion-name')?.textContent).toBe('Mochi');
+    expect(document.querySelector('.ck-companion-stateline')?.textContent).toBe('Here. Ask me anything.');
+    expect(document.querySelector('[data-testid="chat"]')?.textContent).toBe('companion-mochi');
   });
 
   it('turns the check-in editor on when the view carries the list, and keeps what it cannot see off', async () => {
@@ -115,12 +115,12 @@ describe('CompanionPage', () => {
 
   it('says a new session starts after a nap or wake-up, when the companion slept before', async () => {
     await render(view(), {}, [{ id: 'f1', atMs: 1000, kind: 'slept', text: 'Went to sleep.' }]);
-    expect(host.querySelector('[data-testid="chat"]')?.textContent).toContain('New session after a nap or wake-up');
+    expect(document.querySelector('[data-testid="chat"]')?.textContent).toContain('New session after a nap or wake-up');
   });
 
   it('shows no new-session line for a companion that has never slept (its first start is only a wake-up)', async () => {
     await render(view(), {}, [{ id: 'f1', atMs: 1000, kind: 'woke', text: 'Woke up.' }]);
-    expect(host.querySelector('[data-testid="chat"]')?.textContent).not.toContain('New session');
+    expect(document.querySelector('[data-testid="chat"]')?.textContent).not.toContain('New session');
   });
 
   it('a companion whose home is too broad shows the card, and the button moves it', async () => {
@@ -148,7 +148,7 @@ describe('CompanionPage', () => {
 
   it('a sleeping companion shows no chat, and Wake up sends the wake command', async () => {
     const { transport } = await render(view({ state: 'sleeping', stateLine: 'Sleeping. Wake me when you need me.' }));
-    expect(host.querySelector('[data-testid="chat"]')).toBeNull();
+    expect(document.querySelector('[data-testid="chat"]')).toBeNull();
     expect(host.textContent).toContain('Sleeping. Wake me when you need me.');
     await act(async () => button('Wake up Mochi')!.click());
     expect(transport.calls.some((c) => c.method === 'wake')).toBe(true);
@@ -156,7 +156,7 @@ describe('CompanionPage', () => {
 
   it('a companion that is still starting has no chat yet', async () => {
     await render(view({ paneId: null, state: 'starting', stateLine: 'Waking up…' }));
-    expect(host.querySelector('[data-testid="chat"]')).toBeNull();
+    expect(document.querySelector('[data-testid="chat"]')).toBeNull();
     expect(host.textContent).toContain('Waking up…');
   });
 
@@ -177,7 +177,7 @@ describe('CompanionPage', () => {
     try {
       await render(view());
       expect(button('Show terminal')).toBeUndefined();
-      expect(host.querySelector('[data-testid="chat"]')).not.toBeNull();
+      expect(document.querySelector('[data-testid="chat"]')).not.toBeNull();
     } finally {
       forceShowTerminals(true);
     }
@@ -185,24 +185,24 @@ describe('CompanionPage', () => {
 
   it('the rail shows the memory and the setup, and hides and shows again', async () => {
     await render(view());
-    expect(host.querySelector('.ck-companion-rail')?.textContent).toContain('What Mochi knows');
-    expect(host.querySelector('.ck-companion-rail')?.textContent).toContain('Claude');
-    act(() => host.querySelector<HTMLButtonElement>('button[aria-label="Hide details"]')!.click());
-    expect(host.querySelector('.ck-companion-rail')).toBeNull();
-    await act(async () => host.querySelector<HTMLButtonElement>('button[aria-label="Show details"]')!.click());
-    expect(host.querySelector('.ck-companion-rail')).not.toBeNull();
+    expect(document.querySelector('.ck-companion-rail')?.textContent).toContain('What Mochi knows');
+    expect(document.querySelector('.ck-companion-rail')?.textContent).toContain('Claude');
+    act(() => document.querySelector<HTMLButtonElement>('button[aria-label="Hide details"]')!.click());
+    expect(document.querySelector('.ck-companion-rail')).toBeNull();
+    await act(async () => document.querySelector<HTMLButtonElement>('button[aria-label="Show details"]')!.click());
+    expect(document.querySelector('.ck-companion-rail')).not.toBeNull();
   });
 
   it('the Setup card has the agent picker; a move that waits is said under the state line too', async () => {
     await render(view({ state: 'working', stateLine: 'Working…', queuedMove: { agentType: 'codex', agentLabel: 'Codex', untilMs: null } }));
-    expect(host.querySelector('.ck-companion-rail select[aria-label="Agent"]')).not.toBeNull();
-    expect(host.querySelector('.ck-companion-head')?.textContent).toContain('Moves when Mochi is free');
+    expect(document.querySelector('.ck-companion-rail select[aria-label="Agent"]')).not.toBeNull();
+    expect(document.querySelector('.ck-companion-head')?.textContent).toContain('Moves when Mochi is free');
   });
 
   it('the name is renamed in place and saved on leaving the field', async () => {
     const { transport } = await render(view());
-    act(() => host.querySelector<HTMLButtonElement>('.ck-companion-name')!.click());
-    const input = host.querySelector<HTMLInputElement>('input[aria-label="Companion name"]')!;
+    act(() => document.querySelector<HTMLButtonElement>('.ck-companion-name')!.click());
+    const input = document.querySelector<HTMLInputElement>('input[aria-label="Companion name"]')!;
     const setter = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value')!.set!;
     act(() => {
       setter.call(input, 'Pip');
@@ -216,10 +216,10 @@ describe('CompanionPage', () => {
 
   it('archive asks first, then archives and leaves the page', async () => {
     const { transport, props } = await render(view());
-    act(() => host.querySelector<HTMLButtonElement>('button[aria-label="More"]')!.click());
-    act(() => host.querySelector<HTMLButtonElement>('[role="menuitem"]:nth-child(2)')!.click());
+    act(() => document.querySelector<HTMLButtonElement>('button[aria-label="More"]')!.click());
+    act(() => document.querySelector<HTMLButtonElement>('[role="menuitem"]:nth-child(2)')!.click());
     expect(host.textContent).toContain('Archive Mochi?');
-    await act(async () => host.querySelector<HTMLButtonElement>('.ck-companion-sheet .ck-btn--primary')!.click());
+    await act(async () => document.querySelector<HTMLButtonElement>('.ck-companion-sheet .ck-btn--primary')!.click());
     expect(transport.calls.some((c) => c.method === 'archive' && c.args[0] === 'mochi')).toBe(true);
     expect(props.onArchived).toHaveBeenCalledTimes(1);
   });
@@ -248,14 +248,14 @@ describe('CompanionPage', () => {
 
     it('shows no switcher for a single companion', async () => {
       await render(view());
-      expect(host.querySelector('.ck-companion-switch')).toBeNull();
+      expect(document.querySelector('.ck-companion-switch')).toBeNull();
     });
 
     it('switches to another companion from the header', async () => {
       const { props } = await renderMany(mochi);
-      expect(host.querySelector('.ck-companion-badge')?.textContent).toBe('Default');
+      expect(document.querySelector('.ck-companion-badge')?.textContent).toBe('Default');
       act(() => button('Switch companion ▾')!.click());
-      const items = [...host.querySelectorAll<HTMLButtonElement>('.ck-companion-switch [role="menuitem"]')];
+      const items = [...document.querySelectorAll<HTMLButtonElement>('[role="menu"] [role="menuitem"]')];
       expect(items.map((i) => i.textContent)).toEqual(['Bit']);
       act(() => items[0].click());
       expect(props.onSwitch).toHaveBeenCalledWith('bit');
@@ -263,8 +263,8 @@ describe('CompanionPage', () => {
 
     it('Make default is offered to a companion that is not the default, and not to the default', async () => {
       const { transport, props } = await renderMany(bit);
-      act(() => host.querySelector<HTMLButtonElement>('button[aria-label="More"]')!.click());
-      const item = [...host.querySelectorAll<HTMLButtonElement>('[role="menuitem"]')].find((i) => i.textContent === 'Make default')!;
+      act(() => document.querySelector<HTMLButtonElement>('button[aria-label="More"]')!.click());
+      const item = [...document.querySelectorAll<HTMLButtonElement>('[role="menuitem"]')].find((i) => i.textContent === 'Make default')!;
       await act(async () => item.click());
       expect(transport.calls.some((c) => c.method === 'setDefault' && c.args[0] === 'bit')).toBe(true);
       expect(props.onChanged).toHaveBeenCalled();
@@ -272,13 +272,13 @@ describe('CompanionPage', () => {
       act(() => root.unmount());
       root = createRoot(host);
       await renderMany(mochi);
-      act(() => host.querySelector<HTMLButtonElement>('button[aria-label="More"]')!.click());
-      expect([...host.querySelectorAll('[role="menuitem"]')].some((i) => i.textContent === 'Make default')).toBe(false);
+      act(() => document.querySelector<HTMLButtonElement>('button[aria-label="More"]')!.click());
+      expect([...document.querySelectorAll('[role="menuitem"]')].some((i) => i.textContent === 'Make default')).toBe(false);
     });
 
     it('wears its own colour in the header', async () => {
       await renderMany({ ...mochi, accent: 'sky' });
-      expect(host.querySelector('.ck-companion-head')?.getAttribute('data-accent')).toBe('sky');
+      expect(document.querySelector('.ck-companion-head')?.getAttribute('data-accent')).toBe('sky');
     });
   });
 
@@ -315,7 +315,7 @@ describe('CompanionPage', () => {
       await render(view({ body }), {}, [], journal);
       expect(host.textContent).toContain('How Mochi feels');
       expect(host.textContent).toContain('Genki, a lot');
-      expect(host.querySelector('[role="meter"][aria-label="Say hello"]')).toBeTruthy();
+      expect(document.querySelector('[role="meter"][aria-label="Say hello"]')).toBeTruthy();
       expect(host.textContent).toContain('You were away about 2 hours.');
       expect(host.textContent).toContain("Mochi's journal");
       expect(host.textContent).toContain('Today was a good day with Ren.');

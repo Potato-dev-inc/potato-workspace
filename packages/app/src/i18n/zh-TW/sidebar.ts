@@ -3,7 +3,7 @@ import type { EnglishKey } from '../en';
 
 export const sidebar: Partial<Record<EnglishKey, string>> = {
   'sidebar.errorIn': '錯誤 · {where}',
-  'sidebar.helperOf': '{name} 的幫手 · {detail}',
+  'sidebar.helperOf': '由 {name} 啟動 · {detail}',
   'sidebar.rowNeedsYou': '{name}，需要你',
   'sidebar.hasPreviewAt': '有預覽 · {address}',
   'sidebar.hasPreview': '有預覽',
@@ -15,9 +15,9 @@ export const sidebar: Partial<Record<EnglishKey, string>> = {
   'sidebar.ended': '已結束',
   'sidebar.moreFor': '{name} 的更多選項',
   'sidebar.more': '更多',
-  'sidebar.helpersOf': '{name} 的幫手',
-  'sidebar.hideHelpers': '隱藏幫手',
-  'sidebar.showHelpers': '顯示幫手',
+  'sidebar.helpersOf': '{name} 啟動的 AI 助理',
+  'sidebar.hideHelpers': '隱藏啟動的 AI 助理',
+  'sidebar.showHelpers': '顯示啟動的 AI 助理',
   'sidebar.questionsFromAgents': 'AI 助理的提問',
   'sidebar.projects': '專案',
   'sidebar.statusHeading': '狀態',
@@ -83,7 +83,7 @@ export const sidebar: Partial<Record<EnglishKey, string>> = {
   'sidebar.dragLive': '正在拖曳「{name}」。放到左側或右側，按 Esc 取消。',
   'sidebar.dropLeft': '在左側開啟',
   'sidebar.dropRight': '在右側開啟',
-  'sidebar.helperCount': '{count} 個幫手',
+  'sidebar.helperCount': '{count} 個啟動的 AI 助理',
   // ... 選單的三個分組（項目 16）：每個標題說明底下列要去哪裡。
   'sidebar.groupGoTo': '前往',
   'sidebar.groupTools': '工具',

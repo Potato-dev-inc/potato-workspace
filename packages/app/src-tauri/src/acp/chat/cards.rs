@@ -35,6 +35,8 @@ pub struct Card {
     pub title: Option<String>,
     /// The person answered (or dismissed) it and the answer is on its way to the agent.
     pub resolved: bool,
+    /// A minion's ordinary ask: only the agent that started the minion sees and answers it (`helper_answers::MinionAsk`).
+    pub quiet: bool,
 }
 
 impl Card {
@@ -76,6 +78,14 @@ pub fn options_of(offered: &[OptionBrief]) -> Vec<CardOption> {
         out.push(CardOption { choice_id, option_id: o.id.clone(), name, kind: o.kind.clone() });
     }
     out
+}
+
+/// The question line of a risky ask a minion makes: the card sits in the chat of the agent that started the minion.
+pub fn minion_question(label: &str, what: Option<&str>) -> String {
+    match what.map(str::trim).filter(|t| !t.is_empty()) {
+        Some(what) => format!("A minion ({label}) wants to: {}", cut_to(what, 300)),
+        None => format!("A minion ({label}) asks permission to use a tool"),
+    }
 }
 
 /// The words of the card. `label`: the agent's name ("Codex"). `title`: what the tool call is called. `kind` and
@@ -240,9 +250,9 @@ mod tests {
     #[test]
     fn a_dismissed_card_rejects_with_the_agents_reject_option() {
         let (_, options) = new_question("p", "Codex", &wait(offered(&[("a", "Allow", "allow_once"), ("r", "No thanks", "reject_once")])), None, None, &[]);
-        let card = Card { question_id: "q".into(), options, title: None, resolved: false };
+        let card = Card { question_id: "q".into(), options, title: None, resolved: false, quiet: false };
         assert_eq!(card.rejection().map(|o| o.option_id.as_str()), Some("r"));
-        let only_yes = Card { question_id: "q".into(), options: options_of(&offered(&[("a", "Allow", "allow_once")])), title: None, resolved: false };
+        let only_yes = Card { question_id: "q".into(), options: options_of(&offered(&[("a", "Allow", "allow_once")])), title: None, resolved: false, quiet: false };
         assert!(only_yes.rejection().is_none());
     }
 
@@ -288,6 +298,12 @@ mod tests {
         assert!(options[0].option_id.is_empty());
         let (_, with_yes) = fallback_question("p", "Codex", &wait(offered(&[("a", "Allow Once", "allow_once"), ("r", "No", "reject_once")])), Some("ls"));
         assert_eq!(with_yes.iter().map(|o| o.option_id.as_str()).collect::<Vec<_>>(), ["a", "r"]);
+    }
+
+    #[test]
+    fn a_risky_minion_ask_names_the_minion() {
+        assert_eq!(minion_question("Codex", Some(" Delete old.txt ")), "A minion (Codex) wants to: Delete old.txt");
+        assert_eq!(minion_question("Codex", None), "A minion (Codex) asks permission to use a tool");
     }
 
     #[test]

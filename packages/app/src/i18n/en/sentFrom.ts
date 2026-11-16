@@ -1,7 +1,7 @@
 // English messages: sentFrom. Which device sent a message, who is typing or driving a chat, and naming devices.
 export const sentFrom = {
   'sentFrom.from': 'from {name}',
-  'sentFrom.app': 'from Potato Workspace: a helper finished',
+  'sentFrom.app': 'from Potato Workspace: an agent finished',
   'drive.typing': '{name} is typing…',
   'drive.driving': '{name} is driving',
   'drive.takeBack': 'Take back',

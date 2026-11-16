@@ -3,6 +3,7 @@
 // picture. The message then carries the list, and the PC gives the agent the path like a file dropped on the desktop.
 import { useCallback, useEffect, useRef, useState, type ChangeEvent } from 'react';
 import { useT } from '../../i18n';
+import { Menu } from '../common/Floating';
 import { errorSentence } from '../../lib/sayError';
 import type { ChatAttachment } from '../../lib/attachFiles';
 import { checkUpload, FILE_ACCEPT, PHOTO_ACCEPT, sizeWords, UPLOAD_MAX_FILES } from '../../lib/phone-upload';
@@ -152,11 +153,14 @@ export async function readClipboard(onFiles: (files: File[]) => void, onText: (t
 
 /** The four items of the "+" menu. The two pickers are hidden file inputs the items click. */
 export function PlusMenu({
+  anchorRef,
   enabled,
   onFiles,
   onPaste,
   onClose,
 }: {
+  /** The "+" button: the menu sits under it. */
+  anchorRef: React.RefObject<HTMLElement | null>;
   /** The PC takes files (the route exists and the phone may type). Off: the items say so. */
   enabled: boolean;
   onFiles: (files: File[]) => void;
@@ -167,10 +171,6 @@ export function PlusMenu({
   const camera = useRef<HTMLInputElement>(null);
   const photos = useRef<HTMLInputElement>(null);
   const files = useRef<HTMLInputElement>(null);
-  const first = useRef<HTMLButtonElement>(null);
-  useEffect(() => {
-    first.current?.focus();
-  }, []);
 
   const picked = (event: ChangeEvent<HTMLInputElement>) => {
     const list = event.target.files ? [...event.target.files] : [];
@@ -185,18 +185,10 @@ export function PlusMenu({
     { id: 'paste' },
   ];
   return (
-    <div
-      className="ph-comp-menu"
-      role="menu"
-      data-testid="phone-plus-menu"
-      onKeyDown={(event) => {
-        if (event.key === 'Escape') onClose();
-      }}
-    >
-      {items.map((item, index) => (
+    <Menu anchorRef={anchorRef} align="start" className="ph-comp-menu" label={t('phone.composer.add')} testId="phone-plus-menu" onClose={() => onClose()}>
+      {items.map((item) => (
         <button
           key={item.id}
-          ref={index === 0 ? first : undefined}
           type="button"
           role="menuitem"
           aria-disabled={!enabled || undefined}
@@ -215,6 +207,6 @@ export function PlusMenu({
       <input ref={camera} type="file" accept="image/*" capture="environment" hidden tabIndex={-1} data-testid="phone-pick-camera" onChange={picked} />
       <input ref={photos} type="file" accept={PHOTO_ACCEPT} multiple hidden tabIndex={-1} data-testid="phone-pick-photos" onChange={picked} />
       <input ref={files} type="file" accept={FILE_ACCEPT} multiple hidden tabIndex={-1} data-testid="phone-pick-files" onChange={picked} />
-    </div>
+    </Menu>
   );
 }

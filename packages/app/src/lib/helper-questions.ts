@@ -33,6 +33,11 @@ export function helpersAskingFor(list: ReadonlyArray<PaneLike>, paneId: string, 
   return list.filter((p) => p.info.id !== paneId && asking(p.info.id) && bubbleTargets(list, p.info.id).includes(paneId)).map((p) => p.info.id);
 }
 
+/** Whether an agent started this pane as a minion (Two types mode). The field comes with the pane list; old panes have none. */
+export function isMinion(info: object | undefined): boolean {
+  return (info as { started_as?: string } | undefined)?.started_as === 'minion';
+}
+
 /** "Claude helper asks": the card's lead-in, with the helper's agent name. */
 export function helperAsksLabel(agentName: string): string {
   return `${agentName} helper asks`;

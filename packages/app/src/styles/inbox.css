@@ -192,3 +192,16 @@
     opacity: 1;
   }
 }
+
+/* 1.1.8: view switch, crew groups, "Show in crew" */
+.cockpit .ib-view {
+  display: inline-flex;
+  gap: 2px;
+  margin-left: auto;
+}
+.cockpit .ib-group {
+  margin: 0;
+}
+.cockpit .ib-crew-btn {
+  margin: 2px 0 0 12px;
+}

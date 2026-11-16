@@ -1,9 +1,8 @@
-import { useEffect, useLayoutEffect, useRef, useState } from 'react';
-import { createPortal } from 'react-dom';
+import { useState } from 'react';
 import type { PaneAction } from '../../lib/pane-actions';
 import { IconClose, IconInfo, IconPin, IconReflow, IconRename, IconStop } from './Icons';
 import { useT } from '../../i18n';
-import { useDismissable } from '../../hooks/useDismissable';
+import { Menu } from '../common/Floating';
 
 /**
  * The one menu of a pane: opened by a right-click (or the context-menu key, Shift+F10) on its row in the
@@ -69,45 +68,13 @@ export function PaneContextMenu({
   onClose: (refocus: boolean) => void;
 }) {
   const t = useT();
-  const ref = useRef<HTMLDivElement>(null);
-  const [pos, setPos] = useState({ left: x, top: y });
-  // "Make helper of…" swaps the menu for the list of agents to pick from.
+  // "Make helper of…" swaps the menu for the list of agents to pick from. The menu remounts on the swap, so the first item gets the focus.
   const [picking, setPicking] = useState(false);
 
-  // Keep the menu inside the window, then put the keyboard on its first item.
-  useLayoutEffect(() => {
-    const el = ref.current;
-    if (!el) return;
-    const r = el.getBoundingClientRect();
-    const m = 4;
-    const left = Math.max(m, Math.min(x, window.innerWidth - r.width - m));
-    // Not enough room below the pointer: open upward from it (then keep it inside the window either way).
-    const below = window.innerHeight - y - m >= r.height;
-    const wanted = below ? y : y - r.height;
-    const top = Math.max(m, Math.min(wanted, window.innerHeight - r.height - m));
-    setPos({ left, top });
-    el.querySelector<HTMLElement>('[role="menuitem"]')?.focus();
-  }, [x, y, picking]);
-
-  // Escape is handled in onKeyDown below (it refocuses).
-  useDismissable(true, { inside: [ref], anchor: ref, ignore: ['escape'], onDismiss: () => onClose(false) });
-
-  const onKeyDown = (e: React.KeyboardEvent) => {
-    const items = [...(ref.current?.querySelectorAll<HTMLElement>('[role="menuitem"]') ?? [])];
-    const at = items.indexOf(document.activeElement as HTMLElement);
-    if (e.key === 'Escape') {
-      e.preventDefault();
-      onClose(true);
-    } else if (e.key === 'Tab') {
-      e.preventDefault();
-      onClose(true);
-    } else if (e.key === 'ArrowDown') {
-      e.preventDefault();
-      items[(at + 1) % items.length]?.focus();
-    } else if (e.key === 'ArrowUp') {
-      e.preventDefault();
-      items[(at - 1 + items.length) % items.length]?.focus();
-    } else if (e.key === 'Home') {
+  // Home and End jump to the ends of the list. The arrows, Escape and Tab are the shared Menu's.
+  const onKeyDown = (e: React.KeyboardEvent<HTMLDivElement>) => {
+    const items = [...e.currentTarget.querySelectorAll<HTMLElement>('[role="menuitem"]')];
+    if (e.key === 'Home') {
       e.preventDefault();
       items[0]?.focus();
     } else if (e.key === 'End') {
@@ -134,15 +101,16 @@ export function PaneContextMenu({
   );
 
   const menu = (
-    <div
-      ref={ref}
-      className="ck-menu ck-menu--fixed ck-menu--compact"
-      role="menu"
-      aria-label={t('sidebar.paneActions')}
-      style={{ left: pos.left, top: pos.top }}
-      onKeyDown={onKeyDown}
+    <Menu
+      key={picking ? 'picking' : 'main'}
+      point={{ x, y }}
+      align="start"
+      className="ck-menu--compact"
+      label={t('sidebar.paneActions')}
       onContextMenu={(e) => e.preventDefault()}
+      onClose={(back) => onClose(back)}
     >
+      <div onKeyDown={onKeyDown}>
       {picking && helperOf ? (
         <div role="group" aria-label={t('adopt.menuLabel', { name: helperName ?? '' })}>
           {helperOf.map((target) => <span key={target.id} style={{ display: 'contents' }}>{item(target.name, null, () => onHelperOf?.(target.id))}</span>)}
@@ -173,9 +141,8 @@ export function PaneContextMenu({
       {item(t('sidebar.close'), <IconClose />, () => onAction('close'))}
       </>
       )}
-    </div>
+      </div>
+    </Menu>
   );
-  // Inside the cockpit root (the theme scope the `ck-menu` styles hang on), but outside the sidebar.
-  const scope = document.querySelector('.cockpit') ?? document.body;
-  return createPortal(menu, scope);
+  return menu;
 }

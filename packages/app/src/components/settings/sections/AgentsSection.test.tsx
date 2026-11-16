@@ -148,6 +148,13 @@ async function mount() {
 const switchFor = (label: string) => m.host.querySelector<HTMLButtonElement>(`[role="switch"][aria-label="${label}"]`);
 const rowOf = (id: string) => m.host.querySelector<HTMLElement>(`[data-row="${id}"]`);
 
+/** Opens the "Details" fold inside one row (its fields are not on a first look). */
+async function openFold(id: string) {
+  const button = rowOf(id)?.querySelector<HTMLButtonElement>('.st-fold > button');
+  if (button) await click(button);
+  await settle();
+}
+
 beforeEach(() => {
   vi.clearAllMocks();
   useStandby();
@@ -161,21 +168,22 @@ describe('Agents: helper tools inside agent panes', () => {
   it('is on by default and saves only {pane_mcp_enabled} when switched', async () => {
     await mount();
     expect(rowOf('helper-tools')).toBeTruthy();
-    expect(switchFor('Potato Workspace helpers inside agents')!.getAttribute('aria-checked')).toBe('true');
-    await click(switchFor('Potato Workspace helpers inside agents'));
+    expect(switchFor('Potato tools in every agent')!.getAttribute('aria-checked')).toBe('true');
+    await click(switchFor('Potato tools in every agent'));
     expect(m.env.patches).toEqual([{ pane_mcp_enabled: false }]);
   });
 
   it('reads a saved off as off', async () => {
     m = await mountRows(agentsRows, { settings: { ...BASE_SETTINGS, pane_mcp_enabled: false } });
     await settle(10);
-    expect(switchFor('Potato Workspace helpers inside agents')!.getAttribute('aria-checked')).toBe('false');
+    expect(switchFor('Potato tools in every agent')!.getAttribute('aria-checked')).toBe('false');
   });
 });
 
 describe('Agents: every row renders', () => {
   it('shows the three rows, each with its key controls', async () => {
     await mount();
+    await openFold('preload');
     for (const id of ['accounts', 'preload', 'versions', 'definitions']) expect(rowOf(id), `missing row: ${id}`).toBeTruthy();
 
     // Accounts
@@ -186,10 +194,11 @@ describe('Agents: every row renders', () => {
     expect(buttonByText(m.host, 'Remove')).toBeTruthy();
 
     // Preload
-    expect(switchFor('Preload agents')).toBeTruthy();
-    expect(byLabel(m.host, 'Keep Claude warm')).toBeTruthy();
+    expect(switchFor('Keep an agent ready')).toBeTruthy();
+    // Which agents stay ready is on each agent's own page (KeepReadyRow), not in this row.
+    expect(byLabel(m.host, 'Keep Claude warm')).toBeNull();
+    expect(hasText(m.host, 'Agents to keep warm')).toBe(false);
     expect(byLabel(m.host, 'Preload idle timeout (minutes)')).toBeTruthy();
-    expect(hasText(m.host, 'Agents to keep warm')).toBe(true);
     expect(hasText(m.host, 'Idle timeout')).toBe(true);
     expect(hasText(m.host, 'Status')).toBe(true);
 
@@ -212,10 +221,10 @@ describe('Agents: every row renders', () => {
     expect(buttonByText(m.host, 'Save changes')).toBeUndefined();
   });
 
-  it('groups the rows: Sign in, Speed, Standby helpers, Models, Rules for all agents, Helpers, Handoff, Menu, Updates, Chat, Live updates, Keep going, Where agents start, Linux, Same file, then Definitions (whose own block carries the title)', async () => {
+  it('groups the rows: Sign in, Speed, Standbys, Models, Rules for all agents, Helpers, Handoff, Updates, Chat, Live updates, Keep going, Where agents start, Linux, Same file, then Definitions (whose own block carries the title)', async () => {
     await mount();
     const heads = [...m.host.querySelectorAll('section.st-group')].map((g) => g.querySelector(':scope > h2')?.textContent?.trim() ?? '');
-    expect(heads).toEqual(['Add an agent', 'Your agents', 'Check my setup', 'Sign in', 'Speed', 'Standby helpers', 'Models', 'Rules for all agents', 'Helpers', 'Handoff', 'Menu', 'Updates', 'Chat', 'Live updates', 'Keep going', 'Where agents start', 'Linux', 'Same file', '']);
+    expect(heads).toEqual(['Add an agent', 'Your agents', 'Check my setup', 'Sign in', 'Speed', 'Standbys', 'Models', 'Rules for all agents', 'How they run', 'Handoff', 'Updates', 'Chat', 'Live updates', 'Keep going', 'Where agents start', 'Linux', 'Same file', '']);
   });
 
   it('mounts the same-file switch under Same file and it is found by search', async () => {
@@ -228,6 +237,7 @@ describe('Agents: every row renders', () => {
 
   it('Keep going: the block mounts under its own row with the saved order', async () => {
     await mount();
+    await openFold('keep-going');
     expect(rowOf('keep-going')).toBeTruthy();
     expect(hasText(m.host, 'When an agent runs out of usage')).toBe(true);
     expect(byLabel(m.host, 'Ask to move it back when the first agent resets')).toBeTruthy();
@@ -271,16 +281,17 @@ describe('Agents: each control saves through its own command', () => {
 
   it('Preload: the master switch saves through the standby command, not settings.json', async () => {
     await mount();
-    await click(switchFor('Preload agents'));
+    await click(switchFor('Keep an agent ready'));
     await settle();
-    expect(tauri.standbySetConfig).toHaveBeenLastCalledWith(expect.objectContaining({ preload: { enabled: true, providers: {} } }));
+    expect(tauri.standbySetConfig).toHaveBeenLastCalledWith(expect.objectContaining({ preload: expect.objectContaining({ enabled: true }) }));
     expect(m.env.patches).toEqual([]);
   });
 
-  it('Preload: ticking a provider keeps one of it warm', async () => {
-    useStandby({ ...DEFAULT_STANDBY_CONFIG, preload: { enabled: true, providers: {} } });
+  it('Preload: the row has no per-agent list (it is on each agent page), and the switch still saves', async () => {
+    useStandby({ ...DEFAULT_STANDBY_CONFIG, preload: { enabled: false, providers: {} } });
     await mount();
-    await click(byLabel(m.host, 'Keep Claude warm'));
+    expect(byLabel(m.host, 'Keep Claude warm')).toBeNull();
+    await click(switchFor('Keep an agent ready'));
     await settle();
     expect(tauri.standbySetConfig).toHaveBeenLastCalledWith(expect.objectContaining({ preload: { enabled: true, providers: { claude: 1 } } }));
     expect(m.env.patches).toEqual([]);
@@ -288,6 +299,7 @@ describe('Agents: each control saves through its own command', () => {
 
   it('Preload: the idle timeout is typed in minutes and saved as seconds on blur', async () => {
     await mount();
+    await openFold('preload');
     const idle = byLabel<HTMLInputElement>(m.host, 'Preload idle timeout (minutes)')!;
     await typeInto(idle, '30');
     await blur(idle);
@@ -417,7 +429,8 @@ describe('Agents: search finds the rows', () => {
   });
 
   it('"work" finds Accounts', () => {
-    expect(idsFor('work')).toEqual(['copy-offer', 'helper-tools', 'accounts']);
+    expect(idsFor('work')).toContain('accounts');
+    expect(idsFor('workspace')).toContain('helper-tools');
   });
 
   it('"keep going" finds Keep going, and "runs out" finds it too', () => {
@@ -464,7 +477,7 @@ describe('Agents: Show terminals', () => {
   });
 });
 
-describe('Agents: Standby helpers', () => {
+describe('Agents: Standbys', () => {
   const entry = (over: Partial<StandbyHelperEntry> = {}): StandbyHelperEntry => ({
     id: 'sb-1',
     name: 'Reviewer',
@@ -495,14 +508,14 @@ describe('Agents: Standby helpers', () => {
     expect(m.host.textContent).toContain('Codex CLI · gpt-5');
     expect(byLabel(m.host, 'Most standbys at once')).toBeTruthy();
     expect(byLabel(m.host, 'Minutes before an unused standby closes')).toBeTruthy();
-    expect(m.host.textContent).toContain("Add helpers from an agent's row in the sidebar.");
+    expect(m.host.textContent).toContain("Add standbys from an agent\'s row in the sidebar.");
     expect(m.host.querySelector('[data-testid="standby-form"]')).toBeNull();
   });
 
   it('says plainly when there are none', async () => {
     vi.mocked(tauri.standbyHelpersGet).mockResolvedValue(viewOf([]));
     await mount();
-    expect(m.host.textContent).toContain('No helpers on standby yet.');
+    expect(m.host.textContent).toContain('No standbys yet.');
   });
 
   it('has no "after a task" choice (a standby is used once), starts a sleeping one and removes one', async () => {
@@ -554,17 +567,17 @@ describe('Agents: show helpers in the sidebar', () => {
     await mount();
     const row = rowOf('helpers-in-sidebar');
     expect(row).toBeTruthy();
-    expect(row?.closest('section.st-group')?.querySelector(':scope > h2')?.textContent?.trim()).toBe('Helpers');
-    expect(row?.textContent).toContain('Helpers are listed under the agent that started them');
-    expect(switchFor('Show helpers in the sidebar')!.getAttribute('aria-checked')).toBe('true');
+    expect(row?.closest('section.st-group')?.querySelector(':scope > h2')?.textContent?.trim()).toBe('How they run');
+    expect(row?.textContent).toContain('Started agents are listed under the agent that started them');
+    expect(switchFor('Show started agents in the sidebar')!.getAttribute('aria-checked')).toBe('true');
     expect(getHelpersInSidebar()).toBe(true);
-    await click(switchFor('Show helpers in the sidebar'));
+    await click(switchFor('Show started agents in the sidebar'));
     expect(getHelpersInSidebar()).toBe(false);
     expect(localStorage.getItem(HELPERS_IN_SIDEBAR_KEY)).toBe('0');
-    expect(switchFor('Show helpers in the sidebar')!.getAttribute('aria-checked')).toBe('false');
+    expect(switchFor('Show started agents in the sidebar')!.getAttribute('aria-checked')).toBe('false');
     // This device only: nothing is written to settings.json.
     expect(m.env.patches).toEqual([]);
-    await click(switchFor('Show helpers in the sidebar'));
+    await click(switchFor('Show started agents in the sidebar'));
     expect(getHelpersInSidebar()).toBe(true);
   });
 

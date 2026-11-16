@@ -83,9 +83,9 @@ export const state = {
   'state.usage.forecast': 'At this pace you hit the limit at about {hit} · resets {reset}',
   // sidebar
   'state.otherGroup': 'Other',
-  'state.helpers_one': '{count} helper',
-  'state.helpers_other': '{count} helpers',
-  'state.helperOf': 'Helper of {title}',
+  'state.helpers_one': '{count} agent',
+  'state.helpers_other': '{count} agents',
+  'state.helperOf': 'Started by {title}',
   'state.startedBy': 'Started by {host}',
   'state.startedByAgent': 'Started by an agent',
   'state.startedByTask': '{who}: {task}',

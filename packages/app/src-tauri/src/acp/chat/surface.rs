@@ -296,6 +296,14 @@ pub fn view(chat: &AcpChat) -> Value {
     if let Some(note) = chat.lane_note() {
         lanes::merge_note(&mut shown, &note);
     }
+    // What the agent that started this chat made it (minion / spin-off, or One type's helper) and why.
+    if let (Some(started), Some(map)) = (chat.started(), shown.as_object_mut()) {
+        map.insert("as_used".into(), json!(started.as_used));
+        map.insert("as_reason".into(), json!(started.as_reason));
+        if let Some(kind) = &started.started_as {
+            map.insert("started_as".into(), json!(kind));
+        }
+    }
     // A standby seat did (or does) this task: the answer says which one, and that nothing else was started.
     if let (Some(seat), Some(map)) = (chat.seat(), shown.as_object_mut()) {
         let name = crate::standby::helpers::file().snapshot().helpers.into_iter().find(|h| h.id == seat).map(|h| h.name);
@@ -750,7 +758,8 @@ fn run(body: &[u8], query: &str, deps: &StartDeps, session: Option<&str>, lookup
     }
     // The caller's own standby seat of this agent type takes the task, whatever lane wording the caller used ("opencode",
     // "opencode_native", lane "terminal"): the seat is a chat, so the run is a chat on the seat's agent.
-    let (value, seat_note) = seat_first(value, session, &deps.registry.lock().project_path.clone(), query);
+    let standby_refused = value.get("started").and_then(|v| v.get("standby_refused")).and_then(Value::as_bool) == Some(true);
+    let (value, seat_note) = if standby_refused { (value, None) } else { seat_first(value, session, &deps.registry.lock().project_path.clone(), query) };
     // One resolver picks the way (`decide`): what the request needs decides, `lane` is a hint, and a refusal carries the call
     // that works.
     let account = text_of(&value, "account");
@@ -792,7 +801,7 @@ fn run(body: &[u8], query: &str, deps: &StartDeps, session: Option<&str>, lookup
     let started = match super::start::check_gate(labs_on, config.is_some(), crate::acp::lane::RunLane::Acp, true) {
         Err(gate) => Err(gate.into()),
         Ok(()) => match config {
-            Some(cfg) => super::start::start(deps, cfg, StartRequest { agent_id: agent, folder: folder.clone(), explicit: true, account: account.clone(), model: requested_model.clone(), is_helper: session.is_some() || model_from_helper, parent_pane: caller_pane_of(session), helper_name: text_of(&value, "helper"), ..Default::default() }),
+            Some(cfg) => super::start::start(deps, cfg, StartRequest { agent_id: agent, folder: folder.clone(), explicit: true, account: account.clone(), model: requested_model.clone(), is_helper: session.is_some() || model_from_helper, parent_pane: caller_pane_of(session), helper_name: text_of(&value, "helper"), no_standby: standby_refused, ..Default::default() }),
             None => Err(super::start::GateError::NoDefinition.into()),
         },
     };
@@ -863,6 +872,17 @@ fn run(body: &[u8], query: &str, deps: &StartDeps, session: Option<&str>, lookup
     );
     let parent = deps.registry.lock().panes.get(chat.pane_id()).and_then(|p| p.info.parent_pane_id.clone());
     chat.persist_link(session, parent.as_deref());
+    // What the agent made it (minion / spin-off; One type's helper): the route decided, the pane and the record keep it.
+    if let Some(mut started) = value.get("started").and_then(|v| serde_json::from_value::<crate::agent_run_mode::StartedRecord>(v.clone()).ok()) {
+        // A standby seat took the task: a spin-off standby is a spin-off (a named one whatever was asked).
+        if chat.seat().is_some() {
+            started.took_standby(text_of(&value, "helper").is_some());
+        }
+        if let Some(kind) = started.started_as.as_deref() {
+            crate::pty::pane_parent::set_started_as(&deps.registry, chat.pane_id(), kind);
+        }
+        chat.set_started(started);
+    }
     deps.host.panes_changed();
     deps.host.state_changed(chat.pane_id(), &chat.state());
     // Which lane and why (and the account) stay with the chat, so inspect_agent and wait_agents still say it.

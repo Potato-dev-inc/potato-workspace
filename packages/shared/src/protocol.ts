@@ -34,6 +34,8 @@ export const PaneInfoSchema = z.object({
   title: z.string().nullable().optional(),
   /** The pane of the agent that started this one over MCP (a helper); absent for a pane nobody's agent started. Display-only. */
   parent_pane_id: z.string().nullable().optional(),
+  /** `minion` | `spin_off`: what the agent that started this pane made it (Two types mode). Absent: a chat the person started, or One type. */
+  started_as: z.string().nullable().optional(),
   /** Linux Inside: the pane runs inside WSL. Absent for a Windows pane. */
   place: PanePlaceSchema.optional(),
   /** `acp`: a chat session over the Agent Client Protocol (no terminal behind the pane). Absent for a terminal pane. */
@@ -85,5 +87,8 @@ export const BRIDGE_LOCAL_SECRET_FILE = 'potato-workspace.bridge.secret';
 export const BRIDGE_LOCAL_SECRET_HEADER = 'X-Potato-Workspace-Local-Secret';
 /** The agent pane a shell command runs in (from POTATO_WORKSPACE_PANE_ID). A hint that only makes the bridge stricter. */
 export const BRIDGE_PANE_HEADER = 'X-Potato-Workspace-Pane';
+/** The agent window's own secret key (from POTATO_WORKSPACE_PANE_KEY). It proves which pane a call comes from; never log it. */
+export const BRIDGE_PANE_KEY_HEADER = 'X-Potato-Workspace-Pane-Key';
+export const BRIDGE_PANE_KEY_ENV = 'POTATO_WORKSPACE_PANE_KEY';
 export const DEFAULT_BRIDGE_HOST = '127.0.0.1';
 export const BRIDGE_HTTP_PORT_RANGE = { min: 17421, max: 17499 };

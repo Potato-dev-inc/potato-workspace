@@ -191,13 +191,33 @@ pub fn collect_facts(now_ms: u64) -> Facts {
         panes,
         prompts: HashMap::new(),
         questions,
-        stuck_pane_ids: crate::loop_guard::all_active().into_iter().map(|s| s.pane_id).collect(),
+        stuck_pane_ids: stuck_pane_ids(),
         notices: crate::askbar::notices()
             .into_iter()
             .map(|n| NoticeFact { id: n.id, at_ms: Some(n.at_ms), text: Some(clean(&n.question)) })
             .collect(),
         status_since: HashMap::new(),
     }
+}
+
+/// A loop-guard signal and a helper with no progress are one problem: one id, so one card and one count
+/// (the same union as `stuckIds` in `hooks/useNeedsYou.ts`).
+fn stuck_pane_ids() -> Vec<String> {
+    union_stuck(
+        crate::loop_guard::all_active().into_iter().map(|s| s.pane_id).collect(),
+        crate::agent_runs::stall::all().into_iter().map(|(id, _)| id).collect(),
+    )
+}
+
+/// The pane ids both signals name, once each (the loop guard first). Split out so a test can feed it.
+pub(crate) fn union_stuck(guard: Vec<String>, stalled: Vec<String>) -> Vec<String> {
+    let mut ids = guard;
+    for id in stalled {
+        if !ids.contains(&id) {
+            ids.push(id);
+        }
+    }
+    ids
 }
 
 fn project_name(cwd: &str) -> Option<String> {

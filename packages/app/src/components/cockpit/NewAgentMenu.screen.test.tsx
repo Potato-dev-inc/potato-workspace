@@ -190,11 +190,11 @@ const settle = async () => {
   for (let i = 0; i < 4; i += 1) await act(async () => {});
 };
 async function openMenu() {
-  await act(async () => host.querySelector<HTMLButtonElement>('button[aria-label="New agent"]')!.click());
+  await act(async () => document.querySelector<HTMLButtonElement>('button[aria-label="New agent"]')!.click());
   await settle();
-  return host.querySelector<HTMLElement>('[role="menu"]')!;
+  return document.querySelector<HTMLElement>('[role="menu"]')!;
 }
-const menu = () => host.querySelector<HTMLElement>('[role="menu"]');
+const menu = () => document.querySelector<HTMLElement>('[role="menu"]');
 const row = (label: string) => [...menu()!.querySelectorAll<HTMLButtonElement>('button.ck-menu-item')].find((b) => b.textContent?.includes(label))!;
 const seg = (label: string) => [...menu()!.querySelectorAll<HTMLButtonElement>('[data-testid="start-mode"] .ck-lane-seg-btn')].find((b) => b.textContent === label)!;
 const button = (label: string, within: ParentNode = document) => [...within.querySelectorAll<HTMLButtonElement>('button')].find((b) => b.textContent?.trim().startsWith(label));
@@ -203,7 +203,7 @@ const click = async (el: Element | undefined | null) => {
   await act(async () => (el as HTMLElement).click());
   await settle();
 };
-const prompt = (id: string) => host.querySelector<HTMLElement>(`[data-testid="nochat-${id}"]`);
+const prompt = (id: string) => document.querySelector<HTMLElement>(`[data-testid="nochat-${id}"]`);
 const promptButtons = (id: string) => [...prompt(id)!.querySelectorAll('button')].map((b) => b.textContent);
 
 describe('the New agent menu: one Chat | Terminal switch', () => {
@@ -263,7 +263,7 @@ describe('the New agent menu: one Chat | Terminal switch', () => {
     expect(calls('acp_chat_start')).toHaveLength(0);
     expect(calls('acp_overlay_resolve')).toHaveLength(0);
     expect((c.newAgent as ReturnType<typeof vi.fn>).mock.calls[0][0]).toBe('powershell');
-    expect(host.querySelector('[data-testid="nochat-powershell"]')).toBeNull();
+    expect(document.querySelector('[data-testid="nochat-powershell"]')).toBeNull();
   });
 
   it('with Chat switched off in Labs the menu has no switch and starts terminals only', async () => {
@@ -326,7 +326,7 @@ describe('the New agent menu: an agent with no working chat yet', () => {
     expect(calls('acp_chat_start')).toHaveLength(1);
     await act(async () => emitAddon(addonStatus({ state: 'installed', version: '1.0.0' })));
     await settle();
-    expect(host.querySelector('[role="alert"]')).toBeNull();
+    expect(document.querySelector('[role="alert"]')).toBeNull();
     expect(calls('acp_chat_start')).toHaveLength(2);
     expect(c.select).toHaveBeenCalledWith('chat-addonagent');
     expect(menu()).toBeNull();
@@ -362,7 +362,7 @@ describe('the New agent menu: an agent with no working chat yet', () => {
       await new Promise((resolve) => setTimeout(resolve, 2200));
     });
     await settle();
-    expect(host.querySelector('[role="alert"]')).toBeNull();
+    expect(document.querySelector('[role="alert"]')).toBeNull();
     expect(calls('acp_chat_start')).toHaveLength(2);
     expect(c.select).toHaveBeenCalledWith('chat-addonagent');
     expect(menu()).toBeNull();

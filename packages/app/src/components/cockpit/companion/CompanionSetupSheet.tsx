@@ -3,7 +3,7 @@
 // picked. One scroll, one button: "Wake up {name}".
 import { useEffect, useState } from 'react';
 import type { AccentId, AvatarId, CompanionAgentOption, CompanionPersona, CompanionTransport, CompanionView } from '../../../lib/companion';
-import { useT } from '../../../i18n';
+import { t, useT } from '../../../i18n';
 import { shipApi, type ShipApi } from '../../../lib/ship-api';
 import { useAgentRegistry } from '../../../lib/agentRegistry';
 import { chatAllowedFor } from '../../../lib/mobile-pane-view';
@@ -134,7 +134,7 @@ export function CompanionSetupSheet({
       <h2 className="ck-section" id="ck-companion-setup-title">
         {companions.length > 0 ? t('companions.setup.another') : 'Make your companion'}
       </h2>
-      <p className="ck-sub">Your own helper that is always on. It runs on your agent and your plan.</p>
+      <p className="ck-sub">{t('companion.setup.lead')}</p>
 
       <fieldset className="ck-companion-step">
         <legend className="ck-caption">1. Pick a face</legend>

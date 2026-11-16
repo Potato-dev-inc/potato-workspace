@@ -113,6 +113,18 @@ pub fn set_parent(registry: &Arc<Mutex<PaneRegistry>>, child: &str, parent: &str
     }
 }
 
+/// Records what the agent that started `child` made it (`minion` / `spin_off`), once. True when the pane list changed.
+pub fn set_started_as(registry: &Arc<Mutex<PaneRegistry>>, child: &str, kind: &str) -> bool {
+    let mut reg = registry.lock();
+    match reg.panes.get_mut(child) {
+        Some(pane) if pane.info.started_as.is_none() => {
+            pane.info.started_as = Some(kind.to_string());
+            true
+        }
+        _ => false,
+    }
+}
+
 thread_local! {
     static REQUEST_CALLER: std::cell::RefCell<Option<String>> = const { std::cell::RefCell::new(None) };
 }

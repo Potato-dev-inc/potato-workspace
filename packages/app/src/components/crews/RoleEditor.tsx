@@ -4,7 +4,7 @@
 import { useT } from '../../i18n';
 import { useModelOptions } from '../../lib/modelOptions';
 import { ModelPicker } from '../common/ModelPicker';
-import type { Crew, CrewAgents, CrewPermissions, CrewRole } from '../../lib/crews-api';
+import { DEFAULT_AGENT, type Crew, type CrewAgents, type CrewPermissions, type CrewRole } from '../../lib/crews-api';
 import type { ModelNamer } from './modelNames';
 import { MAX_STANDBYS, keyOf, setPermissions, setRole, renameRole, toggleHandoff, isCalled } from './model';
 
@@ -49,7 +49,7 @@ export function RoleEditor({
       <label className="crewc-field">
         <span>{t('crewcanvas.role.agent')}</span>
         <select value={role.agent_type} disabled={disabled} onChange={(e) => patch({ agent_type: e.target.value })}>
-          {!known ? <option value={role.agent_type}>{role.agent_type}</option> : null}
+          {!known ? <option value={role.agent_type}>{role.agent_type === DEFAULT_AGENT ? t('crewcanvas.agent.default') : role.agent_type}</option> : null}
           {choices.map((a) => (
             <option key={a.id} value={a.id}>
               {a.label}

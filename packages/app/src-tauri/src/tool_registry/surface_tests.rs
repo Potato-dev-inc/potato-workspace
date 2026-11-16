@@ -245,8 +245,8 @@ Potato Workspace MCP"));
     // 3200 before the agent browser tools were named here (about 115 characters); 3300 before the standbys line (about 160).
     // 3500 before the seat and start-and-wake lines (about 250 more); 3950 once the wake line gave way to how a helper's
     // result and its questions come back (answer_prompt).
-    // The standby seat lines had already taken it past 3950 (4083 on night/integration); 4250 once workspace_config is named (136 more).
-    assert!(text.len() < 4250, "instructions go out every session: {}", text.len());
+    // The standby seat lines had already taken it past 3950 (4083 on night/integration); 4250 once workspace_config is named (136 more); 4300 once run_agent names `as` (minion / spin-off).
+    assert!(text.len() < 4300, "instructions go out every session: {}", text.len());
     assert!(text.contains("Five tools"));
     assert!(text.contains("SCHEMA_DRIFT"));
     assert!(text.contains("Rebuild or reinstall the Potato Workspace MCP"));

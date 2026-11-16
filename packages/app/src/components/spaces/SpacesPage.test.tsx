@@ -110,13 +110,13 @@ async function render() {
   await act(async () => {});
 }
 const text = () => host.textContent ?? '';
-const button = (label: string) => [...host.querySelectorAll('button')].find((b) => b.textContent?.trim() === label) ?? null;
+const button = (label: string) => [...document.querySelectorAll('button')].find((b) => b.textContent?.trim() === label) ?? null;
 
 describe('Spaces page', () => {
   it('empty state explains spaces', async () => {
     state.view = view();
     await render();
-    expect(host.querySelector('h1')?.textContent).toBe('Spaces');
+    expect(document.querySelector('h1')?.textContent).toBe('Spaces');
     expect(text()).toContain('Chat with friends in small groups, computer to computer. No server keeps your messages.');
     expect(button('New space')).not.toBeNull();
     expect(button('Join a space')).not.toBeNull();
@@ -128,7 +128,7 @@ describe('Spaces page', () => {
     });
     await render();
     expect(text()).toContain('Book club');
-    expect(host.querySelector('.ck-spaces-badge')?.textContent).toBe('3');
+    expect(document.querySelector('.ck-spaces-badge')?.textContent).toBe('3');
     expect(text()).toContain('2 online');
     expect(text()).toContain('No one online');
   });
@@ -137,7 +137,7 @@ describe('Spaces page', () => {
     state.view = view({ spaces: [summary({ id: 's1', name: 'Book club' }), summary({ id: 's2', name: 'Running' })] });
     state.detail = detail();
     await render();
-    expect(host.querySelector('[aria-current="page"]')?.textContent).toContain('Book club');
+    expect(document.querySelector('[aria-current="page"]')?.textContent).toContain('Book club');
   });
 
   it('offline banner', async () => {
@@ -194,7 +194,7 @@ describe('Spaces page', () => {
     await render();
     await act(async () => button('Join a space')!.click());
     await act(async () => {});
-    expect(host.querySelector('[role="dialog"]')).not.toBeNull();
+    expect(document.querySelector('[role="dialog"]')).not.toBeNull();
   });
 
   it('first channel opens with the feed', async () => {
@@ -206,8 +206,8 @@ describe('Spaces page', () => {
       ],
     });
     await render();
-    expect(host.querySelector('[aria-label="#general"]')).not.toBeNull();
-    expect(host.querySelector('.ck-spaces-feed-title')?.textContent).toBe('# general');
+    expect(document.querySelector('[aria-label="#general"]')).not.toBeNull();
+    expect(document.querySelector('.ck-spaces-feed-title')?.textContent).toBe('# general');
   });
 
   it('clicking a channel switches the feed', async () => {
@@ -219,10 +219,10 @@ describe('Spaces page', () => {
       ],
     });
     await render();
-    const books = [...host.querySelectorAll('button')].find((b) => b.textContent?.includes('# books')) ?? null;
+    const books = [...document.querySelectorAll('button')].find((b) => b.textContent?.includes('# books')) ?? null;
     await act(async () => books!.click());
     await act(async () => {});
-    expect(host.querySelector('.ck-spaces-feed-title')?.textContent).toBe('# books');
+    expect(document.querySelector('.ck-spaces-feed-title')?.textContent).toBe('# books');
   });
 
   it('new space sheet creates and selects', async () => {
@@ -231,7 +231,7 @@ describe('Spaces page', () => {
     await render();
     await act(async () => button('New space')!.click());
     await act(async () => {});
-    const input = host.querySelector('.ck-spaces-sheet input') as HTMLInputElement;
+    const input = document.querySelector('.ck-spaces-sheet input') as HTMLInputElement;
     await act(async () => {
       Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value')!.set!.call(input, 'Book club');
       input.dispatchEvent(new Event('input', { bubbles: true }));
@@ -239,7 +239,7 @@ describe('Spaces page', () => {
     await act(async () => button('Create')!.click());
     await act(async () => {});
     expect(state.create).toHaveBeenCalledWith('Book club');
-    expect(host.querySelector('.ck-spaces-sheet')).toBeNull();
+    expect(document.querySelector('.ck-spaces-sheet')).toBeNull();
   });
 
   it('space info shows the honest storage note', async () => {
@@ -260,12 +260,12 @@ describe('Spaces page', () => {
     await render();
     await act(async () => button('Space info')!.click());
     await act(async () => {});
-    const box = host.querySelector('.ck-spaces-sheet input[type="checkbox"]') as HTMLInputElement;
+    const box = document.querySelector('.ck-spaces-sheet input[type="checkbox"]') as HTMLInputElement;
     expect(box.checked).toBe(true);
     expect(text()).toContain("Show when I'm online");
     await click(box);
     expect(state.invoke).toHaveBeenCalledWith('space_show_online', { on: false });
-    expect((host.querySelector('.ck-spaces-sheet input[type="checkbox"]') as HTMLInputElement).checked).toBe(false);
+    expect((document.querySelector('.ck-spaces-sheet input[type="checkbox"]') as HTMLInputElement).checked).toBe(false);
   });
 
   it('the page reports that this window is online', async () => {
@@ -289,12 +289,12 @@ describe('Spaces page', () => {
   };
   const general = [{ id: 'c1', name: 'general', archived: false, unread: 0 }];
   const byLabel = (label: string) =>
-    [...host.querySelectorAll('button')].find((b) => b.getAttribute('aria-label') === label) ?? null;
+    [...document.querySelectorAll('button')].find((b) => b.getAttribute('aria-label') === label) ?? null;
   const click = async (el: Element | null) => {
     await act(async () => (el as HTMLElement).click());
     await act(async () => {});
   };
-  const menuItems = () => [...host.querySelectorAll('[role="menuitem"]')].map((b) => b.textContent);
+  const menuItems = () => [...document.querySelectorAll('[role="menuitem"]')].map((b) => b.textContent);
 
   it('owner leave button is disabled with reason', async () => {
     state.view = view({ spaces: [summary()] });
@@ -322,7 +322,7 @@ describe('Spaces page', () => {
     state.detail = detail({ isOwner: false, state: 'removed', channels: general });
     await render();
     expect(text()).toContain('You were removed from Book club. You can still read what you have here.');
-    expect(host.querySelector('textarea')).toBeNull();
+    expect(document.querySelector('textarea')).toBeNull();
     expect(button('Leave space')).toBeNull();
     await click(button('Delete my copy'));
     expect(text()).toContain("This removes its messages and files from this computer. It can't be undone.");
@@ -360,7 +360,7 @@ describe('Spaces page', () => {
     state.detail = detail({ isOwner: false, channels: general, members: [sam] });
     state.messages = [samMessage, { ...samMessage, id: 'msg2', isMine: true }];
     await render();
-    const menus = [...host.querySelectorAll('[aria-label="Message actions"]')] as HTMLElement[];
+    const menus = [...document.querySelectorAll('[aria-label="Message actions"]')] as HTMLElement[];
     expect(menus).toHaveLength(2);
     await click(menus[0]);
     expect(menuItems()).toEqual(['Reply', 'React']);
@@ -404,7 +404,7 @@ describe('Spaces page', () => {
     await render();
     await click(button('Leave space'));
     await click(button('Leave'));
-    expect(host.querySelector('[role="alert"]')?.textContent).toBe('You are not in this space any more.');
+    expect(document.querySelector('[role="alert"]')?.textContent).toBe('You are not in this space any more.');
   });
 
   // ---- D8.2: files, through the page ---------------------------------------------------------------------------
@@ -419,7 +419,7 @@ describe('Spaces page', () => {
     state.detail = detail({ channels: general, members: [ren, sam] });
     state.messages = [fileMessage()];
     await render();
-    expect(host.querySelector('.ck-spaces-file')?.textContent).toContain('notes.txt · 2 KB');
+    expect(document.querySelector('.ck-spaces-file')?.textContent).toContain('notes.txt · 2 KB');
     expect(text()).toContain('Files from other people can be harmful. Only open files you expect.');
     await click(button('Get file'));
     expect(state.invoke).toHaveBeenCalledWith('space_file_get', { space: 's1', sha: 'ab12' });
@@ -435,7 +435,7 @@ describe('Spaces page', () => {
     });
     await render();
     await click(button('Get file'));
-    expect(host.querySelector('.ck-spaces-file [role="alert"]')?.textContent).toBe(
+    expect(document.querySelector('.ck-spaces-file [role="alert"]')?.textContent).toBe(
       'No one online has this file right now. Try again later.',
     );
   });
@@ -471,7 +471,7 @@ describe('Spaces page', () => {
     });
     await render();
     await click(button('Attach file'));
-    expect(host.querySelector('.ck-spaces-composer [role="alert"]')?.textContent).toBe('Files can be up to 25 MB.');
+    expect(document.querySelector('.ck-spaces-composer [role="alert"]')?.textContent).toBe('Files can be up to 25 MB.');
   });
 
   it('a space I left has no Attach file button', async () => {

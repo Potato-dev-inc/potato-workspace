@@ -1,7 +1,10 @@
-/* The shared floating layer (components/common/Floating.tsx): the top layer of the cockpit, placed in window pixels. */
-.cockpit .fl-layer {
+/* The shared floating layer (components/common/Floating.tsx): the top layer of the cockpit and the phone shell, placed in window pixels. */
+.cockpit .fl-layer,
+.pwa-shell .fl-layer {
   position: fixed;
   z-index: 1000;
+  right: auto;
+  bottom: auto;
   box-sizing: border-box;
   max-width: calc(100vw - 16px);
 }

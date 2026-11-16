@@ -23,6 +23,7 @@ export const DEV_LABS_KEYS = [
   'smaller_updates_enabled',
   'crews_enabled',
   'markup_bar_enabled',
+  'opentunnel_stable_link',
 ] as const;
 
 /** The one line the Labs page shows while the override is on. */

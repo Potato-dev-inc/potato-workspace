@@ -16,6 +16,7 @@
 //   Night Shift 夜班, Mission 任務計畫, Simple mode 簡易模式, Labs stays Labs.
 //   The reader is 你 (not 您). Chinese text uses full-width punctuation, with a space between Chinese and Latin or digits.
 import type { EnglishKey } from './en';
+import { minions } from './zh-TW/minions';
 import { common } from './zh-TW/common';
 import { sidebar } from './zh-TW/sidebar';
 import { whatsnew } from './zh-TW/whatsnew';
@@ -87,6 +88,7 @@ import { deskReview } from './zh-TW/deskReview';
 import { devices } from './zh-TW/devices';
 import { crews } from './zh-TW/crews';
 import { crewCanvas } from './zh-TW/crewCanvas';
+import { crewTalk } from './zh-TW/crewTalk';
 import { account } from './zh-TW/account';
 import { agentRules } from './zh-TW/agentRules';
 import { rail } from './zh-TW/rail';
@@ -164,8 +166,10 @@ export const zhTW: Partial<Record<EnglishKey, string>> = {
   ...devices,
   ...crews,
   ...crewCanvas,
+  ...crewTalk,
   ...account,
   ...agentRules,
   ...rail,
   ...connect,
+  ...minions,
 };

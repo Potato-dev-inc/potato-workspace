@@ -117,6 +117,15 @@ pub struct AgentRunView {
     /// Present when "Helper agents" made the run a background one (same as `receipt.headless_forced`).
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub headless_forced: Option<String>,
+    /// What the started agent is: `minion`, `spin_off`, or `helper` (One type). Present for a run an agent started.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub as_used: Option<String>,
+    /// Why: `requested`, `default`, `person_setting`, `standby` or `one_type`.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub as_reason: Option<String>,
+    /// `minion` | `spin_off`; absent in One type.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub started_as: Option<String>,
     /// Present when the model is the person's helper default (same as `receipt.model_note`).
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub model_note: Option<String>,
@@ -358,6 +367,9 @@ impl From<OperationSnapshot> for AgentRunView {
             run_mode: snapshot.worker.run_mode.clone(),
             headless_ignored: snapshot.worker.headless_ignored.clone(),
             headless_forced: snapshot.worker.headless_forced.clone(),
+            as_used: snapshot.worker.started.as_ref().map(|s| s.as_used.clone()),
+            as_reason: snapshot.worker.started.as_ref().map(|s| s.as_reason.clone()),
+            started_as: snapshot.worker.started.as_ref().and_then(|s| s.started_as.clone()),
             model_note: snapshot.worker.model_note.clone(),
             resumable: snapshot.worker.resumable,
             next: snapshot

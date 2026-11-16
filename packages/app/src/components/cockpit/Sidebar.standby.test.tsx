@@ -1,5 +1,5 @@
 // @vitest-environment jsdom
-// Standby helpers in the sidebar, through the real Sidebar and the Add a helper popover: where the rows sit, the "+" door, Enter
+// Standbys in the sidebar, through the real Sidebar and the Add a standby popover: where the rows sit, the "+" door, Enter
 // adds one (no role needed), the X removes and Undo brings it back, a closed home agent hands its helpers on, and the switch.
 import { act } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
@@ -103,7 +103,7 @@ describe('standby helpers in the sidebar', () => {
     const { api } = fakeApi([helper()]);
     await show(cockpit([pane('a1', 'idle', 'Right panel rebuild'), pane('a2', 'idle', 'Other agent')]), api);
     const group = host.querySelector('.ck-helpers')!;
-    expect(group.getAttribute('aria-label')).toBe('Helpers of Right panel rebuild');
+    expect(group.getAttribute('aria-label')).toBe('Agents Right panel rebuild started');
     expect(names()).toEqual(['Reviewer']);
     expect(states()).toEqual(['Ready']);
     expect(rows()[0].closest('.ck-node')!.querySelector('[data-pane-row="a1"]')).not.toBeNull();
@@ -147,13 +147,13 @@ describe('standby helpers in the sidebar', () => {
     const c2 = cockpit([pane('a2', 'idle', 'Second')]);
     await show(c2, api);
     expect(rows()[0].closest('.ck-node')!.querySelector('[data-pane-row="a2"]')).not.toBeNull();
-    expect(c2.notify).toHaveBeenCalledWith(expect.stringContaining('1 helper on standby moved under'));
+    expect(c2.notify).toHaveBeenCalledWith(expect.stringContaining('1 standby moved under'));
   });
 
-  it('no agent left in the project: a small group "Helpers waiting for an agent"', async () => {
+  it('no agent left in the project: a small group "Standbys waiting for an agent"', async () => {
     const { api } = fakeApi([helper({ home: 'gone' })]);
     await show(cockpit([]), api);
-    expect(host.querySelector('[data-testid="standby-loose"]')!.textContent).toContain('Helpers waiting for an agent');
+    expect(host.querySelector('[data-testid="standby-loose"]')!.textContent).toContain('Standbys waiting for an agent');
     expect(names()).toEqual(['Reviewer']);
   });
 
@@ -307,17 +307,17 @@ describe('standby helpers in the sidebar', () => {
     setHelpersInSidebar(true);
   });
 
-  it('the pane menu has "Add a helper" on an agent and "Keep as standby" on a finished helper', async () => {
+  it('the pane menu has "Add a standby" on an agent and "Keep as standby" on a finished helper', async () => {
     const { api } = fakeApi([]);
     await show(cockpit([pane('a1', 'idle', 'Right panel rebuild'), pane('h1', 'idle', 'Checker', 'a1')]), api);
     const menuItems = () => [...document.querySelectorAll('[role="menu"] [role="menuitem"]')].map((e) => e.textContent);
     await act(async () => host.querySelector('[data-pane-row="a1"]')!.dispatchEvent(new MouseEvent('contextmenu', { bubbles: true, cancelable: true, clientX: 5, clientY: 5 })));
-    expect(menuItems()).toContain('Add a helper');
+    expect(menuItems()).toContain('Add a standby');
     expect(menuItems()).not.toContain('Keep as standby');
     await act(async () => void document.querySelector('[role="menu"]')!.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true })));
     await act(async () => host.querySelector('[data-pane-row="h1"]')!.dispatchEvent(new MouseEvent('contextmenu', { bubbles: true, cancelable: true, clientX: 5, clientY: 5 })));
     expect(menuItems()).toContain('Keep as standby');
-    expect(menuItems()).not.toContain('Add a helper');
+    expect(menuItems()).not.toContain('Add a standby');
     await act(async () => [...document.querySelectorAll<HTMLElement>('[role="menuitem"]')].find((e) => e.textContent === 'Keep as standby')!.click());
     await flush();
     expect(api.add).toHaveBeenCalledWith({ name: 'Checker', agent: 'codex', model: null, project: 'C:/work/shop', after_task: 'wait', home: 'a1' });

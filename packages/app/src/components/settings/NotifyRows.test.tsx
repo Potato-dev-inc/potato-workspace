@@ -4,7 +4,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { SECTIONS } from './catalog';
 import { resetNotifyStoreForTest } from '../../lib/notify-store';
 import { AgentNotifyRows, fromClock, toClock } from './NotifyRows';
-import { byLabel, click, mountRows, pickOption, settle, type, type Mounted } from './test-utils';
+import { buttonByText, byLabel, click, mountRows, pickOption, settle, type, type Mounted } from './test-utils';
 
 const invoke = vi.fn(async (cmd: string, args?: Record<string, unknown>) => {
   if (cmd === 'notify_prefs_get') return { bells: {}, quiet: { enabled: false, start: 1320, end: 420 }, snoozes: {}, imported: true };
@@ -34,9 +34,11 @@ describe('Quiet hours row (Look and feel)', () => {
   it('the switch turns it on, shows start and end, and every change is saved on the PC', async () => {
     m = await mountRows([row]);
     expect(byLabel(m.host, 'Quiet hours start')).toBeNull();
-    await click(byLabel(m.host, 'Quiet hours'));
+    expect(m.host.textContent).not.toContain('Change times');
+    await click(byLabel(m.host, 'Quiet at night (22:00 to 07:00)'));
     expect(invoke).toHaveBeenCalledWith('notify_quiet_set', { quiet: { enabled: true, start: 1320, end: 420 } });
     expect(m.env.markSaved).toHaveBeenCalled();
+    await click(buttonByText(m.host, 'Change times'));
     const start = byLabel<HTMLInputElement>(m.host, 'Quiet hours start')!;
     expect(start.value).toBe('22:00');
     await type(start, '23:30');
@@ -65,7 +67,7 @@ describe('Notifications row on an agent page', () => {
 
   it('the helpers of the agent have their own bell, starting at only when it needs me', async () => {
     m = await mountRows([{ id: 'x', label: 'x', group: 'g', render: () => <AgentNotifyRows agentId="codex" label="Codex" /> }]);
-    const helpers = byLabel<HTMLSelectElement>(m.host, 'Notifications for helpers of Codex')!;
+    const helpers = byLabel<HTMLSelectElement>(m.host, 'Notifications for agents Codex started')!;
     expect(helpers.value).toBe('needs');
     await pickOption(helpers, 'finished');
     expect(invoke).toHaveBeenCalledWith('notify_bell_set', { key: 'helper:codex', level: 'finished' });

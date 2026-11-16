@@ -57,7 +57,7 @@ export const settingsGeneral: Partial<Record<EnglishKey, string>> = {
   'labsPage.empty': '沒有符合「{query}」的搶先體驗功能。',
   'labsPage.openNamed': '打開 {name}',
   'labsPage.area.chat': '對話',
-  'labsPage.area.helpers': '幫手',
+  'labsPage.area.helpers': 'AI 助理啟動的 AI 助理',
   'labsPage.area.devices': '裝置',
   'labsPage.area.team': '團隊',
   'labsPage.area.phone': '手機',

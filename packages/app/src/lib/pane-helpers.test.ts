@@ -18,7 +18,7 @@ describe('groupHelperTree', () => {
     expect(ids(g.working)).toEqual(['p']);
     expect(ids(g.idle)).toEqual([]);
     expect(ids(g.working[0].helpers)).toEqual(['h1', 'h2']);
-    expect(helperChipText(g.working[0])).toBe('2 helpers');
+    expect(helperChipText(g.working[0])).toBe('2 agents');
   });
 
   it('puts the parent first even when the helper is listed before it', () => {
@@ -60,8 +60,8 @@ describe('groupHelperTree', () => {
     expect(ids(g.working)).toEqual(['p']);
     expect(ids(g.working[0].helpers[0].helpers)).toEqual(['hh']);
     expect(descendants(g.working[0]).map((n) => n.pane.info.id)).toEqual(['h', 'hh']);
-    expect(helperChipText(g.working[0])).toBe('2 helpers');
-    expect(helperChipText(g.working[0].helpers[0])).toBe('1 helper');
+    expect(helperChipText(g.working[0])).toBe('2 agents');
+    expect(helperChipText(g.working[0].helpers[0])).toBe('1 agent');
   });
 
   it('promotes a deep helper that needs you without its own children', () => {
@@ -80,7 +80,7 @@ describe('helperOfLabel', () => {
   const list = [pane('p'), pane('h', 'idle', 'p'), pane('lost', 'idle', 'gone'), pane('solo')];
   const title = (p: { info: { id: string } }) => `Title ${p.info.id}`;
   it('names the live parent', () => {
-    expect(helperOfLabel(list, 'h', title)).toEqual({ parentId: 'p', text: 'Helper of Title p' });
+    expect(helperOfLabel(list, 'h', title)).toEqual({ parentId: 'p', text: 'Started by Title p' });
   });
   it('is null without a live parent', () => {
     expect(helperOfLabel(list, 'lost', title)).toBeNull();

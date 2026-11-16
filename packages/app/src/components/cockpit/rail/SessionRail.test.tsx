@@ -6,6 +6,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { useEnglish } from '../../../i18n/test-utils';
 import { SessionRail } from './SessionRail';
 import { resetRailFoldForTests } from './railFold';
+import { resetTaskViews } from '../../../lib/task-view';
 
 const chat = vi.hoisted(() => ({ current: {} as Record<string, unknown>, calls: [] as Array<[string, boolean]> }));
 vi.mock('../../../hooks/useSessionChat', () => ({
@@ -29,6 +30,7 @@ beforeEach(() => {
   useEnglish();
   window.localStorage.clear();
   resetRailFoldForTests();
+  resetTaskViews();
   chat.calls = [];
   jobs.list = [];
   chat.current = {
@@ -201,6 +203,60 @@ describe('Background tasks', () => {
     await act(async () => bg.querySelector<HTMLButtonElement>('[aria-label="Stop Reviewer"]')!.click());
     await act(async () => [...bg.querySelectorAll('button')].find((b) => b.textContent === 'Yes')!.click());
     expect(stop).toHaveBeenCalledWith('h1');
+  });
+});
+
+describe('Minions in Background tasks', () => {
+  const minion = { id: 'm1', title: 'Reviewer', agent: 'Claude', agentType: 'claude', status: 'running', kind: 'minion' };
+  const done = { id: 'm2', title: 'Old check', agent: 'Claude', agentType: 'claude', status: 'idle', kind: 'minion' };
+
+  it('a minion pane gives a row; clicking it opens the read-only view beside the panel, with no text box', async () => {
+    chat.current = { state: 'ready', reason: null, waitingFor: null, source: 'acp', model: 'haiku-x', cliVersion: null, usage: null, plan: [], outputs: [], turns: [], earlier: undefined };
+    const open = vi.fn();
+    await mount({ helpers: [minion], onOpenPane: open, onStopHelper: async () => {} });
+    expect(host.querySelectorAll('[data-testid="rail-helper"]')).toHaveLength(1);
+    expect(host.querySelector('[data-testid="task-column"]')).toBeNull();
+    await act(async () => host.querySelector<HTMLButtonElement>('[data-testid="rail-helper"] .rp-row-main')!.click());
+    const column = host.querySelector('[data-testid="task-column"]')!;
+    expect(open).not.toHaveBeenCalled();
+    expect(column.querySelector('[data-testid="task-side-view"]')).not.toBeNull();
+    expect(column.textContent).toContain('Reviewer');
+    expect(column.textContent).toContain('Claude 1 runs this minion. You can read its work and stop it.');
+    expect(column.querySelector('textarea, input[type="text"], [contenteditable="true"], [role="textbox"]')).toBeNull();
+    expect(chat.calls.some(([id, on]) => id === 'm1' && on)).toBe(true);
+    // Back: the full page; close: gone.
+    await act(async () => column.querySelector<HTMLButtonElement>('[aria-label="Back"]')!.click());
+    expect(host.querySelector('[data-testid="background-page"]')).not.toBeNull();
+    await act(async () => host.querySelector<HTMLButtonElement>('[aria-label="Close"]')!.click());
+    expect(host.querySelector('[data-testid="task-column"]')).toBeNull();
+  });
+
+  it('the heading button opens the page: Running as cards, Finished folded, the bin clears finished, fill toggles', async () => {
+    jobs.list = [{ pid: 7, parentPid: 1, name: 'npm test', command: 'npm test -- upload', startedAtMs: Date.now() - 5000, ports: [] }];
+    await mount({ helpers: [minion, done], onStopHelper: async () => {} });
+    await act(async () => host.querySelector<HTMLButtonElement>('.rp-sec-open')!.click());
+    const page = host.querySelector('[data-testid="background-page"]')!;
+    expect(page.textContent).toContain('Running 2');
+    expect(page.querySelectorAll('[data-testid="task-group"]')).toHaveLength(2);
+    expect(page.textContent).toContain('Finished 1');
+    await act(async () => page.querySelector<HTMLButtonElement>('.tk-sum')!.click());
+    expect(page.querySelector('[data-testid="task-job"]')).not.toBeNull();
+    const fill = host.querySelector<HTMLButtonElement>('[aria-label="Fill the window"]')!;
+    await act(async () => fill.click());
+    expect(host.querySelector('[data-testid="task-column"]')!.getAttribute('data-full')).toBe('true');
+    await act(async () => host.querySelector<HTMLButtonElement>('[aria-label="Back to the side"]')!.click());
+    expect(host.querySelector('[data-testid="task-column"]')!.getAttribute('data-full')).toBeNull();
+    await act(async () => host.querySelector<HTMLButtonElement>('[aria-label="Clear finished"]')!.click());
+    expect(host.querySelector('[data-testid="background-page"]')!.textContent).not.toContain('Finished');
+    expect(host.querySelector('[data-testid="rail-bg"]')!.textContent).not.toContain('finished');
+  });
+
+  it('a helper (One type) still opens its own pane', async () => {
+    const open = vi.fn();
+    await mount({ helpers: [{ ...minion, kind: 'helper' }], onOpenPane: open });
+    await act(async () => host.querySelector<HTMLButtonElement>('[data-testid="rail-helper"] .rp-row-main')!.click());
+    expect(open).toHaveBeenCalledWith('m1');
+    expect(host.querySelector('[data-testid="task-column"]')).toBeNull();
   });
 });
 

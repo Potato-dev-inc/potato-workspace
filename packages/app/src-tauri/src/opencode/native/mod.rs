@@ -93,6 +93,8 @@ pub fn spawn_native_pane(
         .env("PATH", crate::shell_env::path_for_spawn())
         // The MCP shim opencode starts reports this pane, so its helpers nest under it.
         .env(crate::pty::PANE_ID_ENV, &pane_id)
+        // This window's own key (revoked when the pane is closed: `PaneRegistry::take`).
+        .env(crate::agent_authority::pane_keys::KEY_ENV, crate::agent_authority::pane_keys::mint(&pane_id))
         .stdin(std::process::Stdio::null())
         .stdout(std::process::Stdio::piped())
         .stderr(std::process::Stdio::piped());
@@ -233,6 +235,7 @@ pub fn spawn_native_pane(
         place: None,
         lane: None,
         standby_seat: None,
+        started_as: None,
     };
 
     let opencode = OpenCodeLink::new(

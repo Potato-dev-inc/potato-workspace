@@ -8,7 +8,6 @@ import type { AskResult } from '../../lib/askbar';
 import { groupTurns, type ChatItem } from '../../lib/sessionChatModel';
 import type { SideQuestionApi, SideTarget } from '../../lib/sideQuestion';
 import { SessionChatView } from './SessionChatView';
-import { NO_SIDE_AGENT } from './SideQuestionBox';
 import { isSideShortcut, useSideQuestion } from './useSideQuestion';
 
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
@@ -215,7 +214,7 @@ describe('asking', () => {
     await mount(api);
     ctrlSemicolon();
     await flush();
-    expect(host.textContent).toContain(NO_SIDE_AGENT);
+    expect(host.textContent).toContain('No agent is set up for side questions yet');
     expect((host.querySelector('textarea') as HTMLTextAreaElement).disabled).toBe(true);
     expect(button('Ask').disabled).toBe(true);
     expect(asks).toHaveLength(0);

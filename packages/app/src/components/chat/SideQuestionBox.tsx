@@ -9,10 +9,10 @@ import type { ChatTurn } from '../../lib/sessionChatModel';
 import { buildSideContext, type SideQuestionApi, type SideTarget } from '../../lib/sideQuestion';
 import { DotSpinner } from '../cockpit/DotSpinner';
 import { ChatMarkdown } from './ChatMarkdown';
+import { t } from '../../i18n';
 import { REMEMBER_ALREADY, REMEMBER_REMOVED, REMEMBER_SAVED } from './RememberSelection';
 import type { SideAnswer } from './useSideQuestion';
 
-export const NO_SIDE_AGENT = 'No helper agent is set up yet. Set one up in Agents.';
 const MAX_QUESTION = 2_000;
 const NO_RECENT: readonly SideAnswer[] = [];
 
@@ -157,7 +157,7 @@ export function SideQuestionBox({ paneId, api, turns, recent = NO_RECENT, onAnsw
         </button>
       </header>
       <p className="ck-sq-note">
-        {unavailable ? NO_SIDE_AGENT : 'A helper reads the recent chat and answers here. Your agent does not see this.'}
+        {unavailable ? t('side.noAgent') : t('side.reads')}
       </p>
       <form
         className="ck-sq-row"

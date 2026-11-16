@@ -71,6 +71,7 @@ impl Drop for SpawnCleanup {
         }
         retire_generation(&self.pane_id, self.generation);
         crate::agent_hooks::revoke(&self.pane_id);
+        crate::agent_authority::pane_keys::revoke(&self.pane_id);
         crate::pty::stream_pos::forget(&self.pane_id);
         crate::pty::launch_session::forget(&self.pane_id);
         crate::flight::closed(&self.pane_id);
@@ -105,6 +106,7 @@ fn finish_exit(
     retire_generation(pane_id, generation);
     // Hook Lane: the pane's hook token stops working the moment the pane is gone.
     crate::agent_hooks::revoke(pane_id);
+    crate::agent_authority::pane_keys::revoke(pane_id);
     // A conversation that was handed to this pane goes back to the chat.
     crate::commands::pane_ended(app, pane_id);
     *status.lock() = PaneStatus::Error;
@@ -295,17 +297,23 @@ pub fn spawn_pane(
     } else {
         crate::agent_hooks::prepare_spawn(profile.id(), &pane_id, &cwd, &user_args)
     };
+    // This pane's own key (not for a Linux pane: its tools are another program). `prepare` below hands it to the pane's
+    // MCP server entry too; both are revoked with the pane (`retire`/`SpawnCleanup`).
+    let pane_key = (!remote).then(|| crate::agent_authority::pane_keys::mint(&pane_id));
     // Potato Workspace's own helper tools (`run_agent`, `wait_agents`) for this one launch, where the agent
     // can take a server that way. Nothing is added for a Linux pane (the app's program is a Windows
     // one) or when the Settings switch is off. The person's own config files are never written.
     let pane_mcp = if remote {
         crate::tui::pane_mcp::PaneMcpLaunch::default()
     } else {
-        crate::pane_mcp::prepare(profile.as_ref(), &pane_id, &user_args)
+        crate::pane_mcp::prepare(profile.as_ref(), &pane_id, &user_args, pane_key.as_deref())
     };
     // Names the pane to any MCP shim the agent starts, so a helper it starts can be nested under it.
     let mut own_env = hooks.env;
     own_env.extend(pane_mcp.env);
+    if let Some(key) = pane_key {
+        own_env.push((crate::agent_authority::pane_keys::KEY_ENV.to_string(), key));
+    }
     // Model Bridge: a service the person added to this agent gets its key in the environment (never in argv).
     // Nothing for a Linux pane, and nothing while the Labs switch is off.
     // A borrowed sign-in (Share an agent, `lend:<grant>`) talks only to its lend shim: no Model Bridge key either.
@@ -393,6 +401,7 @@ pub fn spawn_pane(
         place: linux.as_ref().map(crate::wsl::place::pane_place).or_else(|| ssh.as_ref().map(crate::ssh::once::pane_place)),
         lane: None,
         standby_seat: None,
+        started_as: None,
     };
 
     let pane = PaneState {

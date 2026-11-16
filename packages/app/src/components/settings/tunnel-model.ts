@@ -19,6 +19,7 @@ export const MODE_LABELS: Record<TunnelMode, string> = {
   named: 'My Cloudflare tunnel',
   custom: 'My own domain or proxy',
   stable: 'Stable link (your own Cloudflare Worker)',
+  open_tunnel: 'Fixed phone address (OpenTunnel, third-party relay, may change)',
 };
 
 export function draftFromConfig(config: TunnelConfigView | null | undefined): TunnelDraft {
@@ -54,6 +55,7 @@ export function toInput(draft: TunnelDraft): TunnelConfigInput {
     return { mode: 'named', hostname: draft.hostname.trim(), token: token || null };
   }
   if (draft.mode === 'custom') return { mode: 'custom', url: draft.url.trim() };
+  if (draft.mode === 'open_tunnel') return { mode: 'open_tunnel' };
   if (draft.mode === 'stable') {
     const own = (draft.secret ?? '').trim();
     return { mode: 'stable', worker_url: (draft.workerUrl ?? '').trim(), secret: own || null, secret_action: 'keep' };
@@ -84,7 +86,7 @@ export function statusLine(status: TunnelStatus | null): StatusLine {
 }
 
 export function isStableMode(mode: TunnelStatus['mode'] | undefined): boolean {
-  return mode === 'named' || mode === 'custom' || mode === 'env' || mode === 'stable';
+  return mode === 'named' || mode === 'custom' || mode === 'env' || mode === 'stable' || mode === 'open_tunnel';
 }
 
 /** "Stable link: <worker> → linked / not linked yet (<why>)". */

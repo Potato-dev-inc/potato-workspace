@@ -50,8 +50,8 @@ describe('settings search', () => {
     for (const row of collectLabs(BASE_SECTIONS)) expect(ids(row.label), row.id).toContain(LABS_INDEX_ID);
   });
 
-  it('a page name is a hit: "helpers" lists the Helpers page first', () => {
-    const result = searchAll(SECTIONS, 'helpers');
+  it('a page name is a hit: "agents that agents start" lists that page first', () => {
+    const result = searchAll(SECTIONS, 'agents that agents start');
     expect(result.names[0].page.id).toBe('helpers');
     expect(result.names[0].group).toBeUndefined();
     expect(searchAll(SECTIONS, 'look').names[0].page.id).toBe('look');

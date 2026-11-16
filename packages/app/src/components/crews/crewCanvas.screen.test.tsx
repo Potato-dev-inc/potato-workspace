@@ -113,7 +113,7 @@ describe('the crew canvas, through the Settings screen', () => {
     await click(boxes()[1]);
     const name = document.querySelector<HTMLInputElement>('[data-testid="role-editor"] input[type="text"]')!;
     expect(name.disabled).toBe(true);
-    expect(button('Take this helper out')).toBeUndefined();
+    expect(button('Take this role out')).toBeUndefined();
 
     await click(button('Save my own copy'));
     await settle(10);
@@ -127,7 +127,7 @@ describe('the crew canvas, through the Settings screen', () => {
     await type(editable, 'Quick worker');
     expect(boxes()[1].querySelector('.crewc-box-name')!.textContent).toBe('Quick worker');
     expect(text()).toContain('You have changes that are not saved.');
-    expect(button('Get helpers ready now…')!.disabled).toBe(true);
+    expect(button('Get standbys ready now…')!.disabled).toBe(true);
     await click(button('Save'));
     await settle(10);
     const lastSave = calls.filter((c) => c.command === 'crews_save_canvas').pop()!;
@@ -139,13 +139,13 @@ describe('the crew canvas, through the Settings screen', () => {
     await openTemplate();
     await click(button('Save my own copy'));
     await settle(10);
-    await click(button('Add a helper'));
+    await click(button('Add a role'));
     const item = [...document.querySelectorAll('[role="menuitem"]')].find((i) => i.textContent === 'Under Lead')!;
     expect(item).toBeDefined();
     await click(item);
     expect(boxes()).toHaveLength(5);
     expect(boxes()[4].querySelector('.crewc-box-name')!.textContent).toBe('Helper 1');
-    await click(button('Take this helper out'));
+    await click(button('Take this role out'));
     expect(boxes()).toHaveLength(4);
   });
 
@@ -184,8 +184,8 @@ describe('the crew canvas, through the Settings screen', () => {
 
   it('gets the helpers ready now in a picked folder, and asks before raising the limit', async () => {
     await openTemplate();
-    await click(button('Get helpers ready now…'));
-    expect(document.querySelector('[role="dialog"][aria-labelledby="crewc-apply-t"]')!.textContent).toContain('3 helpers will be made ready now');
+    await click(button('Get standbys ready now…'));
+    expect(document.querySelector('[role="dialog"][aria-labelledby="crewc-apply-t"]')!.textContent).toContain('3 standbys will be made ready now');
     expect(button('Get them ready')!.disabled).toBe(true);
     await click(button('Pick a folder…'));
     await settle(5);
@@ -193,11 +193,11 @@ describe('the crew canvas, through the Settings screen', () => {
     await click(button('Get them ready'));
     await settle(5);
     expect(calls.find((c) => c.command === 'crews_apply')!.args).toMatchObject({ folder: 'D:/work/app', raiseLimit: false });
-    expect(text()).toContain('needs room for 3 helpers');
+    expect(text()).toContain('needs room for 3 standbys');
     applyAnswer = { added: ['a', 'b', 'c'], already: 0, skipped: [], needs_limit: null, problems: [] };
     await click(button('Raise the limit and get them ready'));
     await settle(5);
     expect(calls.filter((c) => c.command === 'crews_apply').pop()!.args).toMatchObject({ raiseLimit: true });
-    expect(document.querySelector('[data-testid="apply-result"]')!.textContent).toContain('3 helpers are ready now.');
+    expect(document.querySelector('[data-testid="apply-result"]')!.textContent).toContain('3 standbys are ready now.');
   });
 });

@@ -20,6 +20,8 @@ export interface TunnelApi {
   save: (input: TunnelConfigInput) => Promise<TunnelStatus>;
   restart: () => Promise<TunnelStatus>;
   test: () => Promise<TunnelConnectionTest>;
+  /** Delete the fixed phone address (OpenTunnel) everywhere. */
+  forget?: () => Promise<TunnelStatus>;
 }
 
 const defaultApi: TunnelApi = {
@@ -27,6 +29,7 @@ const defaultApi: TunnelApi = {
   save: (input) => tauri.setTunnelConfig(input),
   restart: () => tauri.restartTunnel(),
   test: () => tauri.testTunnelConnection(),
+  forget: () => tauri.forgetOpenTunnelAddress(),
 };
 
 const DOT: Record<string, string> = {
@@ -39,11 +42,11 @@ const DOT: Record<string, string> = {
 const buttonClass =
   'rounded-lg border border-pm-border px-3 py-1.5 text-xs hover:bg-pm-border/40 disabled:opacity-50';
 
-export function TunnelSection({ api = defaultApi }: { api?: TunnelApi }) {
+export function TunnelSection({ api = defaultApi, openTunnelOn = false }: { api?: TunnelApi; /** The Labs switch `opentunnel_stable_link`. */ openTunnelOn?: boolean }) {
   const t = useT();
   const [status, setStatus] = useState<TunnelStatus | null>(null);
   const [draft, setDraft] = useState<TunnelDraft>(draftFromConfig(null));
-  const [busy, setBusy] = useState<'save' | 'restart' | 'test' | null>(null);
+  const [busy, setBusy] = useState<'save' | 'restart' | 'test' | 'forget' | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [test, setTest] = useState<TunnelConnectionTest | null>(null);
   // The shared secret, shown only after it was made or after "Show secret"; never kept in the draft.
@@ -76,7 +79,7 @@ export function TunnelSection({ api = defaultApi }: { api?: TunnelApi }) {
     return () => window.clearInterval(id);
   }, [api, status?.state]);
 
-  const run = async (kind: 'save' | 'restart' | 'test', action: () => Promise<void>) => {
+  const run = async (kind: 'save' | 'restart' | 'test' | 'forget', action: () => Promise<void>) => {
     setBusy(kind);
     setError(null);
     try {
@@ -129,7 +132,10 @@ export function TunnelSection({ api = defaultApi }: { api?: TunnelApi }) {
             onChange={(e) => setDraft({ ...draft, mode: e.target.value as TunnelDraft['mode'] })}
             className="w-full rounded-lg border border-pm-border bg-pm-bg px-3 py-2 text-sm outline-none"
           >
-            {(Object.keys(MODE_LABELS) as (keyof typeof MODE_LABELS)[]).map((mode) => (
+            {(Object.keys(MODE_LABELS) as (keyof typeof MODE_LABELS)[])
+              // The third-party relay is a Labs option: shown when the switch is on, or when it is already the saved choice.
+              .filter((mode) => mode !== 'open_tunnel' || openTunnelOn || status?.config.mode === 'open_tunnel')
+              .map((mode) => (
               <option key={mode} value={mode}>
                 {t(`tunnel.mode.${mode}`)}
               </option>
@@ -180,6 +186,34 @@ export function TunnelSection({ api = defaultApi }: { api?: TunnelApi }) {
             <p className="mt-1 text-xs text-pm-muted">
               {t('tunnel.customHelp')}
             </p>
+          </div>
+        )}
+
+        {draft.mode === 'open_tunnel' && (
+          <div data-testid="opentunnel-note">
+            <p className="text-xs text-pm-muted">{t('tunnel.openTunnelHelp')}</p>
+            {status?.config.mode === 'open_tunnel' && (
+              <div className="mt-2">
+                <button
+                  type="button"
+                  className={buttonClass}
+                  data-testid="opentunnel-forget"
+                  disabled={busy !== null}
+                  onClick={() =>
+                    void run('forget', async () => {
+                      if (!api.forget) return;
+                      const next = await api.forget();
+                      setStatus(next);
+                      setDraft(draftFromConfig(next.config));
+                      setTest(null);
+                    })
+                  }
+                >
+                  {busy === 'forget' ? t('tunnel.openTunnelForgetting') : t('tunnel.openTunnelForget')}
+                </button>
+                <p className="mt-1 text-xs text-pm-muted">{t('tunnel.openTunnelForgetHelp')}</p>
+              </div>
+            )}
           </div>
         )}
 

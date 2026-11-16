@@ -102,6 +102,22 @@ pub struct PaneInfo {
     /// row under its owner, never as an agent of its own. Filled by `PaneState::info()`; left out of the JSON otherwise.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub standby_seat: Option<String>,
+    /// `minion` | `spin_off`: what the agent that started this pane made it (Two types mode, `run_agent`'s `as`).
+    /// Set once with the parent link and left out of the JSON when absent (a pane the person started, or One type).
+    /// Use [`PaneInfo::effective_started_as`] to read it: a helper pane from before the field counts as a spin-off.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub started_as: Option<String>,
+}
+
+impl PaneInfo {
+    /// What this pane is to the person: its own `started_as`, else (a helper pane open before the field existed,
+    /// plan section 7) a **spin-off** when it has a parent link, else nothing.
+    pub fn effective_started_as(&self) -> Option<crate::agent_run_mode::StartedAs> {
+        self.started_as
+            .as_deref()
+            .and_then(crate::agent_run_mode::StartedAs::parse)
+            .or_else(|| self.parent_pane_id.is_some().then(|| crate::agent_run_mode::legacy_kind(true, false)))
+    }
 }
 
 /// Internal handle — owns the PTY master and the reader thread handle.
@@ -218,6 +234,7 @@ impl PaneRegistry {
         super::resize_clock::forget(id);
         super::pane_facts::forget(id);
         super::launch_session::forget(id);
+        crate::agent_authority::pane_keys::revoke(id);
         super::stream_pos::forget(id);
         pane_io::forget_resize_gate(id);
         crate::agent_rules::terminal::forget(id);
@@ -231,6 +248,7 @@ impl PaneRegistry {
             super::resize_clock::forget(id);
             super::pane_facts::forget(id);
             super::launch_session::forget(id);
+            crate::agent_authority::pane_keys::revoke(id);
             super::stream_pos::forget(id);
             pane_io::forget_resize_gate(id);
             crate::flight::closed(id);
@@ -433,6 +451,7 @@ origin: None,
             place: None,
             lane: None,
             standby_seat: None,
+            started_as: None,
         };
         PaneState {
             info,

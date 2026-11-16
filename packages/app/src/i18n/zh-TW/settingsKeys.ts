@@ -2,6 +2,10 @@
 import type { EnglishKey } from '../en';
 
 export const settingsKeys: Partial<Record<EnglishKey, string>> = {
+  'keys.useFound': '使用這台電腦上找到的金鑰',
+  'keys.foundHint': '這台電腦上已有一把以 {tail} 結尾的金鑰。只有這個應用程式會保存它。',
+  'keys.foundHintNoTail': '這台電腦上已有一把金鑰。只有這個應用程式會保存它。',
+  'keys.spareAfterMain': '請先加入主要金鑰，才能再加備用金鑰。',
   'keys.paste': '貼上你的金鑰',
   'keys.removeTitle': '移除 {name} 金鑰？',
   'keys.removeBody': '使用它的 AI 助理會失去存取權，直到你重新加入金鑰。',
@@ -13,7 +17,6 @@ export const settingsKeys: Partial<Record<EnglishKey, string>> = {
   'keys.spareKey': '備用金鑰：{state}',
   'keys.ocA': 'OpenCode 金鑰 A',
   'keys.ocB': 'OpenCode 金鑰 B',
-  'keys.check': '檢查金鑰',
   'keys.readFailedOc': '無法讀取 OpenCode 金鑰狀態：{error}',
   'keys.readFailed': '無法讀取金鑰狀態：{error}',
   'keys.removeAllTitle': '移除所有金鑰？',

@@ -14,7 +14,7 @@ import {
   type KeepGoingTarget,
 } from '../../../lib/keep-going';
 import { Popup } from '../controls';
-import { Btn, Note, SettingBlock, SettingToggle } from '../settings-ui';
+import { Btn, Fold, Note, SettingBlock, SettingToggle } from '../settings-ui';
 
 /** The most agents the list holds (the Rust `SETTINGS_ORDER_CAP`). */
 export const KEEP_GOING_ORDER_CAP = 8;
@@ -116,9 +116,23 @@ export function KeepGoingRows({ onSaved }: { onSaved?: () => void }) {
     void save({ ...settings, order: [...settings.order, chosen.target] });
   };
   const last = settings.order.length - 1;
+  // One switch: on keeps the first agents that can run (in registry order); off clears the list. The list itself
+  // (order, add, remove) sits under Details for anyone who wants another order.
+  const on = settings.order.length > 0;
+  const available = keepGoingChoices(registry.agents, accounts, []);
+  const turnOn = () => void save({ ...settings, order: available.slice(0, KEEP_GOING_ORDER_CAP).map((choice) => choice.target) });
 
   return (
     <>
+      <SettingToggle
+        label={t('keepGoing.toggle')}
+        description={t('keepGoing.toggleHelp')}
+        checked={on}
+        disabled={!on && available.length === 0}
+        onChange={(value) => (value ? turnOn() : void save({ ...settings, order: [] }))}
+      />
+      {on && (
+      <Fold label={t('settings.details')}>
       <SettingBlock {...HEADING}>
         <div className="space-y-3">
           <p className="text-sm font-medium">{t('keepGoing.offer')}</p>
@@ -175,6 +189,8 @@ export function KeepGoingRows({ onSaved }: { onSaved?: () => void }) {
           {error && <Note role="alert">{error}</Note>}
         </div>
       </SettingBlock>
+      </Fold>
+      )}
       <SettingToggle
         label={t('keepGoing.askBack')}
         description={t('keepGoing.askBackHelp')}

@@ -532,6 +532,10 @@ export function installTauriMock(scenario: HarnessScenario): void {
         case 'agent_run_mode_set':
           // The dev harness has no custom agents to choose for.
           return { agents: [] };
+        case 'started_agents_get':
+          return { types: 'one', kind: 'agent_chooses' };
+        case 'started_agents_set':
+          return { types: a.types ?? 'one', kind: a.kind ?? 'agent_chooses' };
         case 'helper_visibility_get':
           return { mode: 'always_show' };
         case 'helper_visibility_set':

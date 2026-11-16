@@ -3,27 +3,30 @@
 // A ready-made crew is read-only until "Save my own copy". Nothing here starts a task or opens a pane.
 //
 // 1.1.8 slots, deliberately left open (do not build them here):
-//   - Follow a task: light up the path of a real task box by box (TryTask is the dry-run twin; `path` is what lights up).
-//   - Change the crew by talking: a "tell the front desk" box that proposes a before/after, applied only by the person.
+//   - Follow a task: built (Follow.tsx lights the path of a real task box by box; TryTask is the dry-run twin).
+//   - (Built) Change the crew by talking: the Talk tab (TalkToCrew.tsx). Routing only; the person presses Apply; Undo after.
 //   - Crew on the phone: a crew card on the phone (view and control only; editing stays here).
-//   - Templates and sharing: a gallery of ready crews on an empty canvas and "share as a file" (CrewsPage lists templates).
+//   - Templates and sharing: built (CrewGallery and ImportSheet on CrewsPage; "Share" below writes the crew as one file).
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { useT } from '../../i18n';
 import { Menu } from '../common/Floating';
-import { crewErrorText, crewsApi, type Crew, type CrewAgents, type CrewOpened, type CrewProblem, type CrewsApi } from '../../lib/crews-api';
+import { DEFAULT_AGENT, crewErrorText, crewsApi, type Crew, type CrewAgents, type CrewOpened, type CrewProblem, type CrewsApi } from '../../lib/crews-api';
 import { shipApi, type ShipApi } from '../../lib/ship-api';
+import type { CrewTalkApi } from '../../lib/crew-talk-api';
 import { ApplySheet } from './ApplySheet';
 import { CanvasSurface } from './CanvasSurface';
 import { RoleEditor } from './RoleEditor';
 import { TryTask } from './TryTask';
+import { Follow, NO_TRACE, type Trace } from './Follow';
+import { TalkToCrew, type Shown } from './TalkToCrew';
 import { useModelNamer } from './modelNames';
-import { MAX_ROLES, addRole, keyOf, moveRole, removeRole, type Spot } from './model';
+import { MAX_ROLES, addRole, isCalled, keyOf, moveRole, removeRole, type Spot } from './model';
 import '../../styles/crew-canvas.css';
 
 const CHECK_DELAY_MS = 350;
 const json = (c: Crew, rules: string) => JSON.stringify([c, rules]);
 
-type Tab = 'role' | 'try';
+type Tab = 'role' | 'try' | 'follow' | 'talk';
 
 export function CrewCanvas({
   slug,
@@ -32,6 +35,8 @@ export function CrewCanvas({
   defaultFolder,
   onClose,
   onSaved,
+  focusRole,
+  talkApi,
 }: {
   slug: string;
   api?: CrewsApi;
@@ -40,6 +45,10 @@ export function CrewCanvas({
   onClose: () => void;
   /** A crew was saved (a new copy or a change): the page reads its list again. */
   onSaved?: (slug: string) => void;
+  /** Open with this role's box selected (the Inbox's "Show in crew"). */
+  focusRole?: string;
+  /** The front desk's command (tests give a fake). */
+  talkApi?: CrewTalkApi;
 }) {
   const t = useT();
   const [opened, setOpened] = useState<CrewOpened | null>(null);
@@ -52,11 +61,14 @@ export function CrewCanvas({
   const [selected, setSelected] = useState<number | null>(null);
   const [tab, setTab] = useState<Tab>('role');
   const [path, setPath] = useState<string[]>([]);
+  const [trace, setTrace] = useState<Trace>(NO_TRACE);
+  const [talkShown, setTalkShown] = useState<Shown | null>(null);
   const [saving, setSaving] = useState(false);
   const [note, setNote] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [applying, setApplying] = useState(false);
   const [menu, setMenu] = useState(false);
+  const [sharing, setSharing] = useState(false);
   const addRef = useRef<HTMLButtonElement>(null);
 
   useEffect(() => {
@@ -72,15 +84,17 @@ export function CrewCanvas({
         setRules(found.routing_text);
         setBaseline(json(found.crew, found.routing_text));
         setProblems(found.problems);
-        setSelected(null);
+        const at = focusRole ? found.crew.roles.findIndex((r) => isCalled(r, focusRole)) : -1;
+        setSelected(at >= 0 ? at : null);
       })
       .catch(() => live && setFailed(true));
     return () => {
       live = false;
     };
-  }, [api, slug]);
+  }, [api, slug, focusRole]);
 
   const readOnly = opened?.kind === 'template';
+  const showTalk = tab === 'talk';
   const dirty = !!crew && json(crew, rules) !== baseline;
 
   // The crew is checked again a moment after the person stops changing it (the model and the hand-offs included).
@@ -101,8 +115,8 @@ export function CrewCanvas({
 
   const agentName = useMemo(() => {
     const list = agents?.agents ?? [];
-    return (id: string) => list.find((a) => a.id === id)?.label ?? id;
-  }, [agents]);
+    return (id: string) => (id === DEFAULT_AGENT ? t('crewcanvas.agent.default') : (list.find((a) => a.id === id)?.label ?? id));
+  }, [agents, t]);
 
   const modelName = useModelNamer(crew?.roles.map((r) => r.agent_type) ?? []);
 
@@ -156,6 +170,19 @@ export function CrewCanvas({
       setError(crewErrorText(err));
     }
     setSaving(false);
+  };
+
+  const share = async () => {
+    setSharing(true);
+    setError(null);
+    setNote(null);
+    try {
+      const where = await api.exportFile(crew, rules);
+      if (where) setNote(t('crewcanvas.share.done', { path: where }));
+    } catch (err) {
+      setError(crewErrorText(err) || t('crewcanvas.share.failed'));
+    }
+    setSharing(false);
   };
 
   const first = agents?.agents[0]?.id ?? null;
@@ -213,6 +240,9 @@ export function CrewCanvas({
               {saving ? t('crewcanvas.saving') : t('crewcanvas.save')}
             </button>
           )}
+          <button type="button" className="crewc-btn" disabled={sharing} title={t('crewcanvas.share.hint')} onClick={() => void share()}>
+            {t('crewcanvas.share')}
+          </button>
           <button type="button" className="crewc-btn" disabled={!!applyWhy} title={applyWhy ?? undefined} onClick={() => setApplying(true)}>
             {t('crewcanvas.apply')}
           </button>
@@ -224,6 +254,7 @@ export function CrewCanvas({
 
       <div className="crewc-status" aria-live="polite">
         {readOnly ? <span>{t('crewcanvas.readonly')}</span> : dirty ? <span>{t('crewcanvas.unsaved')}</span> : note ? <span>{note}</span> : null}
+        {readOnly && note ? <span>{note}</span> : null}
         {problems.length > 0 ? (
           <span className="crewc-bad" data-testid="crew-problems">
             {t('crewcanvas.problems', { count: problems.length })}: {problems[0].message}
@@ -238,22 +269,26 @@ export function CrewCanvas({
 
       <div className="crewc-body">
         <CanvasSurface
-          crew={crew}
+          crew={showTalk && talkShown ? talkShown.crew : crew}
           selected={selected}
           onSelect={(i) => {
             setSelected(i);
-            if (i !== null) setTab('role');
+            if (i !== null && tab !== 'follow') setTab('role');
           }}
           onMove={(i, to: Spot) => edit(moveRole(crew, i, to))}
           problems={problems}
           agentName={agentName}
           modelName={modelName}
-          path={path}
-          readOnly={readOnly}
+          path={trace.path.length > 0 ? trace.path : path}
+          now={trace.now}
+          hops={trace.hops}
+          readOnly={readOnly || showTalk}
+          changed={showTalk && talkShown ? talkShown.changed : undefined}
+          touched={showTalk && talkShown ? talkShown.touched : undefined}
         />
         <aside className="crewc-side" aria-label={t('crewcanvas.tabs')}>
           <div className="crewc-tabs" role="tablist">
-            {(['role', 'try'] as const).map((id) => (
+            {(['role', 'try', 'follow', 'talk'] as const).map((id) => (
               <button key={id} type="button" role="tab" aria-selected={tab === id} className={tab === id ? 'is-on' : ''} onClick={() => setTab(id)}>
                 {t(`crewcanvas.tab.${id}` as never)}
               </button>
@@ -276,9 +311,25 @@ export function CrewCanvas({
             ) : (
               <p className="crewc-hint">{t('crewcanvas.pick')}</p>
             )
-          ) : (
+          ) : null}
+          {tab === 'follow' ? <Follow crew={crew} api={api} onTrace={setTrace} /> : null}
+          {tab === 'try' ? (
             <TryTask crew={crew} routingText={rules} onRoutingText={(v) => { setRules(v); setNote(null); }} api={api} disabled={readOnly} onPath={setPath} />
-          )}
+          ) : null}
+          <div hidden={tab !== 'talk'}>
+            <TalkToCrew
+              crew={crew}
+              rules={rules}
+              disabled={readOnly}
+              api={talkApi}
+              onShow={setTalkShown}
+              onApply={(next, nextRules) => {
+                setCrew(next);
+                setRules(nextRules);
+                setNote(null);
+              }}
+            />
+          </div>
         </aside>
       </div>
 

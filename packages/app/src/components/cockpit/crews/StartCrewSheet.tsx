@@ -3,6 +3,7 @@
 // and the sheet says which. A started agent that asks something (trust, permission) asks in its own pane like any other;
 // nothing here answers for it. A starter can be copied to My crews, where it is edited and saved like any crew.
 import type { ReactNode } from 'react';
+import { rememberCrewStart } from '../../../lib/crew-members';
 import { useCallback, useEffect, useState } from 'react';
 import {
   crewErrorText,
@@ -109,7 +110,9 @@ export function StartCrewSheet({
     setBusy(true);
     setError(null);
     try {
-      setOutcome(await api.start(chosenCrew.slug, folder, chosen));
+      const started = await api.start(chosenCrew.slug, folder, chosen);
+      rememberCrewStart(chosenCrew.slug, started.started);
+      setOutcome(started);
     } catch (err) {
       setError(crewErrorText(err));
     }

@@ -487,3 +487,71 @@ fn stall_minutes_read_the_test_environment() {
         assert!(set_stall_minutes(500).is_err());
     });
 }
+
+// ---- what a started agent is (minion / spin-off) -------------------------------------------------
+
+#[test]
+fn started_agent_settings_default_to_one_type_and_let_it_choose() {
+    store::with_test_env(TestEnv::default(), || {
+        assert_eq!(started_agent_types(), StartedAgentTypes::One);
+        assert_eq!(started_agent_kind(), StartedAgentKind::AgentChooses);
+    });
+}
+
+#[test]
+fn started_agent_settings_survive_a_restart_and_leave_the_rest_alone() {
+    let dir = std::env::temp_dir().join(format!("pm-run-mode-{}-started", std::process::id()));
+    let _ = std::fs::remove_dir_all(&dir);
+    std::fs::create_dir_all(&dir).unwrap();
+    let target = dir.join(store::file_name());
+    store::save_at(&target, "alpha", RunMode::OneTask).unwrap();
+    assert_eq!(store::started_at(&target), (StartedAgentKind::AgentChooses, StartedAgentTypes::One));
+    store::save_started_at(&target, Some(StartedAgentKind::SpinOff), Some(StartedAgentTypes::Two)).unwrap();
+    assert_eq!(store::started_at(&target), (StartedAgentKind::SpinOff, StartedAgentTypes::Two));
+    // Saving one choice leaves the other; neither touches the agents' own run modes.
+    store::save_started_at(&target, Some(StartedAgentKind::Minion), None).unwrap();
+    assert_eq!(store::started_at(&target), (StartedAgentKind::Minion, StartedAgentTypes::Two));
+    assert_eq!(store::mode_in(&store::read_file(&target), "alpha"), RunMode::OneTask);
+    // An unknown value (a newer build) means the default instead of discarding the file.
+    std::fs::write(&target, r#"{"started_agent_kind":"wizard","started_agent_types":"three"}"#).unwrap();
+    assert_eq!(store::started_at(&target), (StartedAgentKind::AgentChooses, StartedAgentTypes::One));
+    let _ = std::fs::remove_dir_all(&dir);
+}
+
+#[test]
+fn the_older_helper_agents_choice_carries_over_to_the_new_kind() {
+    let dir = std::env::temp_dir().join(format!("pm-run-mode-{}-started-migrate", std::process::id()));
+    let _ = std::fs::remove_dir_all(&dir);
+    std::fs::create_dir_all(&dir).unwrap();
+    let target = dir.join(store::file_name());
+    for (old, kind) in [
+        ("always_background", StartedAgentKind::Minion),
+        ("always_show", StartedAgentKind::AgentChooses),
+        ("agent_chooses", StartedAgentKind::AgentChooses),
+    ] {
+        std::fs::write(&target, format!(r#"{{"helper_visibility":"{old}"}}"#)).unwrap();
+        assert_eq!(store::started_at(&target).0, kind, "{old}");
+    }
+    // The new value wins once the person has set it, and the old one stays in the file.
+    std::fs::write(&target, r#"{"helper_visibility":"always_background"}"#).unwrap();
+    store::save_started_at(&target, Some(StartedAgentKind::SpinOff), None).unwrap();
+    assert_eq!(store::started_at(&target).0, StartedAgentKind::SpinOff);
+    assert!(std::fs::read_to_string(&target).unwrap().contains("always_background"));
+    let _ = std::fs::remove_dir_all(&dir);
+}
+
+#[test]
+fn an_unknown_as_value_is_refused_with_the_allowed_words() {
+    assert_eq!(parse_asked(None), Ok(None));
+    assert_eq!(parse_asked(Some("minion")), Ok(Some(StartedAs::Minion)));
+    assert_eq!(parse_asked(Some("spin_off")), Ok(Some(StartedAs::SpinOff)));
+    let error = parse_asked(Some("helper")).unwrap_err();
+    assert!(error.starts_with("INVALID_ARGUMENT") && error.contains("minion") && error.contains("spin_off"), "{error}");
+}
+
+#[test]
+fn old_helpers_are_spin_offs_and_hidden_runs_are_minions() {
+    assert_eq!(legacy_kind(true, false), StartedAs::SpinOff);
+    assert_eq!(legacy_kind(true, true), StartedAs::Minion);
+    assert_eq!(legacy_kind(false, true), StartedAs::Minion);
+}

@@ -150,7 +150,7 @@ describe('ChatComposer add files', () => {
   const chipNames = () => Array.from(host.querySelectorAll('[data-testid="attachment-chip"]')).map((el) => el.getAttribute('data-name'));
   const addFilesViaMenu = (label = 'Add files…') => {
     act(() => attachButton()!.click());
-    const item = Array.from(host.querySelectorAll('[role="menuitem"]')).find((el) => el.textContent?.includes(label)) as HTMLElement;
+    const item = Array.from(document.querySelectorAll('[role="menuitem"]')).find((el) => el.textContent?.includes(label)) as HTMLElement;
     act(() => item.click());
   };
 

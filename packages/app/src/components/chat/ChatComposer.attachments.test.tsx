@@ -76,7 +76,7 @@ const sendButton = () => host.querySelector('button[type="submit"]') as HTMLButt
 const attachButton = () => host.querySelector('[data-testid="chat-composer-attach"]') as HTMLButtonElement;
 const addFilesViaMenu = (label = 'Add files…') => {
   act(() => attachButton()!.click());
-  const item = Array.from(host.querySelectorAll('[role="menuitem"]')).find((el) => el.textContent?.includes(label)) as HTMLElement;
+  const item = Array.from(document.querySelectorAll('[role="menuitem"]')).find((el) => el.textContent?.includes(label)) as HTMLElement;
   act(() => item.click());
 };
 const chips = () => Array.from(host.querySelectorAll('[data-testid="attachment-chip"]'));

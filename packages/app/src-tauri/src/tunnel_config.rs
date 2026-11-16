@@ -13,6 +13,9 @@
 //!   told the Worker's fixed address, and the app registers every new quick-tunnel URL with the Worker
 //!   (see `mobile_tunnel/stable_link.rs`). The shared secret is stored like the named-tunnel token.
 //!
+//! - `open_tunnel`: a fixed address from OpenTunnel (a third-party relay; Labs, off by default). The file holds
+//!   nothing secret: the relay's token lives in the app data folder's own store (`mobile_tunnel/opentunnel.rs`).
+//!
 //! `POTATO_WORKSPACE_PUBLIC_URL` (env) still wins over everything and skips cloudflared.
 
 use serde::{Deserialize, Serialize};
@@ -44,6 +47,8 @@ pub enum TunnelConfig {
         worker_url: String,
         secret: String,
     },
+    /// A fixed address from OpenTunnel. No secret here: the relay's token is in its own store, never in this file.
+    OpenTunnel,
 }
 
 // Manual Debug so a stray `{:?}` can never print the token.
@@ -54,6 +59,7 @@ impl std::fmt::Debug for TunnelConfig {
             Self::Named { hostname, .. } => write!(f, "Named {{ hostname: {hostname:?}, token: <redacted> }}"),
             Self::Custom { url } => write!(f, "Custom {{ url: {url:?} }}"),
             Self::Stable { worker_url, .. } => write!(f, "Stable {{ worker_url: {worker_url:?}, secret: <redacted> }}"),
+            Self::OpenTunnel => write!(f, "OpenTunnel"),
         }
     }
 }
@@ -90,6 +96,8 @@ pub enum TunnelConfigInput {
         #[serde(default)]
         secret_action: SecretAction,
     },
+    /// A fixed address from OpenTunnel. Needs the Labs switch (checked where it is applied).
+    OpenTunnel,
 }
 
 /// What a `stable` save does with the shared secret.
@@ -119,6 +127,7 @@ impl TunnelConfig {
             Self::Stable { worker_url, secret } => {
                 TunnelConfigView { url: Some(worker_url.clone()), has_secret: !secret.is_empty(), ..base("stable") }
             }
+            Self::OpenTunnel => base("open_tunnel"),
         }
     }
 
@@ -157,6 +166,7 @@ pub fn config_from_input(input: TunnelConfigInput, current: &TunnelConfig) -> Re
     match input {
         TunnelConfigInput::Quick => Ok(TunnelConfig::Quick),
         TunnelConfigInput::Custom { url } => Ok(TunnelConfig::Custom { url: normalize_custom_url(&url)? }),
+        TunnelConfigInput::OpenTunnel => Ok(TunnelConfig::OpenTunnel),
         TunnelConfigInput::Stable { worker_url, secret, secret_action } => {
             let worker_url = normalize_custom_url(&worker_url)?;
             let chosen = secret.as_deref().map(str::trim).filter(|s| !s.is_empty());
@@ -254,6 +264,8 @@ pub enum TunnelPlan {
     Custom { url: String },
     /// A quick tunnel registered with the person's own Worker; phones are told `worker_url`.
     Stable { worker_url: String },
+    /// A fixed address from OpenTunnel; the address is learned when the client has connected.
+    OpenTunnel,
 }
 
 impl TunnelPlan {
@@ -264,6 +276,7 @@ impl TunnelPlan {
             Self::Named { .. } => "named",
             Self::Custom { .. } => "custom",
             Self::Stable { .. } => "stable",
+            Self::OpenTunnel => "open_tunnel",
         }
     }
 
@@ -273,20 +286,28 @@ impl TunnelPlan {
             Self::Env { url } | Self::Custom { url } => Some(url.clone()),
             Self::Named { origin } => Some(origin.clone()),
             Self::Stable { worker_url } => Some(worker_url.clone()),
-            Self::Quick => None,
+            Self::Quick | Self::OpenTunnel => None,
         }
     }
 
     pub fn runs_cloudflared(&self) -> bool {
         matches!(self, Self::Quick | Self::Named { .. } | Self::Stable { .. })
     }
+
+    /// The app's own OpenTunnel client runs (and the tunnel listener); no cloudflared.
+    pub fn runs_opentunnel(&self) -> bool {
+        matches!(self, Self::OpenTunnel)
+    }
 }
 
-pub fn resolve_plan(env_public_url: Option<String>, config: &TunnelConfig) -> TunnelPlan {
+/// `open_tunnel_allowed`: the Labs switch. With it off, a saved OpenTunnel setting runs as the automatic address.
+pub fn resolve_plan(env_public_url: Option<String>, config: &TunnelConfig, open_tunnel_allowed: bool) -> TunnelPlan {
     if let Some(url) = env_public_url {
         return TunnelPlan::Env { url };
     }
     match config {
+        TunnelConfig::OpenTunnel if open_tunnel_allowed => TunnelPlan::OpenTunnel,
+        TunnelConfig::OpenTunnel => TunnelPlan::Quick,
         TunnelConfig::Quick => TunnelPlan::Quick,
         TunnelConfig::Named { hostname, .. } => TunnelPlan::Named { origin: format!("https://{hostname}") },
         TunnelConfig::Custom { url } => TunnelPlan::Custom { url: url.clone() },
@@ -408,11 +429,11 @@ mod tests {
     #[test]
     fn plan_env_wins_then_config() {
         let cfg = named("T", "pm.example.com");
-        assert_eq!(resolve_plan(Some("https://env.dev".into()), &cfg), TunnelPlan::Env { url: "https://env.dev".into() });
-        assert_eq!(resolve_plan(None, &cfg), TunnelPlan::Named { origin: "https://pm.example.com".into() });
-        assert_eq!(resolve_plan(None, &TunnelConfig::Quick), TunnelPlan::Quick);
+        assert_eq!(resolve_plan(Some("https://env.dev".into()), &cfg, false), TunnelPlan::Env { url: "https://env.dev".into() });
+        assert_eq!(resolve_plan(None, &cfg, false), TunnelPlan::Named { origin: "https://pm.example.com".into() });
+        assert_eq!(resolve_plan(None, &TunnelConfig::Quick, false), TunnelPlan::Quick);
         let custom = TunnelConfig::Custom { url: "https://my.dev".into() };
-        let plan = resolve_plan(None, &custom);
+        let plan = resolve_plan(None, &custom, false);
         assert_eq!(plan.known_public_url().as_deref(), Some("https://my.dev"));
         assert!(!plan.runs_cloudflared());
         assert!(TunnelPlan::Quick.runs_cloudflared());
@@ -494,6 +515,35 @@ mod tests {
     }
 
     #[test]
+    fn open_tunnel_round_trips_with_nothing_secret_in_the_file_or_the_debug_text() {
+        let dir = std::env::temp_dir().join(format!("pm-tunnel-open-{}", std::process::id()));
+        let path = dir.join(TUNNEL_FILE_NAME);
+        save(&path, &TunnelConfig::OpenTunnel).unwrap();
+        assert_eq!(load(&path), TunnelConfig::OpenTunnel);
+        let text = fs::read_to_string(&path).unwrap();
+        assert_eq!(serde_json::from_str::<serde_json::Value>(&text).unwrap(), serde_json::json!({"mode": "open_tunnel"}));
+        assert_eq!(format!("{:?}", TunnelConfig::OpenTunnel), "OpenTunnel");
+        let view = serde_json::to_string(&TunnelConfig::OpenTunnel.view()).unwrap();
+        assert!(view.contains("\"mode\":\"open_tunnel\"") && view.contains("\"has_token\":false"), "{view}");
+        let input: TunnelConfigInput = serde_json::from_str(r#"{"mode":"open_tunnel"}"#).unwrap();
+        assert_eq!(config_from_input(input, &TunnelConfig::Quick).unwrap(), TunnelConfig::OpenTunnel);
+        let _ = fs::remove_dir_all(dir);
+    }
+
+    #[test]
+    fn open_tunnel_plan_needs_the_labs_switch_and_runs_no_cloudflared() {
+        let on = resolve_plan(None, &TunnelConfig::OpenTunnel, true);
+        assert_eq!(on, TunnelPlan::OpenTunnel);
+        assert_eq!(on.mode(), "open_tunnel");
+        assert!(on.runs_opentunnel() && !on.runs_cloudflared());
+        assert_eq!(on.known_public_url(), None);
+        // switch off: the saved setting runs as the automatic address
+        assert_eq!(resolve_plan(None, &TunnelConfig::OpenTunnel, false), TunnelPlan::Quick);
+        // the env override still wins
+        assert!(matches!(resolve_plan(Some("https://env.dev".into()), &TunnelConfig::OpenTunnel, true), TunnelPlan::Env { .. }));
+    }
+
+    #[test]
     fn stable_input_parses_from_what_the_ui_sends() {
         let input: TunnelConfigInput = serde_json::from_str(r#"{"mode":"stable","worker_url":"https://w.dev"}"#).unwrap();
         assert!(matches!(input, TunnelConfigInput::Stable { secret: None, secret_action: SecretAction::Keep, .. }));
@@ -504,12 +554,12 @@ mod tests {
     #[test]
     fn stable_plan_advertises_the_worker_runs_cloudflared_like_quick_and_env_still_wins() {
         let cfg = TunnelConfig::Stable { worker_url: "https://pm.me.workers.dev".into(), secret: "x".repeat(20) };
-        let plan = resolve_plan(None, &cfg);
+        let plan = resolve_plan(None, &cfg, false);
         assert_eq!(plan, TunnelPlan::Stable { worker_url: "https://pm.me.workers.dev".into() });
         assert_eq!(plan.mode(), "stable");
         assert_eq!(plan.known_public_url().as_deref(), Some("https://pm.me.workers.dev"));
         assert!(plan.runs_cloudflared());
         assert_eq!(cloudflared_args(&plan, "http://127.0.0.1:1420"), ["tunnel", "--url", "http://127.0.0.1:1420"]);
-        assert!(matches!(resolve_plan(Some("https://env.dev".into()), &cfg), TunnelPlan::Env { .. }));
+        assert!(matches!(resolve_plan(Some("https://env.dev".into()), &cfg, false), TunnelPlan::Env { .. }));
     }
 }

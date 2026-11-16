@@ -73,13 +73,13 @@ describe('Bridge & MCP: every row renders', () => {
       expect(m.host.querySelector(`[data-row="${row.id}"]`), `missing row: ${row.id}`).not.toBeNull();
     }
     expect(m.host.querySelector('[aria-label="Tools for every agent"]')).not.toBeNull();
-    for (const label of ["This app's address", 'Connection check', 'Use the built-in helper program', 'Connect Claude, Codex and OpenCode', 'Set up Claude Desktop by hand', 'Set up Codex by hand', 'Disconnect agents from Potato Workspace']) {
+    for (const label of ["This app's address", 'Connection check', 'Use the built-in Potato tools program', 'Connect Claude, Codex and OpenCode', 'Set up Claude Desktop by hand', 'Set up Codex by hand', 'Disconnect agents from Potato Workspace']) {
       expect(hasText(m.host, label), `missing: ${label}`).toBe(true);
     }
     for (const text of ['Check and repair', 'Connect for this project', 'Connect everywhere', 'Uninstall from project…', 'Uninstall globally…', 'Copy']) {
       expect(buttonByText(m.host, text), `missing button: ${text}`).toBeTruthy();
     }
-    expect(switchFor('Use the built-in helper program')).not.toBeNull();
+    expect(switchFor('Use the built-in Potato tools program')).not.toBeNull();
   });
 
   it('shows the bridge endpoint from the environment', async () => {
@@ -113,12 +113,12 @@ describe('Bridge & MCP: every row renders', () => {
 });
 
 describe('Bridge & MCP: controls save and run the right calls', () => {
-  it('Use the built-in helper program saves only {developer_use_rust_mcp}', async () => {
+  it('Use the built-in Potato tools program saves only {developer_use_rust_mcp}', async () => {
     await mount();
-    await click(switchFor('Use the built-in helper program'));
+    await click(switchFor('Use the built-in Potato tools program'));
     expect(m.env.patches).toEqual([{ developer_use_rust_mcp: true }]);
     await m.rerender();
-    expect(switchFor('Use the built-in helper program')!.getAttribute('aria-checked')).toBe('true');
+    expect(switchFor('Use the built-in Potato tools program')!.getAttribute('aria-checked')).toBe('true');
   });
 
   it('Connect for this project runs the project install, shows the per-agent result, and asks the status to re-check', async () => {

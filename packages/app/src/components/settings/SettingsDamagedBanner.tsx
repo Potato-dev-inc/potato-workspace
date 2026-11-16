@@ -48,7 +48,7 @@ export function SettingsDamagedBanner({ api = settingsRecoveryApi }: { api?: Set
       <Note>{t('settings.damaged.line')}</Note>
       <div className="app-update-row">
         <Btn disabled={busy || !status.hasBackup} onClick={() => void restore()}>
-          {busy ? t('settings.damaged.restoring') : t('settings.row.settings-recovery.label')}
+          {busy ? t('settings.damaged.restoring') : t('settings.damaged.undo')}
         </Btn>
         <Btn disabled={busy} onClick={() => void keep()}>
           {t('settings.damaged.keep')}

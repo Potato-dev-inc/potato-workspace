@@ -1,5 +1,5 @@
 // @vitest-environment jsdom
-// Settings > Agents > Helper agents > "Default model for helpers": one model dropdown per installed agent, saved as
+// Settings > Agents > How started agents show > "Default model for started agents": one model dropdown per installed agent, saved as
 // the `helper_default_models` map, found by search, and old settings without the key load fine.
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import type { AgentRegistryListing } from '../../../lib/agentRegistry';
@@ -39,10 +39,10 @@ afterEach(async () => {
 });
 const chipFor = (id: string) => m.host.querySelector<HTMLButtonElement>(`[data-testid="helper-model-${id}"]`);
 
-describe('Default model for helpers', () => {
+describe('Default model for started agents', () => {
   it('is one row in the Helpers group with a short, plain hint', () => {
     expect(row).toHaveLength(1);
-    expect(row[0].group).toBe('Helpers');
+    expect(row[0].group).toBe('How helpers run');
     expect(HELPER_MODELS_HINT.length).toBeLessThanOrEqual(90);
     expect(row[0].hint).toBe(HELPER_MODELS_HINT);
   });

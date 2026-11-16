@@ -49,6 +49,10 @@ async function mount(settings: KeepGoingSettings | Error = SAVED) {
   vi.mocked(keepGoingSettingsSet).mockImplementation(async (next: KeepGoingSettings) => next);
   m = await mountRows([{ id: 'keep-going', label: 'When an agent runs out of usage', group: 'Keep going', render: (env) => <KeepGoingRows onSaved={env.markSaved} /> }]);
   await settle(10);
+  // The list sits under "Details" (open once the switch is on).
+  const details = buttonByText(m.host, 'Details');
+  if (details) await click(details);
+  await settle(3);
   return m;
 }
 
@@ -82,10 +86,11 @@ describe('Keep going: the saved list', () => {
     expect(listItems()[0].textContent).toContain('Not installed');
   });
 
-  it('says what an empty list means', async () => {
+  it('off by default: the switch is off and no list shows', async () => {
     await mount({ order: [], ask_back: true });
+    expect(byLabel<HTMLButtonElement>(m.host, 'When one agent runs out, continue on another')!.getAttribute('aria-checked')).toBe('false');
     expect(listItems()).toEqual([]);
-    expect(hasText(m.host, 'Nothing listed. Potato Workspace then offers every other installed agent, in its usual order.')).toBe(true);
+    expect(buttonByText(m.host, 'Details')).toBeUndefined();
   });
 
   it('keeps the same-company rule in plain words', async () => {
@@ -105,25 +110,25 @@ describe('Keep going: add, move, remove', () => {
   });
 
   it('adds the chosen agent as a target without an account key and saves the whole list', async () => {
-    await mount({ order: [], ask_back: true });
+    await mount({ order: [{ agent_id: 'fake_b' }], ask_back: true });
     await pickOption(addPicker(), 'fake_a');
     await click(buttonByText(m.host, 'Add'));
     await settle();
-    expect(keepGoingSettingsSet).toHaveBeenCalledExactlyOnceWith({ order: [{ agent_id: 'fake_a' }], ask_back: true });
+    expect(keepGoingSettingsSet).toHaveBeenCalledExactlyOnceWith({ order: [{ agent_id: 'fake_b' }, { agent_id: 'fake_a' }], ask_back: true });
     const [saved] = vi.mocked(keepGoingSettingsSet).mock.calls[0];
     expect(Object.keys(saved.order[0])).toEqual(['agent_id']);
   });
 
   it('adds a saved login as agent@account', async () => {
-    await mount({ order: [], ask_back: true });
+    await mount({ order: [{ agent_id: 'fake_b' }], ask_back: true });
     await pickOption(addPicker(), 'fake_a@acc_work');
     await click(buttonByText(m.host, 'Add'));
     await settle();
-    expect(keepGoingSettingsSet).toHaveBeenCalledExactlyOnceWith({ order: [{ agent_id: 'fake_a', account: 'acc_work' }], ask_back: true });
+    expect(keepGoingSettingsSet).toHaveBeenCalledExactlyOnceWith({ order: [{ agent_id: 'fake_b' }, { agent_id: 'fake_a', account: 'acc_work' }], ask_back: true });
   });
 
   it('Add stays off until an agent is picked', async () => {
-    await mount({ order: [], ask_back: true });
+    await mount({ order: [{ agent_id: 'fake_b' }], ask_back: true });
     expect(buttonByText(m.host, 'Add')!.disabled).toBe(true);
   });
 

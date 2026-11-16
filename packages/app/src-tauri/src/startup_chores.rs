@@ -44,7 +44,9 @@ pub fn chores_for_setup(
     registry: std::sync::Arc<parking_lot::Mutex<crate::pty::PaneRegistry>>,
     bridge_url: Option<String>,
 ) -> Vec<Chore> {
-    // A release build only: a development build must not open the phone tunnel.
+    // A release build opens the phone tunnel. A development build does not, unless `POTATO_WORKSPACE_TUNNEL=1`
+    // asks for it (a proof run of the fixed phone address; the app's own profile rules still apply).
+    #[cfg(not(debug_assertions))]
     let _ = (&app, &bridge_url);
     vec![
         // What broke it: remove test copies an earlier run left behind (SPEC n33 section 3.4).
@@ -64,6 +66,17 @@ pub fn chores_for_setup(
         chore("discord_bot", crate::discord_bot::live::reconcile_all),
         #[cfg(not(debug_assertions))]
         chore("phone_tunnel", move || {
+            if let Some(url) = bridge_url {
+                if let Err(err) = crate::mobile_tunnel::start_mobile_tunnel(&app, url) {
+                    tracing::warn!(%err, "mobile tunnel not started");
+                }
+            }
+        }),
+        #[cfg(debug_assertions)]
+        chore("phone_tunnel_opt_in", move || {
+            if std::env::var("POTATO_WORKSPACE_TUNNEL").ok().as_deref() != Some("1") {
+                return;
+            }
             if let Some(url) = bridge_url {
                 if let Err(err) = crate::mobile_tunnel::start_mobile_tunnel(&app, url) {
                     tracing::warn!(%err, "mobile tunnel not started");

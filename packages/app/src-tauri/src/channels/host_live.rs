@@ -178,6 +178,7 @@ origin: None,
             place: None,
             lane: None,
             standby_seat: None,
+            started_as: None,
         }
     }
 

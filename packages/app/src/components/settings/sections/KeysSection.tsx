@@ -117,6 +117,8 @@ function OpenCodeKeys({ env }: { env: SettingsEnv }) {
     return status.active_profile === id ? t('keys.savedInUse') : t('keys.saved');
   };
 
+  const mainSet = Boolean(status?.profiles.find((entry) => entry.id === 'a')?.configured);
+
   const save = async (id: 'a' | 'b', secret: string) => {
     env.setError(null);
     try {
@@ -136,13 +138,14 @@ function OpenCodeKeys({ env }: { env: SettingsEnv }) {
             <FieldLabel>{t('keys.mainKey', { state: profileLine('a') })}</FieldLabel>
             <SecretControl aria-label={t('keys.ocA')} placeholder={t('keys.paste')} onCommit={(secret) => save('a', secret)} />
           </div>
-          <div className="space-y-1">
-            <FieldLabel>{t('keys.spareKey', { state: profileLine('b') })}</FieldLabel>
-            <SecretControl aria-label={t('keys.ocB')} placeholder={t('keys.paste')} onCommit={(secret) => save('b', secret)} />
-          </div>
-        </div>
-        <div className="flex flex-wrap items-center gap-2">
-          <Btn onClick={() => void refresh()}>{t('keys.check')}</Btn>
+          {mainSet ? (
+            <div className="space-y-1">
+              <FieldLabel>{t('keys.spareKey', { state: profileLine('b') })}</FieldLabel>
+              <SecretControl aria-label={t('keys.ocB')} placeholder={t('keys.paste')} onCommit={(secret) => save('b', secret)} />
+            </div>
+          ) : (
+            <Note>{t('keys.spareAfterMain')}</Note>
+          )}
         </div>
         {error && <Note role="alert">{t('keys.readFailedOc', { error })}</Note>}
       </div>

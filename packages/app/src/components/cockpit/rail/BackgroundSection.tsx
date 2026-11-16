@@ -20,6 +20,15 @@ export interface HelperRow {
   /** The agent's id, for its logo. */
   agentType?: string | null;
   status: string;
+  /** `minion`: a small worker of this chat; it opens in the details column. Else a helper: it opens its own pane. */
+  kind?: 'minion' | 'helper';
+  /** A minion's start (ms since the epoch): its row counts the time live. */
+  startedAtMs?: number;
+}
+
+/** How long a row has run: a working minion counts live from its start; any other row reads the usage figure. */
+export function rowElapsedMs(row: HelperRow, now: number, usageMs: number): number {
+  return row.kind === 'minion' && row.startedAtMs && (row.status === 'running' || row.status === 'waiting_input') ? Math.max(0, now - row.startedAtMs) : usageMs;
 }
 
 const isRunning = (s: string) => s === 'running';
@@ -35,7 +44,7 @@ function useClock(ms: number): number {
 }
 
 /** The small stop square. A first click asks "Stop this one?" with Yes and No; Yes does it. */
-function StopSquare({ name, onStop }: { name: string; onStop: () => Promise<void> | void }) {
+export function StopSquare({ name, onStop }: { name: string; onStop: () => Promise<void> | void }) {
   const t = useT();
   const [phase, setPhase] = useState<'idle' | 'asking' | 'stopping'>('idle');
   const [error, setError] = useState<string | null>(null);
@@ -79,6 +88,10 @@ export interface BackgroundSectionProps {
   usage?: PaneUsage | null;
   jobs: readonly PaneJob[];
   onOpenPane: (id: string) => void;
+  /** A minion row was pressed: open its read-only view in the details column. Without it the row opens its pane. */
+  onOpenTask?: (id: string) => void;
+  /** The heading's open button: the full Background tasks page in the details column. */
+  onOpenPage?: () => void;
   onStopHelper?: (id: string) => Promise<void> | void;
   onStopJob: (pid: number, startedAtMs: number) => Promise<void>;
   onPreview?: (port: number, external: boolean) => Promise<void> | void;
@@ -86,7 +99,7 @@ export interface BackgroundSectionProps {
   onSaveTeam?: () => void;
 }
 
-export function BackgroundSection({ helpers, usage, jobs, onOpenPane, onStopHelper, onStopJob, onPreview, onPointFix, onSaveTeam }: BackgroundSectionProps) {
+export function BackgroundSection({ helpers, usage, jobs, onOpenPane, onOpenTask, onOpenPage, onStopHelper, onStopJob, onPreview, onPointFix, onSaveTeam }: BackgroundSectionProps) {
   const t = useT();
   const now = useClock(1000);
   const [showDone, setShowDone] = useState(false);
@@ -102,6 +115,7 @@ export function BackgroundSection({ helpers, usage, jobs, onOpenPane, onStopHelp
     }
   };
   const anchor = useRef<HTMLElement | null>(null);
+  const open = (h: HelperRow) => (h.kind === 'minion' && onOpenTask ? onOpenTask(h.id) : onOpenPane(h.id));
   const busy = new Map((usage?.helpers ?? []).map((u) => [u.paneId, u.busyMs] as const));
 
   const live = helpers.filter((h) => isRunning(h.status) || isWaiting(h.status));
@@ -117,16 +131,16 @@ export function BackgroundSection({ helpers, usage, jobs, onOpenPane, onStopHelp
   };
 
   return (
-    <RailSection id="bg" title={t('rail.bg.title')} summary={summary}>
+    <RailSection id="bg" title={t('rail.bg.title')} summary={summary} action={onOpenPage ? { label: t('rail.bg.openPage'), onClick: onOpenPage } : undefined}>
       <div onContextMenu={onContext} className="rp-bg">
         {running === 0 && finished.length === 0 && <div className="rp-row is-empty">{t('rail.bg.empty')}</div>}
         {live.map((h) => (
           <div key={h.id} className="rp-helper">
           <div className="rp-row rp-hov" data-testid="rail-helper">
-            <button type="button" className="rp-row-main" title={h.agent ?? h.title} onClick={() => onOpenPane(h.id)}>
+            <button type="button" className="rp-row-main" title={h.agent ?? h.title} onClick={() => open(h)}>
               <AgentLogo id={h.agentType ?? ''} name={h.agent ?? h.title} size={16} decorative />
               <span className="rp-name">{h.title}</span>
-              {isWaiting(h.status) ? <span className="rp-v is-warn rp-small">{t('rail.bg.needsYou')}</span> : <span className="rp-time">{clockText(busy.get(h.id) ?? 0)}</span>}
+              {isWaiting(h.status) ? <span className="rp-v is-warn rp-small">{t('rail.bg.needsYou')}</span> : <span className="rp-time">{clockText(rowElapsedMs(h, now, busy.get(h.id) ?? 0))}</span>}
             </button>
             {onStopHelper && <StopSquare name={h.title} onStop={() => onStopHelper(h.id)} />}
           </div>
@@ -167,10 +181,14 @@ export function BackgroundSection({ helpers, usage, jobs, onOpenPane, onStopHelp
         )}
         {showDone &&
           finished.map((h) => (
-            <button key={h.id} type="button" className="rp-row rp-sub" onClick={() => onOpenPane(h.id)}>
+            <button key={h.id} type="button" className="rp-row rp-sub" data-testid="rail-helper-done" onClick={() => open(h)}>
               <AgentLogo id={h.agentType ?? ''} name={h.agent ?? h.title} size={14} decorative />
               <span className="rp-name">{h.title}</span>
-              <span className="rp-time">{t('rail.bg.doneIn', { time: clockText(busy.get(h.id) ?? 0) })}</span>
+              {h.status === 'error' ? (
+                <span className="rp-v is-bad rp-small">{t('rail.bg.failed')}</span>
+              ) : (
+                <span className="rp-time">{t('rail.bg.doneIn', { time: clockText(busy.get(h.id) ?? 0) })}</span>
+              )}
             </button>
           ))}
         {openError && (

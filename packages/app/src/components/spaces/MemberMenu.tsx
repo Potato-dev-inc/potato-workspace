@@ -1,5 +1,6 @@
 // Spaces: the actions on one person in the people column: Remove from space (owner), Block and Unblock (me only).
-import { useState } from 'react';
+import { useRef, useState } from 'react';
+import { Menu } from '../common/Floating';
 import type { SpaceMember } from '../../lib/spaces';
 import { ConfirmSheet } from './ConfirmSheet';
 
@@ -14,13 +15,14 @@ export interface MemberMenuProps {
 export function MemberMenu({ member, spaceName, canRemove, onRemove, onBlock }: MemberMenuProps) {
   const [open, setOpen] = useState(false);
   const [sheet, setSheet] = useState<'remove' | 'block' | null>(null);
+  const btn = useRef<HTMLButtonElement>(null);
   if (member.isMe) return null;
   return (
     <span className="ck-spaces-menu">
-      <button type="button" className="ck-spaces-link" aria-label={`Actions for ${member.name}`} aria-haspopup="menu"
+      <button ref={btn} type="button" className="ck-spaces-link" aria-label={`Actions for ${member.name}`} aria-haspopup="menu"
         aria-expanded={open} onClick={() => setOpen(!open)}>More</button>
       {open && (
-        <span role="menu" className="ck-spaces-menu-list">
+        <Menu anchorRef={btn} align="end" className="ck-spaces-menu-list" label={`Actions for ${member.name}`} onClose={() => setOpen(false)}>
           {canRemove && (
             <button type="button" role="menuitem" onClick={() => { setOpen(false); setSheet('remove'); }}>Remove from space</button>
           )}
@@ -29,7 +31,7 @@ export function MemberMenu({ member, spaceName, canRemove, onRemove, onBlock }: 
           ) : (
             <button type="button" role="menuitem" onClick={() => { setOpen(false); setSheet('block'); }}>Block</button>
           )}
-        </span>
+        </Menu>
       )}
       {sheet === 'remove' && (
         <ConfirmSheet title={`Remove ${member.name} from ${spaceName}?`}

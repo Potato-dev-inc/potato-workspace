@@ -73,12 +73,12 @@ async function mount(props: Partial<NewAgentPageProps> = {}) {
   await act(async () => {});
   return { onStart };
 }
-const switchGroup = () => host.querySelector('[role="radiogroup"]');
-const agentButton = () => host.querySelector<HTMLButtonElement>('button[aria-label^="Agent:"]')!;
+const switchGroup = () => document.querySelector('[role="radiogroup"]');
+const agentButton = () => document.querySelector<HTMLButtonElement>('button[aria-label^="Agent:"]')!;
 async function openAgents() {
   await act(async () => agentButton().click());
 }
-const menuLabels = () => [...host.querySelectorAll('[role="menuitemradio"]')].map((b) => b.textContent ?? '');
+const menuLabels = () => [...document.querySelectorAll('[role="menuitemradio"]')].map((b) => b.textContent ?? '');
 
 describe('the New agent page with terminals hidden', () => {
   it('draws no Chat | Terminal switch, lists only agents that can chat, and says how many need terminals', async () => {
@@ -91,19 +91,19 @@ describe('the New agent page with terminals hidden', () => {
     expect(labels.some((l) => l.includes('Codex'))).toBe(true);
     expect(labels.some((l) => l.includes('Aider'))).toBe(false);
     expect(labels.some((l) => l.includes('Kilo'))).toBe(false);
-    expect(host.querySelector('[data-testid="need-terminals"]')?.textContent).toContain('2 agents need terminals');
-    expect(host.querySelector('[data-testid="need-terminals"]')?.textContent).toContain('Show terminals');
+    expect(document.querySelector('[data-testid="need-terminals"]')?.textContent).toContain('2 agents need terminals');
+    expect(document.querySelector('[data-testid="need-terminals"]')?.textContent).toContain('Show terminals');
   });
 
   it('Send starts a chat', async () => {
     forceShowTerminals(false);
     const { onStart } = await mount();
-    const box = host.querySelector<HTMLTextAreaElement>('textarea')!;
+    const box = document.querySelector<HTMLTextAreaElement>('textarea')!;
     await act(async () => {
       Object.getOwnPropertyDescriptor(HTMLTextAreaElement.prototype, 'value')!.set!.call(box, 'fix the tests');
       box.dispatchEvent(new Event('input', { bubbles: true }));
     });
-    await act(async () => host.querySelector<HTMLButtonElement>('button[aria-label="Start"]')!.click());
+    await act(async () => document.querySelector<HTMLButtonElement>('button[aria-label="Start"]')!.click());
     expect(onStart).toHaveBeenCalledTimes(1);
     expect(onStart.mock.calls[0][0]).toMatchObject({ runAs: 'chat', agentId: 'claude', isolated: false });
   });
@@ -112,12 +112,12 @@ describe('the New agent page with terminals hidden', () => {
     localStorage.setItem('pm.newagent.runAs', 'terminal');
     forceShowTerminals(false);
     const { onStart } = await mount();
-    const box = host.querySelector<HTMLTextAreaElement>('textarea')!;
+    const box = document.querySelector<HTMLTextAreaElement>('textarea')!;
     await act(async () => {
       Object.getOwnPropertyDescriptor(HTMLTextAreaElement.prototype, 'value')!.set!.call(box, 'go');
       box.dispatchEvent(new Event('input', { bubbles: true }));
     });
-    await act(async () => host.querySelector<HTMLButtonElement>('button[aria-label="Start"]')!.click());
+    await act(async () => document.querySelector<HTMLButtonElement>('button[aria-label="Start"]')!.click());
     expect(onStart.mock.calls[0][0]).toMatchObject({ runAs: 'chat' });
   });
 
@@ -127,14 +127,14 @@ describe('the New agent page with terminals hidden', () => {
     expect(switchGroup()).not.toBeNull();
     await openAgents();
     expect(menuLabels().some((l) => l.includes('Aider'))).toBe(true);
-    expect(host.querySelector('[data-testid="need-terminals"]')).toBeNull();
+    expect(document.querySelector('[data-testid="need-terminals"]')).toBeNull();
   });
 
   it('Chat is the default even before its add-on is there, while terminals are shown', async () => {
     forceShowTerminals(true);
     const missing: AcpAddonApi = { ...addonApi, list: async () => ({ labsEnabled: true, addons: [{ ...installed('claude'), state: 'not_installed' }] }) };
     await mount({ addonApi: missing });
-    const chat = [...host.querySelectorAll<HTMLButtonElement>('[role=radio]')].find((b) => b.textContent === 'Chat')!;
+    const chat = [...document.querySelectorAll<HTMLButtonElement>('[role=radio]')].find((b) => b.textContent === 'Chat')!;
     expect(chat.getAttribute('aria-checked')).toBe('true');
   });
 });

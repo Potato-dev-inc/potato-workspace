@@ -158,7 +158,7 @@ fn the_switch_defaults_on_reads_the_setting_and_turns_every_agent_off() {
     assert!(enabled(), "on unless the person turns it off");
     apply_settings(&json!({ "pane_mcp_enabled": false }));
     assert!(!enabled());
-    assert_eq!(prepare(profile_for("claude").as_ref(), "p", &[]), PaneMcpLaunch::default());
+    assert_eq!(prepare(profile_for("claude").as_ref(), "p", &[], None), PaneMcpLaunch::default());
     apply_settings(&json!({ "pane_mcp_enabled": true }));
     assert!(enabled());
 }
@@ -174,7 +174,7 @@ fn the_default_settings_turn_it_on_and_the_key_can_be_patched() {
 #[test]
 fn a_dev_run_with_no_mcp_server_built_adds_nothing() {
     // The test build has no bundled server: no pane is given an entry that fails at start.
-    assert!(server_for("p").is_none());
+    assert!(server_for("p", None).is_none());
 }
 
 #[test]

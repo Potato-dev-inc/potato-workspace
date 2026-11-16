@@ -1,5 +1,5 @@
 // @vitest-environment jsdom
-// Settings > Agents > Helpers: "Helper agents" (always show by default) and "Keep helpers open when they finish"
+// Settings > Agents > Helpers: "How started agents show" (always show by default) and "Keep started agents open when they finish"
 // (on by default). Each saves through its own command, says what it does in plain words, and is found by search.
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { rowMatches } from '../model';
@@ -41,9 +41,9 @@ const choiceRow = agentsRows.filter((r) => r.id === 'helper-agents');
 const keepRow = agentsRows.filter((r) => r.id === 'keep-helpers-open');
 const closeRow = agentsRows.filter((r) => r.id === 'close-helpers-with-agent');
 let m: Mounted;
-const choice = () => m.host.querySelector<HTMLSelectElement>('select[aria-label="Helper agents"]');
-const closeToggle = () => m.host.querySelector<HTMLButtonElement>('[role="switch"][aria-label="Close helpers when their agent closes"]');
-const toggle = () => m.host.querySelector<HTMLButtonElement>('[role="switch"][aria-label="Keep helpers open when they finish"]');
+const choice = () => m.host.querySelector<HTMLSelectElement>('select[aria-label="How started agents show"]');
+const closeToggle = () => m.host.querySelector<HTMLButtonElement>('[role="switch"][aria-label="Close started agents when their agent closes"]');
+const toggle = () => m.host.querySelector<HTMLButtonElement>('[role="switch"][aria-label="Keep started agents open when they finish"]');
 
 beforeEach(() => {
   saved.mode = 'always_show';
@@ -56,10 +56,10 @@ afterEach(async () => {
   await m?.unmount();
 });
 
-describe('Helper agents', () => {
+describe('How started agents show', () => {
   it('is a row in the Agents settings', () => {
     expect(choiceRow).toHaveLength(1);
-    expect(choiceRow[0].group).toBe('Helpers');
+    expect(choiceRow[0].group).toBe('How helpers run');
   });
 
   it('defaults to always showing helpers and says what the choices do', async () => {
@@ -101,7 +101,7 @@ describe('Helper agents', () => {
   });
 });
 
-describe('Keep helpers open when they finish', () => {
+describe('Keep started agents open when they finish', () => {
   it('is a row in the Agents settings and on by default', async () => {
     expect(keepRow).toHaveLength(1);
     m = await mountRows(keepRow);
@@ -139,10 +139,10 @@ describe('Keep helpers open when they finish', () => {
   });
 });
 
-describe('Close helpers when their agent closes', () => {
+describe('Close started agents when their agent closes', () => {
   it('is a row in the Helpers group, after the keep-open row, and on by default', async () => {
     expect(closeRow).toHaveLength(1);
-    expect(closeRow[0].group).toBe('Helpers');
+    expect(closeRow[0].group).toBe('How helpers run');
     m = await mountRows(closeRow);
     await settle(10);
     expect(closeToggle()?.getAttribute('aria-checked')).toBe('true');
@@ -180,13 +180,13 @@ describe('Close helpers when their agent closes', () => {
   });
 });
 
-describe('Most helpers at once', () => {
+describe('Most started agents at once', () => {
   const mostRow = agentsRows.filter((r) => r.id === 'most-helpers-at-once');
-  const select = () => m.host.querySelector<HTMLSelectElement>('select[aria-label="Most helpers at once"]');
+  const select = () => m.host.querySelector<HTMLSelectElement>('select[aria-label="Most started agents at once"]');
 
   it('is a row in the Helpers group and defaults to 8', async () => {
     expect(mostRow).toHaveLength(1);
-    expect(mostRow[0].group).toBe('Helpers');
+    expect(mostRow[0].group).toBe('How helpers run');
     m = await mountRows(mostRow);
     await settle(10);
     expect(select()?.value).toBe('8');

@@ -1,6 +1,7 @@
 // "Go live": picks the panes to share, the title, how long and how many viewers, shows exactly what viewers
 // will see, then starts the room. After start it shows the link masked; Copy link fetches the full one.
 // The owner's own panes are checked by default. Companion and chat-less panes are greyed with the reason.
+import { t } from '../../../i18n';
 import { useEffect, useMemo, useState } from 'react';
 import {
   durationLabel,
@@ -237,7 +238,7 @@ export function GoLiveSheet({
               </label>
               {depth === 0 && all > 0 && !pane.blocked && (
                 <button type="button" className="ck-live-helpers" disabled={helpers === 0 || starting} onClick={() => addHelpers(pane.id)}>
-                  {`and its ${all} ${all === 1 ? 'helper' : 'helpers'}`}
+                  {t('live.andIts', { count: all })}
                 </button>
               )}
             </li>

@@ -39,12 +39,12 @@ describe('Overview cards', () => {
   it('shows four cards: Agents, Signed in, Updates, Helpers (the phone is on the Connect page)', async () => {
     await mount(fakeOverviewSources());
     const names = [...host.querySelectorAll('.st-card')].map((c) => c.getAttribute('aria-label'));
-    expect(names).toEqual(['Agents', 'Signed in', 'Updates', 'Helpers']);
+    expect(names).toEqual(['Agents', 'Signed in', 'Updates', 'Agents that agents start']);
     expect(card('agents').textContent).toContain('2 agents ready');
     expect(card('signed-in').textContent).toContain('Claude and Codex are signed in');
     expect(host.querySelector('[data-card="phone"]')).toBeNull();
     expect(card('updates').textContent).toContain('Up to date (1.0.19)');
-    expect(card('helpers').textContent).toContain('Helpers open in a window and stay open');
+    expect(card('helpers').textContent).toContain('Started agents open in a window and stay open');
     for (const id of ['agents', 'signed-in', 'updates', 'helpers']) expect(glyph(id)).toBe('✓');
   });
 
@@ -102,7 +102,7 @@ describe('Overview cards', () => {
     expect(card('updates').textContent).toContain('Up to date');
     await act(async () => release());
     await settle(3);
-    expect(card('helpers').textContent).toContain('Helpers open in a window');
+    expect(card('helpers').textContent).toContain('Started agents open in a window and stay open');
   });
 
   it('a failed beta check shows its own line on the Updates card, never Up to date', async () => {

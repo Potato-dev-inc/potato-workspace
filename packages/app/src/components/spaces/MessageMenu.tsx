@@ -1,6 +1,7 @@
 // Spaces: the actions on one message. Only Reply, React and Delete exist; nothing here runs, opens or approves
 // anything that a message says (cowork M2).
-import { useState } from 'react';
+import { useRef, useState } from 'react';
+import { Menu } from '../common/Floating';
 import { REACTION_LABEL, type ReactionCode, type SpaceMessage } from '../../lib/spaces';
 import { ConfirmSheet } from './ConfirmSheet';
 import { REACTION_PICTURE } from './MessageRow';
@@ -17,14 +18,15 @@ export function MessageMenu({ message, canDelete, onReply, onReact, onDelete }: 
   const [open, setOpen] = useState(false);
   const [picking, setPicking] = useState(false);
   const [confirm, setConfirm] = useState(false);
+  const btn = useRef<HTMLButtonElement>(null);
   if (message.deleted) return null;
   const close = () => { setOpen(false); setPicking(false); };
   return (
     <span className="ck-spaces-menu">
-      <button type="button" className="ck-spaces-link" aria-label="Message actions" aria-haspopup="menu" aria-expanded={open}
+      <button ref={btn} type="button" className="ck-spaces-link" aria-label="Message actions" aria-haspopup="menu" aria-expanded={open}
         onClick={() => { setOpen(!open); setPicking(false); }}>More</button>
       {open && (
-        <span role="menu" className="ck-spaces-menu-list">
+        <Menu anchorRef={btn} align="end" className="ck-spaces-menu-list" label="Message actions" onClose={close}>
           <button type="button" role="menuitem" onClick={() => { close(); onReply(); }}>Reply</button>
           <button type="button" role="menuitem" aria-expanded={picking} onClick={() => setPicking(!picking)}>React</button>
           {picking && (
@@ -38,7 +40,7 @@ export function MessageMenu({ message, canDelete, onReply, onReact, onDelete }: 
           {canDelete && (
             <button type="button" role="menuitem" onClick={() => { close(); setConfirm(true); }}>Delete</button>
           )}
-        </span>
+        </Menu>
       )}
       {confirm && (
         <ConfirmSheet title="Delete this message?"

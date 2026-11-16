@@ -1,6 +1,12 @@
 // English messages: settingsPreload. Keys are dotted. Plural: `<key>_one` / `<key>_other`.
 export const settingsPreload = {
-  "preload.label": "Preload agents",
+  "preload.label": "Keep an agent ready",
+  "limits.none": "No limit",
+  "limits.light": "Light",
+  "limits.normal": "Normal",
+  "limits.heavy": "Heavy",
+  "limits.custom": "Custom",
+  "limits.help": "Light, Normal and Heavy set the turns and time together. Custom sets each one.",
   "preload.help": "Off by default. Each ready agent stays open in the background, which uses memory, and some providers count it as an open chat. Turning this off closes them all.",
   "preload.agentsLabel": "Agents to keep warm",
   "preload.agentsHelp": "Warm agents start in the folder you are working in: the project of your last run or of the window you opened (your project folder setting until then). A window for another folder starts normally. They never answer a trust or login prompt: an agent that shows one is dropped (open it once yourself first).",
@@ -77,6 +83,7 @@ export const settingsPreload = {
   "budget.turnsAria": "Turns an agent may use (0 is no limit)",
   "budget.turnsSuffix": "turns",
   "budget.minutesAria": "Time an agent may use (0 is no limit)",
+  "budget.presetAria": "How much an agent may use",
   "budget.minSuffix": "min",
   "packageCheck.offNote": "Look-alike names are still checked on this computer.",
 } as const;

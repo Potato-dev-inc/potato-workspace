@@ -33,8 +33,8 @@ afterEach(() => {
   host.remove();
 });
 
-const pane = (id: string, status: string, title: string, parent?: string) => ({
-  info: { id, agent_type: 'codex', pid: 1, status, created_at: 1, last_output_at: null, cwd: 'C:\work\shop', cols: 80, rows: 24, title, parent_pane_id: parent },
+const pane = (id: string, status: string, title: string, parent?: string, started_as?: string) => ({
+  info: { id, agent_type: 'codex', pid: 1, status, created_at: 1, last_output_at: null, cwd: 'C:\work\shop', cols: 80, rows: 24, title, parent_pane_id: parent, started_as },
   status,
 });
 
@@ -94,12 +94,30 @@ describe('sidebar helpers: the default is a count, not a tree', () => {
   });
 });
 
+describe('sidebar: minions are never rows', () => {
+  it('a minion (running, or waiting) has no row and is not counted; a spin-off and a plain helper still nest', async () => {
+    await render(
+      api([
+        pane('p', 'running', 'Refactor auth'),
+        pane('m1', 'running', 'Review the diff', 'p', 'minion'),
+        pane('m2', 'waiting_input', 'Run the tests', 'p', 'minion'),
+        pane('s1', 'running', 'Fix flaky tests', 'p', 'spin_off'),
+        pane('h1', 'idle', 'Read docs', 'p'),
+      ]),
+    );
+    expect(titles()).toEqual(['Refactor auth', 'Fix flaky tests', 'Read docs']);
+    expect(host.textContent).not.toContain('Review the diff');
+    expect(host.textContent).not.toContain('Run the tests');
+    expect(host.querySelector('.ck-helper-chip')?.textContent).toBe('2 agents');
+  });
+});
+
 describe('sidebar helpers', () => {
   it('nests helpers under their parent with a count chip', async () => {
     await render(api([pane('p', 'running', 'Refactor auth'), pane('h1', 'running', 'Check tests', 'p'), pane('h2', 'idle', 'Read docs', 'p')]));
     const group = host.querySelector('.ck-helpers')!;
     expect(titles(group)).toEqual(['Check tests', 'Read docs']);
-    expect(host.querySelector('.ck-helper-chip')?.textContent).toBe('2 helpers');
+    expect(host.querySelector('.ck-helper-chip')?.textContent).toBe('2 agents');
     // Parent first, and the helpers are not also top-level rows of Idle.
     expect(titles()).toEqual(['Refactor auth', 'Check tests', 'Read docs']);
     expect(host.textContent).not.toContain('Idle');
@@ -122,7 +140,7 @@ describe('sidebar helpers', () => {
     await act(async () => host.querySelector<HTMLButtonElement>('.ck-helper-chip')!.click());
     const needs = [...host.querySelectorAll('.ck-group')].find((g) => g.textContent?.startsWith('Needs you'))!;
     expect(titles(needs)).toEqual(['Check tests']);
-    expect(needs.textContent).toContain('Helper of Refactor auth');
+    expect(needs.textContent).toContain('Started by Refactor auth');
   });
 
   it('shows a helper whose parent is gone at top level, without a chip', async () => {

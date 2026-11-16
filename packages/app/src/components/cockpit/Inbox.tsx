@@ -30,6 +30,8 @@ import { accountsFor, pickableAccounts, signInLabel, tauriAccountsApi, type Acco
 import { SIGN_IN } from '../../lib/glossary';
 import { TeamSection } from './team/TeamSection';
 import { DoneToday } from './inbox/DoneToday';
+import { WorkingNow } from './inbox/WorkingNow';
+import { workingRows } from '../../lib/working-now';
 import { IconTick } from './inbox/ActivityIcons';
 import { rowOpenProps } from './inbox/row-open';
 import { LastTurnContext } from './away-context';
@@ -43,6 +45,9 @@ import { useMissions } from '../../lib/missions';
 import type { CompanionTransport, CompanionView } from '../../lib/companion';
 import { COMPANION_PANE_PREFIX, isCompanionPaneId } from './companion/model';
 import { CompanionStoppedCard } from './companion/StoppedCard';
+import { CrewCanvas } from '../crews/CrewCanvas';
+import { crewOf } from '../../lib/crew-members';
+import { groupInbox, readInboxView, rootOf, saveInboxView, type InboxView } from '../../lib/inbox-view';
 
 /** One card in the Inbox's single list: where it sorts, and how to draw it. */
 interface Entry extends InboxEntry {
@@ -308,6 +313,38 @@ export function Inbox({
   const quick = entries.some((e) => e.quick);
   const [keys, setKeys] = useState(false);
 
+  // "By urgency" (default) or "By crew"; the last choice is remembered.
+  const [view, setViewState] = useState<InboxView>(readInboxView);
+  const setView = (v: InboxView) => {
+    setViewState(v);
+    saveInboxView(v);
+  };
+  // "Show in crew": the canvas of the crew this chat was started in, with its box selected.
+  const [crewOpen, setCrewOpen] = useState<{ slug: string; role: string } | null>(null);
+  const showInCrew = (paneId?: string) => {
+    const m = paneId ? crewOf(paneId) : null;
+    return m ? () => setCrewOpen(m) : undefined;
+  };
+  const working = workingRows(c.registry.paneList, { activities: c.activities, statusSince: c.statusSince, skip: (id) => isCompanionPaneId(id) || stuckIds.includes(id) });
+  const parentOf = (id: string) => c.registry.panes.get(id)?.info.parent_pane_id;
+  const rootFor = (id: string) => rootOf(id, parentOf);
+  const grouped = view === 'crew' ? groupInbox(entries, rootFor) : null;
+  const rootName = (root: string | null) => (root === null ? t('inbox.groupOther') : (c.names.get(root) ?? c.registry.panes.get(root)?.info.agent_type ?? root));
+  const firstKey = grouped ? [...grouped.pinned, ...grouped.groups.flatMap((g) => g.entries)][0]?.key : entries[0]?.key;
+  const renderItem = (e: Entry) => {
+    const show = showInCrew(e.paneId);
+    return (
+      <li key={e.key} data-ib-key={e.key} {...rowOpenProps(e.paneId && c.registry.panes.has(e.paneId) ? () => c.select(e.paneId!) : undefined)}>
+        {e.render(e.key === firstKey)}
+        {show && (
+          <button type="button" className="ck-btn ck-btn--plain ck-btn--sm ib-crew-btn" aria-label={t('inbox.showInCrewNamed', { name: nameOfKey(e.key) ?? '' })} onClick={show}>
+            {t('inbox.showInCrew')}
+          </button>
+        )}
+      </li>
+    );
+  };
+
   return (
     <div
       ref={root}
@@ -339,6 +376,15 @@ export function Inbox({
               </span>
             )}
           </h1>
+          {(entries.length > 0 || working.length > 0) && (
+            <div className="ib-view" role="group" aria-label={t('inbox.viewLabel')}>
+              {(['urgency', 'crew'] as const).map((v) => (
+                <button key={v} type="button" className={`ck-btn ck-btn--sm ${view === v ? 'ck-btn--secondary' : 'ck-btn--plain'}`} aria-pressed={view === v} onClick={() => setView(v)}>
+                  {t(v === 'urgency' ? 'inbox.viewUrgency' : 'inbox.viewCrew')}
+                </button>
+              ))}
+            </div>
+          )}
           {entries.length > 0 && (
             <button type="button" className="ck-btn ck-btn--plain ck-btn--sm ib-keys-btn" aria-expanded={keys} onClick={() => setKeys((k) => !k)}>
               {t('inbox.keys')}
@@ -384,14 +430,37 @@ export function Inbox({
         />
       )}
 
-      {entries.length > 0 && (
+      {entries.length > 0 && !grouped && (
         <ul className="ib-list" aria-label={t('inbox.needsYouList')}>
-          {entries.map((e, i) => (
-            <li key={e.key} data-ib-key={e.key} {...rowOpenProps(e.paneId && c.registry.panes.has(e.paneId) ? () => c.select(e.paneId!) : undefined)}>
-              {e.render(i === 0)}
-            </li>
-          ))}
+          {entries.map(renderItem)}
         </ul>
+      )}
+      {entries.length > 0 && grouped && (
+        <>
+          {grouped.pinned.length > 0 && (
+            <ul className="ib-list" aria-label={t('inbox.needsYouList')} data-testid="inbox-pinned">
+              {grouped.pinned.map(renderItem)}
+            </ul>
+          )}
+          {grouped.groups.map((g) => {
+            const need = g.entries.filter((e) => e.kind !== 'companion').length;
+            const busy = g.root === null ? 0 : working.filter((w) => rootFor(w.paneId) === g.root).length;
+            return (
+              <section key={g.root ?? 'other'} className="ib-group" data-testid="inbox-group" data-group={g.root ?? 'other'}>
+                <h2 className="ib-lab">
+                  <span>{rootName(g.root)}</span>
+                  <span className="ib-lab-n">
+                    · {t('inbox.groupNeeds', { count: need })}
+                    {busy > 0 ? ` · ${t('inbox.groupWorking', { count: busy })}` : ''}
+                  </span>
+                </h2>
+                <ul className="ib-list" aria-label={rootName(g.root)}>
+                  {g.entries.map(renderItem)}
+                </ul>
+              </section>
+            );
+          })}
+        </>
       )}
 
       <MissionsSection missions={missions.missions} onChanged={missions.reload} onOpenPane={(id) => c.select(id)} onNotify={c.notify} />
@@ -402,9 +471,21 @@ export function Inbox({
       <HiddenRuns />
       <ImportChatsCard />
 
+      {!firstRun && (
+        <WorkingNow
+          rows={working}
+          names={c.names}
+          now={c.now}
+          onOpen={(id) => c.select(id)}
+          onStop={(id) => void c.interrupt(id)}
+          onShowInCrew={showInCrew}
+        />
+      )}
+
       {!firstRun && <DoneToday summaries={lastTurns} names={c.names} now={c.now} onOpen={(id) => c.select(id)} onMorning={onOpenMorning} hasPane={(id) => c.registry.panes.has(id)} onClosed={() => c.notify(t('inbox.doneClosed'))} />}
 
       {!firstRun && <TeamSection now={c.now} paneNames={c.names} team={team} />}
+      {crewOpen && <CrewCanvas slug={crewOpen.slug} focusRole={crewOpen.role} onClose={() => setCrewOpen(null)} />}
     </div>
   );
 }

@@ -63,7 +63,7 @@ function openNewAgentMenu(): HTMLElement {
   const plus = host.querySelector<HTMLButtonElement>('button[aria-label="New agent"]');
   if (!plus) throw new Error('New agent button not rendered');
   act(() => plus.click());
-  const menu = host.querySelector<HTMLElement>('[role="menu"]');
+  const menu = document.querySelector<HTMLElement>('[role="menu"]');
   if (!menu) throw new Error('New agent menu did not open');
   return menu;
 }

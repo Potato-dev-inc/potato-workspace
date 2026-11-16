@@ -4,6 +4,7 @@ import { errorSentence } from '../../lib/sayError';
 import { useT } from '../../i18n';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import {
+  CUSTOM_AI_SECRET,
   NO_SECURE_STORAGE_WARNING,
   describeKeyState,
   maskLocal,
@@ -40,12 +41,20 @@ export function ApiKeyField({ label, name, placeholder, api = secretsApi, fileVa
   const draftRef = useRef('');
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  // A key already on this PC (masked). Offered only when the credential store can keep it.
+  const [found, setFound] = useState<SecretMask | null>(null);
 
   const refresh = useCallback(async () => {
     try {
       const i = await api.storageInfo();
       setInfo(i);
       setMask(i.secure ? await api.getMasked(name) : null);
+      if (i.secure && api.foundOnPc && (name === 'anthropic_api_key' || name === 'openai_api_key' || name === 'openrouter_api_key')) {
+        const hit = await api.foundOnPc(name).catch(() => null);
+        setFound(hit?.set ? hit : null);
+      } else {
+        setFound(null);
+      }
     } catch (e) {
       setError(errorSentence(e));
     }
@@ -107,6 +116,15 @@ export function ApiKeyField({ label, name, placeholder, api = secretsApi, fileVa
     });
   };
 
+  const useFound = () =>
+    run(async () => {
+      if (name === CUSTOM_AI_SECRET || !api.useFound) return;
+      await api.useFound(name);
+      await refresh();
+      onSaved?.();
+      setEditing(false);
+    });
+
   const remove = async () => {
     if (onConfirmRemove && !(await onConfirmRemove())) return;
     await run(async () => {
@@ -167,6 +185,16 @@ export function ApiKeyField({ label, name, placeholder, api = secretsApi, fileVa
               </Btn>
             )}
           </div>
+          {found && (
+            <div className="flex flex-wrap items-center gap-2" data-testid="key-found">
+              <Btn primary disabled={busy} onClick={() => void useFound()}>
+                {t('keys.useFound')}
+              </Btn>
+              <span className="text-xs text-pm-muted">
+                {found.last4 ? t('keys.foundHint', { tail: found.last4 }) : t('keys.foundHintNoTail')}
+              </span>
+            </div>
+          )}
           {!current.set && (
             <p className="text-xs text-pm-muted" data-testid="key-state">
               {describeKeyState(current, info)}

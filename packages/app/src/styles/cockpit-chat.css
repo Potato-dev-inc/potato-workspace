@@ -798,6 +798,11 @@
 .cockpit .ck-chat-dock .ck-helper-asks {
   gap: 8px;
 }
+.cockpit .ck-helper-asks-lead {
+  margin: 0 0 4px;
+  font-size: 12px;
+  color: var(--label);
+}
 
 /* "Remember for all agents" (components/chat/RememberSelection.tsx): a small monochrome pill over selected text in a
    message, and the toast under the conversation. Desktop only. */

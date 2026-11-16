@@ -19,7 +19,9 @@ export const SYNONYM_GROUPS: SynonymGroup[] = [
   { terms: ['api', 'token', 'secret', 'password', 'credential', 'key'] },
   { terms: ['notification', 'notify', 'alert', 'ping', 'buzz', 'discord', 'phone alerts', 'telegram'] },
   { terms: ['mobile', 'iphone', 'android', 'qr', 'scan', 'phone', 'pair'] },
-  { terms: ['subagent', 'sub-agent', 'worker', 'delegate', 'background', 'helper'] },
+  { terms: ['subagent', 'sub-agent', 'worker', 'delegate', 'background', 'helper', 'minion', 'minions', 'background agent'] },
+  // Started agents: a helper is a minion (runs for the agent) or a spin-off (a chat you talk to). Both ways find both.
+  { terms: ['spin-off', 'spin off', 'spinoff', 'handoff', 'hand off', 'helper', 'started agent'] },
   { terms: ['mcp', 'bridge', 'server', 'connector', 'plugin', 'tool', 'connections to other tools', 'toolbelt'] },
   { terms: ['llm', 'provider', 'model', 'opencode', 'openrouter', 'models', 'default model'] },
   { terms: ['beta', 'experimental', 'preview', 'labs', 'early', 'early features'] },

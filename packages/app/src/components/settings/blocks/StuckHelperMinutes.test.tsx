@@ -1,5 +1,5 @@
 // @vitest-environment jsdom
-// Settings > Agents: "Tell me when a helper is stuck" saves the minutes (0 = off).
+// Settings > Agents: "Tell me when an agent is stuck" saves the minutes (0 = off).
 import { act } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
@@ -28,7 +28,7 @@ describe('Stuck helper minutes', () => {
     await act(async () => {});
     const select = host.querySelector<HTMLSelectElement>('select')!;
     expect(select.value).toBe('5');
-    expect(host.textContent).toContain('Tell me when a helper is stuck');
+    expect(host.textContent).toContain('Tell me when an agent is stuck');
     expect([...select.options].map((o) => o.textContent)).toContain('Off');
     await act(async () => {
       select.value = '1';

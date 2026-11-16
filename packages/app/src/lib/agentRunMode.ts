@@ -98,7 +98,7 @@ export const tauriHelperAgentsApi = {
 
 export type HelperAgentsApi = typeof tauriHelperAgentsApi;
 
-export const HELPER_AGENTS_LABEL = 'Helper agents';
+export const HELPER_AGENTS_LABEL = 'How started agents show';
 export const HELPER_AGENTS_HINT = 'Where helpers show up.';
 export const HELPER_CHOICES: { value: HelperVisibility; label: string }[] = [
   { value: 'always_show', label: 'Always show them: each helper gets a pane' },
@@ -106,15 +106,34 @@ export const HELPER_CHOICES: { value: HelperVisibility; label: string }[] = [
   { value: 'always_background', label: 'Always run in the background: they show in your Inbox' },
 ];
 
-export const KEEP_OPEN_LABEL = 'Keep helpers open when they finish';
+export const KEEP_OPEN_LABEL = 'Keep started agents open when they finish';
 export const KEEP_OPEN_HINT =
   'On: a finished helper stays open so you can read it and ask it more. Off: its pane closes when the work is done unless the agent asks to keep it.';
 
-export const CLOSE_WITH_AGENT_LABEL = 'Close helpers when their agent closes';
+export const CLOSE_WITH_AGENT_LABEL = 'Close started agents when their agent closes';
 export const CLOSE_WITH_AGENT_HINT =
   'On: when you close an agent, the helpers it started close too. Off: they stay open until you close them. Quitting the app never closes your chats for good.';
 
-export const MOST_HELPERS_LABEL = 'Most helpers at once';
+export const MOST_HELPERS_LABEL = 'Most started agents at once';
 export const MOST_HELPERS_HINT =
   'When an agent starts several helpers in one call, this many run together. The rest wait their turn and start as others finish.';
 export const MOST_HELPERS_CHOICES = [1, 2, 3, 4, 6, 8, 12, 16, 24, 32];
+
+// "Agents that agents start": One type (helpers, today) or Two types (minions and spin-offs), and under Two types what
+// an agent gets when it starts another. Backed by `started_agents_get/set` (the desktop window only; neither an agent
+// nor a phone has a route to it).
+export type StartedAgentTypes = 'one' | 'two';
+export type StartedAgentKind = 'agent_chooses' | 'minion' | 'spin_off';
+
+export interface StartedAgentsView {
+  types: StartedAgentTypes;
+  kind: StartedAgentKind;
+}
+
+export const tauriStartedAgentsApi = {
+  get: () => call<StartedAgentsView>('started_agents_get'),
+  set: (change: Partial<StartedAgentsView>) =>
+    call<StartedAgentsView>('started_agents_set', { types: change.types ?? null, kind: change.kind ?? null }),
+};
+
+export type StartedAgentsApi = typeof tauriStartedAgentsApi;

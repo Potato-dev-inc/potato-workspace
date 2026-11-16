@@ -151,11 +151,7 @@ describe('Run agents in Linux: distros and checks', () => {
     expect(hasText(m.host, 'Debian-Test · WSL 1')).toBe(true);
     expect(hasText(m.host, 'Debian-Test needs a newer Linux setup before agents can run in it.')).toBe(true);
     expect(m.host.textContent).not.toContain('--set-version');
-    handoff.sent = [];
-    await click(buttonByText(m.host, 'Let an agent upgrade it'));
-    await settle();
-    expect(handoff.sent[0][2]).toContain('Debian-Test');
-    expect(handoff.sent[0][2]).toContain('WSL 2');
+    expect(buttonByText(m.host, 'Upgrade')).toBeTruthy();
     expect(buttonByText(m.host, 'Check Ubuntu-Test')!.disabled).toBe(false);
     expect(buttonByText(m.host, 'Check Debian-Test')!.disabled).toBe(true);
   });

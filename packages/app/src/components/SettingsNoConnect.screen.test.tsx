@@ -41,7 +41,7 @@ const search = () => host.querySelector('input[aria-label="Search settings"]') a
 describe('Settings in the cockpit has no Connect page', () => {
   it('the nav has no Connect, and no closed cards for Phone, Team, Lend or Discord', async () => {
     await mount();
-    expect(nav()).toEqual(['Overview', 'Agents', 'Helpers', 'Look and feel', 'Keys', 'Shortcuts', 'Labs', 'Advanced']);
+    expect(nav()).toEqual(['Overview', 'Agents', 'Agents that agents start', 'Look and feel', 'Keys', 'Shortcuts', 'Labs', 'Advanced']);
     expect(host.querySelector('.st-closed-group[data-group="Phone"]')).toBeNull();
     expect(host.querySelector('[data-testid^="connect-link-"]')).toBeNull();
   });

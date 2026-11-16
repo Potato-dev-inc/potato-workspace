@@ -76,13 +76,13 @@ async function mount(cards: HomeCard[], lanes: LaneView | null = null) {
   await act(async () => {});
 }
 const open = async (testId: string) => {
-  await act(async () => host.querySelector<HTMLButtonElement>(`[data-testid="${testId}"]`)!.click());
+  await act(async () => document.querySelector<HTMLButtonElement>(`[data-testid="${testId}"]`)!.click());
 };
 
 describe('New agent page in Traditional Chinese', () => {
   it('shows the empty page with starters in Chinese', async () => {
     await mount([]);
-    expect(host.querySelector('[data-testid="na-ask"]')?.textContent).toBe(t('newAgent.ask'));
+    expect(document.querySelector('[data-testid="na-ask"]')?.textContent).toBe(t('newAgent.ask'));
     expect(host.textContent).toContain(t('newAgent.tryOne'));
     expect(visibleEnglish(host, EXTRA)).toEqual([]);
   });
@@ -93,14 +93,14 @@ describe('New agent page in Traditional Chinese', () => {
     expect(host.textContent).toContain(t('newAgent.cardPrompt'));
     expect(visibleEnglish(host, EXTRA)).toEqual([]);
     await open('na-plus');
-    expect(host.textContent).toContain(t('newAgent.addFiles'));
+    expect(document.body.textContent).toContain(t('newAgent.addFiles'));
     expect(visibleEnglish(host, EXTRA)).toEqual([]);
     await open('na-folder');
-    expect(host.textContent).toContain(t('newAgent.addProject'));
+    expect(document.body.textContent).toContain(t('newAgent.addProject'));
     expect(visibleEnglish(host, EXTRA)).toEqual([]);
     await open('na-agent');
-    expect(host.textContent).toContain(t('newAgent.setUpAgents'));
-    expect(host.textContent).toContain(t('firstRun.agentMissing'));
+    expect(document.body.textContent).toContain(t('newAgent.setUpAgents'));
+    expect(document.body.textContent).toContain(t('firstRun.agentMissing'));
     expect(visibleEnglish(host, EXTRA)).toEqual([]);
   });
 });

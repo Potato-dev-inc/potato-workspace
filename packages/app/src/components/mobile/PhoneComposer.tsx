@@ -86,6 +86,7 @@ export function PhoneComposer({
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const [plus, setPlus] = useState(false);
+  const plusBtn = useRef<HTMLButtonElement>(null);
   /** The mic's notes (the keyboard hint, listening, errors) show once the mic was used, not before. */
   const [micUsed, setMicUsed] = useState(false);
   const [interim, setInterim] = useState('');
@@ -309,12 +310,12 @@ export function PhoneComposer({
         )}
         <div className="ph-comp-row">
           <div className="ph-comp-plus">
-            <button type="button" className="ph-comp-btn" aria-label={t('phone.composer.add')} aria-haspopup="menu" aria-expanded={plus} disabled={blocked} onClick={() => setPlus((v) => !v)}>
+            <button ref={plusBtn} type="button" className="ph-comp-btn" aria-label={t('phone.composer.add')} aria-haspopup="menu" aria-expanded={plus} disabled={blocked} onClick={() => setPlus((v) => !v)}>
               <svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true">
                 <path d="M12 5v14M5 12h14" />
               </svg>
             </button>
-            {plus && <PlusMenu enabled={upload !== null} onFiles={attach.add} onPaste={() => void pasteFromClipboard()} onClose={() => setPlus(false)} />}
+            {plus && <PlusMenu anchorRef={plusBtn} enabled={upload !== null} onFiles={attach.add} onPaste={() => void pasteFromClipboard()} onClose={() => setPlus(false)} />}
           </div>
           {pill === undefined ? (
             <span className="ph-comp-model" title={model ?? t('phone.composer.modelUnknown')}>

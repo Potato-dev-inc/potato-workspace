@@ -10,6 +10,7 @@ import {
   wslPlacesGet,
   wslPlaceSet,
   wslStatus,
+  wslUpgrade,
   type AgentPlaceRow,
   type Distro,
   type DistroView,
@@ -78,6 +79,9 @@ export function LinuxRows({ onSaved }: { onSaved?: () => void }) {
   const [rows, setRows] = useState<AgentPlaceRow[]>([]);
   const [views, setViews] = useState<Record<string, DistroView>>({});
   const [checking, setChecking] = useState<string | null>(null);
+  // The distro being upgraded, and the ones where the app's own tries did not work (then an agent is offered).
+  const [upgrading, setUpgrading] = useState<string | null>(null);
+  const [upgradeFailed, setUpgradeFailed] = useState<Record<string, true>>({});
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
@@ -104,6 +108,22 @@ export function LinuxRows({ onSaved }: { onSaved?: () => void }) {
       setRows(next.state === 'ready' ? await wslPlacesGet() : []);
     } catch (e) {
       setError(linuxErrorText(e));
+    }
+  };
+
+  const upgrade = async (distro: string) => {
+    setError(null);
+    setUpgrading(distro);
+    setUpgradeFailed(({ [distro]: _gone, ...rest }) => rest);
+    try {
+      const next = await wslUpgrade(distro);
+      setStatus(next);
+      setRows(next.state === 'ready' ? await wslPlacesGet().catch(() => []) : []);
+    } catch (e) {
+      setError(linuxErrorText(e));
+      setUpgradeFailed((all) => ({ ...all, [distro]: true }));
+    } finally {
+      setUpgrading(null);
     }
   };
 
@@ -190,10 +210,15 @@ export function LinuxRows({ onSaved }: { onSaved?: () => void }) {
                 <span className="font-medium">{`${d.name}${d.default ? ` ${t('linux.default')}` : ''} · WSL ${d.version}`}</span>
                 {d.version !== 2 && <span className="text-xs text-pm-muted">{t('linux.wsl1', { name: d.name })}</span>}
                 {d.version !== 2 && (
+                  <Btn small primary disabled={upgrading !== null} onClick={() => void upgrade(d.name)} data-testid={`linux-upgrade-${d.name}`}>
+                    {t('linux.upgrade')}
+                  </Btn>
+                )}
+                {d.version !== 2 && upgradeFailed[d.name] && (
                   <FixWithAgent
-                    label={t('linux.upgrade')}
-                    testId={`linux-upgrade-${d.name}`}
-                    task={fixTask(`Upgrade the Linux distro "${d.name}" from WSL 1 to WSL 2 on this PC.`, ['Agents can only run in WSL 2. The usual step is `wsl --set-version ' + d.name + ' 2`; it can take a few minutes.'])}
+                    label={t('linux.letAgentFix')}
+                    testId={`linux-fix-${d.name}`}
+                    task={fixTask(`Upgrade the Linux distro "${d.name}" from WSL 1 to WSL 2 on this PC.`, ['Agents can only run in WSL 2. The usual step is `wsl --set-version ' + d.name + ' 2`; it can take a few minutes. The app tried three times and it did not work.'])}
                   />
                 )}
                 <span className="ml-auto flex items-center gap-2">
@@ -201,6 +226,12 @@ export function LinuxRows({ onSaved }: { onSaved?: () => void }) {
                     {t('linux.check', { name: d.name })}
                   </Btn>
                 </span>
+                {upgrading === d.name && (
+                  <span className="flex basis-full items-center gap-2 text-xs text-pm-muted">
+                    <DotSpinner status="running" size={3} label={t('linux.upgrading', { name: d.name })} />
+                    {t('linux.upgrading', { name: d.name })}
+                  </span>
+                )}
                 {busy && (
                   <span className="flex basis-full items-center gap-2 text-xs text-pm-muted">
                     <DotSpinner status="running" size={3} label={t('linux.checking', { name: d.name })} />

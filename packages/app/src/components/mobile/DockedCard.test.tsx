@@ -88,14 +88,24 @@ describe('a helper’s question in its parent’s chat', () => {
     return onOpenPane;
   };
 
-  it('docks the helper’s card under the parent, with Open helper, and counts it once', async () => {
+  it('docks the helper’s card under the parent, with See what it is doing, and counts it once', async () => {
     const onOpenPane = await renderWith(snap([helperItem, ITEM_HIGH]), ['helper-pane']);
     expect(host.querySelectorAll('[data-testid="helper-question"] .ph-appr')).toHaveLength(1);
-    expect(host.querySelector('.ph-dock-helper-lead')?.textContent).toContain('helper asks');
+    expect(host.querySelector('.ph-dock-helper-lead')?.textContent).toContain('agent asks');
     // Only the OTHER pane's item is "more waiting"; the helper's card is already on screen.
     expect(host.querySelector('.ph-queue-line')?.textContent).toContain('1 more waiting');
     await act(async () => host.querySelector<HTMLButtonElement>('[data-role="open-helper"]')!.click());
     expect(onOpenPane).toHaveBeenCalledWith('helper-pane');
+  });
+
+  it('says "A minion of <agent> asks" for a minion’s risky ask, and the button shows what it is doing', async () => {
+    await act(async () => {
+      root.render(
+        <DockedCard snapshot={snap([helperItem])} paneId="parent-pane" bridge={bridge} canAnswer onOpenPane={() => undefined} onOpenItem={() => undefined} helperPaneIds={['helper-pane']} minionPaneIds={['helper-pane']} paneName="Claude 1" />,
+      );
+    });
+    expect(host.querySelector('.ph-dock-helper-lead')?.textContent).toBe('A minion of Claude 1 asks');
+    expect(host.querySelector('[data-role="open-helper"]')?.textContent).toBe('See what it is doing');
   });
 
   it('shows nothing for a helper that is not asking, or when no helper is passed', async () => {

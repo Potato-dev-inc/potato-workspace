@@ -49,21 +49,21 @@ async function mount(paneCount = 1) {
   });
   await act(async () => {});
 }
-const card = () => host.querySelector<HTMLElement>('[data-testid="getting-started"]');
+const card = () => document.querySelector<HTMLElement>('[data-testid="getting-started"]');
 
 describe('the New agent page shows Getting started', () => {
   it('after the first look: "Getting started · 1 of 6", above the pinned cards', async () => {
     seedSteps(['second']);
     await mount(2);
     expect(card()!.textContent).toContain('Getting started · 1 of 6');
-    const cards = host.querySelector('.ck-na-cards')!;
+    const cards = document.querySelector('.ck-na-cards')!;
     expect(card()!.compareDocumentPosition(cards) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
   });
 
   it('"Start one" puts the cursor in the message box', async () => {
     seedSteps([]);
     await mount(1);
-    const box = host.querySelector<HTMLTextAreaElement>('textarea')!;
+    const box = document.querySelector<HTMLTextAreaElement>('textarea')!;
     await act(async () => card()!.querySelector<HTMLButtonElement>('[data-step="second"] button')!.click());
     expect(document.activeElement).toBe(box);
   });

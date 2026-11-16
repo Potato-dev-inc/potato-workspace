@@ -3,7 +3,7 @@ import type { EnglishKey } from '../en';
 
 export const sentFrom: Partial<Record<EnglishKey, string>> = {
   'sentFrom.from': '來自 {name}',
-  'sentFrom.app': '來自 Potato Workspace：幫手已完成',
+  'sentFrom.app': '來自 Potato Workspace：AI 助理已完成',
   'drive.typing': '{name} 正在輸入…',
   'drive.driving': '{name} 正在操作',
   'drive.takeBack': '拿回來',

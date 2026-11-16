@@ -468,6 +468,11 @@ pub fn run_agent(
         worker.headless_ignored = Some(crate::agent_run_mode::HEADLESS_IGNORED_NOTE.to_string());
     }
     if request.turn_index == 0 {
+        worker.started = request.started.clone();
+    } else if let Some(earlier) = previous.as_ref() {
+        worker.started = earlier.worker.started.clone();
+    }
+    if request.turn_index == 0 {
         worker.lane_note = request.lane_note.clone().map(|mut note| {
             if request.headless {
                 note.used = "headless".into();

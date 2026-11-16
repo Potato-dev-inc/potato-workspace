@@ -41,13 +41,13 @@ pub(super) fn tools() -> Vec<ToolDefinition> {
         },
         ToolDefinition {
             name: "run_agents",
-            description: "Start several helpers in one call and collect them together. tasks[] are run_agent arguments (defaults{} fills shared ones); until: all (default), any, first_success. Returns one size-capped result with a handle per task; a task that cannot start comes back with its own error. At most \"Most helpers at once\" (Settings > Agents, default 8) run together; the rest queue. Still running at wait_ms: handles for wait_agents.",
+            description: "Start several minions in one call and collect them together. tasks[] are run_agent arguments (defaults{} fills shared ones); until: all (default), any, first_success. Returns one size-capped result with a handle per task; a task that cannot start comes back with its own error. At most \"Most minions at once\" (Settings > Agents, default 8) run together; the rest queue. Still running at wait_ms: handles for wait_agents.",
             input_schema: object_schema(json!({
                 "tasks":{"type":"array","minItems":1,"maxItems":32,"items":{"type":"object","properties":{"task":{"type":"string"},"name":{"type":"string"},"agent_type":agent_type_schema(),"project_path":{"type":"string"},"model":{"type":"string"},"read_only":{"type":"boolean"},"isolation":{"type":"string","enum":["none","worktree"]},"review_by":review_by_schema()},"required":["task"],"additionalProperties":true}},
                 "defaults":{"type":"object","description":"run_agent arguments every task starts from; a task's own value wins.","additionalProperties":true},
                 "until":{"type":"string","enum":["all","any","first_success"],"default":"all"},
                 "wait_ms":{"type":"integer","minimum":0,"maximum":3600000,"default":120000},
-                "cancel_rest":{"type":"boolean","default":false,"description":"With until any or first_success: stop the helpers still running once the batch is decided."},
+                "cancel_rest":{"type":"boolean","default":false,"description":"With until any or first_success: stop the minions still running once the batch is decided."},
                 "idempotency_key":{"type":"string"}
             }), vec!["tasks"]),
             output_schema: Some(json!({"type":"object","properties":{"runs":{"type":"array","items":{"type":"object"}},"reason":{"type":"string"},"waited_ms":{"type":"integer"},"limit":{"type":"integer"},"queued":{"type":"integer"}},"required":["runs","reason"]})),

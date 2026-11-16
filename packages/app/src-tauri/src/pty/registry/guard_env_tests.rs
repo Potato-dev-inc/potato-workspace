@@ -85,3 +85,15 @@ fn the_launch_command_gets_the_guard_last_and_drops_the_tokens() {
     assert_eq!(get("PM_HOOK_TOKEN").as_deref(), Some("hook-token"));
     assert_eq!(get("PM_TEST_SPEC_TOKEN"), None, "removed after every set");
 }
+
+#[test]
+fn a_guard_never_strips_the_panes_own_key() {
+    let key = crate::agent_authority::pane_keys::KEY_ENV;
+    let mut guard = guard();
+    guard.remove.push(key.into());
+    let mut env_vars = hooks();
+    env_vars.push((key.to_string(), "the-key".to_string()));
+    let env = spawn::compose_pane_env(account(), env_vars, "pane-1", Some(guard));
+    assert!(!env.remove.iter().any(|r| r == key));
+    assert_eq!(value_of(&env, key).as_deref(), Some("the-key"));
+}
