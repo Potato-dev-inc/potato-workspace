@@ -32,6 +32,7 @@ export class CliError extends Error {
 export interface Bridge {
   get<T = unknown>(path: string): Promise<T>;
   patch<T = unknown>(path: string, body: unknown): Promise<T>;
+  post<T = unknown>(path: string, body: unknown): Promise<T>;
 }
 
 export interface BridgeOptions {
@@ -129,5 +130,6 @@ export function createBridge(options: BridgeOptions): Bridge {
   return {
     get: (path) => call('GET', path),
     patch: (path, body) => call('PATCH', path, body),
+    post: (path, body) => call('POST', path, body),
   };
 }

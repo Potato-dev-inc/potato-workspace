@@ -16,6 +16,7 @@ mod browser_mcp;
 mod guide_mcp;
 mod companion_mcp;
 mod checkpoints;
+mod config;
 mod timeline;
 mod chats;
 mod phone_chat;
@@ -99,6 +100,7 @@ pub(super) fn dispatch(cx: &Ctx) -> Option<RouteResult> {
         .or_else(|| session::handle(cx))
         .or_else(|| wait::handle(cx))
         .or_else(|| standby::handle(cx))
+        .or_else(|| config::handle(cx))
         .or_else(|| own_lend::handle(cx))
         .or_else(|| accounts::handle(cx))
         .or_else(|| opencode::handle(cx))

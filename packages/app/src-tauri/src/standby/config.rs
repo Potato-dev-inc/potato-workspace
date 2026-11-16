@@ -74,11 +74,17 @@ pub struct StandbyConfig {
     pub recent_hours: u64,
     /// A standby unused this long is shut down and its key stays cold until the next run.
     pub idle_timeout_secs: u64,
+    /// The person chose `idle_timeout_secs`. Until then it follows this PC's RAM (`acp::memory::default_idle_secs`): a small
+    /// PC gives the memory back sooner.
+    pub idle_explicit: bool,
     /// Hand-set cap on warm workers in all. `None`: the default for this PC's RAM (`acp::memory::default_caps`).
     pub max_preload_total: Option<usize>,
     /// Hand-set cap per provider. `None`: the default for this PC's RAM.
     pub max_per_provider: Option<u8>,
 }
+
+/// Today's idle time on a PC with plenty of RAM.
+pub const DEFAULT_IDLE_SECS: u64 = 20 * 60;
 
 impl Default for StandbyConfig {
     fn default() -> Self {
@@ -89,7 +95,8 @@ impl Default for StandbyConfig {
             max_total: 3,
             recent_projects: 2,
             recent_hours: 6,
-            idle_timeout_secs: 20 * 60,
+            idle_timeout_secs: DEFAULT_IDLE_SECS,
+            idle_explicit: false,
             max_preload_total: None,
             max_per_provider: None,
         }
@@ -100,7 +107,25 @@ impl StandbyConfig {
     /// Pull every field into its supported range (a hand-edited file or an old UI must not be
     /// able to start 50 CLIs) and drop toggles a backend cannot honour.
     pub fn clamped(self) -> Self {
-        self.clamped_for(crate::acp::memory::pc_caps())
+        self.clamped_for(crate::acp::memory::pc_caps()).with_idle_for(crate::acp::memory::pc_total_phys())
+    }
+
+    /// The idle time for a PC with this much RAM: a time the person set stays; otherwise the RAM tier. A saved time that is not
+    /// today's default must have been set by hand, so it counts as the person's.
+    pub fn with_idle_for(mut self, total_phys: Option<u64>) -> Self {
+        let tier = crate::acp::memory::idle_tier_secs(total_phys);
+        if !self.idle_explicit && self.idle_timeout_secs != DEFAULT_IDLE_SECS && Some(self.idle_timeout_secs) != tier {
+            self.idle_explicit = true;
+        }
+        if !self.idle_explicit {
+            self.idle_timeout_secs = crate::acp::memory::default_idle_secs(total_phys, DEFAULT_IDLE_SECS);
+        }
+        self
+    }
+
+    /// Settings are being saved over `prev`: a changed idle time is the person's choice from now on.
+    pub fn note_idle_change(&mut self, prev: &StandbyConfig) {
+        self.idle_explicit = self.idle_explicit || prev.idle_explicit || self.idle_timeout_secs != prev.idle_timeout_secs;
     }
 
     /// The most warm workers in all and per provider: a hand-set number wins, else the default for the PC's RAM.
@@ -363,6 +388,31 @@ mod tests {
         assert!(!config.backends.contains_key("nonsense"));
         assert!(!config.backends["cursor_agent"].headless, "headless cursor cannot be pre-launched");
         assert!(!config.backends["cursor_agent"].visible, "visible lives in preload");
+    }
+
+    #[test]
+    fn idle_time_follows_ram_until_the_person_sets_it() {
+        const GB: u64 = 1024 * 1024 * 1024;
+        let small = StandbyConfig::default().with_idle_for(Some(8 * GB));
+        assert_eq!(small.idle_timeout_secs, 300);
+        assert!(!small.idle_explicit);
+        assert_eq!(StandbyConfig::default().with_idle_for(Some(24 * GB)).idle_timeout_secs, 600);
+        assert_eq!(StandbyConfig::default().with_idle_for(Some(64 * GB)).idle_timeout_secs, 20 * 60);
+        // Saved and read again: the tier is not taken for a choice.
+        assert_eq!(small.with_idle_for(Some(8 * GB)).idle_timeout_secs, 300);
+        // A time the person saved wins (also a legacy file without the flag).
+        let legacy = StandbyConfig { idle_timeout_secs: 45 * 60, ..StandbyConfig::default() };
+        assert_eq!(legacy.with_idle_for(Some(8 * GB)).idle_timeout_secs, 45 * 60);
+        // Saving a changed time over the shown one is a choice, even if it equals today's default.
+        let shown = StandbyConfig::default().with_idle_for(Some(8 * GB));
+        let mut next = StandbyConfig { idle_timeout_secs: 20 * 60, ..shown.clone() };
+        next.note_idle_change(&shown);
+        assert!(next.idle_explicit);
+        assert_eq!(next.with_idle_for(Some(8 * GB)).idle_timeout_secs, 20 * 60);
+        // Saving something else leaves it following the PC.
+        let mut other = StandbyConfig { max_total: 2, ..shown.clone() };
+        other.note_idle_change(&shown);
+        assert!(!other.idle_explicit);
     }
 
     #[test]

@@ -499,7 +499,9 @@ impl Pool {
 
     /// Replace the settings. Standbys the new settings no longer allow (pool off, backend off,
     /// smaller cap) are shut down right away.
-    pub fn set_config(&self, config: StandbyConfig) -> StandbyConfig {
+    pub fn set_config(&self, mut config: StandbyConfig) -> StandbyConfig {
+        let before = self.shared.inner.lock().config.clone();
+        config.note_idle_change(&before);
         let config = config.clamped();
         let (doomed, snapshot) = {
             let mut inner = self.shared.inner.lock();

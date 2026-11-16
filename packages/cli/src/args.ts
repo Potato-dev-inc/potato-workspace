@@ -8,9 +8,11 @@ export interface ConfigArgs {
   dryRun: boolean;
   help: boolean;
   waitMs?: number;
+  /** Flags that take a word: --name, --agent, --model, --project, --after. */
+  values: Record<string, string>;
 }
 
-export const CONFIG_COMMANDS = new Set(['settings', 'labs', 'status', 'agents', 'models', 'projects']);
+export const CONFIG_COMMANDS = new Set(['settings', 'labs', 'status', 'agents', 'models', 'projects', 'standby']);
 
 export const CONFIG_USAGE = `usage:
   potato-workspace status
@@ -19,15 +21,18 @@ export const CONFIG_USAGE = `usage:
   potato-workspace agents list
   potato-workspace models list AGENT
   potato-workspace projects list
+  potato-workspace standby list | add --name N --agent A [--model M] [--project P] [--after wait|close] | remove NAME | close NAME
+standby: "remove" only takes a standby off its agent (it keeps running); "close" stops it.
 flags: --json  --yes (apply a change)  --dry-run (show only)  --wait-ms N (wait for the Allow card)
 exit codes: 0 ok, 1 failed, 4 app not reachable, 5 needs --yes (nothing changed), 6 refused`;
 
-const KNOWN = new Set(['json', 'yes', 'y', 'dry-run', 'help', 'h', 'wait-ms']);
+const VALUE_FLAGS = new Set(['name', 'agent', 'model', 'project', 'after']);
+const KNOWN = new Set(['json', 'yes', 'y', 'dry-run', 'help', 'h', 'wait-ms', ...VALUE_FLAGS]);
 
 /** The parsed args, or `{ problem }` for a flag the commands do not know. */
 export function parseConfigArgs(argv: string[]): ConfigArgs | { problem: string } {
   const [command = '', ...rest] = argv;
-  const out: ConfigArgs = { command, positional: [], json: false, yes: false, dryRun: false, help: false };
+  const out: ConfigArgs = { command, positional: [], json: false, yes: false, dryRun: false, help: false, values: {} };
   for (let i = 0; i < rest.length; i++) {
     const a = rest[i];
     // A value such as -1 or "-" is a value, not a flag.
@@ -37,6 +42,12 @@ export function parseConfigArgs(argv: string[]): ConfigArgs | { problem: string 
     }
     const key = a.replace(/^-+/, '');
     if (!KNOWN.has(key)) return { problem: `unknown flag ${a}` };
+    if (VALUE_FLAGS.has(key)) {
+      const value = rest[++i];
+      if (value === undefined || value.startsWith('--')) return { problem: `--${key} needs a value` };
+      out.values[key] = value;
+      continue;
+    }
     switch (key) {
       case 'json':
         out.json = true;

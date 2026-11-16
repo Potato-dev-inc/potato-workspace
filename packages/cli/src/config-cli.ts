@@ -1,11 +1,12 @@
 /**
- * Entry for the config commands: `status`, `settings`, `labs`, `agents`, `models`, `projects`.
+ * Entry for the config commands: `status`, `settings`, `labs`, `agents`, `models`, `projects`, `standby`.
  * Returns the process exit code; index.ts calls `process.exit` with it.
  */
 import { createInterface } from 'node:readline/promises';
 import { CONFIG_USAGE, parseConfigArgs } from './args.js';
 import { CliError, DEFAULT_CONSENT_WAIT_MS, EXIT, createBridge, type Bridge, type BridgeOptions } from './bridge.js';
 import { runLabs, runSettings } from './commands/settings.js';
+import { runStandby } from './commands/standby.js';
 import { runAgents, runModels, runProjects, runStatus } from './commands/read.js';
 import type { Io } from './output.js';
 
@@ -62,6 +63,8 @@ export async function runConfigCli(
         return await runModels(ctx);
       case 'projects':
         return await runProjects(ctx);
+      case 'standby':
+        return await runStandby(ctx);
       default:
         io.err(CONFIG_USAGE);
         return EXIT.failed;

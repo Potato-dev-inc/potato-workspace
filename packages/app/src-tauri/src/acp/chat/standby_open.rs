@@ -20,6 +20,10 @@ pub fn open_standby_chat(deps: &StartDeps, helper_id: &str) -> Result<String, St
     let Some(pool) = crate::acp::warm::pool() else { return Err("Standbys are not running yet. Try again in a moment.".into()) };
     let Some(conversations) = deps.conversations.clone() else { return Err("Chats are not available here.".into()) };
     let mut built: Option<(Arc<AcpChat>, Option<String>)> = None;
+    // A seat that sleeps wakes now and is waited for (its row says "Waking up"), so the click opens the chat instead of asking to try again.
+    if pool.wake_and_wait(helper_id) {
+        crate::startup_timing::mark(&key, "standby_open_woke");
+    }
     let pane = pool.open_helper(helper_id, |warm, meta, agent| {
         let cfg = conversations.config_for(agent).map_err(|e| format!("The agent could not start: {e}"))?;
         let view = conversations.adopt_warm(&warm.id, agent, &warm.folder, warm.account.as_deref(), warm.session.clone()).map_err(|e| format!("The agent could not start: {e}"))?;

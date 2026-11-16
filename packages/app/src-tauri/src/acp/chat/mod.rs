@@ -46,6 +46,7 @@ pub(crate) use start::start_failure_sentence;
 pub mod read_only;
 mod rules;
 pub mod receipt;
+pub(crate) mod stall_support;
 pub mod right_size;
 pub mod surface;
 

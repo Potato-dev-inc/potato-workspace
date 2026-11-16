@@ -62,8 +62,8 @@
 .cockpit .ck-sb-x {
   position: absolute;
   right: 28px;
-  top: 50%;
-  transform: translateY(-50%);
+  /* Line up with the row's first line (like the "..." button), not the middle of the row plus its "Used N times" line. */
+  top: 4px;
   display: none;
   align-items: center;
   justify-content: center;
@@ -198,6 +198,16 @@
 }
 
 /* The orange "standby" tag: a standby is a helper kept ready for an agent; a normal helper has none. */
+/* The quiet line under a standby row: today's use count and the last reason an agent's task passed it by. */
+.cockpit .ck-sb-meta {
+  padding: 0 8px 2px 30px;
+  font-size: 10.5px;
+  line-height: 14px;
+  color: var(--label-3, var(--label-2));
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
 .cockpit .ck-sb-tag {
   flex: none;
   margin-left: 6px;

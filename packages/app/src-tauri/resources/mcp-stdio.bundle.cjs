@@ -18092,6 +18092,7 @@ var BRIDGE_PORT_FILE_ENV = "POTATO_WORKSPACE_BRIDGE_PORT_FILE";
 var DEFAULT_BRIDGE_PORT_FILE = "potato-workspace.bridge.port";
 var BRIDGE_LOCAL_SECRET_FILE = "potato-workspace.bridge.secret";
 var BRIDGE_LOCAL_SECRET_HEADER = "X-Potato-Workspace-Local-Secret";
+var BRIDGE_PANE_HEADER = "X-Potato-Workspace-Pane";
 
 // packages/shared/dist/bridge-port.js
 var APP_ID = "com.potatodev.workspace";
@@ -18160,6 +18161,10 @@ async function readBridgePort(filePath) {
   throw new Error(`Potato Workspace bridge port file not found (tried: ${candidates.map((p) => `"${p}"`).join(", ")}). Start Potato Workspace first (\`npx potato-workspace\`).`);
 }
 async function readLocalSecretHeaders(filePath) {
+  const pane = (process.env.POTATO_WORKSPACE_PANE_ID ?? "").trim();
+  return { ...await readSecretHeader(filePath), ...pane ? { [BRIDGE_PANE_HEADER]: pane.slice(0, 64) } : {} };
+}
+async function readSecretHeader(filePath) {
   for (const candidate of [...new Set(bridgePortCandidates(filePath))]) {
     try {
       if (!(await (0, import_promises.stat)(candidate)).isFile())
@@ -18323,7 +18328,8 @@ var FALLBACK_AGENT_TOOLS = [
   { name: "session_identity", description: "Read this connection's coordinator identity and attach token.", inputSchema: { type: "object", properties: {} }, method: "GET", path: "/mcp/session", visibility: { external_mcp: true } },
   { name: "attach_agents", description: "Re-attach after reconnect using attach_token.", inputSchema: { type: "object", properties: { attach_token: { type: "string" } }, required: ["attach_token"] }, method: "POST", path: "/agents/attach", visibility: { external_mcp: true } },
   { name: "release_lease", description: "Drop the worker control lease.", inputSchema: { type: "object", properties: { handle: { type: "string" } }, required: ["handle"] }, method: "POST", path: "/agents/release-lease", visibility: { external_mcp: true } },
-  { name: "transfer_agent", description: "Transfer worker ownership to a live connection.", inputSchema: { type: "object", properties: { handle: { type: "string" }, to_session_id: { type: "string" } }, required: ["handle", "to_session_id"] }, method: "POST", path: "/agents/transfer", visibility: { external_mcp: true } }
+  { name: "transfer_agent", description: "Transfer worker ownership to a live connection.", inputSchema: { type: "object", properties: { handle: { type: "string" }, to_session_id: { type: "string" } }, required: ["handle", "to_session_id"] }, method: "POST", path: "/agents/transfer", visibility: { external_mcp: true } },
+  { name: "show_artifact", description: "Show the person a page you made (html, markdown, svg or mermaid) as a card in your chat. Give content or a path inside the project; the same id again is the next version. Or write the file into <project>/.potato/artifacts/.", inputSchema: { type: "object", properties: { title: { type: "string", maxLength: 120 }, content: { type: "string" }, path: { type: "string" }, kind: { type: "string", enum: ["html", "markdown", "svg", "mermaid"] }, id: { type: "string", maxLength: 48 }, pane_id: { type: "string" } } }, method: "POST", path: "/artifacts/show", visibility: { external_mcp: true } }
 ];
 function mergeLocalAgentCatalog(remote) {
   const names = new Set(remote.map((tool) => tool.name));
@@ -18390,13 +18396,15 @@ var SettingsSchema = external_exports.object({
   /** Orchestrator sidebar width in the workspace (px). */
   sidebar_width: external_exports.number().int().min(300).max(800).default(360),
   /** Desktop UI chrome theme. */
-  theme: external_exports.enum(["dark", "light"]).default("dark"),
+  theme: external_exports.enum(["dark", "light", "dim", "auto"]).default("dark"),
   /** Where panes are shown: one cockpit window (orchestration) or a pop-out per pane (individual). Owned by Rust (set_ui_mode). */
   ui_mode: external_exports.enum(["orchestration", "individual"]).default("orchestration"),
   /** Ask before closing a pane window, a cockpit pane or the app while an agent is working. */
   confirm_close_running_pane: external_exports.boolean().default(true),
   /** Keep the PC awake (the screen may still turn off) while an agent works, so locking it does not stop the agents (Rust: keep_awake). */
   keep_awake_while_working: external_exports.boolean().default(true),
+  /** The agent that started a helper may answer its safe questions: allow once and any no; the rest goes to the person (Rust: acp::chat::helper_answers). */
+  helper_answers_enabled: external_exports.boolean().default(true),
   /** The "Used" strip at the bottom of the sidebar: plan usage per signed-in agent (Rust: usage). */
   show_usage_bar: external_exports.boolean().default(true),
   /** The strip may read Claude's plan usage with the person's own Claude login (on by default, like Orca; Rust: usage::oauth). */
@@ -18415,6 +18423,8 @@ var SettingsSchema = external_exports.object({
   budget_default_turns: external_exports.number().int().min(0).max(1e4).default(0),
   /** Same, in wall-clock minutes; 0 = no limit. */
   budget_default_minutes: external_exports.number().int().min(0).max(10080).default(0),
+  /** After a turn, a quiet line may say a cheaper or stronger model would fit better. On unless false. Rust: acp::chat::right_size. */
+  right_size_suggest: external_exports.boolean().optional(),
   /** Live updates from agents (Claude, Codex): off, or watch only for now. Owned by Rust (settings_store). */
   agent_hooks_mode: external_exports.enum(["off", "shadow", "evidence"]).optional(),
   /** Per-agent override of agent_hooks_mode, keyed by agent id. */
@@ -18433,12 +18443,39 @@ var SettingsSchema = external_exports.object({
   acp_chat_enabled: external_exports.boolean().optional(),
   /** What the "+" menu starts: a chat or a terminal. Absent: chat. Shown only while Chat is on. */
   new_agent_start: external_exports.enum(["chat", "terminal"]).optional(),
+  /** Show terminals (Settings > General): off = every agent starts as a chat and terminal-only controls are hidden. Absent: off. Open terminals keep working. Rust: show_terminals. */
+  show_terminals: external_exports.boolean().optional(),
   /** Model Bridge (Settings › General › Labs): connect a model service with a key and add it to Codex. Off unless chosen. Rust: model_bridge. */
   model_bridge_enabled: external_exports.boolean().optional(),
   /** Spaces (Settings › General › Labs): chat with friends in small groups, computer to computer. Off unless chosen. Rust: spaces. */
   spaces_enabled: external_exports.boolean().optional(),
   /** Share an agent (Settings > General > Labs): lend an agent sign-in to another PC, or borrow one. Off unless chosen. Rust: lend. */
   lend_enabled: external_exports.boolean().optional(),
+  /** Devices (Settings > General > Labs): pair two Workspaces and run a chat or terminal on the other one. Off unless chosen. Rust: device_link. */
+  devices_enabled: external_exports.boolean().optional(),
+  /** Desktop Potato (Settings > General > Labs): a small pet window on the desktop. Off unless chosen. Rust: pet. */
+  desktop_pet_enabled: external_exports.boolean().optional(),
+  agent_browser_enabled: external_exports.boolean().optional(),
+  /** Companion memory and mood (Settings > General > Labs): daily journal, diary and mood per companion. Off unless chosen. */
+  companion_vault_enabled: external_exports.boolean().optional(),
+  /** Discord bot (Settings > General > Labs): a companion answers in chosen Discord channels with the person's own bot. Off unless chosen. */
+  discord_bot_enabled: external_exports.boolean().optional(),
+  /** Project guide (Settings > General > Labs): the person's agent writes a short guide to a project when asked. Off unless chosen. Rust: project_guide. */
+  project_guide_enabled: external_exports.boolean().optional(),
+  /** Mark-up bar (Settings > General > Labs): draw, pick and send marks of a page to the chat that made it; Open in agent browser. Off unless chosen. */
+  markup_bar_enabled: external_exports.boolean().optional(),
+  /** The Today page (Settings > General > Labs): one line for the whole day, and a way back to any point on it. Off unless chosen. Rust: timeline. */
+  timeline_day_enabled: external_exports.boolean().optional(),
+  /** Desktop Potato: size 'small' | 'medium' | 'large', hidden-until (epoch ms), quiet. Rust: pet. */
+  desktop_pet_size: external_exports.enum(["small", "medium", "large"]).optional(),
+  desktop_pet_quiet: external_exports.boolean().optional(),
+  desktop_pet_hidden_until_ms: external_exports.number().optional(),
+  /** Get early versions (beta): the updater also reads the beta address and takes the newer version. Off unless chosen. Rust: commands/update_channel. */
+  early_versions_enabled: external_exports.boolean().optional(),
+  /** Smaller updates (Labs): an update may take the app-only package and leave the built-in tools alone. Off unless chosen. Rust: commands/update_plan. */
+  smaller_updates_enabled: external_exports.boolean().optional(),
+  /** The version whose small update failed (written by the app); that version takes the full package. */
+  app_only_failed_for: external_exports.string().optional(),
   /** The first-switch sheet for Individual mode was shown and (with "Don't show again") dismissed for good. Absent: show it. */
   individual_explained: external_exports.boolean().optional(),
   /** How the windows move when the mode switches between Orchestration and Individual: Domino (default), Ink, or Off (a quick fade). Rust reads it (switch_anim). */
@@ -18451,6 +18488,8 @@ var SettingsSchema = external_exports.object({
   show_developer_settings: external_exports.boolean().optional(),
   /** How the New agent page greets you ("What's up next, <name>?"). Empty or absent: no name. Never derived from the computer. */
   display_name: external_exports.string().max(60).optional(),
+  /** App language: follow the system (the default when absent), English or Traditional Chinese. App: i18n/. */
+  ui_language: external_exports.enum(["auto", "en", "zh-TW"]).optional(),
   /** The cards pinned on the New agent page, in order. Absent: none. */
   home_cards: external_exports.array(external_exports.object({ id: external_exports.string().max(40), kind: external_exports.enum(["recent", "running", "needs", "prompt"]), text: external_exports.string().max(2e3).optional() })).max(12).optional(),
   /** First-run welcome: absent = never decided (shown once on a fresh profile), true = finished or skipped, false = show it again. Rust reads it (first_run). */
@@ -18468,7 +18507,9 @@ var SettingsSchema = external_exports.object({
   /** Default OpenCode model for opencode_native API prompts (write_terminal_input). */
   opencode_model_id: external_exports.string().optional(),
   /** Settings > Agents > Helper agents: the model a helper runs on per agent id when the request names none. Absent: none. Rust reads it (agent_run_mode::helper_model). */
-  helper_default_models: external_exports.record(external_exports.string().max(120)).optional()
+  helper_default_models: external_exports.record(external_exports.string().max(120)).optional(),
+  /** Settings > Agents > Default model: the model each agent starts on per agent id when nothing names one. Absent: none. Rust reads it (agent_run_mode::agent_model). */
+  agent_default_models: external_exports.record(external_exports.string().max(120)).optional()
 });
 
 // packages/shared/dist/mobile-pairing.js
@@ -19003,7 +19044,7 @@ async function routeToolCall(clientRef, name, args, extra) {
 }
 
 // packages/mcp-server/src/index.ts
-var MCP_INSTRUCTIONS = "For a subagent or delegated task beyond a one-shot lookup, use run_agent instead of a built-in subagent tool; fall back only when this MCP is unreachable. Potato Workspace MCP (agent mode). Sequence: list_agents \u2192 run_agent(worker_id or pane_id, task) \u2192 handle; send_message(handle) steers the current turn; followup_task(handle) continues the conversation; wait_agents(handles) collects answers. Run watch_command in the background after run/followup/delegate or WAIT_TIMEOUT. Reuse idempotency_key after WAIT_TIMEOUT. Do not close the user pane as cleanup.";
+var MCP_INSTRUCTIONS = "For a subagent or delegated task beyond a one-shot lookup, use run_agent instead of a built-in subagent tool; fall back only when this MCP is unreachable. Potato Workspace MCP (agent mode). Sequence: list_agents \u2192 run_agent(worker_id or pane_id, task) \u2192 handle; send_message(handle) steers the current turn; followup_task(handle) continues the conversation; wait_agents(handles) collects answers. Run watch_command in the background after run/followup/delegate or WAIT_TIMEOUT. Reuse idempotency_key after WAIT_TIMEOUT. Do not close the user pane as cleanup. workspace_config (callable by name) changes the app setup, for example a standby helper: op=plan returns plain lines, show them to the person; op=apply runs that plan only after the person taps Allow in the app (CONSENT_PENDING: wait, call again).";
 var SET_MODE_NOTE = "Sent notifications/tools/list_changed. Hosts that read tools/list only once at startup ignore it and keep the old tool list; if tool_count differs from what you can see, restart the MCP server with --mode <mode> or reconnect.";
 function withSetModeNote(text) {
   const parsed = tryJson(text);

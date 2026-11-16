@@ -79,6 +79,7 @@ pub fn tool_visible_in_mode(name: &str, mode: McpMode) -> bool {
         "read_guide_structure",
         "read_guide_page",
         "ask_guide",
+        "workspace_config",
         "show_artifact",
     ];
     const SHELL_TOOLS: &[&str] = &[

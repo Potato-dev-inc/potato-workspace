@@ -87,6 +87,8 @@ const ADVANCED: &[&str] = &[
     "read_guide_structure",
     "read_guide_page",
     "ask_guide",
+    // App setup (plan then apply, the person says Allow): callable by name, not listed by default.
+    "workspace_config",
     // Companions only: listed by the shim for an agent started in a companion pane, callable by name elsewhere (and refused there).
     "companion_recall",
     // A page the agent made, as a card in its chat: callable by name, listed for an agent started in a Potato pane.

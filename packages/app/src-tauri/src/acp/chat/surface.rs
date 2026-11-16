@@ -307,6 +307,13 @@ pub fn view(chat: &AcpChat) -> Value {
         }));
         map.insert("pane_policy".into(), json!("stays_open_until_you_close_it"));
     }
+    // A helper with no progress for the stuck-helper minutes says so here (never as a message typed into the caller chat).
+    if status == "running" {
+        if let (Some(minutes), Some(map)) = (crate::agent_runs::stall::minutes_of(chat.pane_id()), shown.as_object_mut()) {
+            map.insert("stalled".into(), json!(true));
+            map.insert("stalled_minutes".into(), json!(minutes));
+        }
+    }
     // The receipt says what the app answered for the caller, so it can be checked afterwards.
     let approved = shown.get("auto_approved").cloned().unwrap_or(Value::Null);
     if let Some(receipt) = shown.get_mut("receipt").and_then(Value::as_object_mut) {
@@ -975,6 +982,10 @@ fn wait(body: &[u8]) -> Option<Reply> {
     let mut settle: Vec<Option<Instant>> = vec![None; chats.len()];
     let mut settle_items: Vec<usize> = chats.iter().map(|c| c.item_count()).collect();
     let mut saw_background = vec![false; chats.len()];
+    // A chat already stuck when the wait starts does not end it again (the caller reads `stalled` on it); one that turns
+    // stuck while the caller waits does.
+    let stuck_at_start: Vec<bool> = chats.iter().map(|c| crate::agent_runs::stall::minutes_of(c.pane_id()).is_some()).collect();
+    let mut stalled_wake = false;
     let started = Instant::now();
     let deadline = started + Duration::from_millis(wait_ms);
     // Every exit from this loop is a `break` that sets `reason` first, so no initial value is needed.
@@ -1030,6 +1041,13 @@ fn wait(body: &[u8]) -> Option<Reply> {
             if hit {
                 hits += 1;
             }
+            if !closed && !stuck_at_start[i] && crate::agent_runs::stall::minutes_of(chat.pane_id()).is_some() {
+                stalled_wake = true;
+            }
+        }
+        if stalled_wake {
+            reason = wait_reasons::STALLED;
+            break;
         }
         if (wait_all && hits == chats.len()) || (!wait_all && hits > 0) {
             reason = wait_reasons::MATCHED_STATE;

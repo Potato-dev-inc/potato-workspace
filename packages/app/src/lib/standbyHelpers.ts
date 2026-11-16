@@ -12,6 +12,8 @@ import { tauri } from './tauri';
 export type StandbyState = 'ready' | 'busy' | 'starting' | 'asleep' | 'problem';
 /** What it does when its task is over: `wait` starts again and waits; `close` stays closed until it is needed. */
 export type AfterTask = 'wait' | 'close';
+/** Why an agent's task passed a standby by: a different model, another project, busy, or the person was using it. */
+export type SkipReason = 'different_model' | 'other_project' | 'busy' | 'you_were_using_it';
 /** Why a standby is a problem. */
 export type StandbyNote = 'needs_chat' | 'folder_missing' | 'did_not_start' | 'needs_sign_in';
 
@@ -26,6 +28,10 @@ export interface StandbyHelperEntry {
   note: StandbyNote | string | null;
   /** The chat doing the task while `state` is `busy`. The top bar moves the chip next to that chat's helpers. */
   pane_id: string | null;
+  /** How many times an agent's task used it today (the person's local day; starts again at local midnight). */
+  used_today?: number;
+  /** The last reason an agent's task passed it by. Memory only; a restart clears it. */
+  skip_reason?: SkipReason | null;
   /** The pane id of the agent the helper is shown under (the project owns it). `null`: the screens choose. */
   home: string | null;
   /** While `busy`: an agent's task (`agent`) or the person using it (`person`). */

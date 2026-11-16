@@ -16,7 +16,9 @@ const UNKNOWN = 'Another agent';
 /** "another agent" inside a sentence, a name as it is. */
 const inSentence = (name: string): string => (name === UNKNOWN ? t('inboxCards.consent.anotherAgent') : name);
 
-// Rust writes this sentence (agent_authority/consent.rs); the noun has changed over time, so match any.
+// Rust writes these sentences (agent_authority/consent.rs).
+const CHANGE_SOURCE = /\s*(?:It asked from a command in its own window|[^.]+? asked through its tools)\.\s*$/;
+// The noun has changed over time, so match any.
 const NOT_STARTED = /\s*It did not start this (?:pane|window|agent|chat)\./;
 
 /** Who is asking, for the line next to the title: the name, or one plain phrase when Potato cannot name it. */
@@ -30,6 +32,14 @@ export function askerName(q: Question): string {
  * "It wants to answer: "Delete a folder outside this project"." then "It did not start this pane."
  */
 export function consentReason(q: Question): string | undefined {
+  if (q.consent?.action === 'config_change') {
+    const detail = (q.context ?? '').replace(CHANGE_SOURCE, '').trim();
+    const who = q.consent.requester?.trim();
+    const source = q.consent.pane_id
+      ? t('inboxCards.consent.askedFromCommand')
+      : t('inboxCards.consent.askedThroughTools', { who: !who || who === UNKNOWN ? t('inboxCards.consent.unknownAgent') : who });
+    return detail ? `${detail} ${source}` : source;
+  }
   if (q.consent?.action !== 'answer_prompt') return q.context;
   const asked = (q.context ?? '').replace(NOT_STARTED, '').trim().replace(/[.:]+$/, '');
   return asked ? `${t('inboxCards.consent.wantsToAnswer', { asked })}

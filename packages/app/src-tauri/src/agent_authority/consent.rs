@@ -176,6 +176,20 @@ fn in_sentence(requester: &str) -> String {
     }
 }
 
+/// Why a settings change is asked. From a shell command (it has a pane) it says so; from an MCP tool call (no pane) it
+/// names the agent instead, since there is no command window.
+fn config_change_reason(ask: &Ask) -> String {
+    let source = if ask.pane_id.is_some() {
+        "It asked from a command in its own window.".to_string()
+    } else {
+        format!("{} asked through its tools.", ask.requester)
+    };
+    match &ask.risk_headline {
+        Some(detail) => format!("{detail}. {source}"),
+        None => source,
+    }
+}
+
 fn card_words(ask: &Ask) -> (String, String, Vec<Choice>) {
     let choice = |id: &str, label: &str| Choice { id: id.into(), label: label.into() };
     let who = in_sentence(&ask.requester);
@@ -187,10 +201,7 @@ fn card_words(ask: &Ask) -> (String, String, Vec<Choice>) {
         ),
         Action::ConfigChange => (
             format!("Allow {who} to change {}?", ask.target),
-            ask.risk_headline
-                .clone()
-                .map(|detail| format!("{detail}. It asked from a command in its own window."))
-                .unwrap_or_else(|| "It asked from a command in its own window.".to_string()),
+            config_change_reason(ask),
             vec![choice(CHOICE_ONCE, "Allow once"), choice(CHOICE_DENY, "Deny")],
         ),
         Action::AnswerPrompt => (
@@ -303,3 +314,36 @@ pub fn on_resolved(question: &Question) {
     );
 }
 
+
+#[cfg(test)]
+mod reason_tests {
+    use super::*;
+
+    fn change(pane: Option<&str>, requester: &str) -> Ask {
+        Ask {
+            session: "s".into(),
+            subject: "PUT /config".into(),
+            pane_id: pane.map(String::from),
+            action: Action::ConfigChange,
+            prompt_key: String::new(),
+            requester: requester.into(),
+            target: "your settings".into(),
+            risk: None,
+            risk_headline: Some("It wants to change: language".into()),
+        }
+    }
+
+    #[test]
+    fn a_tool_call_names_the_agent_and_has_no_command_window() {
+        let (_, context, _) = card_words(&change(None, "Claude"));
+        assert_eq!(context, "It wants to change: language. Claude asked through its tools.");
+        assert!(!context.contains("command"));
+        assert!(!context.contains("own window"));
+    }
+
+    #[test]
+    fn a_shell_command_still_says_it_came_from_its_own_window() {
+        let (_, context, _) = card_words(&change(Some("p1"), "Claude"));
+        assert!(context.ends_with("It asked from a command in its own window."));
+    }
+}

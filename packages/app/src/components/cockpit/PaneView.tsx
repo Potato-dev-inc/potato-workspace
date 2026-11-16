@@ -31,6 +31,8 @@ import { helperRows } from './rail/helperRows';
 import { chatHelpers } from '../../lib/chat-helpers';
 import { DockedCards } from './DockedCards';
 import { HelperQuestions, helperQuestionIds } from './HelperQuestions';
+import { StallNotice } from './StallNotice';
+import { useStall } from '../../lib/stalls';
 import { formatElapsed, spinnerStatus, stateText } from './model';
 import { acpStatusWords } from './acp-pane';
 import { ChatCopyBar } from './ChatCopyBar';
@@ -427,6 +429,8 @@ export function PaneView({
     !!pane && !!helperOfLabel(c.registry.paneList, paneId, (p) => paneHeading(p.info, c.names.get(p.info.id) ?? p.info.agent_type).primary);
   const bellAgent = pane?.info.agent_type ?? '';
   const [bell, setBell] = useBellLevel(bellIsHelper ? `helper:${bellAgent}` : bellAgent, bellIsHelper);
+  // A helper with no progress for a few minutes (hook order: before the early return).
+  const stalledMin = useStall(paneId);
 
   if (!pane) {
     return (
@@ -491,8 +495,9 @@ export function PaneView({
   const askingPanes = new Set(c.asked.questions.map((q) => q.pane_id).filter((id): id is string => !!id));
   const startedHelpers = chatHelpers(c.registry.paneList, paneId, (p) => c.names.get(p.info.id) ?? p.info.agent_type, askingPanes);
   const chatDock =
-    dockNow || helperAsks.length > 0 || isAcp || check.shown ? (
+    dockNow || helperAsks.length > 0 || isAcp || check.shown || stalledMin !== null ? (
       <>
+        {stalledMin !== null && <StallNotice paneId={paneId} />}
         {inTerminal && (
           <HandedToTerminal
             terminalPaneId={inTerminal.paneId}

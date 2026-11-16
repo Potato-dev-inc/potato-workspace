@@ -1,5 +1,21 @@
 # Changelog
 
+## 1.1.5
+
+This is a beta.
+
+- Standbys sleep when idle and wake by themselves.
+  - A ready helper that sits unused gives its memory back. It sleeps sooner on PCs with less memory.
+  - When an agent or you picks it, it shows "Waking up…" and starts again in a few seconds. A task never fails because a helper was asleep.
+- Standby rows show they're useful:
+  - "Used 3 times today".
+  - A "Try it" item.
+  - The reason an agent passed one by, like "Skipped: different model".
+- Stuck helpers: a helper that makes no progress for 5 minutes shows "Stuck?" with Nudge, Stop and Respawn. The agent that started it is told too. You can change the time, or turn it off, in Settings › Agents.
+- Command line, part 2: `potato-workspace standby list / add / remove / close`.
+  - Changes are planned first and applied only with `--yes`.
+  - Agents can set up standbys for you through a new tool, after your Allow.
+
 ## 1.1.4
 
 This is a beta.

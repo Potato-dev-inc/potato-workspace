@@ -21,7 +21,7 @@ use std::path::{Path, PathBuf};
 
 use serde::Serialize;
 
-use super::{Inner, Pool, Slot, State, WarmHost, WarmKey};
+use super::{local_day, Inner, Pool, SkipReason, Slot, State, WarmHost, WarmKey};
 use crate::standby::key::canonical_project;
 use crate::standby::seat_log;
 
@@ -119,6 +119,13 @@ const IDLE_CLAIM_MS: i64 = 10 * 60_000;
 /// again after 30 s: both fit.
 pub const CLEAN_HOLD_MS: i64 = 90_000;
 
+/// The stage a sleeping standby shows while it wakes.
+pub const WAKING_STAGE: &str = "waking up";
+
+/// How long a task waits for a sleeping seat it woke (a cold start of the slowest agent fits). A seat that is not ready by then
+/// is left to finish and the task starts its own chat: a claim never fails because a seat slept.
+pub const WAKE_WAIT: std::time::Duration = std::time::Duration::from_secs(45);
+
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize)]
 #[serde(rename_all = "snake_case")]
 pub enum HelperState {
@@ -149,6 +156,10 @@ pub struct HelperStatus {
     /// and when that stage began (unix milliseconds).
     pub stage: Option<String>,
     pub stage_since_ms: Option<i64>,
+    /// Claims by agents' tasks today (the person's local day; starts again at local midnight).
+    pub used_today: u32,
+    /// The last reason an agent's task passed this standby by (memory only).
+    pub skip_reason: Option<SkipReason>,
 }
 
 /// What a task finds among the helpers.
@@ -184,6 +195,19 @@ fn model_fits(requested: Option<&str>, helper: &Option<String>) -> bool {
     }
 }
 
+/// Why a seat is not for a task: the words the seat log uses, and the reason a standby row shows for the kinds an agent's
+/// task can pass a seat by (`None` for the rest).
+struct Miss {
+    why: String,
+    reason: Option<SkipReason>,
+}
+
+impl Miss {
+    fn plain(why: impl Into<String>) -> Self {
+        Self { why: why.into(), reason: None }
+    }
+}
+
 struct Wanted {
     family: String,
     project: String,
@@ -196,22 +220,23 @@ impl Wanted {
     }
 
     /// Why the seat is not for this task at all (`None`: it is). Says nothing about whether it is free.
-    fn not_for<T>(&self, key: &WarmKey, slot: &Slot<T>, claim: &HelperClaim, home_alive: impl Fn(&str) -> bool) -> Option<String> {
+    fn not_for<T>(&self, key: &WarmKey, slot: &Slot<T>, claim: &HelperClaim, home_alive: impl Fn(&str) -> bool) -> Option<Miss> {
         let meta = slot.helper.as_ref()?;
         if agent_family(&key.agent) != self.family {
-            return Some(format!("it is a {} seat", key.agent));
+            return Some(Miss::plain(format!("it is a {} seat", key.agent)));
         }
         if !same_project(&key.project, &self.project) {
-            return Some("it is for another project".into());
+            return Some(Miss { why: "it is for another project".into(), reason: Some(SkipReason::OtherProject) });
         }
         if key.account != self.account {
-            return Some("it is for another account".into());
+            return Some(Miss::plain("it is for another account"));
         }
         if !model_fits(claim.model, &meta.model) {
-            return Some(format!("the task asked for model {} and the seat is on {}", claim.model.unwrap_or_default().trim(), meta.model.as_deref().unwrap_or("its default")));
+            let why = format!("the task asked for model {} and the seat is on {}", claim.model.unwrap_or_default().trim(), meta.model.as_deref().unwrap_or("its default"));
+            return Some(Miss { why, reason: Some(SkipReason::DifferentModel) });
         }
         if claim.name.is_some_and(|n| !meta.name.eq_ignore_ascii_case(n.trim())) {
-            return Some("another standby was asked for by name".into());
+            return Some(Miss::plain("another standby was asked for by name"));
         }
         // A standby under another agent is fine when the project is the same: the caller's own seats are tried first.
         let _ = home_alive;
@@ -366,6 +391,9 @@ impl<H: WarmHost> Pool<H> {
         let wanted = Wanted::new(claim.agent, claim.folder, claim.account);
         let mut dead = Vec::new();
         let mut skipped: Vec<String> = Vec::new();
+        // Only a task an agent asked for says why it passed a standby by (a routine or the person's own claim does not).
+        let by_agent = claim.caller.is_some();
+        let day = local_day(now);
         let (hit, seats) = {
             let mut guard = self.inner.lock();
             let inner = &mut *guard;
@@ -386,15 +414,26 @@ impl<H: WarmHost> Pool<H> {
                 let Some(slot) = inner.slots.get_mut(&key) else { continue };
                 let Some(meta) = slot.helper.clone() else { continue };
                 let label = format!("\"{}\" ({})", meta.name, meta.id);
-                if let Some(why) = wanted.not_for(&key, slot, claim, |home| self.host.working(home).is_some()) {
-                    skipped.push(format!("{label}: {why}"));
+                if let Some(miss) = wanted.not_for(&key, slot, claim, |home| self.host.working(home).is_some()) {
+                    skipped.push(format!("{label}: {}", miss.why));
+                    if let (true, Some(reason)) = (by_agent, miss.reason) {
+                        inner.tally.note_skip(&meta.id, reason);
+                    }
                     continue;
                 }
                 // It is for this task: asking for it wakes it, whether or not it can be taken now.
                 slot.cold = false;
                 slot.last_use = Some(now);
                 if let Some(busy) = &slot.busy {
-                    skipped.push(format!("{label}: {}", if busy.by == HelperUser::Person { "the person is using it" } else { "it is busy with another task" }));
+                    let (text, reason) = if busy.by == HelperUser::Person {
+                        ("the person is using it", SkipReason::YouWereUsingIt)
+                    } else {
+                        ("it is busy with another task", SkipReason::Busy)
+                    };
+                    skipped.push(format!("{label}: {text}"));
+                    if by_agent {
+                        inner.tally.note_skip(&meta.id, reason);
+                    }
                     continue;
                 }
                 if !matches!(slot.state, State::Ready { .. }) {
@@ -417,6 +456,7 @@ impl<H: WarmHost> Pool<H> {
                 slot.busy = Some(Busy { pane, since: now, by: HelperUser::Agent, saw_work: false, awaiting_pane: awaiting && open.is_none(), turns_needed, over_at: None });
                 // "Close after one task": it is not started again until a task asks for it (or the person presses Start).
                 slot.cold = meta.close_after_use;
+                inner.tally.count_claim(&meta.id, &day);
                 hit = Some((key.clone(), Claimed { item: Some(item), meta, pane: open }));
                 break;
             }
@@ -564,8 +604,41 @@ impl<H: WarmHost> Pool<H> {
         Ok(pane)
     }
 
-    /// `claim_helper_for`, waiting (at most `wait`) for a matching helper that is still starting: it is part of the way.
+    /// Wakes the sleeping seat that fits `claim` best (the caller's own first), when no fitting seat is ready or starting. One
+    /// seat only: waking every match would spend the memory the sleep gave back. True: a seat is waking now.
+    pub fn wake_for(&self, claim: &HelperClaim, now: i64) -> bool {
+        let wanted = Wanted::new(claim.agent, claim.folder, claim.account);
+        let mut guard = self.inner.lock();
+        let mut keys: Vec<(u8, u8, WarmKey)> = guard
+            .slots
+            .iter()
+            .filter(|(key, slot)| key.slot.is_some() && slot.helper.is_some() && slot.busy.is_none())
+            .filter(|(key, slot)| wanted.not_for(key, slot, claim, |_| true).is_none())
+            .map(|(key, slot)| (u8::from(!slot.helper.as_ref().is_some_and(|meta| own_seat(meta, claim))), u8::from(slot.opened.is_some()), key.clone()))
+            .collect();
+        keys.sort();
+        // A fitting seat that is ready or already on its way needs no waking.
+        if keys.iter().any(|(_, _, key)| guard.slots.get(key).is_some_and(|slot| !matches!(slot.state, State::Empty) || slot.waking_since.is_some())) {
+            return keys.iter().any(|(_, _, key)| guard.slots.get(key).is_some_and(|slot| slot.waking_since.is_some()));
+        }
+        let Some((_, _, key)) = keys.into_iter().find(|(_, _, key)| guard.slots.get(key).is_some_and(|slot| matches!(slot.state, State::Empty) && slot.cold)) else { return false };
+        let Some(slot) = guard.slots.get_mut(&key) else { return false };
+        slot.cold = false;
+        slot.backoff_until = 0;
+        slot.last_use = Some(now);
+        slot.waking_since = Some(now);
+        seat_log::line(&format!("seat {} is asleep: waking it for a task", key.slot.as_deref().unwrap_or("?")));
+        true
+    }
+
+    /// `claim_helper_for`, waiting (at most `wait`) for a matching helper that is still starting: it is part of the way. A matching
+    /// seat that is asleep is woken first and waited for (`WAKE_WAIT` at most), so the task takes the seat rather than missing it.
     pub fn claim_helper_waiting_for(self: &std::sync::Arc<Self>, claim: &HelperClaim, wait: std::time::Duration) -> Option<Claimed<H::Item>> {
+        let mut wait = wait;
+        if self.helper_match_for(claim) == HelperMatch::None && self.wake_for(claim, crate::event_log::now_ms()) {
+            self.tick(crate::event_log::now_ms());
+            wait = wait.max(WAKE_WAIT);
+        }
         let deadline = std::time::Instant::now() + wait;
         loop {
             // Only the last look writes to the seat log, so a wait is one line.
@@ -587,6 +660,7 @@ impl<H: WarmHost> Pool<H> {
             let mut guard = self.inner.lock();
             guard.policy.helpers.retain(|want| want.meta.id != helper_id);
         }
+        self.inner.lock().tally.forget(helper_id);
         seat_log::line(&format!("seat {helper_id} removed by the person"));
         self.tick(now);
     }
@@ -596,14 +670,42 @@ impl<H: WarmHost> Pool<H> {
         let mut guard = self.inner.lock();
         for (key, slot) in guard.slots.iter_mut() {
             if key.slot.as_deref() == Some(helper_id) {
+                if slot.cold && matches!(slot.state, State::Empty) {
+                    slot.waking_since = Some(crate::event_log::now_ms());
+                }
                 slot.cold = false;
                 slot.backoff_until = 0;
             }
         }
     }
 
-    /// Every helper the pool has a slot for, by id.
+    /// The person picked seat `helper_id`: if it sleeps it wakes now, and this waits (at most `WAKE_WAIT`) until its start has
+    /// ended. Returns false at once for a seat that is not asleep.
+    pub fn wake_and_wait(self: &std::sync::Arc<Self>, helper_id: &str) -> bool {
+        let asleep = self.inner.lock().slots.iter().any(|(key, slot)| key.slot.as_deref() == Some(helper_id) && slot.busy.is_none() && slot.cold && matches!(slot.state, State::Empty));
+        if !asleep {
+            return false;
+        }
+        self.wake_helper(helper_id);
+        self.tick(crate::event_log::now_ms());
+        let deadline = std::time::Instant::now() + WAKE_WAIT;
+        while std::time::Instant::now() < deadline {
+            let waiting = self.inner.lock().slots.iter().any(|(key, slot)| key.slot.as_deref() == Some(helper_id) && matches!(slot.state, State::Starting { .. }));
+            if !waiting {
+                break;
+            }
+            std::thread::sleep(std::time::Duration::from_millis(25));
+        }
+        true
+    }
+
+    /// Every helper the pool has a slot for, by id (with today's local day for the use count).
     pub fn helper_statuses(&self) -> BTreeMap<String, HelperStatus> {
+        self.helper_statuses_on(&local_day(crate::event_log::now_ms()))
+    }
+
+    /// `helper_statuses` for local day `day` (`YYYY-MM-DD`).
+    pub fn helper_statuses_on(&self, day: &str) -> BTreeMap<String, HelperStatus> {
         let guard = self.inner.lock();
         let mut out = BTreeMap::new();
         for (key, slot) in &guard.slots {
@@ -621,13 +723,16 @@ impl<H: WarmHost> Pool<H> {
             } else {
                 match &slot.state {
                     State::Ready { .. } => HelperStatus { state: HelperState::Ready, open_pane: slot.opened.clone(), ..Default::default() },
+                    State::Starting { .. } if slot.waking_since.is_some() => HelperStatus { state: HelperState::Starting, stage: Some(WAKING_STAGE.to_string()), stage_since_ms: slot.waking_since, ..Default::default() },
                     State::Starting { .. } => HelperStatus { state: HelperState::Starting, stage: staged.as_ref().map(|s| s.0.clone()), stage_since_ms: staged.as_ref().map(|s| s.1), ..Default::default() },
                     State::Empty if slot.last_error.as_deref() == Some(super::WAITING_FOR_MEMORY) => HelperStatus { state: HelperState::Starting, stage: Some(super::MEMORY_STAGE.to_string()), stage_since_ms: None, ..Default::default() },
+                    State::Empty if slot.waking_since.is_some() && !slot.cold => HelperStatus { state: HelperState::Starting, stage: Some(WAKING_STAGE.to_string()), stage_since_ms: slot.waking_since, ..Default::default() },
                     State::Empty if slot.cold => HelperStatus { state: HelperState::Asleep, ..Default::default() },
                     State::Empty if slot.fails > 0 => HelperStatus { state: HelperState::Problem, note: slot.last_error.clone(), ..Default::default() },
                     State::Empty => HelperStatus { state: HelperState::Starting, stage: staged.as_ref().map(|s| s.0.clone()), stage_since_ms: staged.as_ref().map(|s| s.1), ..Default::default() },
                 }
             };
+            let status = HelperStatus { used_today: guard.tally.used_today(id, day), skip_reason: guard.tally.last_skip(id), ..status };
             out.insert(id.clone(), status);
         }
         out

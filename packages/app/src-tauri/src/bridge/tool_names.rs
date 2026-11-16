@@ -7,6 +7,7 @@ pub(super) fn bridge_tool_name(method: &str, segments: &[&str]) -> Option<String
         ("POST", ["questions", "ask"]) => Some("ask_user".to_string()),
         ("POST", ["artifacts", "show"]) => Some("show_artifact".to_string()),
         ("POST", ["companion", "recall"]) => Some("companion_recall".to_string()),
+        ("POST", ["config", "op"]) => Some("workspace_config".to_string()),
         ("POST", ["guide", "structure"]) => Some("read_guide_structure".to_string()),
         ("POST", ["guide", "page"]) => Some("read_guide_page".to_string()),
         ("POST", ["guide", "ask"]) => Some("ask_guide".to_string()),

@@ -818,3 +818,178 @@ fn a_seat_that_waits_for_memory_shows_that_stage_and_is_not_a_failure() {
     assert_eq!(settle(&pool, &host, 31_000), 1);
     assert_eq!(state(&pool, "a"), HelperState::Ready);
 }
+
+// ---- wake on claim ----------------------------------------------------------------------------------------------------
+
+fn claim_for<'a>(agent: &'a str, folder: &'a Path) -> HelperClaim<'a> {
+    HelperClaim { agent, folder, account: None, model: None, caller: None, name: None }
+}
+
+/// A seat that sat unused until it went to sleep: its program is closed and its slot is cold.
+fn sleeping(helpers: Vec<HelperWant>) -> (Arc<Pool<Fake>>, Arc<Fake>) {
+    let (pool, host) = pool(helpers, 4);
+    settle(&pool, &host, 0);
+    settle(&pool, &host, 5 * 60_000 + 1);
+    (pool, host)
+}
+
+#[test]
+fn a_sleeping_seat_is_claimed_wakes_and_runs_the_task() {
+    let (pool, host) = sleeping(vec![want("a", "codex", None, false)]);
+    assert_eq!(state(&pool, "a"), HelperState::Asleep);
+    assert_eq!(host.closed.lock().len(), 1, "its program was closed to give the memory back");
+    let folder = PathBuf::from(FOLDER);
+    let claimed = pool.claim_helper_waiting_for(&claim_for("codex", &folder), std::time::Duration::ZERO).expect("the claim must not fail because the seat slept");
+    assert_eq!(claimed.meta.id, "a");
+    assert!(claimed.item.is_some(), "a fresh session of the seat's own");
+    assert_eq!(state(&pool, "a"), HelperState::Busy);
+}
+
+#[test]
+fn a_waking_seat_says_waking_up_until_it_is_ready() {
+    let (pool, host) = sleeping(vec![want("a", "codex", None, false)]);
+    let folder = PathBuf::from(FOLDER);
+    assert!(pool.wake_for(&claim_for("codex", &folder), 10));
+    let status = pool.helper_statuses()["a"].clone();
+    assert_eq!(status.state, HelperState::Starting);
+    assert_eq!(status.stage.as_deref(), Some("waking up"));
+    assert_eq!(settle(&pool, &host, 11), 1);
+    let status = pool.helper_statuses()["a"].clone();
+    assert_eq!(status.state, HelperState::Ready);
+    assert_eq!(status.stage, None);
+}
+
+#[test]
+fn only_the_seat_that_fits_wakes() {
+    let (pool, _host) = sleeping(vec![want("a", "codex", None, false), want("b", "claude", None, false)]);
+    let folder = PathBuf::from(FOLDER);
+    assert!(pool.wake_for(&claim_for("claude", &folder), 10));
+    assert_eq!(state(&pool, "a"), HelperState::Asleep, "the codex seat keeps sleeping");
+    assert_eq!(pool.helper_statuses()["b"].stage.as_deref(), Some("waking up"));
+    assert!(!pool.wake_for(&claim_for("cursor", &folder), 11), "no cursor seat: nothing to wake");
+}
+
+#[test]
+fn one_task_wakes_one_seat_not_every_match() {
+    let (pool, _host) = sleeping(vec![want("a", "codex", None, false), want("b", "codex", None, false)]);
+    let folder = PathBuf::from(FOLDER);
+    assert!(pool.wake_for(&claim_for("codex", &folder), 10));
+    let asleep = ["a", "b"].iter().filter(|id| state(&pool, id) == HelperState::Asleep).count();
+    assert_eq!(asleep, 1);
+}
+
+#[test]
+fn picking_a_sleeping_seat_wakes_it_and_waits() {
+    let (pool, _host) = sleeping(vec![want("a", "codex", None, false)]);
+    assert!(pool.wake_and_wait("a"));
+    assert_eq!(state(&pool, "a"), HelperState::Ready);
+    assert!(!pool.wake_and_wait("a"), "a ready seat is not asleep");
+}
+
+#[test]
+fn a_seat_that_never_slept_is_claimed_as_before() {
+    let (pool, host) = pool_one();
+    settle(&pool, &host, 0);
+    let folder = PathBuf::from(FOLDER);
+    assert!(!pool.wake_for(&claim_for("codex", &folder), 1));
+    assert!(pool.claim_helper_waiting_for(&claim_for("codex", &folder), std::time::Duration::ZERO).is_some());
+}
+
+// ---- use counts and the last reason a standby was passed by ------------------------------------------------------------
+
+/// A seat in folder `folder` (not always the test folder): for the "other project" reason.
+fn seat_in(id: &str, agent: &str, model: Option<&str>, folder: &str) -> HelperWant {
+    HelperWant::new(meta(id, model, false), agent, &PathBuf::from(folder), None)
+}
+
+#[test]
+fn a_claim_counts_one_use_for_the_day_and_the_count_starts_again_at_a_new_day() {
+    let mut tally = Tally::default();
+    for _ in 0..3 {
+        tally.count_claim("a", "2026-11-16");
+    }
+    assert_eq!(tally.used_today("a", "2026-11-16"), 3);
+    assert_eq!(tally.used_today("a", "2026-11-17"), 0, "a new day shows no use yet");
+    tally.count_claim("a", "2026-11-17");
+    assert_eq!((tally.used_today("a", "2026-11-17"), tally.used_today("a", "2026-11-16")), (1, 0));
+    assert_eq!(tally.used_today("b", "2026-11-17"), 0, "another standby has its own count");
+}
+
+#[test]
+fn the_day_turns_over_at_local_midnight() {
+    use chrono::TimeZone;
+    let before = chrono::Local.with_ymd_and_hms(2026, 11, 16, 23, 59, 59).single().expect("a local time").timestamp_millis();
+    let after = chrono::Local.with_ymd_and_hms(2026, 11, 17, 0, 0, 0).single().expect("a local time").timestamp_millis();
+    assert_eq!(local_day(before), "2026-11-16");
+    assert_eq!(local_day(after), "2026-11-17");
+    let mut tally = Tally::default();
+    tally.count_claim("a", &local_day(before));
+    tally.count_claim("a", &local_day(before));
+    assert_eq!(tally.used_today("a", &local_day(after)), 0, "the count is back to zero at midnight");
+    tally.count_claim("a", &local_day(after));
+    assert_eq!(tally.used_today("a", &local_day(after)), 1);
+}
+
+#[test]
+fn a_skip_reason_is_the_last_one_and_is_dropped_with_the_standby() {
+    let mut tally = Tally::default();
+    tally.note_skip("a", SkipReason::Busy);
+    tally.note_skip("a", SkipReason::DifferentModel);
+    assert_eq!(tally.last_skip("a"), Some(SkipReason::DifferentModel));
+    assert_eq!(tally.last_skip("b"), None);
+    tally.count_claim("a", "2026-11-16");
+    tally.forget("a");
+    assert_eq!((tally.last_skip("a"), tally.used_today("a", "2026-11-16")), (None, 0));
+}
+
+#[test]
+fn an_agents_claim_is_counted_and_a_seat_that_is_busy_says_busy() {
+    let (pool, host) = pool_one();
+    settle(&pool, &host, 0);
+    assert!(pool.claim_helper_for(&ask("codex", Some("orch"), None), 1).is_some());
+    let status = pool.helper_statuses_on(&local_day(1))["a"].clone();
+    assert_eq!((status.used_today, status.skip_reason), (1, None));
+    assert!(pool.claim_helper_for(&ask("codex", Some("orch"), None), 2).is_none(), "the first task still runs on the seat");
+    let status = pool.helper_statuses_on(&local_day(2))["a"].clone();
+    assert_eq!((status.used_today, status.skip_reason), (1, Some(SkipReason::Busy)));
+}
+
+#[test]
+fn a_task_that_passes_a_standby_by_says_different_model_or_other_project() {
+    let (pool, host) = pool(vec![seat_in("m", "codex", Some("deepseek"), FOLDER), seat_in("p", "codex", None, "C:/other")], 4);
+    settle(&pool, &host, 0);
+    assert!(pool.claim_helper_for(&ask("codex", Some("orch"), Some("gpt-5")), 1).is_none());
+    let statuses = pool.helper_statuses_on(&local_day(1));
+    assert_eq!(statuses["m"].skip_reason, Some(SkipReason::DifferentModel));
+    assert_eq!(statuses["p"].skip_reason, Some(SkipReason::OtherProject));
+    assert_eq!(statuses["m"].used_today, 0, "a pass-by is not a use");
+}
+
+#[test]
+fn a_standby_the_person_is_using_says_you_were_using_it() {
+    let (pool, host) = pool_one();
+    settle(&pool, &host, 0);
+    assert!(pool.begin_person_use("a", 1));
+    assert!(pool.claim_helper_for(&ask("codex", Some("orch"), None), 2).is_none());
+    let status = pool.helper_statuses_on(&local_day(2))["a"].clone();
+    assert_eq!((status.skip_reason, status.used_today), (Some(SkipReason::YouWereUsingIt), 0));
+}
+
+#[test]
+fn a_claim_nobody_asked_for_records_no_reason() {
+    let (pool, host) = pool(vec![seat_in("m", "codex", Some("deepseek"), FOLDER)], 4);
+    settle(&pool, &host, 0);
+    assert!(pool.claim_helper("codex", Path::new(FOLDER), None, Some("gpt-5"), 1).is_none());
+    assert_eq!(pool.helper_statuses_on(&local_day(1))["m"].skip_reason, None);
+}
+
+#[test]
+fn a_claim_that_woke_a_sleeping_seat_counts_as_a_use_and_leaves_no_skip_reason() {
+    let (pool, _host) = sleeping(vec![want("a", "codex", None, false)]);
+    let folder = PathBuf::from(FOLDER);
+    assert!(pool.claim_helper_waiting_for(&claim_for("codex", &folder), std::time::Duration::ZERO).is_some());
+    let today = local_day(crate::event_log::now_ms());
+    let status = pool.helper_statuses_on(&today)["a"].clone();
+    assert_eq!(status.used_today, 1);
+    assert_eq!(status.skip_reason, None);
+}

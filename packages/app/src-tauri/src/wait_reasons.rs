@@ -13,6 +13,10 @@ pub const BACKGROUND: &str = "background";
 /// `wake_on_progress` was asked for and the work changed. This is a wake, not an end: the caller asks again.
 pub const REVISION_CHANGED: &str = "revision_changed";
 
+/// A helper in the wait has had no progress for the stuck-helper minutes (Settings > Agents). A wake, not an end: the
+/// run then carries `stalled: true` and `stalled_minutes`.
+pub const STALLED: &str = "stalled";
+
 /// The word chat waits used before [`MATCHED_STATE`] was shared with the terminal path. Kept only so a newer tool
 /// program still understands an older app.
 pub const STATUS_LEGACY: &str = "status";
@@ -24,7 +28,7 @@ pub fn finished(reason: &str) -> bool {
 
 /// Whether the wait should return to the caller now: it finished, or the caller asked to wake on any change.
 pub fn wakes(reason: &str) -> bool {
-    finished(reason) || reason == REVISION_CHANGED
+    finished(reason) || reason == REVISION_CHANGED || reason == STALLED
 }
 
 #[cfg(test)]

@@ -71,11 +71,13 @@ pub struct HelperSettings {
     pub max: usize,
     /// A standby nobody used for this long is closed to free memory (it starts again when a task asks).
     pub idle_minutes: u64,
+    /// The person chose `idle_minutes`. Until then it follows this PC's RAM (`acp::memory::default_idle_secs`).
+    pub idle_explicit: bool,
 }
 
 impl Default for HelperSettings {
     fn default() -> Self {
-        Self { max: DEFAULT_MAX, idle_minutes: DEFAULT_IDLE_MINUTES }
+        Self { max: DEFAULT_MAX, idle_minutes: DEFAULT_IDLE_MINUTES, idle_explicit: false }
     }
 }
 
@@ -96,9 +98,22 @@ fn tidy(text: &str) -> String {
 
 impl HelperStore {
     /// Pulls a hand-edited file into range.
-    pub fn clamped(mut self) -> Self {
+    pub fn clamped(self) -> Self {
+        self.clamped_for(crate::acp::memory::pc_total_phys())
+    }
+
+    /// `clamped` for a PC with this much RAM. A saved idle time that is neither today's default nor this PC's tier counts as the person's choice;
+    /// otherwise the RAM tier applies (5 minutes under 16 GB, 10 minutes to 32 GB).
+    pub fn clamped_for(mut self, total_phys: Option<u64>) -> Self {
         self.settings.max = self.settings.max.clamp(1, MAX_HELPERS);
         self.settings.idle_minutes = self.settings.idle_minutes.clamp(1, 24 * 60);
+        let tier_minutes = crate::acp::memory::idle_tier_secs(total_phys).map(|secs| secs / 60);
+        if self.settings.idle_minutes != DEFAULT_IDLE_MINUTES && Some(self.settings.idle_minutes) != tier_minutes {
+            self.settings.idle_explicit = true;
+        }
+        if !self.settings.idle_explicit {
+            self.settings.idle_minutes = (crate::acp::memory::default_idle_secs(total_phys, DEFAULT_IDLE_MINUTES * 60) / 60).clamp(1, 24 * 60);
+        }
         let mut seen = std::collections::BTreeSet::new();
         self.helpers.retain(|h| !h.id.trim().is_empty() && !h.agent.trim().is_empty() && !h.project.trim().is_empty() && seen.insert(h.id.clone()));
         for helper in &mut self.helpers {
@@ -182,7 +197,9 @@ impl HelperStore {
         if max < self.helpers.len() {
             return Err(format!("You have {} standbys. Remove some before the limit goes below that.", self.helpers.len()));
         }
-        self.settings = HelperSettings { max, idle_minutes: idle_minutes.clamp(1, 24 * 60) };
+        let idle_minutes = idle_minutes.clamp(1, 24 * 60);
+        let idle_explicit = self.settings.idle_explicit || idle_minutes != self.settings.idle_minutes;
+        self.settings = HelperSettings { max, idle_minutes, idle_explicit };
         Ok(())
     }
 }
@@ -251,7 +268,7 @@ pub fn extend_policy(policy: &mut Policy, store: &HelperStore, probe: &dyn Agent
 
 // ---- the view -----------------------------------------------------------------------------------------------------------
 
-pub use crate::acp::warm::HelperUser;
+pub use crate::acp::warm::{HelperUser, SkipReason};
 
 /// A standby as the screens read it. The top bar chips and the Settings list use this one shape.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
@@ -285,6 +302,10 @@ pub struct HelperEntry {
     pub stage: Option<String>,
     /// How long the start has been at that stage, in milliseconds.
     pub stage_ms: Option<i64>,
+    /// How many times an agent's task used it today (the person's local day; starts again at local midnight).
+    pub used_today: u32,
+    /// The last reason an agent's task passed it by: `different_model`, `other_project`, `busy` or `you_were_using_it`.
+    pub skip_reason: Option<SkipReason>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
@@ -325,6 +346,8 @@ pub fn build_view(store: &HelperStore, statuses: &BTreeMap<String, HelperStatus>
                 warm: h.warm,
                 stage: status.stage,
                 stage_ms: status.stage_since_ms.map(|since| (crate::event_log::now_ms() - since).max(0)),
+                used_today: status.used_today,
+                skip_reason: status.skip_reason,
             }
         })
         .collect();

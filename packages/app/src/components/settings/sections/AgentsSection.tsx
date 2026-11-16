@@ -13,7 +13,7 @@ import { AgentLaneRows } from '../blocks/AgentLaneRows';
 import { AgentVersions } from '../blocks/AgentVersions';
 import { CHAT_ADDONS_LABEL, ChatAddonRows } from '../blocks/ChatAddonRows';
 import { COLLISION_LABEL, CollisionSettings } from '../blocks/CollisionSettings';
-import { CloseHelpersWithAgentToggle, HelperAgentsChoice, KeepHelpersOpenToggle, MostHelpersAtOnce } from '../blocks/HelperAgents';
+import { CloseHelpersWithAgentToggle, HelperAgentsChoice, KeepHelpersOpenToggle, MostHelpersAtOnce, StuckHelperMinutes } from '../blocks/HelperAgents';
 import { HELPER_MODELS_HINT, HELPER_MODELS_LABEL, HelperDefaultModels } from '../blocks/HelperModels';
 import { HiddenAgentsRow } from '../blocks/HiddenAgentsRow';
 import { StandbyHelpersSettings } from '../blocks/StandbyHelpersSettings';
@@ -303,6 +303,14 @@ export const agentsRows: RowDef[] = [
     keywords: 'most helpers at once how many parallel batch limit cap queue several many same time subagents',
     group: 'Helpers',
     render: (env) => <MostHelpersAtOnce onSaved={env.markSaved} />,
+  },
+  {
+    id: 'stuck-helper-minutes',
+    label: 'Tell me when a helper is stuck',
+    hint: 'Minutes with no progress before a helper shows Stuck.',
+    keywords: 'stuck stall stalled helper no progress minutes nudge respawn quiet silent hang hung frozen notify',
+    group: 'Helpers',
+    render: (env) => <StuckHelperMinutes onSaved={env.markSaved} />,
   },
   {
     id: 'handoff-mode',

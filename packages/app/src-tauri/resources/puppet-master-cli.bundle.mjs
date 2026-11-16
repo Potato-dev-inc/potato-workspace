@@ -4161,6 +4161,8 @@ var SettingsSchema = external_exports.object({
   confirm_close_running_pane: external_exports.boolean().default(true),
   /** Keep the PC awake (the screen may still turn off) while an agent works, so locking it does not stop the agents (Rust: keep_awake). */
   keep_awake_while_working: external_exports.boolean().default(true),
+  /** The agent that started a helper may answer its safe questions: allow once and any no; the rest goes to the person (Rust: acp::chat::helper_answers). */
+  helper_answers_enabled: external_exports.boolean().default(true),
   /** The "Used" strip at the bottom of the sidebar: plan usage per signed-in agent (Rust: usage). */
   show_usage_bar: external_exports.boolean().default(true),
   /** The strip may read Claude's plan usage with the person's own Claude login (on by default, like Orca; Rust: usage::oauth). */
@@ -4688,7 +4690,8 @@ function watchLine(snapshot, operationId, projectPath) {
     status: status || "unknown",
     revision,
     result: snapshot.result ?? null,
-    error: snapshot.error
+    error: snapshot.error,
+    prompt: snapshot.prompt ?? void 0
   };
 }
 function isDone(status) {
@@ -4955,7 +4958,7 @@ async function runPairLink() {
 }
 
 // packages/cli/src/args.ts
-var CONFIG_COMMANDS = /* @__PURE__ */ new Set(["settings", "labs", "status", "agents", "models", "projects"]);
+var CONFIG_COMMANDS = /* @__PURE__ */ new Set(["settings", "labs", "status", "agents", "models", "projects", "standby"]);
 var CONFIG_USAGE = `usage:
   potato-workspace status
   potato-workspace settings list | get KEY | set KEY VALUE [KEY VALUE ...] | reset KEY
@@ -4963,12 +4966,15 @@ var CONFIG_USAGE = `usage:
   potato-workspace agents list
   potato-workspace models list AGENT
   potato-workspace projects list
+  potato-workspace standby list | add --name N --agent A [--model M] [--project P] [--after wait|close] | remove NAME | close NAME
+standby: "remove" only takes a standby off its agent (it keeps running); "close" stops it.
 flags: --json  --yes (apply a change)  --dry-run (show only)  --wait-ms N (wait for the Allow card)
 exit codes: 0 ok, 1 failed, 4 app not reachable, 5 needs --yes (nothing changed), 6 refused`;
-var KNOWN = /* @__PURE__ */ new Set(["json", "yes", "y", "dry-run", "help", "h", "wait-ms"]);
+var VALUE_FLAGS = /* @__PURE__ */ new Set(["name", "agent", "model", "project", "after"]);
+var KNOWN = /* @__PURE__ */ new Set(["json", "yes", "y", "dry-run", "help", "h", "wait-ms", ...VALUE_FLAGS]);
 function parseConfigArgs(argv) {
   const [command = "", ...rest] = argv;
-  const out = { command, positional: [], json: false, yes: false, dryRun: false, help: false };
+  const out = { command, positional: [], json: false, yes: false, dryRun: false, help: false, values: {} };
   for (let i = 0; i < rest.length; i++) {
     const a = rest[i];
     if (!a.startsWith("--") && !(a.startsWith("-") && /^-[a-z]/i.test(a))) {
@@ -4977,6 +4983,12 @@ function parseConfigArgs(argv) {
     }
     const key = a.replace(/^-+/, "");
     if (!KNOWN.has(key)) return { problem: `unknown flag ${a}` };
+    if (VALUE_FLAGS.has(key)) {
+      const value = rest[++i];
+      if (value === void 0 || value.startsWith("--")) return { problem: `--${key} needs a value` };
+      out.values[key] = value;
+      continue;
+    }
     switch (key) {
       case "json":
         out.json = true;
@@ -5097,7 +5109,8 @@ function createBridge(options) {
   }
   return {
     get: (path) => call("GET", path),
-    patch: (path, body) => call("PATCH", path, body)
+    patch: (path, body) => call("PATCH", path, body),
+    post: (path, body) => call("POST", path, body)
   };
 }
 
@@ -5312,6 +5325,93 @@ async function runLabs(ctx) {
   }
 }
 
+// packages/cli/src/commands/standby.ts
+var USAGE = "usage: potato-workspace standby list | add --name N --agent A [--model M] [--project P] [--after wait|close] | remove NAME | close NAME";
+async function planAndApply(ctx, ops) {
+  const { bridge, io, args } = ctx;
+  const plan = await bridge.post("/config/plan", { ops });
+  if (!args.json) for (const line of plan.lines) io.out(line);
+  if (plan.changes_anything === false) {
+    if (args.json) io.out(JSON.stringify({ plan, applied: false, reason: "no change" }));
+    else io.out("Nothing to change.");
+    return EXIT.ok;
+  }
+  if (args.dryRun) {
+    if (args.json) io.out(JSON.stringify({ plan, applied: false, reason: "dry run" }));
+    else io.out("Dry run: nothing was changed.");
+    return EXIT.ok;
+  }
+  if (!args.yes) {
+    if (io.interactive && !args.json) {
+      if (!await io.confirm("Apply this? [y/N] ")) {
+        io.out("Nothing was changed.");
+        return EXIT.needsConfirmation;
+      }
+    } else {
+      if (args.json) io.out(JSON.stringify({ plan, applied: false, reason: "needs --yes" }));
+      io.err("Nothing was changed. Run the same command again with --yes to apply it.");
+      return EXIT.needsConfirmation;
+    }
+  }
+  const done = await bridge.post("/config/apply", { plan_id: plan.plan_id });
+  if (args.json) {
+    io.out(JSON.stringify({ plan, applied: done.applied, standby_added: done.standby_added ?? [] }));
+  } else {
+    io.out("Done.");
+  }
+  return EXIT.ok;
+}
+function oneName(args, rest, verb) {
+  if (rest.length !== 1) throw new CliError(EXIT.failed, `usage: potato-workspace standby ${verb} NAME`);
+  return rest[0];
+}
+async function runStandby(ctx) {
+  const { bridge, io, args } = ctx;
+  const [sub, ...rest] = args.positional;
+  switch (sub) {
+    case "list": {
+      const view = await bridge.get("/config/standby");
+      if (args.json) {
+        io.out(JSON.stringify(view));
+        return EXIT.ok;
+      }
+      if (view.helpers.length === 0) {
+        io.out("No standbys.");
+        return EXIT.ok;
+      }
+      const rows = [
+        ["NAME", "AGENT", "MODEL", "STATE", "AFTER TASK", "ID"],
+        ...view.helpers.map((h) => [
+          h.name,
+          h.agent,
+          h.model ?? "(agent default)",
+          h.warm ? `${h.state ?? "?"} (free warm agent)` : h.state ?? "?",
+          h.after_task ?? "wait",
+          h.id
+        ])
+      ];
+      for (const line of table(rows)) io.out(line);
+      return EXIT.ok;
+    }
+    case "add": {
+      if (rest.length > 0) throw new CliError(EXIT.failed, USAGE);
+      const { name, agent, model, project, after } = args.values;
+      if (!name || !agent) throw new CliError(EXIT.failed, `standby add needs --name and --agent. ${USAGE}`);
+      const op = { kind: "standby_add", name, agent };
+      if (model) op.model = model;
+      if (project) op.project = project;
+      if (after) op.after_task = after;
+      return planAndApply(ctx, [op]);
+    }
+    case "remove":
+      return planAndApply(ctx, [{ kind: "standby_remove", target: oneName(args, rest, "remove") }]);
+    case "close":
+      return planAndApply(ctx, [{ kind: "standby_close", target: oneName(args, rest, "close") }]);
+    default:
+      throw new CliError(EXIT.failed, USAGE);
+  }
+}
+
 // packages/cli/src/commands/read.ts
 async function runStatus(ctx) {
   const { bridge, io, args, cliVersion } = ctx;
@@ -5452,6 +5552,8 @@ async function runConfigCli(argv, io, cliVersion, makeBridge = createBridge) {
         return await runModels(ctx);
       case "projects":
         return await runProjects(ctx);
+      case "standby":
+        return await runStandby(ctx);
       default:
         io.err(CONFIG_USAGE);
         return EXIT.failed;
@@ -5516,6 +5618,8 @@ Usage:
   potato-workspace agents list     The agents the app knows.
   potato-workspace models list AGENT   The models one agent offers.
   potato-workspace projects list   Folders with an open window.
+  potato-workspace standby ...     list | add --name N --agent A [--model M] [--project P] | remove NAME | close NAME
+                                (remove only takes it off its agent; close stops it). Plan first, then apply.
                                 Config flags: --json --yes --dry-run --wait-ms N. Exit 5 = needs --yes.
                                 From an agent window a change raises an Allow card the person answers in the app.
   potato-workspace version         Print version

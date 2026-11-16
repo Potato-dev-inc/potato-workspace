@@ -80,6 +80,8 @@ Usage:
   potato-workspace agents list     The agents the app knows.
   potato-workspace models list AGENT   The models one agent offers.
   potato-workspace projects list   Folders with an open window.
+  potato-workspace standby ...     list | add --name N --agent A [--model M] [--project P] | remove NAME | close NAME
+                                (remove only takes it off its agent; close stops it). Plan first, then apply.
                                 Config flags: --json --yes --dry-run --wait-ms N. Exit 5 = needs --yes.
                                 From an agent window a change raises an Allow card the person answers in the app.
   potato-workspace version         Print version

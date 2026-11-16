@@ -98,6 +98,28 @@ pub fn pc_caps() -> Caps {
     *CAPS
 }
 
+/// How long an unused warm agent or standby sits before it goes to sleep (its program is closed to give the memory back),
+/// by total RAM: under 16 GB 5 minutes, 16 to 32 GB 10 minutes. `None`: this PC keeps today's values (a bigger PC, or an
+/// unreadable one). The tiers match `default_caps`.
+pub fn idle_tier_secs(total_phys: Option<u64>) -> Option<u64> {
+    match total_phys {
+        Some(b) if b < 16 * GB => Some(5 * 60),
+        Some(b) if b <= 32 * GB => Some(10 * 60),
+        _ => None,
+    }
+}
+
+/// The idle time to use when the person set none: the RAM tier, but never longer than `today` (the old default).
+pub fn default_idle_secs(total_phys: Option<u64>, today: u64) -> u64 {
+    idle_tier_secs(total_phys).map_or(today, |tier| tier.min(today))
+}
+
+/// This PC's total RAM, read once.
+pub fn pc_total_phys() -> Option<u64> {
+    static TOTAL: once_cell::sync::Lazy<Option<u64>> = once_cell::sync::Lazy::new(|| SystemReader.read().map(|i| i.total_phys));
+    *TOTAL
+}
+
 /// One log line when the warm loop starts.
 pub fn log_start(reader: &dyn MemoryReader) {
     let info = reader.read();
@@ -144,6 +166,20 @@ mod tests {
         assert!(chat_warning(&commit(10), "claude").is_some());
         assert!(chat_warning(&commit(50), "claude").is_none());
         assert!(chat_warning(&Fake(None), "claude").is_none());
+    }
+
+    #[test]
+    fn idle_time_follows_total_ram() {
+        assert_eq!(idle_tier_secs(Some(8 * GB)), Some(300));
+        assert_eq!(idle_tier_secs(Some(16 * GB)), Some(600));
+        assert_eq!(idle_tier_secs(Some(32 * GB)), Some(600));
+        assert_eq!(idle_tier_secs(Some(64 * GB)), None);
+        assert_eq!(idle_tier_secs(None), None);
+        assert_eq!(default_idle_secs(Some(8 * GB), 1200), 300);
+        assert_eq!(default_idle_secs(Some(24 * GB), 1800), 600);
+        assert_eq!(default_idle_secs(Some(64 * GB), 1200), 1200);
+        // A tier never makes the time longer than today's value.
+        assert_eq!(default_idle_secs(Some(24 * GB), 120), 120);
     }
 
     #[test]

@@ -33,7 +33,9 @@ use crate::standby::config::{StandbyConfig, MAX_PRELOAD_TOTAL};
 
 mod helpers;
 mod stage;
+mod tally;
 pub use helpers::{Claimed, HelperClaim, HelperMeta, HelperState, HelperStatus, HelperUser, HelperWant, SeatLook};
+pub use tally::{local_day, SkipReason, Tally};
 #[cfg(test)]
 pub use helpers::{agent_family, same_project, CLEAN_HOLD_MS};
 
@@ -175,11 +177,13 @@ struct Slot<T> {
     last_error: Option<String>,
     /// The visible chat the person opened on this helper's waiting session (it shares that session; see `warm/helpers.rs`).
     opened: Option<String>,
+    /// When a sleeping seat was asked to wake (a task or the person wants it). The row says "Waking up" until it is ready.
+    waking_since: Option<i64>,
 }
 
 impl<T> Slot<T> {
     fn new(folder: PathBuf) -> Self {
-        Slot { folder, state: State::Empty, fails: 0, backoff_until: 0, cold: false, last_use: None, helper: None, busy: None, last_error: None, opened: None }
+        Slot { folder, state: State::Empty, fails: 0, backoff_until: 0, cold: false, last_use: None, helper: None, busy: None, last_error: None, opened: None, waking_since: None }
     }
 }
 
@@ -201,6 +205,8 @@ struct Inner<T> {
     shut: bool,
     /// Task chats a seat just gave up: `tick` tells the host outside the lock (`WarmHost::seat_released`).
     released: Vec<String>,
+    /// Per standby: today's claims and the last reason an agent's task passed it by (memory only).
+    tally: Tally,
 }
 
 /// A start the pool decided on. Run it with `Pool::run`.
@@ -217,7 +223,7 @@ pub struct Pool<H: WarmHost> {
 
 impl<H: WarmHost> Pool<H> {
     pub fn new(host: Arc<H>) -> Arc<Self> {
-        Arc::new(Self { host, inner: Mutex::new(Inner { slots: BTreeMap::new(), hints: BTreeMap::new(), policy: Policy::default(), generation: 0, shut: false, released: Vec::new() }) })
+        Arc::new(Self { host, inner: Mutex::new(Inner { slots: BTreeMap::new(), hints: BTreeMap::new(), policy: Policy::default(), generation: 0, shut: false, released: Vec::new(), tally: Tally::default() }) })
     }
 
     pub fn set_policy(&self, policy: Policy) {
@@ -365,7 +371,15 @@ impl<H: WarmHost> Pool<H> {
         {
             let mut guard = self.inner.lock();
             let inner = &mut *guard;
-            let current = inner.slots.get_mut(key).filter(|slot| matches!(slot.state, State::Starting { generation: g } if g == generation));
+            let mut current = inner.slots.get_mut(key).filter(|slot| matches!(slot.state, State::Starting { generation: g } if g == generation));
+            if let Some(slot) = current.as_deref_mut() {
+                // A sleeping seat that was woken: how long it took, then the row stops saying "Waking up".
+                if let Some(since) = slot.waking_since.take() {
+                    let outcome = if result.is_ok() { "woke up" } else { "could not wake up" };
+                    crate::standby::seat_log::line(&format!("seat {} {outcome} in {} ms", key.slot.as_deref().unwrap_or("?"), now - since));
+                    tracing::info!(agent = %key.agent, wake_ms = now - since, ok = result.is_ok(), "acp: sleeping standby woke");
+                }
+            }
             match (current, result, inner.shut) {
                 (Some(slot), Ok(item), false) => {
                     slot.fails = 0;

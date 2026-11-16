@@ -48,7 +48,7 @@ fn the_limit_stops_a_new_standby_and_is_never_lowered_under_the_count() {
     assert!(store.remove("2"));
     assert!(!store.remove("2"));
     store.set_settings(1, 30).unwrap();
-    assert_eq!(HelperStore { settings: HelperSettings { max: 99, idle_minutes: 0 }, ..Default::default() }.clamped().settings, HelperSettings { max: MAX_HELPERS, idle_minutes: 1 });
+    assert_eq!(HelperStore { settings: HelperSettings { max: 99, idle_minutes: 0, idle_explicit: false }, ..Default::default() }.clamped_for(None).settings, HelperSettings { max: MAX_HELPERS, idle_minutes: 1, idle_explicit: true });
 }
 
 #[test]
@@ -234,4 +234,29 @@ fn a_starting_helper_says_where_its_start_is() {
     let view = build_view(&store, &statuses, |_| true, |_| true);
     assert_eq!(view.helpers[0].stage.as_deref(), Some("opening session"));
     assert!(view.helpers[0].stage_ms.is_some_and(|ms| ms >= 2_000));
+}
+
+const GB: u64 = 1024 * 1024 * 1024;
+
+#[test]
+fn a_standby_sleeps_sooner_on_a_small_pc_unless_the_person_set_a_time() {
+    let fresh = HelperStore::default();
+    assert_eq!(fresh.clone().clamped_for(Some(8 * GB)).settings.idle_minutes, 5);
+    assert_eq!(fresh.clone().clamped_for(Some(24 * GB)).settings.idle_minutes, 10);
+    assert_eq!(fresh.clone().clamped_for(Some(64 * GB)).settings.idle_minutes, DEFAULT_IDLE_MINUTES);
+    assert_eq!(fresh.clamped_for(None).settings.idle_minutes, DEFAULT_IDLE_MINUTES);
+    // The tier is not mistaken for a choice when it is saved and read again.
+    let saved = HelperStore::default().clamped_for(Some(8 * GB));
+    assert!(!saved.settings.idle_explicit);
+    assert_eq!(saved.clamped_for(Some(8 * GB)).settings.idle_minutes, 5);
+    // A time the person set wins on any PC, also one saved before the flag existed.
+    let mut set = HelperStore::default();
+    set.set_settings(4, 45).unwrap();
+    assert_eq!(set.clone().clamped_for(Some(8 * GB)).settings.idle_minutes, 45);
+    let legacy = HelperStore { settings: HelperSettings { max: 4, idle_minutes: 12, idle_explicit: false }, ..Default::default() };
+    assert_eq!(legacy.clamped_for(Some(8 * GB)).settings.idle_minutes, 12);
+    // Choosing today's default on a small PC is still a choice.
+    let mut small = HelperStore::default().clamped_for(Some(8 * GB));
+    small.set_settings(4, DEFAULT_IDLE_MINUTES).unwrap();
+    assert_eq!(small.clamped_for(Some(8 * GB)).settings.idle_minutes, DEFAULT_IDLE_MINUTES);
 }

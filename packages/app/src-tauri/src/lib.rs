@@ -52,6 +52,7 @@ mod tools_home;
 mod uninstall;
 mod one_brain;
 mod companion;
+mod config_plan;
 mod crews;
 mod discord_alerts;
 mod discord_bot;
@@ -962,6 +963,12 @@ pub fn run() {
             commands::close_helpers_with_agent_set,
             commands::most_helpers_at_once_get,
             commands::most_helpers_at_once_set,
+            commands::stall_minutes_get,
+            commands::stall_minutes_set,
+            commands::stalls_list,
+            commands::stall_nudge,
+            commands::stall_stop,
+            commands::stall_respawn,
             commands::hidden_runs_list,
             commands::hidden_runs_dismiss,
             commands::audit_recent,
@@ -1080,6 +1087,7 @@ pub fn run() {
             }
             // Agents keep working when the PC is locked: hold it awake while any pane is busy.
             keep_awake::spawn(app.state::<AppState>().registry.clone());
+            agent_runs::stall::spawn(app.state::<AppState>().registry.clone(), app.handle().clone());
             // Copy (never move) the data release 1.0.3 left under the old names once: the home and
             // companion folders, and the paired phones / tunnel / push files in the app data folder.
             // The old files stay untouched and nothing already saved under the new names is overwritten.

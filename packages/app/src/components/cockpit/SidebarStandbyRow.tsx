@@ -5,7 +5,7 @@ import { createPortal } from 'react-dom';
 import { useDismissable } from '../../hooks/useDismissable';
 import { useT, type MessageKey } from '../../i18n';
 import { tauriModelOptionsApi, useModelOptions, type ModelOptionsApi } from '../../lib/modelOptions';
-import type { AfterTask } from '../../lib/standbyHelpers';
+import type { AfterTask, SkipReason } from '../../lib/standbyHelpers';
 import { AgentLogo } from '../common/AgentLogo';
 import { IconClose, IconMore } from './Icons';
 import type { StandbyRow } from './standby-rows';
@@ -24,6 +24,12 @@ export interface StandbyRowActions {
   start: (row: StandbyRow) => void;
 }
 
+const SKIP: Record<SkipReason, MessageKey> = {
+  different_model: 'standby.skip.model',
+  other_project: 'standby.skip.project',
+  busy: 'standby.skip.busy',
+  you_were_using_it: 'standby.skip.you',
+};
 const WORD: Record<StandbyRow['state'], MessageKey> = {
   ready: 'standby.state.ready',
   working: 'standby.state.busy',
@@ -70,6 +76,9 @@ export function SidebarStandbyRow({
   const problemNote = row.state === 'problem' && h.note ? t(`standby.note.${h.note}` as MessageKey) : null;
   const tip = problemNote ?? t('standby.tip', { name: h.name, agent: h.model ? `${agentLabel} · ${h.model}` : agentLabel, state: t(TIP[row.state]) });
   const canRemove = row.state !== 'working' && row.state !== 'withYou';
+  const usedToday = h.used_today ?? 0;
+  const usedLine = usedToday === 1 ? t('standby.usedOnce') : usedToday > 1 ? t('standby.usedTimes', { count: usedToday }) : null;
+  const skipLine = h.skip_reason ? t(SKIP[h.skip_reason]) : null;
   const leave = () => (warm ? actions.close(row) : actions.detach(row));
   const from = useRef<HTMLElement | null>(null);
 
@@ -129,6 +138,13 @@ export function SidebarStandbyRow({
           <span className="ck-sb-word">{word}</span>
         </span>
       </button>
+      {(usedLine || skipLine) && (
+        <div className="ck-sb-meta" data-testid="standby-meta">
+          {usedLine && <span data-testid="standby-used">{usedLine}</span>}
+          {usedLine && skipLine && <span aria-hidden="true"> · </span>}
+          {skipLine && <span data-testid="standby-skip">{skipLine}</span>}
+        </div>
+      )}
       {canRemove && (
         <button type="button" className="ck-sb-x" data-testid="standby-row-x" aria-label={t(warm ? 'standby.rowClose' : 'standby.rowX', { name: h.name })} title={warm ? t('standby.menu.close') : t('standby.menu.removeFrom', { agent: underTitle ?? t('standby.agentNow') })} onClick={leave}>
           <IconClose />
@@ -235,6 +251,7 @@ function StandbyRowMenu({
   return createPortal(
     <div ref={ref} className="ck-menu ck-menu--fixed ck-menu--compact" role="menu" data-testid="standby-row-menu" aria-label={h.name} style={{ left: pos.left, top: pos.top }} onKeyDown={onKeyDown} onContextMenu={(e) => e.preventDefault()}>
       {plain(t('standby.menu.open'), () => actions.open(row))}
+      {plain(t('standby.menu.tryIt'), () => actions.open(row))}
       {plain(t('standby.menu.rename'), onRename)}
       {(row.state === 'resting' || row.state === 'problem') && plain(t('standby.menu.start'), () => actions.start(row))}
       {models.length > 0 && head(t('standby.menu.model'))}

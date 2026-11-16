@@ -38,6 +38,8 @@ export const inboxCards: Partial<Record<EnglishKey, string>> = {
   // ConsentCard
   'inboxCards.consent.anotherAgent': '另一個 AI 助理',
   'inboxCards.consent.unknownAgent': '不明的 AI 助理',
+  'inboxCards.consent.askedFromCommand': '它是從自己視窗裡的指令提出的。',
+  'inboxCards.consent.askedThroughTools': '{who}透過自己的工具提出了這個要求。',
   'inboxCards.consent.notStarted': '這個 AI 助理不是它啟動的。',
   'inboxCards.consent.wantsToAnswer': '它想回答：「{asked}」。',
   'inboxCards.consent.controlTitle': '要允許{who}控制{target}嗎？',

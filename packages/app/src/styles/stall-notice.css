@@ -1,0 +1,50 @@
+/* "Stuck?" line for a helper with no progress: a small orange accent on a quiet row. */
+.cockpit .stall-notice {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px 10px;
+  padding: 6px 10px;
+  margin: 4px 0;
+  border: 1px solid var(--sep);
+  border-left: 3px solid var(--accent);
+  border-radius: 6px;
+  background: var(--fill);
+  color: var(--label);
+  font-size: var(--fs-meta);
+}
+.cockpit .stall-notice.is-compact {
+  margin: 0 8px 4px;
+  padding: 4px 8px;
+}
+.cockpit .stall-line {
+  font-weight: var(--fw-medium);
+}
+.cockpit .stall-actions {
+  display: inline-flex;
+  gap: 4px;
+}
+.cockpit .stall-btn {
+  height: 22px;
+  padding: 0 8px;
+  border-radius: 6px;
+  border: 1px solid var(--sep);
+  background: var(--fill);
+  color: var(--label);
+  font-size: var(--fs-meta);
+  font-weight: var(--fw-medium);
+  white-space: nowrap;
+}
+.cockpit .stall-btn:hover:not(:disabled) {
+  background: var(--fill-hover);
+}
+.cockpit .stall-btn:disabled {
+  opacity: 0.5;
+}
+.cockpit .stall-btn.is-danger {
+  color: var(--danger);
+}
+.cockpit .stall-note {
+  color: var(--label-2);
+  flex-basis: 100%;
+}

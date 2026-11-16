@@ -75,7 +75,7 @@ export const LAYOUT: Record<SectionId, LayoutGroup[]> = {
   ],
   helpers: [
     { group: 'How helpers run', rows: ['helper-agents', 'helpers-in-sidebar', 'helper-default-models', 'keep-helpers-open', 'close-helpers-with-agent'] },
-    { group: 'Limits', rows: ['most-helpers-at-once'] },
+    { group: 'Limits', rows: ['most-helpers-at-once', 'stuck-helper-minutes'] },
     { group: 'Connect your agents', rows: ['agent-pack'] },
   ],
   look: [

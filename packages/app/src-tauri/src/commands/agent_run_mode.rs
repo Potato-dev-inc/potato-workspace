@@ -3,7 +3,9 @@
 //! agent runs.
 
 use crate::agent_run_mode::{self, RunMode};
+use super::AppState;
 use serde_json::Value;
+use tauri::State;
 
 /// `{agents: [{id, label, headless_supported, headless_verified, headless_verified_reason, run_mode}]}`
 /// for every custom (definition-based) agent.
@@ -74,6 +76,46 @@ pub fn most_helpers_at_once_get() -> Value {
 pub fn most_helpers_at_once_set(value: u32) -> Result<Value, String> {
     agent_run_mode::set_most_helpers_at_once(value)?;
     Ok(most_helpers_at_once_get())
+}
+
+/// `{value: number}`: minutes with no progress before a helper reads as stuck (0 = off, default 5).
+#[tauri::command]
+pub fn stall_minutes_get() -> Value {
+    serde_json::json!({ "value": agent_run_mode::stall_minutes() })
+}
+
+/// Saves the stuck-helper minutes; only the Settings window writes it.
+#[tauri::command]
+pub fn stall_minutes_set(value: u32) -> Result<Value, String> {
+    agent_run_mode::set_stall_minutes(value)?;
+    Ok(stall_minutes_get())
+}
+
+/// Helpers that read as stuck now: `[{pane_id, minutes}]`.
+#[tauri::command]
+pub fn stalls_list() -> Value {
+    Value::Array(crate::agent_runs::stall::all().into_iter().map(|(pane_id, minutes)| serde_json::json!({ "pane_id": pane_id, "minutes": minutes })).collect())
+}
+
+/// Nudge a stuck helper: one short line through `send_message`.
+#[tauri::command]
+pub async fn stall_nudge(state: State<'_, AppState>, app: tauri::AppHandle, pane_id: String) -> Result<(), String> {
+    let registry = state.registry.clone();
+    tauri::async_runtime::spawn_blocking(move || crate::agent_runs::stall::nudge(registry, app, &pane_id)).await.map_err(|e| format!("INTERNAL: {e}"))?
+}
+
+/// Stop a stuck helper: the existing cancel.
+#[tauri::command]
+pub async fn stall_stop(state: State<'_, AppState>, app: tauri::AppHandle, pane_id: String) -> Result<(), String> {
+    let registry = state.registry.clone();
+    tauri::async_runtime::spawn_blocking(move || crate::agent_runs::stall::stop(registry, app, &pane_id)).await.map_err(|e| format!("INTERNAL: {e}"))?
+}
+
+/// Respawn a stuck helper: close it and start a fresh one with the same task and model. Returns the new handle.
+#[tauri::command]
+pub async fn stall_respawn(state: State<'_, AppState>, app: tauri::AppHandle, pane_id: String) -> Result<String, String> {
+    let registry = state.registry.clone();
+    tauri::async_runtime::spawn_blocking(move || crate::agent_runs::stall::respawn(registry, app, &pane_id)).await.map_err(|e| format!("INTERNAL: {e}"))?
 }
 
 /// The helpers that ran hidden (no pane), newest first, for the Inbox.

@@ -10,6 +10,7 @@ import type { PaneUsage } from '../../../lib/pane-usage';
 import { AgentLogo } from '../../common/AgentLogo';
 import { FloatingMenu } from '../FloatingMenu';
 import { RailSection } from './RailSection';
+import { StallNotice } from '../StallNotice';
 import { clockText } from './railFormat';
 
 export interface HelperRow {
@@ -120,13 +121,16 @@ export function BackgroundSection({ helpers, usage, jobs, onOpenPane, onStopHelp
       <div onContextMenu={onContext} className="rp-bg">
         {running === 0 && finished.length === 0 && <div className="rp-row is-empty">{t('rail.bg.empty')}</div>}
         {live.map((h) => (
-          <div key={h.id} className="rp-row rp-hov" data-testid="rail-helper">
+          <div key={h.id} className="rp-helper">
+          <div className="rp-row rp-hov" data-testid="rail-helper">
             <button type="button" className="rp-row-main" title={h.agent ?? h.title} onClick={() => onOpenPane(h.id)}>
               <AgentLogo id={h.agentType ?? ''} name={h.agent ?? h.title} size={16} decorative />
               <span className="rp-name">{h.title}</span>
               {isWaiting(h.status) ? <span className="rp-v is-warn rp-small">{t('rail.bg.needsYou')}</span> : <span className="rp-time">{clockText(busy.get(h.id) ?? 0)}</span>}
             </button>
             {onStopHelper && <StopSquare name={h.title} onStop={() => onStopHelper(h.id)} />}
+          </div>
+          {isRunning(h.status) && <StallNotice paneId={h.id} compact />}
           </div>
         ))}
         {jobs.map((job) => (

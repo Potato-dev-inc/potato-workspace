@@ -544,6 +544,12 @@ export function installTauriMock(scenario: HarnessScenario): void {
           return { on: true };
         case 'close_helpers_with_agent_set':
           return { on: Boolean(a.on) };
+        case 'stall_minutes_get':
+          return { value: 5 };
+        case 'stall_minutes_set':
+          return { value: Number(a.value) };
+        case 'stalls_list':
+          return [];
         case 'most_helpers_at_once_get':
           return { value: 8 };
         case 'most_helpers_at_once_set':

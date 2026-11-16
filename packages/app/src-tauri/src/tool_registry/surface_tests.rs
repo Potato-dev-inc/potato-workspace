@@ -17,9 +17,9 @@ fn catalog_version_moved_when_the_listed_surface_was_introduced() {
     let version = catalog_version();
     assert_ne!(version, CATALOG_VERSION_BEFORE_SURFACE);
     // 68 tools before the Team tools were added (team_roster, team_events, team_wait, team_notify): 72, then 73 with companion_recall.
-    // The five agent browser tools (browser_open, browser_read, browser_click, browser_type, browser_console) are the 77th to 81st (show_artifact is the 76th); the three project guide tools (read_guide_structure, read_guide_page, ask_guide) are the 82nd to 84th.
-    assert!(version.starts_with("84-"), "{version}");
-    assert_eq!(external_mcp_tool_count(), 84);
+    // The five agent browser tools (browser_open, browser_read, browser_click, browser_type, browser_console) are the 77th to 81st (show_artifact is the 76th); the three project guide tools (read_guide_structure, read_guide_page, ask_guide) are the 82nd to 84th; workspace_config (app setup, plan then apply) is the 85th.
+    assert!(version.starts_with("85-"), "{version}");
+    assert_eq!(external_mcp_tool_count(), 85);
 }
 
 #[test]
@@ -126,7 +126,7 @@ fn listed_tool_count_per_mode_is_pinned() {
     assert_eq!(names_for(McpMode::Shell).len(), 16, "{:?}", names_for(McpMode::Shell));
     assert_eq!(names_for(McpMode::Both).len(), 12, "{:?}", names_for(McpMode::Both));
     // The full list behind mode `all`: every tool except the six aliases.
-    assert_eq!(names_for(McpMode::All).len(), 84 - ALIASES.len());
+    assert_eq!(names_for(McpMode::All).len(), 85 - ALIASES.len());
     assert_eq!(names_for(McpMode::All).len() + ALIASES.len(), external_mcp_tool_count());
 }
 
@@ -190,11 +190,11 @@ fn unlisted_advanced_tools_are_still_callable_where_they_were() {
 fn nothing_became_callable_or_uncallable_in_agent_and_shell_modes() {
     // The callable sets of agent and shell are the pre-change lists (33 and 18 names, with
     // set_mode counted in agent mode only through its always-visible rule), plus the four Team
-    // tools in agent mode only. companion_recall (agent, both, all) is the 73rd; run_agents and review_agent are the 74th and 75th; show_artifact (agent, both, all) is the 76th; the five browser tools (agent, both, all) are the 77th to 81st; the three project guide tools (agent, both, all) are the 82nd to 84th.
-    assert_eq!(callable_tools_for_mode(McpMode::Agent).len(), 49);
+    // tools in agent mode only. companion_recall (agent, both, all) is the 73rd; run_agents and review_agent are the 74th and 75th; show_artifact (agent, both, all) is the 76th; the five browser tools (agent, both, all) are the 77th to 81st; the three project guide tools (agent, both, all) are the 82nd to 84th; workspace_config (agent, both, all) is the 85th.
+    assert_eq!(callable_tools_for_mode(McpMode::Agent).len(), 50);
     assert_eq!(callable_tools_for_mode(McpMode::Shell).len(), 19);
-    assert_eq!(callable_tools_for_mode(McpMode::Both).len(), 84);
-    assert_eq!(callable_tools_for_mode(McpMode::All).len(), 84);
+    assert_eq!(callable_tools_for_mode(McpMode::Both).len(), 85);
+    assert_eq!(callable_tools_for_mode(McpMode::All).len(), 85);
 }
 
 #[test]
@@ -245,7 +245,8 @@ Potato Workspace MCP"));
     // 3200 before the agent browser tools were named here (about 115 characters); 3300 before the standbys line (about 160).
     // 3500 before the seat and start-and-wake lines (about 250 more); 3950 once the wake line gave way to how a helper's
     // result and its questions come back (answer_prompt).
-    assert!(text.len() < 3950, "instructions go out every session: {}", text.len());
+    // The standby seat lines had already taken it past 3950 (4083 on night/integration); 4250 once workspace_config is named (136 more).
+    assert!(text.len() < 4250, "instructions go out every session: {}", text.len());
     assert!(text.contains("Five tools"));
     assert!(text.contains("SCHEMA_DRIFT"));
     assert!(text.contains("Rebuild or reinstall the Potato Workspace MCP"));
@@ -288,4 +289,26 @@ fn the_team_tools_are_callable_by_name_in_agent_mode_but_not_listed_by_default()
         assert!(mcp_instructions().contains(name), "{name}");
     }
     assert!(mcp_instructions().contains("untrusted data"));
+}
+
+#[test]
+fn workspace_config_is_one_advanced_mutating_tool_on_the_config_route() {
+    let tool = tools().into_iter().find(|t| t.name == "workspace_config").expect("the tool exists");
+    assert_eq!((tool.method, tool.path), ("POST", "/config/op"));
+    assert_eq!(tool.safety, ToolSafety::Mutating);
+    assert_eq!(tool_tier("workspace_config"), ToolTier::Advanced);
+    assert!(tool_visible_in_mode("workspace_config", McpMode::Agent));
+    assert!(tool_visible_in_mode("workspace_config", McpMode::Both));
+    assert!(tool_visible_in_mode("workspace_config", McpMode::All));
+    assert!(!tool_visible_in_mode("workspace_config", McpMode::Shell), "a terminal-control session has no business with app setup");
+    assert!(!names_for(McpMode::Agent).contains(&"workspace_config"), "callable, not listed by default");
+    assert!(!names_for(McpMode::Both).contains(&"workspace_config"));
+    assert!(names_for(McpMode::All).contains(&"workspace_config"));
+    // The agent is told the person says Allow, and what the safety limits are.
+    for needle in ["Allow", "CONSENT_PENDING", "plan_id", "Logins, lending, devices and secrets cannot be changed"] {
+        assert!(tool.description.contains(needle), "{needle}");
+    }
+    assert!(mcp_instructions().contains("workspace_config"));
+    // The input is the three operations, nothing that carries a secret.
+    assert_eq!(tool.input_schema["properties"]["op"]["enum"], serde_json::json!(["plan", "apply", "read"]));
 }

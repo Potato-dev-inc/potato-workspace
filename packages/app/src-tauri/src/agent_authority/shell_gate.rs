@@ -52,6 +52,10 @@ fn exempt(segments: &[&str]) -> bool {
             // Showing the person a page is what this route is for.
             | ["artifacts", "show"]
             | ["health"]
+            // A plan changes nothing (the apply is the call that asks).
+            | ["config", "plan"]
+            // Refused for a caller with no MCP session; no card for a call that cannot work.
+            | ["config", "op"]
     )
 }
 
@@ -77,6 +81,7 @@ fn target_words(segments: &[&str]) -> String {
         ["settings", ..] => "your settings".to_string(),
         ["panes", _, "input" | "key"] => "a window by typing into it".to_string(),
         ["agents", ..] => "your agent list".to_string(),
+        ["config", ..] => "your app setup".to_string(),
         ["opencode", ..] => "your OpenCode settings".to_string(),
         _ => "something in the app".to_string(),
     }
@@ -84,6 +89,12 @@ fn target_words(segments: &[&str]) -> String {
 
 /// For `/settings`, the names of the keys it would change (never the values).
 fn detail(segments: &[&str], body: &Value) -> Option<String> {
+    if let ["config", "apply"] = segments {
+        // The plan's own words (no setting values): what exactly the person is allowing.
+        let id = body.get("plan_id")?.as_str()?;
+        let lines = crate::config_plan::store().card_lines(id, crate::questions::now_ms())?;
+        return (!lines.is_empty()).then(|| format!("It wants to: {}", lines.join("; ")));
+    }
     if !matches!(segments, ["settings", ..]) {
         return None;
     }
@@ -102,6 +113,32 @@ fn body_key(body: &Value) -> String {
     let mut hasher = std::collections::hash_map::DefaultHasher::new();
     body.to_string().hash(&mut hasher);
     format!("{:016x}", hasher.finish())
+}
+
+/// The card for a call from an MCP session (not a shell): same words, same Allow, keyed on the session.
+pub fn check_session_call(session: &str, method: &str, segments: &[&str], body: &Value, now: u64) -> Result<(), OperationError> {
+    let route = format!("{method} /{}", segments.join("/"));
+    let requester = crate::mcp_sessions::session_client_name(session).unwrap_or_else(|| gate::UNKNOWN_REQUESTER.to_string());
+    let ask = Ask {
+        session: session.to_string(),
+        subject: route.clone(),
+        pane_id: None,
+        action: Action::ConfigChange,
+        prompt_key: body_key(body),
+        requester: requester.clone(),
+        target: target_words(segments),
+        risk: None,
+        risk_headline: detail(segments, body),
+    };
+    let target = ask.target.clone();
+    gate::run(ask, now)?;
+    audit::record(
+        Kind::Consent,
+        Who::Agent(session.to_string()),
+        &format!("{requester} changed {target} through its tools, after you allowed it"),
+        json!({ "route": route, "via": "mcp" }),
+    );
+    Ok(())
 }
 
 /// The verdict for a call known to come from agent pane `pane`.
@@ -228,6 +265,25 @@ mod tests {
         assert!(is_changing("POST", &["panes", "p1", "input"]));
         assert!(is_changing("DELETE", &["panes", "p1"]));
         assert!(is_changing("POST", &["agents", "definitions"]));
+    }
+
+    #[test]
+    fn a_config_plan_is_free_but_applying_it_from_an_agent_window_is_a_card_with_the_plans_words() {
+        assert!(!is_changing("POST", &["config", "plan"]), "a plan changes nothing");
+        assert!(!is_changing("GET", &["config", "standby"]));
+        assert!(is_changing("POST", &["config", "apply"]));
+        let world = crate::config_plan::tests::Fake::new();
+        let body = json!({ "ops": [{ "kind": "standby_add", "name": "Cheap helper", "agent": "opencode" }, { "kind": "settings", "patch": { "language": "zh-TW" } }] });
+        let view = crate::config_plan::plan(&world, crate::config_plan::store(), &body, now_ms()).unwrap();
+        let pane = pane();
+        let apply = json!({ "plan_id": view.plan_id });
+        let error = check_agent_call(&pane, "POST", &["config", "apply"], &apply, None, now_ms()).unwrap_err();
+        let card = questions::store().get(&pending_id(&error), now_ms()).unwrap();
+        assert_eq!(card.question, "Allow another agent to change your app setup?");
+        let context = card.context.as_deref().unwrap();
+        assert!(context.contains("Cheap helper") && context.contains("language") && !context.contains("zh-TW"), "{context}");
+        // The plan call itself raises nothing.
+        check_agent_call(&pane, "POST", &["config", "plan"], &body, None, now_ms()).expect("planning needs no card");
     }
 
     struct Nobody;

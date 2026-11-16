@@ -32,6 +32,8 @@ pub(super) struct StoreFile {
     close_helpers_with_agent: Option<bool>,
     /// "Most helpers at once" for `run_agents`: absent means [`DEFAULT_MOST_HELPERS`].
     most_helpers_at_once: Option<u32>,
+    /// "Tell me when a helper is stuck": minutes with no progress (0 = off); absent means the default.
+    stall_minutes: Option<u32>,
 }
 
 /// How many helpers one `run_agents` call runs together unless the person changed it.
@@ -92,6 +94,8 @@ pub struct TestEnv {
     pub close_helpers_with_agent: Option<bool>,
     /// `None` = the default ([`DEFAULT_MOST_HELPERS`]).
     pub most_helpers_at_once: Option<u32>,
+    /// `None` = the default ([`crate::agent_runs::stall::DEFAULT_MINUTES`]).
+    pub stall_minutes: Option<u32>,
 }
 
 #[cfg(test)]
@@ -251,6 +255,63 @@ pub fn set_most_helpers_at_once(value: u32) -> Result<(), String> {
     #[cfg(not(test))]
     {
         let file = save_most_helpers_at(&path(), value)?;
+        *CACHE.write() = Some(file);
+        Ok(())
+    }
+}
+
+/// Minutes with no progress before a helper reads as stuck (0 = never); default 5.
+pub fn stall_minutes() -> u32 {
+    #[cfg(test)]
+    {
+        TEST_ENV.with(|slot| slot.borrow().as_ref().and_then(|env| env.stall_minutes).unwrap_or(crate::agent_runs::stall::DEFAULT_MINUTES))
+    }
+    #[cfg(not(test))]
+    {
+        stall_minutes_in(&loaded())
+    }
+}
+
+fn stall_minutes_in(file: &StoreFile) -> u32 {
+    file.stall_minutes.unwrap_or(crate::agent_runs::stall::DEFAULT_MINUTES).min(crate::agent_runs::stall::MAX_MINUTES)
+}
+
+/// Writes the stall setting into the file at `target`.
+pub(super) fn save_stall_minutes_at(target: &Path, value: u32) -> Result<StoreFile, String> {
+    if value > crate::agent_runs::stall::MAX_MINUTES {
+        return Err(format!("INVALID_ARGUMENT: stuck-helper minutes must be between 0 and {}", crate::agent_runs::stall::MAX_MINUTES));
+    }
+    let mut file = read_file(target);
+    file.version = FILE_VERSION;
+    file.stall_minutes = Some(value);
+    let text = serde_json::to_vec_pretty(&file).map_err(|e| e.to_string())?;
+    crate::settings_patch::write_atomic(target, &text).map_err(|e| format!("could not save: {e}"))?;
+    Ok(file)
+}
+
+/// The stall setting of the file at `target` (default 5).
+#[cfg(test)]
+pub(super) fn stall_minutes_at(target: &Path) -> u32 {
+    stall_minutes_in(&read_file(target))
+}
+
+/// Saves the stall setting.
+pub fn set_stall_minutes(value: u32) -> Result<(), String> {
+    #[cfg(test)]
+    {
+        if value > crate::agent_runs::stall::MAX_MINUTES {
+            return Err("INVALID_ARGUMENT: stuck-helper minutes is out of range".into());
+        }
+        TEST_ENV.with(|slot| {
+            if let Some(env) = slot.borrow_mut().as_mut() {
+                env.stall_minutes = Some(value);
+            }
+        });
+        Ok(())
+    }
+    #[cfg(not(test))]
+    {
+        let file = save_stall_minutes_at(&path(), value)?;
         *CACHE.write() = Some(file);
         Ok(())
     }

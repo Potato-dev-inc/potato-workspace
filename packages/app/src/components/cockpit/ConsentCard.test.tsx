@@ -4,7 +4,7 @@ import { createRoot, type Root } from 'react-dom/client';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { deriveNeedsYou } from '../../lib/attention';
 import type { Question } from '../../lib/questions';
-import { ConsentCard, consentTitle } from './ConsentCard';
+import { ConsentCard, consentReason, consentTitle } from './ConsentCard';
 
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 
@@ -170,5 +170,21 @@ describe('ConsentCard: answering a risky prompt', () => {
     expect(consentTitle(change, 'Claude 1')).toBe('Allow Claude to change your settings?');
     expect(button('Deny')?.className).toContain('ck-btn--primary');
     expect(button('Always allow here')).toBeUndefined();
+  });
+
+  it('a settings change asked through MCP tools names the agent and has no command window', () => {
+    const change: Question = {
+      ...takeOver,
+      id: 'c3',
+      question: 'Allow Claude to change your settings?',
+      context: 'It wants to change: language. Claude asked through its tools.',
+      choices: takeOver.choices.filter((c) => c.id !== 'always'),
+      consent: { action: 'config_change', requester: 'Claude', target: 'your settings' },
+    };
+    const reason = consentReason(change) ?? '';
+    expect(reason).toBe('It wants to change: language. Claude asked through its tools.');
+    expect(reason).not.toMatch(/command|own window/);
+    render(change, 'Claude 1');
+    expect(host.querySelector('.ib-reason')?.textContent).toBe(reason);
   });
 });

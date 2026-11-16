@@ -64,13 +64,7 @@ pub(super) fn wait_agents(
         ));
     }
     let wait_started = std::time::Instant::now();
-    let result = operations::wait_for_operations(
-        &cursors,
-        request.until,
-        request.wait_ms,
-        wait_all,
-        request.wake_on_progress,
-    )?;
+    let result = wait_with_stall_wake(&cursors, &request, wait_all)?;
     let waited_ms = wait_started.elapsed().as_millis() as u64;
     let agents = result
         .snapshots
@@ -93,6 +87,44 @@ pub(super) fn wait_agents(
     Ok(
         json!({"agents": agents, "reason": result.reason, "mode": if wait_all {"all"} else {"any"}, "waited_ms": waited_ms, "requested_wait_ms": request.wait_ms}),
     )
+}
+
+/// `wait_for_operations`, in short slices so a helper that turns stuck while the caller waits ends the wait
+/// ("stalled"): the caller then reads `stalled: true` on the run. A run already stuck when the wait starts
+/// does not end it again (the caller already knows), so a wait on a stuck helper still waits.
+fn wait_with_stall_wake(
+    cursors: &[OperationWaitCursor],
+    request: &WaitAgentsRequest,
+    wait_all: bool,
+) -> Result<operations::MultiOperationWaitResult, OperationError> {
+    const SLICE_MS: u64 = 5_000;
+    let started = std::time::Instant::now();
+    let stuck_at_start: Vec<bool> = cursors.iter().map(|c| stuck_now(c)).collect();
+    loop {
+        let left = request.wait_ms.saturating_sub(started.elapsed().as_millis() as u64);
+        let slice = left.min(SLICE_MS);
+        let mut result = operations::wait_for_operations(cursors, request.until.clone(), slice, wait_all, request.wake_on_progress)?;
+        if result.reason != crate::wait_reasons::TIMEOUT || left <= slice {
+            return Ok(result);
+        }
+        let newly: Vec<usize> = (0..cursors.len()).filter(|i| !stuck_at_start[*i] && stuck_now(&cursors[*i])).collect();
+        if !newly.is_empty() {
+            for i in newly {
+                if let Some(reason) = result.wake_reasons.get_mut(i) {
+                    *reason = crate::wait_reasons::STALLED.into();
+                }
+            }
+            result.reason = crate::wait_reasons::STALLED.into();
+            return Ok(result);
+        }
+    }
+}
+
+fn stuck_now(cursor: &OperationWaitCursor) -> bool {
+    operations::get_operation(&cursor.project_path, &cursor.operation_id)
+        .ok()
+        .and_then(|snapshot| crate::agent_runs::stall::minutes_for_snapshot(&snapshot))
+        .is_some()
 }
 
 pub(super) fn transcript(

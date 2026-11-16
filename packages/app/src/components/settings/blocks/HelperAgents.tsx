@@ -17,6 +17,8 @@ import {
   type HelperAgentsApi,
   type HelperVisibility,
 } from '../../../lib/agentRunMode';
+import { useT } from '../../../i18n';
+import { STALL_CHOICES, tauriStallSettingApi, type StallSettingApi } from '../../../lib/stalls';
 import { Popup } from '../controls';
 import { SettingRow, SettingToggle } from '../settings-ui';
 
@@ -162,6 +164,54 @@ export function MostHelpersAtOnce({
           {choices.map((n) => (
             <option key={n} value={String(n)}>
               {n}
+            </option>
+          ))}
+        </Popup>
+      </SettingRow>
+      {error && (
+        <div role="alert" className="text-xs">
+          {error}
+        </div>
+      )}
+    </>
+  );
+}
+
+/** "Tell me when a helper is stuck": minutes with no progress before a helper shows "Stuck?" (0 = off). */
+export function StuckHelperMinutes({ api = tauriStallSettingApi, onSaved }: { api?: StallSettingApi; onSaved?: () => void }) {
+  const t = useT();
+  const [value, setValue] = useState<number | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  useEffect(() => {
+    let alive = true;
+    api
+      .get()
+      .then((v) => alive && setValue(v.value))
+      // No desktop shell (a browser preview): there is nothing to switch.
+      .catch(() => undefined);
+    return () => {
+      alive = false;
+    };
+  }, [api]);
+  if (value === null) return null;
+  const save = async (next: number) => {
+    setError(null);
+    try {
+      setValue((await api.set(next)).value);
+      onSaved?.();
+    } catch (e) {
+      setError(errorSentence(e));
+    }
+  };
+  const choices = STALL_CHOICES.includes(value) ? STALL_CHOICES : [...STALL_CHOICES, value].sort((a, b) => a - b);
+  const label = t('stall.setting.label');
+  return (
+    <>
+      <SettingRow label={label} description={t('stall.setting.hint')}>
+        <Popup aria-label={label} value={String(value)} onChange={(event) => void save(Number(event.target.value))}>
+          {choices.map((n) => (
+            <option key={n} value={String(n)}>
+              {n === 0 ? t('stall.setting.off') : t('stall.setting.min', { n })}
             </option>
           ))}
         </Popup>

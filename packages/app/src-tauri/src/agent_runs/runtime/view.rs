@@ -137,6 +137,12 @@ pub struct AgentRunView {
     /// Present when this follow-up had to bring a closed conversation back (new pane, resumed session).
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub reopened: Option<serde_json::Value>,
+    /// True while the helper has had no progress (no output, tool event or file change) for the
+    /// stuck-helper minutes in Settings. Nothing is typed into the caller's chat: it is read here.
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub stalled: bool,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub stalled_minutes: Option<u64>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -197,6 +203,7 @@ impl From<OperationSnapshot> for AgentRunView {
         };
         let turn_id = format!("turn-{}", snapshot.turn_index);
         let warnings = run_warnings(&snapshot);
+        let stalled_minutes = crate::agent_runs::stall::minutes_for_snapshot(&snapshot);
         if snapshot.status.terminal() {
             messaging::expire_terminal_steers(&snapshot.project_path, &handle);
         }
@@ -361,6 +368,8 @@ impl From<OperationSnapshot> for AgentRunView {
             lane_reason: lane.1,
             lane_fallback: lane.2,
             reopened: None,
+            stalled: stalled_minutes.is_some(),
+            stalled_minutes,
         }
     }
 }

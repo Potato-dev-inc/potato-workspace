@@ -61,7 +61,7 @@ fn helpers_show_the_folder_name_never_the_path() {
             note: None,
             pane_id: None,
             open_pane: None,
-            person_pane: None, warm: false, stage: None, stage_ms: None,
+            person_pane: None, warm: false, stage: None, stage_ms: None, used_today: 0, skip_reason: None,
         }],
         max: 4,
         idle_minutes: 30,

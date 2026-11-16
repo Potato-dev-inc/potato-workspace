@@ -36,6 +36,8 @@ export const inboxCards = {
   // ConsentCard
   'inboxCards.consent.anotherAgent': 'another agent',
   'inboxCards.consent.unknownAgent': 'Unknown agent',
+  'inboxCards.consent.askedFromCommand': 'It asked from a command in its own window.',
+  'inboxCards.consent.askedThroughTools': '{who} asked through its tools.',
   'inboxCards.consent.notStarted': 'It did not start this agent.',
   'inboxCards.consent.wantsToAnswer': 'It wants to answer: "{asked}".',
   'inboxCards.consent.controlTitle': 'Allow {who} to control {target}?',

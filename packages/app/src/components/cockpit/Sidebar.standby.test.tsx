@@ -225,6 +225,12 @@ describe('standby helpers in the sidebar', () => {
     expect(states()).toEqual(['Waiting for memory']);
   });
 
+  it('a sleeping standby that is waking up says so', async () => {
+    const { api } = fakeApi([helper({ state: 'starting', stage: 'waking up' })]);
+    await show(cockpit([pane('a1', 'idle', 'Right panel rebuild')]), api);
+    expect(states()).toEqual(['Waking up…']);
+  });
+
   it('Close stops it: the menu item removes the helper', async () => {
     const { api } = fakeApi([helper()]);
     await show(cockpit([pane('a1', 'idle', 'Right panel rebuild')]), api);
@@ -264,6 +270,22 @@ describe('standby helpers in the sidebar', () => {
     await flush();
     expect(api.open).toHaveBeenCalledWith('y');
     expect(c.select).toHaveBeenCalledWith('chat-9');
+  });
+
+  it('a row says how often it was used today and why an agent last passed it by; Try it opens it for the person', async () => {
+    const { api } = fakeApi([helper({ id: 'x', name: 'Reviewer', used_today: 3, skip_reason: 'different_model' }), helper({ id: 'y', name: 'Second', used_today: 1 })]);
+    await show(cockpit([pane('a1', 'idle', 'Right panel rebuild')]), api);
+    const row = (id: string) => rows().find((r) => r.dataset.helperId === id)!;
+    expect(row('x').querySelector('[data-testid="standby-used"]')?.textContent).toBe('Used 3 times today');
+    expect(row('x').querySelector('[data-testid="standby-skip"]')?.textContent).toBe('Skipped: different model');
+    expect(row('y').querySelector('[data-testid="standby-used"]')?.textContent).toBe('Used once today');
+    expect(row('y').querySelector('[data-testid="standby-skip"]')).toBeNull();
+    await act(async () => row('x').querySelector<HTMLButtonElement>('.ck-row-more')!.click());
+    const tryIt = [...document.querySelectorAll<HTMLElement>('[data-testid="standby-row-menu"] [role="menuitem"]')].find((e) => e.textContent === 'Try it')!;
+    expect(tryIt).toBeDefined();
+    await act(async () => tryIt.click());
+    await flush();
+    expect(api.open).toHaveBeenCalledWith('x');
   });
 
   it('the row menu: rename, after a task, remove from the agent, close', async () => {

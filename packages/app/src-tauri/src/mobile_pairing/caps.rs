@@ -254,6 +254,9 @@ pub fn route_need(method: &str, segments: &[&str]) -> Need {
         // `lend`. Written out so the route is never a plain `control` POST.
         ("POST", ["lend", "item"]) => Need::Cap(Lend),
 
+        // App setup (`bridge/routes/config.rs`): acting, even to read the standby list. The routes also refuse every device.
+        (_, ["config", ..]) => Need::Cap(Control),
+
         ("GET", _) => Need::Cap(Watch),
         _ => Need::Cap(Control),
     }

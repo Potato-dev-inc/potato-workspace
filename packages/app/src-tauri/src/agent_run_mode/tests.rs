@@ -459,3 +459,31 @@ fn most_helpers_at_once_reads_the_test_environment() {
         assert!(set_most_helpers_at_once(99).is_err());
     });
 }
+
+#[test]
+fn stall_minutes_default_to_5_survive_a_restart_and_stay_in_range() {
+    let dir = std::env::temp_dir().join(format!("pm-run-mode-{}-stall", std::process::id()));
+    let _ = std::fs::remove_dir_all(&dir);
+    let target = dir.join(store::file_name());
+    assert_eq!(store::stall_minutes_at(&target), 5, "no file: 5");
+    store::save_stall_minutes_at(&target, 1).unwrap();
+    assert_eq!(store::stall_minutes_at(&target), 1);
+    store::save_most_helpers_at(&target, 4).unwrap();
+    assert_eq!(store::stall_minutes_at(&target), 1, "the other settings do not reset it");
+    store::save_stall_minutes_at(&target, 0).unwrap();
+    assert_eq!(store::stall_minutes_at(&target), 0, "0 = off");
+    assert!(store::save_stall_minutes_at(&target, 121).unwrap_err().starts_with("INVALID_ARGUMENT"));
+    assert_eq!(store::stall_minutes_at(&target), 0, "a refused value changes nothing");
+    let _ = std::fs::remove_dir_all(&dir);
+}
+
+#[test]
+fn stall_minutes_read_the_test_environment() {
+    store::with_test_env(TestEnv::default(), || assert_eq!(stall_minutes(), 5));
+    store::with_test_env(TestEnv { stall_minutes: Some(2), ..TestEnv::default() }, || {
+        assert_eq!(stall_minutes(), 2);
+        set_stall_minutes(9).unwrap();
+        assert_eq!(stall_minutes(), 9);
+        assert!(set_stall_minutes(500).is_err());
+    });
+}

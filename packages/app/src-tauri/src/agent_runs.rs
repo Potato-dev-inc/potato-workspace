@@ -17,6 +17,7 @@ pub(crate) mod pane_lease;
 pub(crate) mod pane_api;
 pub(crate) mod persist;
 pub(crate) mod quick;
+pub(crate) mod stall;
 pub(crate) mod structured;
 pub(crate) mod tree_proof;
 #[cfg(test)]

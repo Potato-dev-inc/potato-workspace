@@ -278,7 +278,7 @@ mod standby_list_tests {
     use crate::standby::helpers::{AfterTask, HelperEntry, HelpersView};
 
     fn entry(name: &str, agent: &str, model: Option<&str>, project: &str, state: HelperState) -> HelperEntry {
-        HelperEntry { id: name.into(), name: name.into(), agent: agent.into(), model: model.map(str::to_string), project: project.into(), after_task: AfterTask::Wait, home: None, used_by: None, taken_over: false, state, note: None, pane_id: None, open_pane: None, person_pane: None, warm: false, stage: None, stage_ms: None }
+        HelperEntry { id: name.into(), name: name.into(), agent: agent.into(), model: model.map(str::to_string), project: project.into(), after_task: AfterTask::Wait, home: None, used_by: None, taken_over: false, state, note: None, pane_id: None, open_pane: None, person_pane: None, warm: false, stage: None, stage_ms: None, used_today: 0, skip_reason: None }
     }
 
     #[test]
