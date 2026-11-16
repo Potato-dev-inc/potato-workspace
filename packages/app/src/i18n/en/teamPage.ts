@@ -36,7 +36,7 @@ export const teamPage = {
   'teamHub.empty.body': 'See who is around, lend each other usage, pass tasks, and keep the same skills and tools on every PC.',
   'teamHub.empty.start': 'Start a team',
   'teamHub.empty.join': 'I have an invite',
-  'teamHub.empty.solo': 'Just you? You can still link your own PCs under Devices.',
+  'teamHub.empty.solo': 'Just you? You can still link your own PCs under My PCs.',
   'teamHub.empty.waiting': 'Waiting for the team owner to let you in.',
 
   'teamHub.presence.here': 'Here',

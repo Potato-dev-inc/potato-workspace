@@ -141,8 +141,35 @@ pub fn save(dir: &Path, crew: &Crew, replace: bool, agent_state: &dyn Fn(&str) -
     Ok(slug)
 }
 
-/// Delete one crew file (only ever a file of ours, found by slug).
+/// Delete one crew file (only ever a file of ours, found by slug), and its routing rules.
 pub fn remove(dir: &Path, slug: &str) -> Result<(), CrewError> {
     let path = path_of(dir, slug)?;
+    let _ = std::fs::remove_file(routing_path(dir, slug)?);
     std::fs::remove_file(path).map_err(|_| CrewError::new("CREW_NOT_FOUND", "There is no such crew."))
+}
+
+/// The rules for routing work live next to the crew: `<slug>.routing.md` (not a crew file: only `.toml` is listed).
+const MAX_ROUTING_BYTES: usize = 16 * 1024;
+
+fn routing_path(dir: &Path, slug: &str) -> Result<PathBuf, CrewError> {
+    path_of(dir, slug)?;
+    Ok(dir.join(format!("{slug}.routing.md")))
+}
+
+/// The routing rules saved with a crew, if any.
+pub fn load_routing(dir: &Path, slug: &str) -> Option<String> {
+    std::fs::read_to_string(routing_path(dir, slug).ok()?).ok()
+}
+
+/// Save the routing rules of a crew (plain text, at most 16 KB). Empty text removes them.
+pub fn save_routing(dir: &Path, slug: &str, text: &str) -> Result<(), CrewError> {
+    let path = routing_path(dir, slug)?;
+    if text.trim().is_empty() {
+        let _ = std::fs::remove_file(path);
+        return Ok(());
+    }
+    if text.len() > MAX_ROUTING_BYTES {
+        return Err(CrewError::new("CREW_ROUTING_TOO_BIG", "The routing rules are too long. Keep them under 16 KB."));
+    }
+    crate::secure_file::write_private(&path, text).map_err(|e| CrewError::new("CREW_WRITE_FAILED", format!("Could not save the rules: {e}")))
 }

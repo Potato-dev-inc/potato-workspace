@@ -45,7 +45,7 @@ describe('useInlineSettings with row names', () => {
     await act(async () => hook.open('live-updates'));
     await render();
     expect(view).toBe('settings');
-    expect(hook.viewProps.initialTab).toBe('advanced');
+    expect(hook.viewProps.initialTab).toBe('labs');
     expect(hook.viewProps.initialRow).toBe('live-updates');
   });
 

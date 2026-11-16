@@ -159,14 +159,31 @@ describe('Go live sheet', () => {
     expect(host.querySelector('.ck-live-preview')?.textContent).toContain('fix the cart');
   });
 
-  it('with no relay address it says so and links to settings; Go live is off', async () => {
-    const onOpenSettings = vi.fn();
-    const api = fakeApi({ relay: '' });
-    await mount(api, { onOpenSettings });
-    expect(host.textContent).toContain('Live Room needs a relay address. Set it in Settings › General › Live Room.');
+  it('with no relay address it asks for one right here and saves it; Go live is off until then', async () => {
+    const api = { ...fakeApi({ relay: '' }), configSet: vi.fn(async (_c: LiveRoomConfig) => undefined) };
+    await mount(api);
+    expect(host.textContent).toContain('Live Room needs a relay address.');
+    expect(host.textContent).not.toContain('Settings');
     expect(button('Go live')?.disabled).toBe(true);
-    await click(button('Open Live Room settings'));
-    expect(onOpenSettings).toHaveBeenCalledTimes(1);
+    const input = host.querySelector<HTMLInputElement>('input[aria-label="Relay address"]')!;
+    await act(async () => {
+      const set = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value')!.set!;
+      set.call(input, 'https://relay.example.test');
+      input.dispatchEvent(new Event('input', { bubbles: true }));
+    });
+    await click(button('Save address'));
+    expect(api.configSet).toHaveBeenCalledWith({ relay: 'https://relay.example.test', minutes: 60, maxViewers: 10 });
+    expect(button('Go live')?.disabled).toBe(false);
+  });
+
+  it('"Remember these for next time" saves the length and viewers as the defaults', async () => {
+    const api = { ...fakeApi(), configSet: vi.fn(async (_c: LiveRoomConfig) => undefined) };
+    await mount(api);
+    expect(button('Remember these for next time')?.disabled).toBe(true);
+    await click([...host.querySelectorAll<HTMLElement>('[role="radio"], button')].find((b) => b.textContent === '25')!);
+    await click(button('Remember these for next time'));
+    expect(api.configSet).toHaveBeenCalledWith({ relay: 'https://relay.example.test', minutes: 60, maxViewers: 25 });
+    expect(host.textContent).toContain('Remembered for next time');
   });
 
   it('a team relay counts as a relay', async () => {

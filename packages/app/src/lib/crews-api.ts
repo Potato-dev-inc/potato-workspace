@@ -2,9 +2,9 @@
 // "Save this team" reads a draft from a live pane; "Start crew" starts a saved one in a folder.
 // The crew shape is shared with the command line (`@potato-workspace/shared`, crews.ts).
 import { invoke } from '@tauri-apps/api/core';
-import type { Crew, CrewProblem, CrewRole, CrewSummary } from '@potato-workspace/shared';
+import type { Crew, CrewApplied, CrewOpened, CrewPermissions, CrewProblem, CrewRole, CrewRoutePreview, CrewSummary } from '@potato-workspace/shared';
 
-export type { Crew, CrewProblem, CrewRole, CrewSummary };
+export type { Crew, CrewApplied, CrewOpened, CrewPermissions, CrewProblem, CrewRole, CrewRoutePreview, CrewSummary };
 
 /** The agent a starter role has until the crew starts: the person's default agent. */
 export const DEFAULT_AGENT = '{default}';
@@ -53,6 +53,18 @@ export interface CrewsApi {
   remove: (slug: string) => Promise<void>;
   /** `agents` maps role names to the agent the Start sheet chose for them. */
   start: (slug: string, folder: string, agents?: Record<string, string>) => Promise<CrewStartOutcome>;
+  /** The ready-made crews (read-only). */
+  templates: () => Promise<CrewSummary[]>;
+  /** A saved crew or a template with its rules and problems, for the canvas. */
+  open: (slug: string) => Promise<CrewOpened>;
+  /** Every problem of a crew as it is now. Nothing is saved. */
+  check: (crew: Crew) => Promise<CrewProblem[]>;
+  /** Save a crew with its routing rules. */
+  saveCanvas: (crew: Crew, routingText: string, replace?: boolean) => Promise<CrewSaveOutcome>;
+  /** "Try a task": a dry run. Null when the rules name no role of the crew. */
+  tryTask: (crew: Crew, routingText: string, task: string) => Promise<CrewRoutePreview | null>;
+  /** Keep the crew's standby helpers ready in a folder. */
+  apply: (crew: Crew, folder: string, raiseLimit?: boolean) => Promise<CrewApplied>;
 }
 
 const isTauri = (): boolean => typeof window !== 'undefined' && '__TAURI_INTERNALS__' in window;
@@ -71,6 +83,12 @@ export const crewsApi: CrewsApi = {
   save: (crew, replace = false) => call<CrewSaveOutcome>('crews_save', { crew, replace }),
   remove: (slug) => call<void>('crews_remove', { slug }),
   start: (slug, folder, agents) => call<CrewStartOutcome>('crews_start', { slug, folder, agents }),
+  templates: () => call<CrewSummary[]>('crews_templates'),
+  open: (slug) => call<CrewOpened>('crews_open', { slug }),
+  check: (crew) => call<CrewProblem[]>('crews_check', { crew }),
+  saveCanvas: (crew, routingText, replace = false) => call<CrewSaveOutcome>('crews_save_canvas', { crew, routingText, replace }),
+  tryTask: (crew, routingText, task) => call<CrewRoutePreview | null>('crews_try_task', { crew, routingText, task }),
+  apply: (crew, folder, raiseLimit = false) => call<CrewApplied>('crews_apply', { crew, folder, raiseLimit }),
 };
 
 /** A command error is `CODE: message`; the message is the part to show. */

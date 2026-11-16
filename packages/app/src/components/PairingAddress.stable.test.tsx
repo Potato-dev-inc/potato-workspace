@@ -205,11 +205,11 @@ describe('Settings screen (real catalog): Connect page', () => {
     host = document.createElement('div');
     document.body.appendChild(host);
     root = createRoot(host);
-    await act(async () => root.render(<SettingsPanel open api={settingsApi} initialTab="connect" />));
+    await act(async () => root.render(<SettingsPanel open withConnect api={settingsApi} initialTab="connect" />));
     await settle(8);
-    // The Phone card starts closed on the Connect page: open it.
-    await click(host.querySelector('.st-closed-group[data-group="Phone"] .st-adv-toggle'));
-    await settle(8);
+    // Connect > Phone: "Pair a phone" opens the pairing panel, which carries "Keep one address".
+    await click(host.querySelector('[data-testid="connect-main-phone"]'));
+    await settle(30);
     const offer = host.querySelector<HTMLElement>('[data-testid="keep-one-address"]');
     expect(offer).not.toBeNull();
     await click(offer);

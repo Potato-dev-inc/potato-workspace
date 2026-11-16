@@ -8,7 +8,7 @@ import { t } from '../../i18n';
 import { isCantCheck, type CheckRow } from '../../lib/setup-checks';
 import { problemWords } from './problem-words';
 
-export type CardId = 'agents' | 'signed-in' | 'phone' | 'updates' | 'helpers';
+export type CardId = 'agents' | 'signed-in' | 'updates' | 'helpers';
 export type Glyph = '✓' | '!' | '×' | '…' | '•';
 
 /** What a card's button does. `fix` runs the first failing setup check's own fix; the others jump. */
@@ -33,9 +33,6 @@ export const CARD_NAMES: Record<CardId, string> = {
   },
   get 'signed-in'() {
     return t('settings.card.signed-in');
-  },
-  get phone() {
-    return t('settings.card.phone');
   },
   get updates() {
     return t('settings.card.updates');
@@ -151,28 +148,6 @@ export function signedInCard(overview: AccountsOverview, rows: CheckRow[]): Card
     line: t('settings.card.signedIn', { count: withSignIn.length, names: join(withSignIn.map(titleCase)) }),
     sub,
     actions: [{ label: t('settings.card.manage'), kind: 'row', row: 'accounts' }],
-  };
-}
-
-// ---------- Phone ----------
-
-export function phoneCard(paired: number): CardView {
-  if (paired === 0) {
-    return {
-      id: 'phone',
-      name: CARD_NAMES.phone,
-      glyph: '•',
-      line: t('settings.card.noPhone'),
-      sub: t('settings.card.noPhoneSub'),
-      actions: [{ label: t('settings.card.pairPhone'), kind: 'row', row: 'pairing', primary: true }],
-    };
-  }
-  return {
-    id: 'phone',
-    name: CARD_NAMES.phone,
-    glyph: '✓',
-    line: t('settings.card.phonesPaired', { count: paired }),
-    actions: [{ label: t('settings.card.yourPhones'), kind: 'row', row: 'paired-devices' }],
   };
 }
 

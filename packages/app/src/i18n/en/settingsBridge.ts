@@ -27,6 +27,7 @@ export const settingsBridge = {
   "bridge.connectEverywhere": "Connect everywhere",
   "bridge.projectLine": "Project: {path}",
   "bridge.chooseFolder": "Choose a project folder in General first",
+  "bridge.pickFolderFirst": "Pick a project folder first.",
   "bridge.uninstallProjectTitle": "Uninstall MCP from project?",
   "bridge.uninstallProjectBody": "Remove potato-workspace from this project’s .mcp.json, .codex/config.toml, and opencode.json?",
   "bridge.uninstallGlobalTitle": "Uninstall global MCP?",

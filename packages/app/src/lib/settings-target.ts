@@ -12,11 +12,14 @@ import { SECTIONS } from '../components/settings/catalog';
 import { LABS_SWITCH_KEYS } from '../components/settings/labs-areas';
 import { findRowSection, type SettingsPageId } from '../components/settings/model';
 import { DEFAULT_SETTINGS_TAB, resolveSettingsTab } from './settings-entry';
+import { connectTabFor, type ConnectTab } from './openConnect';
 
 export interface SettingsTarget {
   page: SettingsPageId;
   /** A row of that page to scroll to and mark. */
   row?: string;
+  /** On the Connect page (the separate Settings window), the tab an old name such as `lend` stands for. */
+  connectTab?: ConnectTab;
 }
 
 /** Old or short names that open a row rather than just a page. */
@@ -25,12 +28,6 @@ const ROW_ALIASES: Record<string, string> = {
   security: 'security-ask-before-control',
   plugins: 'agent-pack',
   costs: 'budget-turns',
-  // Connect's cards start closed; the old tab names open the card they used to be.
-  phone: 'pairing',
-  mobile: 'pairing',
-  team: 'team-page',
-  lend: 'lend-page',
-  devices: 'devices-page',
 };
 
 /** The page and row a name stands for; null when it names nothing. */
@@ -42,6 +39,7 @@ export function resolveSettingsTarget(tab: string | null | undefined): SettingsT
   const section = findRowSection(SECTIONS, rowId);
   // A section id wins over a row that happens to share its name.
   if (section && !(direct && direct === tab)) return { page: section.id, row: rowId };
+  if (direct === 'connect') return { page: direct, connectTab: connectTabFor(tab) };
   return direct ? { page: direct } : null;
 }
 

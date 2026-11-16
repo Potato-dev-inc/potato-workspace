@@ -386,28 +386,25 @@ fn a_seat_does_its_task_in_its_own_chat_and_the_pane_list_ends_as_it_began() {
 
     chat.send("ping").unwrap_or_else(|e| panic!("send: {e:?}"));
     assert!(wait_until(30, || turn_done(&chat)), "the turn did not end");
-    // The task is over: the same seat is ready again (its next clean session was started while it worked), still one seat.
+    // The task is over: the standby is used up. A standby is one-time (founder 2026-11-16): nothing is started in its place.
     assert!(wait_until(30, || {
         pool.tick(crate::event_log::now_ms());
-        pool.helper_statuses()["s1"].state == warm::HelperState::Ready
-    }), "the seat did not go back to ready");
-    let status = pool.helper_statuses()["s1"].clone();
-    assert_eq!((status.pane_id, status.used_by), (None, None));
-    assert_eq!(pool.seat_count(), 1);
+        pool.helper_statuses().get("s1").is_none()
+    }), "the used standby should be gone, not refilled");
+    assert_eq!(pool.seat_count(), 0);
     // The finished chat is NOT closed (founder 2026-11-16): it stays listed and open as an ordinary chat, never labelled as a standby.
     assert!(wait_until(30, || listed(&rig) == vec![(chat.pane_id().to_string(), None, None)]), "the finished chat should stay as an ordinary chat: {:?}", listed(&rig));
-    // Later, but inside the helper idle time (20 minutes): past that an unused seat sleeps on purpose.
+    // Later too: no replacement standby appears and nothing closes the chat.
     pool.tick(crate::event_log::now_ms() + 5 * 60_000);
     assert!(crate::acp::chat::get(chat.pane_id()).is_some(), "nothing closes it later either");
-    assert_eq!(pool.helper_statuses()["s1"].state, warm::HelperState::Ready, "and the seat is still there, ready");
-    // The next task finds the same seat, with clean memory (a new session).
+    assert_eq!(pool.seat_count(), 0, "and no new standby was made");
+    // The next task finds no standby: it starts an ordinary helper.
     let again = start(&rig.deps, rig.cfg.clone(), rig.request()).expect("starts again");
-    assert_eq!(again.seat().as_deref(), Some("s1"));
-    assert!(!Arc::ptr_eq(again.session(), chat.session()), "a clean session for the next task");
+    assert_eq!(again.seat(), None, "no standby is left to take it");
+    assert!(!Arc::ptr_eq(again.session(), chat.session()), "a new session for the next task");
     again.send("recall").unwrap_or_else(|e| panic!("send: {e:?}"));
     assert!(wait_until(30, || turn_done(&again)));
-    assert!(serde_json::to_string(&again.items()).unwrap().contains("recall:none"), "the seat remembers nothing of the task before");
-    assert_eq!(pool.seat_count(), 1);
+    assert!(serde_json::to_string(&again.items()).unwrap().contains("recall:none"), "it remembers nothing of the task before");
     again.retire();
     let _ = rig.conversations.close(again.pane_id());
 }

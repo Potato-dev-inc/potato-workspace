@@ -103,6 +103,7 @@ export function Sidebar({
   onNewCompanion,
   onOpenNewAgent,
   newAgentOpen = false,
+  settingsOpen = false,
   spaces,
   spacesOpen = false,
   onOpenSpaces,
@@ -158,6 +159,8 @@ export function Sidebar({
   onOpenNewAgent?: (project?: { path: string; name: string }) => void;
   /** The New agent page is the view on screen: the New agent row is the active one (and the Inbox row is not). */
   newAgentOpen?: boolean;
+  /** Settings is the view on screen: its gear (in the footer) is the active one, and the Inbox row is not. */
+  settingsOpen?: boolean;
   /** Spaces (Labs `spaces_enabled`). The Spaces row shows only when `enabled` is true. */
   spaces?: { enabled: boolean };
   /** The Spaces page is the view on screen: its row is the active one. */
@@ -437,7 +440,6 @@ export function Sidebar({
     },
     rename: (r, name) => void standbyApi.update(r.helper.id, { name }).then(applyStandby).catch((e) => c.notify(errorSentence(e))),
     setModel: (r, model) => void standbyApi.update(r.helper.id, { model }).then(applyStandby).catch((e) => c.notify(errorSentence(e))),
-    setAfter: (r, after) => void standbyApi.update(r.helper.id, { after_task: after }).then(applyStandby).catch((e) => c.notify(errorSentence(e))),
     moveUnder: (r, agentId) => void standbyApi.update(r.helper.id, { home: agentId }).then(applyStandby).catch((e) => c.notify(errorSentence(e))),
     start: (r) => void standbyApi.start(r.helper.id).then(applyStandby).catch(() => {}),
   };
@@ -1002,7 +1004,7 @@ export function Sidebar({
         )}
         <button
           type="button"
-          className={`ck-row ck-row--flat${c.selectedId === null && !c.spawn && !openCompanionId && !newAgentOpen && !spacesOpen && !connect?.open ? ' is-active' : ''}`}
+          className={`ck-row ck-row--flat${c.selectedId === null && !c.spawn && !openCompanionId && !newAgentOpen && !settingsOpen && !spacesOpen && !connect?.open ? ' is-active' : ''}`}
           onClick={() => {
             c.select(null);
             onOpenInbox?.();
@@ -1135,6 +1137,7 @@ export function Sidebar({
         helpersOf={(id) => helperRows(c.registry.paneList, id, (p) => c.names.get(p.info.id) ?? p.info.agent_type)}
         onStopHelper={(id) => c.interrupt(id)}
         onOpenSettings={(tab) => void (tab ? c.openSettings(tab) : c.openSettings())}
+        settingsOpen={settingsOpen}
         bridgeLine={c.bridgeLine}
         onOpenDoctor={onOpenDoctor}
         onOpenMemory={onOpenMemory}

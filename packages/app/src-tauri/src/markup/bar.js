@@ -10,6 +10,7 @@
   var KEY = __PM_MARKUP_KEY__;
   var SPEC = __PM_MARKUP_SPEC__;
   var STR = __PM_MARKUP_STR__;
+  var LOGOS = __PM_MARKUP_LOGOS__;
   var TOP = __PM_MARKUP_TOP__;
   try {
     if (window.top !== window.self || window[KEY]) return;
@@ -62,6 +63,7 @@
     needText: false,
     targets: [],
     to: '',
+    toOpen: false,
     owner: '',
     width: 0,
   };
@@ -348,7 +350,8 @@
     }
   }
   function escape() {
-    if (st.draft) st.draft = null;
+    if (st.toOpen) st.toOpen = false;
+    else if (st.draft) st.draft = null;
     else if (st.popup) st.popup = null;
     else if (st.sending) st.sending = false;
     else if (st.tool !== 'select') st.tool = 'select';
@@ -482,6 +485,114 @@
       return out;
     });
   }
+  // ---- who gets it: the list of running agents ----
+  function openTo() {
+    st.toOpen = true;
+    typing = true;
+    refresh();
+    var cur = ui.toList.querySelector('[data-cur="1"]') || ui.toList.querySelector('button:not([disabled])');
+    if (cur) cur.focus();
+  }
+  function closeTo() {
+    st.toOpen = false;
+    typing = false;
+    refresh();
+  }
+  function logoFor(agent, size) {
+    var l = LOGOS[agent];
+    if (!l) {
+      var m = css(el('span'), 'flex:none;display:grid;place-items:center;width:' + size + 'px;height:' + size + 'px;border-radius:5px;font-size:' + Math.round(size * 0.6) + 'px;font-weight:700;background:' + T.hover + ';color:' + T.text);
+      m.textContent = (agent || '?').charAt(0).toUpperCase();
+      return m;
+    }
+    var light = T === THEMES.light;
+    var v = svgEl('svg', { viewBox: '0 0 24 24', width: size, height: size, 'aria-hidden': 'true', fill: (light ? l.light : l.dark) || 'currentColor' });
+    svgEl('path', { d: l.path }, v);
+    v.style.flex = 'none';
+    return v;
+  }
+  function targetRow(t, picked) {
+    var rest = picked ? T.hover : 'transparent';
+    var b = css(el('button'), 'all:unset;box-sizing:border-box;display:flex;align-items:center;gap:10px;width:100%;min-height:48px;padding:6px 12px;border-radius:8px;cursor:' + (t.ok ? 'pointer' : 'default') + ';opacity:' + (t.ok ? 1 : 0.5) + ';background:' + rest);
+    b.setAttribute('type', 'button');
+    b.setAttribute('role', 'menuitem');
+    if (picked) b.setAttribute('data-cur', '1');
+    if (!t.ok) {
+      b.disabled = true;
+      if (t.reason) b.setAttribute('title', one(t.reason, 160));
+    }
+    b.appendChild(logoFor(t.agent, 20));
+    var col = css(el('span'), 'display:flex;flex-direction:column;min-width:0;flex:1');
+    var name = css(el('span'), 'font-size:13px;font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap');
+    name.textContent = t.name;
+    if (t.task) {
+      var task = css(el('span'), 'font-weight:400;color:' + T.dim);
+      task.textContent = ' \u00b7 ' + t.task;
+      name.appendChild(task);
+    }
+    var sub = css(el('span'), 'font-size:11.5px;color:' + T.dim + ';overflow:hidden;text-overflow:ellipsis;white-space:nowrap');
+    var word = css(el('span'), t.status === 'working' ? 'color:' + T.accent : t.status === 'waiting' ? 'color:' + T.text + ';font-weight:600' : '');
+    word.textContent = S[t.status] || S.idle;
+    sub.appendChild(doc.createTextNode(t.project ? t.project + ' \u00b7 ' : ''));
+    sub.appendChild(word);
+    if (t.id === st.ownerId) sub.appendChild(doc.createTextNode(' \u00b7 ' + S.thisPage));
+    col.appendChild(name);
+    col.appendChild(sub);
+    b.appendChild(col);
+    if (picked) {
+      var tick = svgEl('svg', { viewBox: '0 0 20 20', width: 16, height: 16, 'aria-hidden': 'true', fill: 'none', stroke: 'currentColor', 'stroke-width': '1.8', 'stroke-linecap': 'round', 'stroke-linejoin': 'round' });
+      svgEl('path', { d: 'M4.5 10.5l3.5 3.5 7.5-8' }, tick);
+      b.appendChild(css(tick, 'flex:none;color:' + T.dim));
+    }
+    listen.call(b, 'mouseenter', function () { if (t.ok) b.style.background = T.hover; });
+    listen.call(b, 'mouseleave', function () { b.style.background = rest; });
+    listen.call(b, 'focus', function () { b.style.background = T.hover; });
+    listen.call(b, 'blur', function () { b.style.background = rest; });
+    click(b, function () {
+      if (!t.ok) return;
+      st.to = t.id;
+      closeTo();
+      doSend();
+    });
+    return b;
+  }
+  function renderTo() {
+    var pick = st.targets.length > 0;
+    var cur = st.targets.find(function (t) { return t.id === st.to && t.ok; }) || st.targets.find(function (t) { return t.ok; }) || null;
+    if (cur && st.to !== cur.id) st.to = cur.id;
+    // The list is rebuilt only when something it shows changed: a rebuild between a press and its release would drop the click.
+    var sig = JSON.stringify([st.targets, st.to, st.toOpen, st.ownerId, T === THEMES.light]);
+    if (sig === renderTo.sig) return;
+    renderTo.sig = sig;
+    var b = ui.toBtn;
+    while (b.firstChild) b.removeChild(b.firstChild);
+    css(b, 'all:unset;box-sizing:border-box;cursor:pointer;display:inline-flex;align-items:center;gap:6px;min-height:32px;max-width:60%;padding:0 10px;border-radius:8px;border:1px solid ' + T.line + ';color:' + T.text);
+    var lead = css(el('span'), 'color:' + T.dim);
+    lead.textContent = S.to;
+    b.appendChild(lead);
+    if (cur) b.appendChild(logoFor(cur.agent, 16));
+    var now = css(el('span'), 'font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap');
+    now.textContent = cur ? cur.name : pick ? S.toPick : S.noAgents;
+    b.appendChild(now);
+    b.appendChild(doc.createTextNode('\u25be'));
+    b.setAttribute('aria-expanded', st.toOpen ? 'true' : 'false');
+    var l = ui.toList;
+    while (l.firstChild) l.removeChild(l.firstChild);
+    css(l, 'position:absolute;right:8px;bottom:calc(100% + 6px);width:min(340px,calc(100% - 16px));max-height:320px;overflow-y:auto;padding:4px;border-radius:10px;box-sizing:border-box;background:' + T.bar + ';border:1px solid ' + T.line + ';color:' + T.text + ';box-shadow:0 8px 24px rgba(0,0,0,.35);display:' + (st.toOpen ? 'block' : 'none'));
+    if (!st.toOpen) return;
+    st.targets.forEach(function (t) { l.appendChild(targetRow(t, cur && t.id === cur.id)); });
+    var nb = css(el('button'), 'all:unset;box-sizing:border-box;display:flex;align-items:center;gap:10px;width:100%;min-height:48px;padding:6px 12px;cursor:pointer;border-radius:8px;margin-top:4px;font-size:13px;font-weight:600;' + (pick ? 'border-top:1px solid ' + T.line : ''));
+    nb.setAttribute('type', 'button');
+    nb.setAttribute('role', 'menuitem');
+    var plus = css(el('span'), 'width:20px;text-align:center;font-size:18px;line-height:1;color:' + T.dim);
+    plus.textContent = '+';
+    nb.appendChild(plus);
+    nb.appendChild(doc.createTextNode(pick ? S.newAgent : S.startAgent));
+    listen.call(nb, 'focus', function () { nb.style.background = T.hover; });
+    listen.call(nb, 'blur', function () { nb.style.background = 'transparent'; });
+    click(nb, function () { closeTo(); push({ kind: 'newagent' }); });
+    l.appendChild(nb);
+  }
   function doSend() {
     var hasNote = st.marks.some(function (m) { return m.type === 'text'; });
     if (!st.request.trim() && !hasNote) {
@@ -571,7 +682,7 @@
     dock.appendChild(ui.status);
 
     // the send row
-    ui.row = css(el('div'), 'display:none;gap:8px;width:min(520px,calc(100% - 32px));padding:8px;border-radius:12px;pointer-events:auto;box-sizing:border-box');
+    ui.row = css(el('div'), 'display:none;gap:8px;width:min(520px,calc(100% - 32px));padding:8px;border-radius:12px;pointer-events:auto;box-sizing:border-box;position:relative');
     ui.thumb = css(el('img'), 'flex:none;align-self:center;width:92px;max-height:80px;object-fit:contain;border-radius:6px');
     ui.thumbNone = css(el('div'), 'flex:none;align-self:center;width:92px;min-height:52px;display:grid;place-items:center;text-align:center;font-size:11px;border-radius:6px;padding:4px;box-sizing:border-box');
     var col = css(el('div'), 'flex:1;display:flex;flex-direction:column;gap:5px;min-width:0');
@@ -598,23 +709,41 @@
     });
     var meta = css(el('div'), 'display:flex;align-items:center;gap:8px;font-size:12px');
     ui.count = el('span');
-    ui.to = css(el('select'), 'max-width:46%;font:inherit;border-radius:6px;padding:1px 4px');
-    ui.to.setAttribute('aria-label', S.to);
-    listen.call(ui.to, 'change', function () { st.to = ui.to.value; });
-    ui.toText = el('span');
+    ui.toBtn = css(el('button'), '');
+    ui.toBtn.setAttribute('type', 'button');
+    ui.toBtn.setAttribute('aria-haspopup', 'menu');
+    ui.toBtn.setAttribute('aria-label', S.toPick);
+    click(ui.toBtn, function () { st.toOpen ? closeTo() : openTo(); });
+    ui.toList = css(el('div'), 'display:none');
+    ui.toList.setAttribute('role', 'menu');
+    ui.toList.setAttribute('aria-label', S.toPick);
+    listen.call(ui.toList, 'keydown', function (e) {
+      e.stopPropagation();
+      if (e.key === 'Escape') {
+        e.preventDefault();
+        closeTo();
+        return ui.toBtn.focus();
+      }
+      if (e.key !== 'ArrowDown' && e.key !== 'ArrowUp') return;
+      var items = [].slice.call(ui.toList.querySelectorAll('button:not([disabled])'));
+      if (!items.length) return;
+      e.preventDefault();
+      var at = items.indexOf(root.activeElement);
+      items[(at + (e.key === 'ArrowDown' ? 1 : -1) + items.length) % items.length].focus();
+    });
     ui.go = css(el('button'), 'all:unset;cursor:pointer;height:' + SPEC.sizes.button + 'px;padding:0 12px;box-sizing:border-box;border-radius:8px;font-weight:600;white-space:nowrap;line-height:' + SPEC.sizes.button + 'px');
     ui.go.textContent = S.send;
     click(ui.go, doSend);
     meta.appendChild(ui.count);
     meta.appendChild(css(el('span'), 'flex:1'));
-    meta.appendChild(ui.toText);
-    meta.appendChild(ui.to);
+    meta.appendChild(ui.toBtn);
     meta.appendChild(ui.go);
     col.appendChild(ui.req);
     col.appendChild(meta);
     ui.row.appendChild(ui.thumb);
     ui.row.appendChild(ui.thumbNone);
     ui.row.appendChild(col);
+    ui.row.appendChild(ui.toList);
     dock.appendChild(ui.row);
 
     // the bar
@@ -752,7 +881,7 @@
     css(ui.status, 'padding:3px 9px;border-radius:8px;font-size:12px;pointer-events:auto;background:' + T.bar + ';border:1px solid ' + T.line + ';color:' + T.dim + (st.status ? '' : ';display:none'));
     // Send row.
     var showRow = st.sending && n > 0;
-    css(ui.row, 'display:' + (showRow ? 'flex' : 'none') + ';gap:8px;width:min(520px,calc(100% - 32px));padding:8px;border-radius:12px;pointer-events:auto;box-sizing:border-box;background:' + T.bar + ';border:1px solid ' + T.line + ';color:' + T.text + ';box-shadow:0 8px 24px rgba(0,0,0,.35)');
+    css(ui.row, 'display:' + (showRow ? 'flex' : 'none') + ';gap:8px;width:min(520px,calc(100% - 32px));padding:8px;border-radius:12px;pointer-events:auto;box-sizing:border-box;position:relative;background:' + T.bar + ';border:1px solid ' + T.line + ';color:' + T.text + ';box-shadow:0 8px 24px rgba(0,0,0,.35)');
     if (showRow) {
       if (st.thumb) {
         ui.thumb.setAttribute('src', st.thumb);
@@ -771,25 +900,9 @@
       st.marks.forEach(function (m) { if (m.type === 'pick') els++; });
       ui.count.textContent = (n === 1 ? S.count1 : S.countN.replace('{n}', String(n))) + (els ? ' · ' + (els === 1 ? S.element1 : S.elementsN.replace('{n}', String(els))) : '');
       css(ui.count, 'color:' + T.dim);
-      // Who gets it: the agent that opened the page, or a pane the person picks.
-      var pick = st.targets.length > 0 && !st.owner;
-      ui.to.style.display = pick ? 'inline-block' : 'none';
-      css(ui.to, 'max-width:46%;font:inherit;border-radius:6px;padding:1px 4px;background:' + T.bar + ';color:' + T.text + ';border:1px solid ' + T.line + ';display:' + (pick ? 'inline-block' : 'none'));
-      ui.toText.textContent = st.owner ? S.toOwner.replace('{agent}', st.owner) : S.to;
-      css(ui.toText, 'color:' + T.dim);
-      if (pick && ui.to.options.length !== st.targets.length) {
-        while (ui.to.firstChild) ui.to.removeChild(ui.to.firstChild);
-        st.targets.forEach(function (t) {
-          var o = create.call(doc, 'option');
-          o.value = t.id;
-          o.textContent = t.label;
-          o.disabled = !t.ok;
-          ui.to.appendChild(o);
-        });
-        if (!st.to) st.to = (st.targets.find(function (t) { return t.ok; }) || st.targets[0]).id;
-        ui.to.value = st.to;
-      }
-      ui.go.disabled = st.taking;
+      // Who gets it: a running agent, the page's own first.
+      renderTo();
+      ui.go.disabled = st.taking || !st.targets.some(function (t) { return t.ok; });
       css(ui.go, 'all:unset;cursor:pointer;height:' + SPEC.sizes.button + 'px;padding:0 12px;box-sizing:border-box;border-radius:8px;font-weight:600;white-space:nowrap;line-height:' + SPEC.sizes.button + 'px;background:' + T.accent + ';color:' + T.accentFg + ';opacity:' + (st.taking ? 0.4 : 1));
     }
     renderPop();
@@ -848,6 +961,7 @@
         if ('noPicture' in v) st.noPicture = !!v.noPicture;
         if (v.targets) st.targets = v.targets.slice(0, 40);
         if ('to' in v) st.to = String(v.to || '');
+        if ('ownerId' in v) st.ownerId = String(v.ownerId || '');
         if ('owner' in v) st.owner = one(v.owner, 60);
         if (v.status) say(one(v.status, 160));
         if (v.sent) {

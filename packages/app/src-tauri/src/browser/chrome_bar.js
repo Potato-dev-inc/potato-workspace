@@ -20,6 +20,9 @@
   var ui = null;
   var shownUrl = '';
   var editing = false;
+  // The start page's box asks for the focus once (see `render`); the person's own click or key ends the asking.
+  var startDone = false;
+  var acted = false;
 
   function push(kind, url) {
     if (queue.length < 20) queue.push({ kind: kind, url: url === undefined ? '' : String(url).slice(0, 2000) });
@@ -117,14 +120,45 @@
     ui.side.style.display = view.side ? 'block' : 'none';
     ui.mark.style.display = view.mark ? 'block' : 'none';
     ui.input.readOnly = !!view.side;
-    // On the app's own start page the box is ready for typing: asked again each tick until it holds the focus
-    // (a window that is still opening cannot take it yet).
-    if (view.start && document.activeElement !== host) {
-      try {
-        ui.input.focus();
-      } catch (e) {}
+    // On the app's own start page the box is ready for typing: the focus is asked for only while nothing else holds it
+    // and the person has not touched the page yet (a window that is still opening cannot take it at once). Once the box
+    // has it, or anything else has it (the mark-up bar, the page), or the person has clicked or typed, it is never
+    // asked for again: the bar must not take the focus back on later ticks.
+    if (view.start && !startDone) {
+      var held = document.activeElement;
+      if (held === host) startDone = true;
+      else if (held && held !== document.body && held !== document.documentElement) startDone = true;
+      else if (!acted) {
+        try {
+          ui.input.focus();
+        } catch (e) {}
+        if (document.activeElement === host) startDone = true;
+      }
     }
   }
+
+  // After that only the person's own click, key press or Ctrl+L moves the focus to the box.
+  document.addEventListener(
+    'pointerdown',
+    function (e) {
+      if (e.isTrusted !== false) acted = true;
+    },
+    true,
+  );
+  document.addEventListener(
+    'keydown',
+    function (e) {
+      if (!e.isTrusted) return;
+      acted = true;
+      if ((e.ctrlKey || e.metaKey) && !e.altKey && String(e.key).toLowerCase() === 'l' && ui) {
+        e.preventDefault();
+        try {
+          ui.input.focus();
+        } catch (x) {}
+      }
+    },
+    true,
+  );
 
   var api = {
     set: function (json) {

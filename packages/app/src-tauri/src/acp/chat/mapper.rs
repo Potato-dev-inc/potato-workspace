@@ -311,6 +311,10 @@ pub struct Mapper {
     tool_order: Vec<String>,
     notice_n: u64,
     steer_n: u64,
+    /// The person sent a message into the running turn. From then on the agent's words in this turn are shown in Summary
+    /// like final answers: the person is talking to the agent and waits for each reply (a turn with a background task can
+    /// stay open after its last message, so "the last message of the turn" would hide them all until the next message).
+    steered: bool,
     ignore_replay: bool,
     /// This replay was already judged (kept or dropped); the next start report clears it.
     replay_judged: bool,
@@ -376,6 +380,7 @@ impl Mapper {
             tool_order: Vec::new(),
             notice_n: 0,
             steer_n: 0,
+            steered: false,
             ignore_replay: false,
             replay_judged: false,
             emitted: false,
@@ -525,6 +530,7 @@ impl Mapper {
         self.seg_n = 0;
         self.think_n = 0;
         self.steer_n = 0;
+        self.steered = false;
         self.assistant = None;
         self.thinking = None;
         self.last_assistant = None;
@@ -549,6 +555,7 @@ impl Mapper {
     pub fn steered_with(&mut self, text: &str, attachments: &[ChatAttachment], at: &str) -> Vec<ChatItem> {
         let turn = self.turn.as_ref().map(|t| t.n).unwrap_or(self.turn_no);
         self.steer_n += 1;
+        self.steered = true;
         // What the agent says next is a new message after the person's.
         self.assistant = None;
         self.thinking = None;
@@ -814,7 +821,7 @@ impl Mapper {
             self.turn_visible = true;
         }
         let cut = seg.cut;
-        let item = ChatItem::Assistant { id: seg.id.clone(), at: Some(at.to_string()), text: shown, model: self.model.clone(), final_answer: false };
+        let item = ChatItem::Assistant { id: seg.id.clone(), at: Some(at.to_string()), text: shown, model: self.model.clone(), final_answer: self.steered && !replay };
         self.last_assistant = Some((item.clone(), seg_n));
         let mut out = vec![item];
         if cut && !replay && !self.cut_noted {
@@ -969,6 +976,7 @@ impl Mapper {
             }
         }
         self.last_assistant = None;
+        self.steered = false;
         // One grey line says how the turn ended; the view puts the buttons that fit it next to the words.
         out.push(self.notice(&end.reason.notice_kind(), end.text, at));
         out.push(ChatItem::TurnEnd { id: format!("end:{}", turn.n), at: Some(at.to_string()), outcome, duration_ms });

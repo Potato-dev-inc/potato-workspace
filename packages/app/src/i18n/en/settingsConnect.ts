@@ -62,6 +62,7 @@ export const settingsConnect = {
   "discord.linkAria": "Discord webhook link",
   "discord.savedEnds": "Saved. Ends in {tail}",
   "discord.save": "Save",
+  "discord.pasteFirst": "Paste a webhook link first.",
   "discord.working": "Working…",
   "discord.addFirst": "Add a webhook link first",
   "discord.savedNote": "Saved in the secure store on this PC. Ends in {tail}.",

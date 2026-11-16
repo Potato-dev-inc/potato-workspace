@@ -12,7 +12,7 @@ describe('settings entry', () => {
     expect(settingsEntryTab('?settings=1&tab=nope')).toBe('overview');
   });
 
-  it('opens each of the eight pages by id', () => {
+  it('opens each page by id (Connect only exists in the separate Settings window)', () => {
     for (const id of ['overview', 'agents', 'helpers', 'look', 'connect', 'keys', 'shortcuts', 'advanced']) {
       expect(settingsEntryTab(`?settings=1&tab=${id}`)).toBe(id);
     }

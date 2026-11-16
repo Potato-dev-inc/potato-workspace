@@ -24,7 +24,6 @@ import { ChatIndexSettings } from '../blocks/ChatIndexSettings';
 import { CiFixSettings } from '../blocks/CiFixSettings';
 import { DiagnosticFile } from '../blocks/DiagnosticFile';
 import { DiscordAlertsBlock } from '../blocks/DiscordAlerts';
-import { LiveRoomRow } from '../blocks/LiveRoomRow';
 import { MyEditorRow } from '../blocks/MyEditorRow';
 import { LoopGuardSettingsBlock } from '../blocks/LoopGuardSettings';
 import { SharedMemoryToggle } from '../blocks/SharedMemoryToggle';
@@ -433,7 +432,7 @@ export const generalRows: RowDef[] = [
   },
   {
     id: 'away-minutes',
-    label: 'Away digest after',
+    label: 'Tell me what happened while I was away',
     hint: 'After this many minutes without keyboard or mouse, shows what agents did. 0 is off.',
     keywords: 'away minutes digest while you were away idle',
     group: 'While agents work',
@@ -484,27 +483,6 @@ export const generalRows: RowDef[] = [
         checked={env.settings.checkpoints_enabled ?? true}
         onChange={(value) => void env.patch({ checkpoints_enabled: value })}
       />
-    ),
-  },
-  {
-    id: 'checkpoints-keep',
-    label: 'Keep last N checkpoints',
-    hint: 'Per agent. Older checkpoints are deleted.',
-    keywords: 'checkpoints prune',
-    group: 'Undo and memory',
-    render: (env) => (
-      <SettingRow label={t('settings.row.checkpoints-keep.label')} description={t('settings.row.checkpoints-keep.hint')}>
-        <NumberControl
-          aria-label={t('settings.row.checkpoints-keep.label')}
-          min={5}
-          max={500}
-          step={5}
-          disabled={env.settings.checkpoints_enabled === false}
-          value={env.settings.checkpoints_keep ?? 50}
-          normalize={clampCheckpointsKeep}
-          onCommit={(keep) => env.patch({ checkpoints_keep: keep })}
-        />
-      </SettingRow>
     ),
   },
   {
@@ -590,38 +568,6 @@ export const generalRows: RowDef[] = [
     render: (env) => <CiFixSettings onSaved={env.markSaved} />,
   },
   {
-    id: 'acp-chat-labs',
-    label: 'Chat view',
-    hint: 'Use an agent as a chat instead of a terminal.',
-    keywords: 'chat acp agent client protocol conversation terminal lane labs early',
-    group: 'Labs',
-    labs: { name: 'Chat view', about: 'Use an agent as a chat instead of a terminal.' },
-    render: (env) => (
-      <SettingToggle
-        label={t('settings.row.acp-chat-labs.label')}
-        description={t('settings.row.acp-chat-labs.hint')}
-        checked={env.settings.acp_chat_enabled ?? true}
-        onChange={(value) => void env.patch({ acp_chat_enabled: value })}
-      />
-    ),
-  },
-  {
-    id: 'model-bridge-labs',
-    label: 'Another model in Codex',
-    hint: 'Adds a way to use another model service inside Codex.',
-    keywords: 'model bridge service key codex provider responses connect labs early',
-    group: 'Labs',
-    labs: { name: 'Another model in Codex', about: 'Adds a way to use another model service inside Codex.' },
-    render: (env) => (
-      <SettingToggle
-        label={t('settings.row.model-bridge-labs.label')}
-        description={t('settings.row.model-bridge-labs.hint')}
-        checked={env.settings.model_bridge_enabled ?? false}
-        onChange={(value) => void env.patch({ model_bridge_enabled: value })}
-      />
-    ),
-  },
-  {
     id: 'spaces-labs',
     label: 'Spaces',
     hint: 'Chat with friends in small groups, PC to PC. No server keeps messages.',
@@ -666,6 +612,22 @@ export const generalRows: RowDef[] = [
         description={t('settings.row.devices-labs.hint')}
         checked={env.settings.devices_enabled ?? false}
         onChange={(value) => void env.patch({ devices_enabled: value })}
+      />
+    ),
+  },
+  {
+    id: 'account-labs',
+    label: 'Potato account',
+    hint: 'Sign in once and your devices find each other. Adds a sign-in to Connect.',
+    keywords: 'account sign in login devices my devices potato account labs early',
+    group: 'Labs',
+    labs: { name: 'Potato account', about: 'Sign in once and see your devices on each other.' },
+    render: (env) => (
+      <SettingToggle
+        label={t('settings.row.account-labs.label')}
+        description={t('settings.row.account-labs.hint')}
+        checked={env.settings.account_enabled ?? false}
+        onChange={(value) => void env.patch({ account_enabled: value })}
       />
     ),
   },
@@ -800,10 +762,10 @@ export const generalRows: RowDef[] = [
   {
     id: 'crews-labs',
     label: 'Crews',
-    hint: 'See your saved crews of agents. Read-only for now.',
+    hint: 'Plan a crew of agents as boxes on a canvas.',
     keywords: 'crews crew team roles agents orchestrator checker difficulty routing workers canvas labs early',
     group: 'Labs',
-    labs: { name: 'Crews', about: 'See your saved crews of agents (read-only for now).' },
+    labs: { name: 'Crews', about: 'Plan a crew of agents as boxes on a canvas.' },
     render: (env) => (
       <SettingToggle
         label={t('settings.row.crews-labs.label')}
@@ -813,7 +775,6 @@ export const generalRows: RowDef[] = [
       />
     ),
   },
-  { id: 'live-room', label: 'Live Room', hint: 'Let people with a link watch a chat. Pick the link address, how long and how many.', keywords: 'live room share stream watch link relay viewers broadcast default length', group: 'Live Room', render: (env) => <LiveRoomRow onSaved={env.markSaved} /> },
   { id: 'version', label: 'Version', hint: 'Check for updates and download the installer.', keywords: 'app version update release download install', group: 'About', render: () => <VersionRow /> },
   {
     id: 'early-versions',

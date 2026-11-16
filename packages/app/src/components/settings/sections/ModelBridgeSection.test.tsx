@@ -237,18 +237,16 @@ describe('Model Bridge section', () => {
 describe('Model Bridge is reachable in the real Settings', () => {
   const models = (flags: { model_bridge_enabled?: boolean } | null) => visibleSections(SECTIONS, flags).find((s) => s.id === 'advanced')!;
 
-  it('is a row of Advanced > Models while the Labs switch is on, and gone while it is off', () => {
+  it('is a row of Advanced > Models whether or not it is on: its switch is at the top, and the panel shows only when on', () => {
     expect(models({ model_bridge_enabled: true }).rows.map((r) => r.id)).toContain('model-bridge');
-    expect(models({ model_bridge_enabled: false }).rows.map((r) => r.id)).not.toContain('model-bridge');
-    expect(models(null).rows.map((r) => r.id)).not.toContain('model-bridge');
+    expect(models({ model_bridge_enabled: false }).rows.map((r) => r.id)).toContain('model-bridge');
+    expect(models(null).rows.map((r) => r.id)).toContain('model-bridge');
   });
 
-  it('is found by search, and the Labs switch is in Advanced > Early features (Labs)', () => {
-    const hits = searchSections(visibleSections(SECTIONS, { model_bridge_enabled: true }), 'model bridge');
+  it('is found by search, and it is not listed under Early features any more (one switch, in the panel)', () => {
+    const hits = searchSections(visibleSections(SECTIONS, { model_bridge_enabled: false }), 'model bridge');
     expect(JSON.stringify(hits)).toContain('model-bridge');
-    // The Labs switch is drawn by the Labs page (one row under Advanced), which search returns for the feature.
-    expect(collectLabs(BASE_SECTIONS).filter((r) => r.labs?.name === 'Another model in Codex')).toHaveLength(1);
-    expect(JSON.stringify(searchSections(SECTIONS, 'model bridge'))).toContain(LABS_INDEX_ID);
+    expect(collectLabs(BASE_SECTIONS).filter((r) => r.labs?.name === 'Another model in Codex')).toHaveLength(0);
   });
 
   it('the real row renders the section, in monochrome rows', async () => {
@@ -260,9 +258,9 @@ describe('Model Bridge is reachable in the real Settings', () => {
     await m.unmount();
   });
 
-  it('the Labs toggle patches model_bridge_enabled', async () => {
-    const page = SECTIONS.find((s) => s.id === 'advanced')!.rows.find((r) => r.id === LABS_INDEX_ID)!;
-    const m = await mountRows([page]);
+  it('the switch at the top of the panel patches model_bridge_enabled', async () => {
+    const row = SECTIONS.find((s) => s.id === 'advanced')!.rows.find((r) => r.id === 'model-bridge')!;
+    const m = await mountRows([row]);
     const toggle = m.host.querySelector('[role="switch"][aria-label="Another model in Codex"]') as HTMLElement;
     await click(toggle);
     expect(m.env.patches).toContainEqual({ model_bridge_enabled: true });

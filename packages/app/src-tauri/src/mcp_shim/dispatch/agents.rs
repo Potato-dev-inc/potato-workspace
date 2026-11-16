@@ -49,16 +49,15 @@ fn run(
             // `review_by` is not a run field: the second opinion is asked for once the run has finished.
             let review_by = super::super::review::take_review_by(&mut body);
             let project = body.get("project_path").cloned();
-            let caller_key = caller_gave_idempotency_key(&body);
-            let key = ensure_stable_idempotency_key("run_agent", &mut body);
-            // With a derived key, an earlier run may already own it: this call then replays that run,
-            // and the answer says so (a fresh run gets no marker).
-            let earlier = (!caller_key).then(|| earlier_operation_for_key(&body, &key)).flatten();
+            // The work to do may come under a common name; a call with none gets a short, plain answer (not a schema dump).
+            normalize_task(&mut body, "run_agent")?;
+            // No key from the caller: this is a new run (a random key). Only a key the caller names and reuses repeats an
+            // earlier run ("do it again" must run again).
+            ensure_idempotency_key(&mut body);
             // A run Potato Workspace started under a budget names itself in this process's environment;
             // a helper it starts then draws from that budget.
             inject_budget_parent(&mut body, std::env::var(PARENT_RUN_ENV).ok());
             super::super::long_wait::launch_and_wait("/agents/run", body, cancel_rx)
-                .map(|response| mark_replayed(response, earlier.as_ref()))
                 .map(|response| {
                     super::super::review::attach_review(response, review_by.as_ref(), project.as_ref(), |request| {
                         bridge_request("POST", "/agents/review", Some(request))
@@ -103,7 +102,7 @@ fn run(
             {
                 return Err("missing required argument: message or task".into());
             }
-            ensure_stable_idempotency_key("followup_task", &mut body);
+            ensure_idempotency_key(&mut body);
             super::super::long_wait::launch_and_wait("/agents/followup", body, cancel_rx)
         }
         "answer_prompt" => bridge_request("POST", "/agents/answer", Some(args.clone())),

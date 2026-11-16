@@ -183,18 +183,6 @@ export const agentsRows: RowDef[] = [
     render: () => <AccountsGroup />,
   },
   {
-    id: 'bring-chats-agents',
-    label: 'Bring my chats',
-    hint: 'Pick an agent, see its newest chats and bring them into your chat list.',
-    keywords: 'bring import old previous chats history agents list',
-    group: 'Your chats',
-    render: () => (
-      <SettingRow label={t('agentsRows.bringLabel')} description={t('agentsRows.bringHelp')}>
-        <Btn onClick={() => requestBringChats()}>{t('agentsRows.bringBtn')}</Btn>
-      </SettingRow>
-    ),
-  },
-  {
     id: 'preload',
     label: 'Keep agents ready',
     hint: 'Keep an agent started and waiting, so opening a window feels instant.',
@@ -353,7 +341,7 @@ export const agentsRows: RowDef[] = [
   },
   {
     id: 'message-rail',
-    label: 'Message rail',
+    label: 'Jump marks beside the chat',
     hint: 'Thin dashes by the chat scroll bar, one per message. Click or drag to jump.',
     keywords: 'message rail minimap dashes lines scroll bar jump scrub chat long navigate overview',
     group: 'Chat',
@@ -369,7 +357,7 @@ export const agentsRows: RowDef[] = [
   },
   {
     id: 'done-card',
-    label: 'Done means line',
+    label: 'Show if build and tests passed',
     hint: 'A small line above the message box that says if the build and tests passed.',
     keywords: 'done means card checks build tests result strip hide show line composer',
     group: 'Chat',
@@ -377,11 +365,10 @@ export const agentsRows: RowDef[] = [
   },
   {
     id: 'agent-lane',
-    label: 'How to run',
+    label: 'Chat or terminal',
     hint: 'Helpers run as a chat when the agent can, else in a terminal.',
     keywords: 'chat acp terminal lane run mode conversation session how to run',
     group: 'Chat',
-    labsFlag: 'acp_chat_enabled',
     render: () => <AgentLaneRows />,
   },
   {
@@ -390,7 +377,6 @@ export const agentsRows: RowDef[] = [
     hint: 'The small helper each agent needs to run as a chat. Install or remove it here.',
     keywords: 'chat acp add-on addon adapter install remove helper download sign in claude codex',
     group: 'Chat',
-    labsFlag: 'acp_chat_enabled',
     render: () => <ChatAddonRows />,
   },
   {

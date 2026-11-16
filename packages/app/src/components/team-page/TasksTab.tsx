@@ -4,6 +4,7 @@ import { errorSentence } from '../../lib/sayError';
 import type { TeamApi, TeamState } from '../../lib/team';
 import type { TasksView, TeamTasksApi } from '../../lib/team-tasks';
 import { TeamCard } from '../cockpit/team/TeamCard';
+import { Switch } from '../settings/controls';
 import type { FolderPicker } from './pickFolder';
 import { RecvCard, SentCard } from './TaskCards';
 import { recvWaiting } from './tasks-model';
@@ -96,16 +97,14 @@ export function TasksTab({
         </>
       )}
       <footer className="tpg-tasks-foot" data-testid="handover-switch">
-        <label className="tpg-tick">
-          <input
-            type="checkbox"
-            role="switch"
-            checked={tasks.handoverOn}
-            onChange={(e) => (e.target.checked ? setAsking(true) : void setHandover(false))}
-            data-testid="handover-toggle"
-          />
+        <div className="tpg-tick tpg-tick--switch" data-testid="handover-toggle">
           <span>{t('teamHub.tasks.handover')}</span>
-        </label>
+          <Switch
+            checked={tasks.handoverOn}
+            label={t('teamHub.tasks.handover')}
+            onChange={(on) => (on ? setAsking(true) : void setHandover(false))}
+          />
+        </div>
         <small className="tpg-sub">{t('teamHub.tasks.handover.note')}</small>
         {asking && (
           <div className="tpg-risk" role="group" data-testid="handover-confirm">

@@ -79,7 +79,6 @@ vi.mock('./settings/catalog', async () => {
           },
         ],
       },
-      { id: 'connect', title: 'Connect', blurb: 'Connect.', rows: [{ id: 'pairing', label: 'Pair a phone', hint: 'Scan a code.', level: 'basic', group: 'Phone', render: () => <SettingRow label="Pair a phone" /> }] },
       {
         id: 'keys',
         title: 'Keys',
@@ -191,12 +190,12 @@ describe('a damaged settings file', () => {
 describe('shell', () => {
   it('Settings opens on Overview, and every page is reachable from the nav', async () => {
     await mount({ initialTab: undefined });
-    const titles = ['Overview', 'Agents', 'Helpers', 'Look and feel', 'Connect', 'Keys', 'Shortcuts', 'Advanced'];
+    const titles = ['Overview', 'Agents', 'Helpers', 'Look and feel', 'Keys', 'Shortcuts', 'Advanced'];
     expect([...host.querySelectorAll('.st-nav .st-nav-row')].map((b) => b.textContent)).toEqual(titles);
     expect(nav('Overview').getAttribute('aria-current')).toBe('page');
     expect(main().querySelector('h1')!.textContent).toBe('Overview');
     expect(host.querySelector('.st-side-foot')).toBeNull(); // the "Coming later" entry is gone
-    expect(host.querySelectorAll('.st-card')).toHaveLength(5); // the cards come before the Setup rows
+    expect(host.querySelectorAll('.st-card')).toHaveLength(4); // the cards come before the Setup rows
     expect(main().textContent).toContain('Check my setup');
     for (const title of titles) {
       await click(nav(title));

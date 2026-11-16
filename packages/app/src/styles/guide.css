@@ -54,7 +54,6 @@
   background: var(--fill);
 }
 .cockpit .ck-guide-item.is-active {
-  box-shadow: inset 2px 0 0 var(--accent, var(--label));
 }
 .cockpit .ck-guide-mark {
   font-size: 11px;

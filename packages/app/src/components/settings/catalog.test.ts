@@ -9,22 +9,22 @@ const allRows = SECTIONS.flatMap((s) => s.rows.map((r) => ({ section: s.id, row:
 
 /** Every row id that existed before the move (115 of them, plus Add an agent and Your agents). */
 const PINNED_IDS = [
-  'accounts', 'acp-chat-labs', 'agent-browser-labs', 'companion-vault-labs', 'discord-bot-labs', 'agent-rules', 'less-motion', 'speak-results', 'strong-contrast', 'text-size', 'add-agent', 'agent-default-models', 'agent-lane', 'agent-list', 'agent-pack', 'ask-bar', 'assign-issue', 'away-minutes',
-  'bridge-endpoint', 'bring-chats-agents', 'bring-old-chats', 'budget-minutes', 'budget-turns', 'project-budget', 'right-size', 'chat-addons', 'chat-search-index', 'chat-view', 'done-card',
-  'checkpoints', 'checkpoints-keep', 'close-helpers-with-agent', 'collision', 'confirm-close', 'copy-offer', 'crews-labs', 'crews-page', 'definitions', 'desktop-potato-labs', 'devices-labs', 'devices-page', 'diagnostic-file',
+  'account-labs', 'accounts', 'agent-browser-labs', 'companion-vault-labs', 'discord-bot-labs', 'agent-rules', 'less-motion', 'speak-results', 'strong-contrast', 'text-size', 'add-agent', 'agent-default-models', 'agent-lane', 'agent-list', 'agent-pack', 'ask-bar', 'assign-issue', 'away-minutes',
+  'bridge-endpoint', 'bring-old-chats', 'budget-minutes', 'budget-turns', 'project-budget', 'right-size', 'chat-addons', 'chat-search-index', 'chat-view', 'done-card',
+  'checkpoints', 'close-helpers-with-agent', 'collision', 'confirm-close', 'copy-offer', 'crews-labs', 'crews-page', 'definitions', 'desktop-potato-labs', 'devices-labs', 'diagnostic-file',
   'discord-alerts', 'early-versions', 'handoff-mode', 'helper-agents', 'helper-answers', 'helper-default-models', 'helper-tools', 'helpers-in-sidebar', 'hidden-agents',
   'individual-window-layout', 'keep-awake', 'language', 'keep-going', 'keep-helpers-open', 'key-anthropic', 'key-openai', 'key-openrouter',
-  'lend-labs', 'lend-page', 'librarian-indexer', 'linux', 'live-room', 'live-updates', 'loop-guard', 'markup-bar-labs', 'mcp-install', 'mcp-status',
-  'mcp-uninstall', 'message-rail', 'missions', 'mobile-input-delay', 'mobile-input-visible', 'mobile-keyboard-resizes', 'mode-switch-animation',
-  'model-bridge', 'model-bridge-labs', 'most-helpers-at-once', 'night-shift', 'opencode-automation', 'opencode-keys', 'opencode-model',
-  'opencode-provider', 'opencode-restart', 'package-check', 'paired-devices', 'pairing', 'phone-notifications', 'preload',
-  'pc-notifications', 'project-folder', 'project-guide-labs', 'quiet-hours', 'red-to-green', 'remove-all-keys', 'revoke-all-devices', 'rust-mcp', 'security-agents-merge',
+  'lend-labs', 'librarian-indexer', 'linux', 'live-updates', 'loop-guard', 'markup-bar-labs', 'mcp-install', 'mcp-status',
+  'mcp-uninstall', 'message-rail', 'missions', 'mode-switch-animation',
+  'model-bridge', 'most-helpers-at-once', 'night-shift', 'opencode-automation', 'opencode-keys', 'opencode-model',
+  'opencode-provider', 'package-check', 'preload',
+  'pc-notifications', 'project-folder', 'project-guide-labs', 'quiet-hours', 'red-to-green', 'remove-all-keys', 'rust-mcp', 'security-agents-merge',
   'security-ask-before-control', 'security-recent-approvals', 'settings-file', 'settings-recovery', 'setup-check', 'shared-memory',
   'shortcut-agent-board', 'shortcut-ask-aside', 'shortcut-ask-bar', 'shortcut-focus-mode', 'shortcut-mode-toggle', 'shortcut-new-agent', 'shortcut-next-needs-me', 'shortcut-open-inbox',
   'stuck-helper-minutes', 'shortcut-palette', 'shortcut-pane-jump', 'shortcut-pane-next', 'shortcut-pane-prev', 'shortcut-remember', 'shortcut-search-chats',
   'shortcut-show-list', 'shortcut-split', 'shortcut-split-close-side', 'shortcut-split-down', 'shortcut-split-focus-down', 'shortcut-split-focus-left', 'shortcut-split-focus-right', 'shortcut-split-focus-up', 'shortcut-split-swap', 'shortcut-stop-all',
   'shortcuts-reset-all', 'show-developer-settings', 'show-terminals', 'simple-mode', 'smaller-updates-labs', 'snippet-claude-desktop', 'snippet-codex', 'spaces-labs', 'standby-helpers',
-  'start-at-sign-in', 'storage', 'team-page', 'telegram', 'theme', 'timeline-labs', 'toolbelt', 'tunnel', 'uninstall', 'usage-bar', 'usage-login-reads',
+  'start-at-sign-in', 'storage', 'theme', 'timeline-labs', 'toolbelt', 'uninstall', 'usage-bar', 'usage-login-reads',
   'version', 'versions', 'welcome', 'whats-new', 'your-name',
 ];
 
@@ -38,33 +38,24 @@ const PLACEMENT: [string, string, string[]][] = [
   ['agents', 'Where agents start', ['project-folder', 'copy-offer', 'linux']],
   ['agents', 'Moving work', ['handoff-mode', 'keep-going']],
   ['agents', 'All agents', ['show-terminals', 'message-rail', 'chat-view', 'done-card', 'preload', 'agent-default-models', 'agent-lane', 'chat-addons', 'hidden-agents', 'versions']],
-  ['agents', 'Your chats', ['bring-chats-agents']],
   ['agents', 'Rules for all agents', ['loop-guard', 'package-check', 'security-ask-before-control', 'security-agents-merge', 'agent-rules', 'security-recent-approvals', 'collision']],
   ['agents', 'Limits', ['budget-turns', 'budget-minutes', 'project-budget', 'right-size']],
-  ['agents', 'Undo and memory', ['checkpoints', 'checkpoints-keep', 'shared-memory']],
+  ['agents', 'Undo and memory', ['checkpoints', 'shared-memory']],
   ['agents', 'Your own agents', ['definitions']],
   ['helpers', 'How helpers run', ['helper-agents', 'helpers-in-sidebar', 'keep-helpers-open', 'close-helpers-with-agent', 'helper-default-models']],
   ['helpers', 'Limits', ['most-helpers-at-once', 'stuck-helper-minutes']],
-  ['helpers', 'Connect your agents', ['agent-pack']],
+  ['helpers', 'Let agents ask each other', ['agent-pack']],
   ['look', 'Appearance', ['theme', 'mode-switch-animation', 'individual-window-layout', 'usage-bar', 'usage-login-reads']],
   ['look', 'Comfort', ['text-size', 'strong-contrast', 'less-motion', 'speak-results']],
   ['look', 'You', ['your-name']],
   ['look', 'Startup', ['start-at-sign-in']],
-  ['look', 'While agents work', ['confirm-close', 'keep-awake', 'away-minutes', 'quiet-hours', 'pc-notifications']],
-  ['connect', 'Phone', ['pairing', 'paired-devices', 'phone-notifications']],
-  ['connect', 'Team', ['team-page']],
-  ['connect', 'Lend', ['lend-page']],
-  ['connect', 'Devices', ['devices-page']],
-  ['connect', 'Discord', ['discord-alerts']],
-  ['connect', 'Share a chat', ['live-room']],
-  ['connect', 'On the phone', ['mobile-input-delay', 'mobile-keyboard-resizes', 'mobile-input-visible']],
-  ['connect', 'Public address', ['tunnel']],
+  ['look', 'While agents work', ['confirm-close', 'keep-awake', 'away-minutes', 'quiet-hours', 'pc-notifications', 'discord-alerts']],
   ['keys', 'Provider keys', ['key-anthropic', 'key-openai', 'key-openrouter']],
-  ['keys', 'OpenCode keys', ['opencode-keys', 'opencode-restart']],
+  ['keys', 'OpenCode keys', ['opencode-keys']],
   ['advanced', 'Connections to other tools', ['toolbelt', 'helper-tools', 'bridge-endpoint', 'mcp-status', 'rust-mcp', 'mcp-install', 'snippet-claude-desktop', 'snippet-codex']],
   ['advanced', 'Models', ['librarian-indexer', 'opencode-provider', 'opencode-model', 'model-bridge']],
   [
-    'advanced',
+    'labs',
     'Early features (Labs)',
     ['labs-index'],
   ],
@@ -74,14 +65,13 @@ const PLACEMENT: [string, string, string[]][] = [
 /** Danger rows sit in the last list of their page (their group name is not shown). */
 const DANGER: [string, string[]][] = [
   ['keys', ['remove-all-keys']],
-  ['connect', ['revoke-all-devices']],
   ['advanced', ['uninstall', 'mcp-uninstall']],
 ];
 
 describe('settings catalog', () => {
-  it('has exactly the eight pages, in order: Overview, Agents, Helpers, Look and feel, Connect, Keys, Shortcuts, Advanced', () => {
+  it('has exactly the eight pages, in order: Overview, Agents, Helpers, Look and feel, Keys, Shortcuts, Labs, Advanced', () => {
     expect(SECTIONS.map((s) => s.id)).toEqual([...SECTION_IDS]);
-    expect(SECTIONS.map((s) => s.title)).toEqual(['Overview', 'Agents', 'Helpers', 'Look and feel', 'Connect', 'Keys', 'Shortcuts', 'Advanced']);
+    expect(SECTIONS.map((s) => s.title)).toEqual(['Overview', 'Agents', 'Helpers', 'Look and feel', 'Keys', 'Shortcuts', 'Labs', 'Advanced']);
   });
 
   it('every row id that existed before the move still exists exactly once', () => {
@@ -160,7 +150,7 @@ describe('settings catalog', () => {
 
   it('the destructive rows are the ones the brief names', () => {
     const danger = allRows.filter((r) => r.row.danger).map((r) => `${r.section}/${r.row.id}`);
-    expect(danger.sort()).toEqual(['advanced/mcp-uninstall', 'advanced/uninstall', 'connect/revoke-all-devices', 'keys/remove-all-keys']);
+    expect(danger.sort()).toEqual(['advanced/mcp-uninstall', 'advanced/uninstall', 'keys/remove-all-keys']);
   });
 });
 
@@ -183,8 +173,8 @@ describe('what a new person sees first in Agents', () => {
 describe('row search over the real catalog', () => {
   it('finds a row by a word in its label, hint or keywords, grouped under its page (best page first, nav order for ties)', () => {
     const hits = searchSections(SECTIONS, 'key');
-    expect(hits.map((h) => h.section.id)).toEqual(expect.arrayContaining(['keys', 'connect']));
-    // The Keys page holds the label hits, so it comes first even though Connect is earlier in the nav.
+    expect(hits.map((h) => h.section.id)).toEqual(expect.arrayContaining(['keys']));
+    // The Keys page holds the label hits, so it comes first.
     expect(hits[0].section.id).toBe('keys');
   });
 
@@ -192,10 +182,8 @@ describe('row search over the real catalog', () => {
     ['checkpoints', 'checkpoints'],
     ['librarian', 'librarian-indexer'],
     ['toolbelt', 'toolbelt'],
-    ['qr', 'pairing'],
     ['uninstall', 'uninstall'],
     ['idle timeout', 'preload'],
-    ['tunnel', 'tunnel'],
     ['loop', 'loop-guard'],
     ['discord', 'discord-alerts'],
     ['away', 'away-minutes'],
@@ -282,5 +270,26 @@ describe('plain words in labels and hints', () => {
       expect(row.hint, row.id).toBeTruthy();
       expect((row.hint ?? '').length, `${row.id} hint length`).toBeLessThanOrEqual(260);
     }
+  });
+});
+
+describe('dead choices are gone (review slice 8)', () => {
+  const allIds = () => SECTIONS.flatMap((s) => s.rows.map((r) => r.id));
+
+  it('the duplicate and dead rows are not on any page', () => {
+    const ids = allIds();
+    for (const gone of ['bring-chats-agents', 'opencode-restart', 'checkpoints-keep', 'model-bridge-labs', 'acp-chat-labs']) {
+      expect(ids, gone).not.toContain(gone);
+    }
+  });
+
+  it('"Bring my chats" is found once, under App and files', () => {
+    const hits = searchSections(SECTIONS, 'bring my chats').flatMap((h) => h.rows.filter((r) => r.label === 'Bring my chats').map((r) => ({ id: r.id, section: h.section.id })));
+    expect(hits).toEqual([{ id: 'bring-old-chats', section: 'advanced' }]);
+  });
+
+  it('"Another model in Codex" is one row: the switch sits at the top of its panel (no Labs line)', () => {
+    const labelled = SECTIONS.flatMap((s) => s.rows).filter((r) => r.label === 'Another model in Codex');
+    expect(labelled.map((r) => r.id)).toEqual(['model-bridge']);
   });
 });

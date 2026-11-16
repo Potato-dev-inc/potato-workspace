@@ -41,11 +41,11 @@ describe('Orchestrator & Models: every control renders', () => {
 
   it('shows every control by its label and aria-label', async () => {
     await mount();
-    for (const label of ['Project index', 'OpenCode: model service', 'OpenCode: model']) {
+    for (const label of ['Search inside my project', 'OpenCode: model service', 'OpenCode: model']) {
       expect(hasText(m.host, label), `missing label: ${label}`).toBe(true);
     }
     for (const aria of [
-      'Project index',
+      'Search inside my project',
       'OpenCode provider ID',
       'OpenCode model ID',
     ]) {
@@ -56,7 +56,7 @@ describe('Orchestrator & Models: every control renders', () => {
   it('groups the rows under their headings in order', async () => {
     await mount();
     const heads = [...m.host.querySelectorAll('section.st-group h2')].map((h) => h.textContent);
-    expect(heads).toEqual(['Project index', 'OpenCode']);
+    expect(heads).toEqual(['Search inside my project', 'OpenCode']);
   });
 
   it('has no Save button, no planned controls and no destructive list', async () => {
@@ -77,9 +77,9 @@ describe('Orchestrator & Models: each control saves a partial patch', () => {
     }
   });
 
-  it('Project index clears to null when you leave the field, not while you type', async () => {
+  it('Search inside my project clears to null when you leave the field, not while you type', async () => {
     await mount({ librarian_indexer_path: 'opencode' });
-    const field = byLabel<HTMLInputElement>(m.host, 'Project index')!;
+    const field = byLabel<HTMLInputElement>(m.host, 'Search inside my project')!;
     expect(field.value).toBe('opencode');
     await typeInto(field, '');
     expect(m.env.patches).toHaveLength(0);
@@ -87,9 +87,9 @@ describe('Orchestrator & Models: each control saves a partial patch', () => {
     expect(m.env.patches).toEqual([{ librarian_indexer_path: null }]);
   });
 
-  it('Project index saves a typed path when you leave the field', async () => {
+  it('Search inside my project saves a typed path when you leave the field', async () => {
     await mount({ librarian_indexer_path: 'opencode' });
-    const field = byLabel<HTMLInputElement>(m.host, 'Project index')!;
+    const field = byLabel<HTMLInputElement>(m.host, 'Search inside my project')!;
     await typeInto(field, 'scripts/project-indexer.py');
     expect(m.env.patches).toHaveLength(0);
     await blur(field);

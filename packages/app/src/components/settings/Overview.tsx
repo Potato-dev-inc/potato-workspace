@@ -1,4 +1,4 @@
-// The Overview page's five cards: Agents, Signed in, Phone, Updates, Helpers. Each card loads on its own, so one
+// The Overview page's four cards: Agents, Signed in, Updates, Helpers. Each card loads on its own, so one
 // slow source never blocks the others, and shows "…" with "Can't check this yet" when its source fails.
 // The Agents and Signed in cards read the SAME setup rows as the Setup list under them (setup-source.tsx), so the
 // cards and the list never disagree. Cards that need a fix come first. The rows under the cards are ordinary rows.
@@ -15,13 +15,13 @@ import { SetupChecksProvider, useSharedSetupChecks, type SetupChecksState } from
 import { tauri } from '../../lib/tauri';
 import { errorSentence } from '../../lib/sayError';
 import { Btn } from './settings-ui';
+import { DEFAULT_FIX_EVERYTHING, FixEverything, type FixEverythingSources } from './FixEverything';
 import { DEFAULT_SETUP_ACTIONS, runFix, type SetupCheckActions } from './SetupCheckPage';
 import {
   agentsCard,
   cantCheckCard,
   helpersCard,
   loadingCard,
-  phoneCard,
   signedInCard,
   checkFailedCard,
   updatesCard,
@@ -36,18 +36,18 @@ export interface OverviewSources {
   checks: (deps: SetupCheckDeps, ctx: SetupCheckContext, options?: RunOptions) => Promise<CheckRow[]>;
   setupDeps: SetupCheckDeps;
   accounts: () => Promise<AccountsOverview>;
-  phones: () => Promise<number>;
   version: () => Promise<string | null>;
   update: () => Promise<UpdateOffer | null>;
   helpers: () => Promise<HelpersFacts>;
   actions: SetupCheckActions;
+  /** What "Fix everything" runs. Absent: the app's own. */
+  everything?: FixEverythingSources;
 }
 
 export const DEFAULT_OVERVIEW_SOURCES: OverviewSources = {
   checks: (deps, ctx, options) => runAllChecks(deps, ctx, options),
   setupDeps: tauriSetupDeps,
   accounts: () => tauriAccountsApi.list(),
-  phones: async () => (await tauri.listPairedMobileDevices()).filter((d) => !d.expired).length,
   version: async () => (await tauri.getAppInstallInfo()).version,
   update: () => tauriUpdateTransport.check(),
   helpers: async () => {
@@ -122,16 +122,53 @@ export function Overview(props: OverviewProps) {
   );
 }
 
-function OverviewCards({ openRow, openPage, sources = DEFAULT_OVERVIEW_SOURCES }: OverviewProps) {
+function OverviewCards({ settings, openRow, openPage, sources = DEFAULT_OVERVIEW_SOURCES }: OverviewProps) {
   useT(); // the cards are built from words that change with the language
   const checks: SetupChecksState = useSharedSetupChecks()?.result ?? { state: 'loading' };
   const accounts = useSource(sources.accounts);
-  const phones = useSource(sources.phones);
   const version = useSource(sources.version);
   const update = useSource(sources.update);
   const helpers = useSource(sources.helpers);
   const refreshChecks = useSharedSetupChecks()?.refresh ?? (() => undefined);
   const [fixError, setFixError] = useState<string | null>(null);
+
+  // The checks run by themselves when this page opens. An agent that was never tested is tested now (it starts the
+  // agent in an empty folder, sends nothing, costs no tokens), one after the other, once each. Until they answer,
+  // the Agents and Signed in cards say "Checking…" and never an amber "not tested yet".
+  const rows = checks.state === 'ready' ? checks.rows : null;
+  const tried = useRef(new Set<string>());
+  const canTest = Boolean(sources.actions.test);
+  const untested = canTest && rows ? rows.filter((r) => r.status === 'warn' && r.fix?.kind === 'test' && !tried.current.has(r.id)) : [];
+  const [autoRunning, setAutoRunning] = useState(false);
+  const mounted = useRef(true);
+  useEffect(() => {
+    mounted.current = true;
+    return () => {
+      mounted.current = false;
+    };
+  }, []);
+  const todoKey = untested.map((r) => r.id).join(',');
+  useEffect(() => {
+    if (!todoKey || autoRunning || !rows) return;
+    const todo = rows.filter((r) => todoKey.split(',').includes(r.id) && r.fix);
+    todo.forEach((r) => tried.current.add(r.id));
+    setAutoRunning(true);
+    void (async () => {
+      for (const r of todo) {
+        try {
+          await runFix(r.fix as NonNullable<typeof r.fix>, sources.actions);
+        } catch {
+          /* one agent failing must not stop the others; its row says what happened next */
+        }
+      }
+      if (!mounted.current) return;
+      setAutoRunning(false);
+      refreshChecks();
+    })();
+    // Only when the list of agents still to test changes.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [todoKey]);
+  const checkingAgents = autoRunning || untested.length > 0;
 
   const updatesView = (): CardView => {
     // Both sources are needed for a tick: the version we run, and the answer of the update check.
@@ -147,14 +184,13 @@ function OverviewCards({ openRow, openPage, sources = DEFAULT_OVERVIEW_SOURCES }
     // The checks and the sign-in list are both needed: the checks decide who is signed in.
     if (accounts.state === 'failed') return cantCheckCard('signed-in');
     if (checks.state === 'failed') return cantCheckCard('signed-in');
-    if (accounts.state === 'loading' || checks.state === 'loading') return loadingCard('signed-in');
+    if (accounts.state === 'loading' || checks.state === 'loading' || checkingAgents) return loadingCard('signed-in');
     return signedInCard(accounts.value, checks.rows);
   };
 
   const cards: CardView[] = fixFirst([
-    checks.state === 'ready' ? agentsCard(checks.rows) : checks.state === 'failed' ? cantCheckCard('agents') : loadingCard('agents'),
+    checks.state === 'ready' && !checkingAgents ? agentsCard(checks.rows) : checks.state === 'failed' ? cantCheckCard('agents') : loadingCard('agents'),
     signedInView(),
-    cardOf('phone', phones, phoneCard),
     updatesView(),
     cardOf('helpers', helpers, helpersCard),
   ]);
@@ -169,7 +205,12 @@ function OverviewCards({ openRow, openPage, sources = DEFAULT_OVERVIEW_SOURCES }
     void Promise.resolve(runFix(first.fix, sources.actions)).then(() => refreshChecks()).catch((error) => setFixError(errorSentence(error)));
   };
 
+  // One button for the first-time set-up, shown while something is not fine.
+  const needsFix = (rows ?? []).some((r) => r.status === 'warn' || r.status === 'fail') || (helpers.state === 'ready' && !helpers.value.connected);
+  const everything = sources.everything ?? DEFAULT_FIX_EVERYTHING;
+
   return (
+    <>
     <div className="st-cards" data-testid="overview-cards">
       {cards.map((card) => (
         <section key={card.id} className="st-card" data-card={card.id} data-tone={card.glyph === '×' || card.glyph === '!' ? 'fix' : undefined} aria-label={card.name}>
@@ -198,5 +239,7 @@ function OverviewCards({ openRow, openPage, sources = DEFAULT_OVERVIEW_SOURCES }
         </section>
       ))}
     </div>
+    <FixEverything sources={everything} project={settings.project_path ?? null} needed={needsFix && !checkingAgents} onDone={refreshChecks} />
+    </>
   );
 }

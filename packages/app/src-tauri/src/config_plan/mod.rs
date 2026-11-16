@@ -279,7 +279,7 @@ fn read_op(world: &dyn World, catalog: &Value, scratch: &mut HelperStore, raw: &
             let input = NewHelper { name: text(obj, "name").unwrap_or_default(), agent, model: text(obj, "model"), project, after_task: after_task_of(text(obj, "after_task"))?, home: None };
             let added = scratch.add(input.clone(), "plan".into()).map_err(|e| ("REFUSED", e))?;
             let model = added.model.clone().map(|m| format!(", {m}")).unwrap_or_default();
-            let line = format!("standby: add \"{}\" ({}{model}; {})", added.name, added.agent, if added.after_task == AfterTask::Close { "closes after a task" } else { "waits after a task" });
+            let line = format!("standby: add \"{}\" ({}{model}; used once, then it is a normal helper)", added.name, added.agent);
             lines.push(line.clone());
             card.push(line);
             Ok(Step::StandbyAdd(NewHelper { name: added.name, ..input }))

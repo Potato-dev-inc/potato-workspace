@@ -109,7 +109,7 @@ export const settingsRows = {
   "settings.row.rust-mcp.hint": "On: agents start the helper that ships with the app. Off: they use npx.",
   "settings.row.mcp-install.hint": "Writes the helper program into their settings.",
   "settings.row.snippet-claude-desktop.hint": "Copy this into Claude Desktop's settings. The app won't write it.",
-  "settings.row.snippet-codex.hint": "Copy this if you would rather not use Connect.",
+  "settings.row.snippet-codex.hint": "Copy this to set it up by hand.",
   "settings.row.librarian-indexer.hint": "Empty: OpenCode builds it. Or the path to your own script.",
   "settings.row.opencode-provider.hint": "Used when you start OpenCode without naming a model.",
   "settings.row.opencode-model.hint": "The model used with the service above.",

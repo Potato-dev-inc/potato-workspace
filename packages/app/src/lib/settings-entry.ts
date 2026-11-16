@@ -46,7 +46,8 @@ export function isSettingsEntry(search: string): boolean {
 /** A page id from a section id or an old tab id; null when it names nothing. */
 export function resolveSettingsTab(tab: string | null | undefined): SettingsPageId | null {
   if (!tab) return null;
-  if ((SECTION_IDS as readonly string[]).includes(tab)) return tab as SettingsPageId;
+  // `connect` is a page only of the separate Settings window; the cockpit shows the first page for it (see SettingsPanel).
+  if (tab === 'connect' || (SECTION_IDS as readonly string[]).includes(tab)) return tab as SettingsPageId;
   return LEGACY_TABS[tab] ?? null;
 }
 

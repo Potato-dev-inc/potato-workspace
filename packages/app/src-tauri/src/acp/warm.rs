@@ -37,7 +37,7 @@ mod tally;
 pub use helpers::{Claimed, HelperClaim, HelperMeta, HelperState, HelperStatus, HelperUser, HelperWant, SeatLook};
 pub use tally::{local_day, SkipReason, Tally};
 #[cfg(test)]
-pub use helpers::{agent_family, same_project, CLEAN_HOLD_MS};
+pub use helpers::{agent_family, same_project};
 
 /// What a warm session is keyed by: everything fixed when its adapter starts.
 #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord)]
@@ -140,6 +140,8 @@ pub trait WarmHost: Send + Sync + 'static {
     /// A standby gave up a task's chat: it is an ordinary chat now (the finished chat stays open; nothing closes it). The screens
     /// must read the pane list again, because the chat is no longer the seat's own.
     fn seat_released(&self, _pane_id: &str) {}
+    /// A standby is one-time: a task used seat `helper_id` up. The host takes it off the person's list so no replacement is made.
+    fn seat_spent(&self, _helper_id: &str) {}
 }
 
 const BACKOFF_FIRST_MS: i64 = 30_000;
@@ -292,7 +294,7 @@ impl<H: WarmHost> Pool<H> {
             slot.folder = want.folder.clone();
             slot.helper = Some(want.meta.clone());
         }
-        // A claimed helper whose task is over goes back to standby (its slot is refilled below).
+        // A claimed helper whose task is over is used up (standbys are one-time; nothing refills it).
         Self::release_finished(inner, &*self.host, now);
         inner.hints.retain(|_, hint| hint.until > now);
         let hinted: Vec<(WarmKey, PathBuf)> = inner.hints.iter().map(|(key, hint)| (key.clone(), hint.folder.clone())).collect();
@@ -343,8 +345,8 @@ impl<H: WarmHost> Pool<H> {
                 continue;
             }
             let Some(slot) = inner.slots.get_mut(key) else { continue };
-            // A seat whose session an agent's task took gets its next clean session now, so it is ready the moment the task ends.
-            let refill_ok = slot.busy.as_ref().is_none_or(|b| b.by == HelperUser::Agent && !b.awaiting_pane);
+            // A seat an agent's task took is not refilled: a standby is one-time, so nothing is started in its place.
+            let refill_ok = slot.busy.is_none();
             if matches!(slot.state, State::Empty) && !slot.cold && refill_ok && now >= slot.backoff_until {
                 generation += 1;
                 slot.state = State::Starting { generation };
@@ -700,8 +702,20 @@ impl WarmHost for LiveHost {
     fn seat_released(&self, pane_id: &str) {
         // The chat is no longer the seat's own: the screens read the pane list again, so it is drawn as the ordinary helper it is now.
         crate::bridge::notify_panes_changed();
-        crate::standby::seat_log::line(&format!("chat {pane_id} is an ordinary chat now: its standby is ready again (the chat stays open)"));
+        crate::standby::seat_log::line(&format!("chat {pane_id} is an ordinary chat now (the chat stays open; the standby was used up)"));
     }
+
+    fn seat_spent(&self, helper_id: &str) {
+        // Off the person's list for good: the next pass of the pool finds nothing to refill. The person adds a new standby by hand.
+        // (A seat that is not on the list, as in a test pool, changes and saves nothing.)
+        if helpers_file_remove(helper_id).is_ok() {
+            crate::standby::seat_log::line(&format!("seat {helper_id} taken off the list: a standby is used once"));
+        }
+    }
+}
+
+fn helpers_file_remove(helper_id: &str) -> Result<(), String> {
+    crate::standby::helpers::file().edit(|store| if store.remove(helper_id) { Ok(()) } else { Err("not on the list".to_string()) })
 }
 
 // ---- the app's pool ---------------------------------------------------------------------------------------------------

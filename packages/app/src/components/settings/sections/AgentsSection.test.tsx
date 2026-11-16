@@ -212,10 +212,10 @@ describe('Agents: every row renders', () => {
     expect(buttonByText(m.host, 'Save changes')).toBeUndefined();
   });
 
-  it('groups the rows: Sign in, Your chats, Speed, Standby helpers, Models, Rules for all agents, Helpers, Handoff, Menu, Updates, Chat, Live updates, Keep going, Where agents start, Linux, Same file, then Definitions (whose own block carries the title)', async () => {
+  it('groups the rows: Sign in, Speed, Standby helpers, Models, Rules for all agents, Helpers, Handoff, Menu, Updates, Chat, Live updates, Keep going, Where agents start, Linux, Same file, then Definitions (whose own block carries the title)', async () => {
     await mount();
     const heads = [...m.host.querySelectorAll('section.st-group')].map((g) => g.querySelector(':scope > h2')?.textContent?.trim() ?? '');
-    expect(heads).toEqual(['Add an agent', 'Your agents', 'Check my setup', 'Sign in', 'Your chats', 'Speed', 'Standby helpers', 'Models', 'Rules for all agents', 'Helpers', 'Handoff', 'Menu', 'Updates', 'Chat', 'Live updates', 'Keep going', 'Where agents start', 'Linux', 'Same file', '']);
+    expect(heads).toEqual(['Add an agent', 'Your agents', 'Check my setup', 'Sign in', 'Speed', 'Standby helpers', 'Models', 'Rules for all agents', 'Helpers', 'Handoff', 'Menu', 'Updates', 'Chat', 'Live updates', 'Keep going', 'Where agents start', 'Linux', 'Same file', '']);
   });
 
   it('mounts the same-file switch under Same file and it is found by search', async () => {
@@ -505,15 +505,14 @@ describe('Agents: Standby helpers', () => {
     expect(m.host.textContent).toContain('No helpers on standby yet.');
   });
 
-  it('changes what happens after a task, starts a sleeping one and removes one', async () => {
+  it('has no "after a task" choice (a standby is used once), starts a sleeping one and removes one', async () => {
     vi.mocked(tauri.standbyHelpersGet).mockResolvedValue(viewOf([entry({ state: 'asleep' })]));
-    vi.mocked(tauri.standbyHelperUpdate).mockResolvedValue(viewOf([entry({ state: 'asleep', after_task: 'close' })]));
     vi.mocked(tauri.standbyHelperStart).mockResolvedValue(viewOf([entry({ state: 'starting' })]));
     vi.mocked(tauri.standbyHelperRemove).mockResolvedValue(viewOf([]));
     await mount();
     expect(m.host.querySelector('[data-testid="standby-state-sb-1"]')!.textContent).toBe('Resting');
-    await pickOption(byLabel<HTMLSelectElement>(m.host, 'What Reviewer does after a task')!, 'close');
-    expect(tauri.standbyHelperUpdate).toHaveBeenCalledWith('sb-1', { after_task: 'close' });
+    expect(byLabel(m.host, 'What Reviewer does after a task')).toBeFalsy();
+    expect(m.host.textContent).not.toMatch(/After a task/);
     await click(buttonByText(m.host, 'Start'));
     expect(tauri.standbyHelperStart).toHaveBeenCalledWith('sb-1');
     expect(m.host.querySelector('[data-testid="standby-state-sb-1"]')!.textContent).toBe('Starting');

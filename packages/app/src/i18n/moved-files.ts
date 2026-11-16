@@ -50,7 +50,6 @@ export const MOVED_FILES: readonly string[] = [
   'components/settings/blocks/TelegramSetup.tsx',
   'components/settings/blocks/TelegramPairing.tsx',
   'components/settings/blocks/RelaySheet.tsx',
-  'components/settings/blocks/LiveRoomSettings.tsx',
   'components/settings/sections/AgentsSection.tsx',
   'components/settings/sections/KeepGoingRows.tsx',
   'components/settings/sections/LinuxRows.tsx',

@@ -8,7 +8,8 @@ import { setLanguagePref } from '../../i18n';
 import type { Artifact, ArtifactPage, ArtifactsApi } from '../../lib/artifacts';
 import { PICK_AT, PICK_AT_REPLY, PICK_ARM, PICK_DONE, PICK_HOVER } from '../../lib/artifact-point';
 import { resetArtifactSideForTests } from '../../lib/artifact-side';
-import type { MarkupApi } from '../../lib/markup/api';
+import type { MarkupAgent, MarkupApi } from '../../lib/markup/api';
+import { registerNewAgentOpener } from '../../lib/newAgentRequest';
 import { ArtifactTab } from '../artifacts/ArtifactTab';
 
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
@@ -566,5 +567,130 @@ describe('Open in', () => {
     click(byId('artifact-openin'));
     expect(byId('openin-window').getAttribute('aria-checked')).toBe('true');
     expect(byId('openin-beside').getAttribute('aria-checked')).toBe('false');
+  });
+});
+
+describe('the "send to" list', () => {
+  const agent = (id: string, over: Partial<MarkupAgent> = {}): MarkupAgent => ({
+    id,
+    agentId: 'claude',
+    name: 'Claude',
+    task: '',
+    project: 'shop',
+    status: 'idle',
+    ok: true,
+    reason: null,
+    ...over,
+  });
+  const rows = [agent('pane-1', { task: 'Pricing page', status: 'working' }), agent('pane-2', { agentId: 'codex', name: 'Codex', project: 'blog', status: 'waiting' }), agent('pane-3', { agentId: 'gemini', name: 'Gemini', ok: false, reason: 'It is on a question.' })];
+  const withAgents = (list: MarkupAgent[], current: string | null = 'pane-1') =>
+    fakeMarkup({ targets: vi.fn(async () => ({ rows: list, current })) });
+  const ready = async (markup: MarkupApi) => {
+    await mount({ markup });
+    await openBar();
+    click(byId('markup-pen'));
+    drag(10, 10, 90, 60);
+    click(byId('markup-send'));
+    await settle();
+    typeInto(q<HTMLInputElement>('[data-testid="markup-request"]')!, 'fix it');
+  };
+  const layer = () => document.querySelector<HTMLElement>('[data-testid="markup-to-menu"]');
+
+  it('shows the page\'s own agent preselected, by name, with no ids', async () => {
+    await ready(withAgents(rows));
+    const to = byId('markup-to');
+    expect(to.textContent).toContain('Claude');
+    expect(to.textContent).not.toContain('pane-');
+    click(to);
+    await flush();
+    const menu = layer()!;
+    expect(menu).toBeTruthy();
+    expect(menu.getAttribute('role')).toBe('menu');
+    expect(host.contains(menu)).toBe(true);
+    const text = menu.textContent!;
+    expect(text).toContain('Claude');
+    expect(text).toContain('Pricing page');
+    expect(text).toContain('Working');
+    expect(text).toContain('Codex');
+    expect(text).toContain('blog');
+    expect(text).toContain('Waiting for you');
+    expect(text).toContain('made this page');
+    expect(text).not.toMatch(/pane-\d/);
+    expect(menu.querySelector('[data-testid="markup-to-pane-1"]')!.classList.contains('is-picked')).toBe(true);
+    // The picked row shows a check mark on the right, and no other row does.
+    expect(menu.querySelectorAll('[data-testid="markup-to-pane-1"] .mk-to-check')).toHaveLength(1);
+    expect(menu.querySelectorAll('.mk-to-check')).toHaveLength(1);
+    expect((menu.querySelector('[data-testid="markup-to-pane-3"]') as HTMLButtonElement).disabled).toBe(true);
+    // "New agent" is the last row.
+    const items = [...menu.querySelectorAll('[role="menuitem"]')];
+    expect(items[items.length - 1]!.textContent).toContain('New agent');
+  });
+
+  it('one click on an agent sends to that agent', async () => {
+    const markup = withAgents(rows);
+    await ready(markup);
+    click(byId('markup-to'));
+    await flush();
+    click(layer()!.querySelector('[data-testid="markup-to-pane-2"]')!);
+    await settle();
+    expect(markup.send).toHaveBeenCalledTimes(1);
+    const [from, shot, , to] = (markup.send as ReturnType<typeof vi.fn>).mock.calls[0];
+    expect(from).toBe('pane-1');
+    expect(shot).toBe('shot-1');
+    expect(to).toBe('pane-2');
+    expect(q('[data-testid="markup-status"]')!.textContent).toBe('Sent to Codex.');
+    expect(layer()).toBeNull();
+  });
+
+  it('Send keeps going to the page\'s agent, and Escape closes the list first', async () => {
+    const markup = withAgents(rows);
+    await ready(markup);
+    click(byId('markup-to'));
+    await flush();
+    press('Escape', {}, document.activeElement ?? document);
+    await flush();
+    expect(layer()).toBeNull();
+    expect(q('[data-testid="markup-bar"]')).not.toBeNull();
+    click(byId('markup-go'));
+    await settle();
+    expect((markup.send as ReturnType<typeof vi.fn>).mock.calls[0]).toHaveLength(3);
+  });
+
+  it('arrows move between agents and Enter sends', async () => {
+    const markup = withAgents(rows);
+    await ready(markup);
+    click(byId('markup-to'));
+    await flush();
+    const menu = layer()!;
+    const first = menu.querySelector<HTMLElement>('[data-testid="markup-to-pane-1"]')!;
+    expect(document.activeElement).toBe(first);
+    act(() => void first.dispatchEvent(new KeyboardEvent('keydown', { key: 'ArrowDown', bubbles: true, cancelable: true })));
+    expect(document.activeElement).toBe(menu.querySelector('[data-testid="markup-to-pane-2"]'));
+    // A letter in the list is not a tool key.
+    act(() => void document.activeElement!.dispatchEvent(new KeyboardEvent('keydown', { key: 'p', bubbles: true, cancelable: true })));
+    expect(byId('markup-select').getAttribute('aria-pressed')).not.toBe('true');
+  });
+
+  it('with no agent running: an empty state and "Start an agent"', async () => {
+    const markup = withAgents([], null);
+    await ready(markup);
+    expect(q('[data-testid="markup-to-empty"]')!.textContent).toContain('No agent is running.');
+    expect(byId('markup-go').disabled).toBe(true);
+    expect(byId('markup-start-agent').textContent).toBe('Start an agent');
+  });
+
+  it('"New agent" asks for the New agent page', async () => {
+    const opener = vi.fn();
+    registerNewAgentOpener(opener);
+    try {
+      await ready(withAgents(rows));
+      click(byId('markup-to'));
+      await flush();
+      click(layer()!.querySelector('[data-testid="markup-to-new"]')!);
+      await flush();
+      expect(opener).toHaveBeenCalledTimes(1);
+    } finally {
+      registerNewAgentOpener(null);
+    }
   });
 });

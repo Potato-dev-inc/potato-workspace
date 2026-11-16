@@ -424,3 +424,132 @@
   width: 14px;
   color: var(--accent);
 }
+
+/* "Send to": the agent list. Big targets, brand icon, name, project and a short status. */
+.cockpit .mk-to-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-height: 32px;
+  max-width: 60%;
+  padding: 0 10px;
+  border: 1px solid var(--sep);
+  border-radius: 8px;
+  background: transparent;
+  color: var(--label);
+  font: inherit;
+  cursor: pointer;
+}
+.cockpit .mk-to-btn:hover {
+  background: var(--fill);
+}
+.cockpit .mk-to-btn:focus-visible,
+.cockpit .mk-to-row:focus-visible,
+.cockpit .mk-to-start:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 1px;
+}
+.cockpit .mk-to-lead {
+  color: var(--label-2);
+}
+.cockpit .mk-to-now {
+  min-width: 0;
+  overflow: hidden;
+  font-weight: 600;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.cockpit .mk-to-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  box-sizing: border-box;
+  width: 100%;
+  min-height: 48px;
+  padding: 6px 12px;
+  border: 0;
+  border-radius: 8px;
+  background: transparent;
+  color: var(--label);
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+.cockpit .mk-to-row:hover:not(:disabled),
+.cockpit .mk-to-row:focus-visible {
+  background: var(--fill);
+}
+/* The picked agent: the same raised fill as a hovered menu item, and a small check on the right. No stripe. */
+.cockpit .mk-to-row.is-picked {
+  background: var(--fill-active);
+}
+.cockpit .mk-to-check {
+  flex: none;
+  margin-left: auto;
+  color: var(--label-2);
+}
+.cockpit .mk-to-row:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+.cockpit .mk-to-text {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  min-width: 0;
+}
+.cockpit .mk-to-name {
+  overflow: hidden;
+  font-size: 13px;
+  font-weight: 600;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.cockpit .mk-to-task {
+  color: var(--label-2);
+  font-weight: 400;
+}
+.cockpit .mk-to-sub {
+  overflow: hidden;
+  color: var(--label-2);
+  font-size: 11.5px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.cockpit .mk-to-status.is-working {
+  color: var(--accent);
+}
+.cockpit .mk-to-status.is-waiting {
+  color: var(--label);
+  font-weight: 600;
+}
+.cockpit .mk-to-new {
+  margin-top: 4px;
+  border-top: 1px solid var(--sep);
+  border-radius: 0 0 8px 8px;
+}
+.cockpit .mk-to-plus {
+  display: grid;
+  place-items: center;
+  width: 20px;
+  height: 20px;
+  font-size: 18px;
+  line-height: 1;
+  color: var(--label-2);
+}
+.cockpit .mk-to-empty {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+.cockpit .mk-to-start {
+  min-height: 32px;
+  padding: 0 12px;
+  border: 1px solid var(--sep);
+  border-radius: 8px;
+  background: transparent;
+  color: var(--label);
+  font: inherit;
+  font-weight: 600;
+  cursor: pointer;
+}

@@ -16,11 +16,6 @@ import { connectTabFor, registerConnectOpener, type ConnectTab } from '../../lib
 import type { ShipApi } from '../../lib/ship-api';
 import type { TeamApi } from '../../lib/team';
 import { Sidebar } from '../cockpit/Sidebar';
-import { RowShell } from '../settings/SectionView';
-import { devicesRows } from '../settings/sections/DevicesSection';
-import { lendRows } from '../settings/sections/LendSection';
-import { phoneRows } from '../settings/sections/PhoneSection';
-import { teamRows } from '../settings/sections/TeamSection';
 import { BASE_SETTINGS, click, makeEnv, settle } from '../settings/test-utils';
 import { resetRememberedTab } from '../team-page/TeamPage';
 import { ConnectPage, type ConnectApi } from './ConnectPage';
@@ -211,50 +206,21 @@ describe('Connect page', () => {
   });
 });
 
-describe('Settings rows that moved to Connect', () => {
-  const rowFor = (rows: typeof phoneRows, id: string) => rows.find((r) => r.id === id)!;
-
-  it('each old Settings row is a link; pressing it lands on the matching Connect tab', async () => {
-    const env = makeEnv();
-    const cases: Array<[typeof phoneRows, string, ConnectTab]> = [
-      [phoneRows, 'pairing', 'phone'],
-      [phoneRows, 'paired-devices', 'phone'],
-      [phoneRows, 'tunnel', 'phone'],
-      [devicesRows, 'devices-page', 'pcs'],
-      [teamRows, 'team-page', 'team'],
-      [lendRows, 'lend-page', 'lending'],
-    ];
-    function Both({ row, startTab }: { row: (typeof phoneRows)[number]; startTab: ConnectTab }) {
-      const [tab, setTab] = useState<ConnectTab>(startTab);
-      registerConnectOpener(setTab);
-      return (
-        <>
-          <RowShell row={row} env={env} />
-          <ConnectPage tab={tab} onTab={setTab} api={makeApi()} />
-        </>
-      );
-    }
-    for (const [rows, id, tab] of cases) {
-      const startTab: ConnectTab = tab === 'phone' ? 'team' : 'phone';
-      await act(async () => root.render(<Both key={id} row={rowFor(rows, id)} startTab={startTab} />));
-      await settle(6);
-      expect(q('[data-testid="connect-tab-' + startTab + '"]')!.getAttribute('aria-selected')).toBe('true');
-      const link = q(`[data-testid="connect-link-${tab}"]`)!;
-      expect(link, id).not.toBeNull();
-      await click(link.querySelector('button'));
-      await settle(6);
-      expect(q(`[data-testid="connect-tab-${tab}"]`)!.getAttribute('aria-selected'), id).toBe('true');
-    }
-  });
-
-  it('keeps its own content in the Settings window, which has no Connect page', async () => {
-    registerConnectOpener(null);
-    await act(async () => root.render(<RowShell row={rowFor(teamRows, 'team-page')} env={makeEnv()} />));
-    await settle(4);
-    expect(q('[data-testid^="connect-link-"]')).toBeNull();
+describe('Connect > Phone carries the phone rows Settings used to hold', () => {
+  it('shows the keyboard and typing-box switches, and Telegram behind a closed fold', async () => {
+    await act(async () => root.render(<ConnectPage tab="phone" onTab={() => undefined} api={makeApi()} />));
+    await settle(8);
+    expect(q('[data-row="mobile-keyboard-resizes"]')).not.toBeNull();
+    expect(q('[data-row="mobile-input-visible"]')).not.toBeNull();
+    expect(q('[data-row="mobile-input-delay"]')).toBeNull();
+    const telegram = q<HTMLDetailsElement>('[data-testid="connect-telegram"]')!;
+    expect(telegram).not.toBeNull();
+    expect(telegram.open).toBe(false);
   });
 
   it('old Settings names resolve to a tab', () => {
+    expect(connectTabFor('connect')).toBe('phone');
+    expect(connectTabFor('telegram')).toBe('phone');
     expect(connectTabFor('phone')).toBe('phone');
     expect(connectTabFor('pairing')).toBe('phone');
     expect(connectTabFor('devices')).toBe('pcs');

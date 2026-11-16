@@ -57,13 +57,16 @@ pub async fn markup_capture(window: tauri::WebviewWindow, state: State<'_, AppSt
 /// Sends the text to the chat of `pane_id`, with the picture `shot_id` when there is one. A pane that is on a dialog,
 /// a question or without its input box gets nothing, and the person reads the outbox's own sentence.
 #[tauri::command]
-pub async fn markup_send(app: tauri::AppHandle, state: State<'_, AppState>, pane_id: String, shot_id: Option<String>, text: String) -> Result<OutboxMessage, String> {
+pub async fn markup_send(app: tauri::AppHandle, state: State<'_, AppState>, pane_id: String, shot_id: Option<String>, text: String, to: Option<String>) -> Result<OutboxMessage, String> {
+    // The picture was taken for the page's chat (`pane_id`); it may go to another agent (`to`).
+    let from = pane_id;
+    let pane_id = to.filter(|t| !t.trim().is_empty()).unwrap_or_else(|| from.clone());
     let target = target_of(&state, &pane_id)?;
     if let Some(why) = refusal(&target) {
         return Err(why);
     }
     let waiting = match &shot_id {
-        Some(id) => Some(store::get(&pane_id, id).ok_or_else(|| NO_PICTURE.to_string())?),
+        Some(id) => Some(store::get(&from, id).ok_or_else(|| NO_PICTURE.to_string())?),
         None => None,
     };
     let (text, attachments) = with_picture(&target, waiting.as_ref(), &text);
@@ -73,6 +76,23 @@ pub async fn markup_send(app: tauri::AppHandle, state: State<'_, AppState>, pane
         store::drop_id(&id);
     }
     Ok(sent)
+}
+
+/// The agents the bar can send to, in plain words: the page's own chat first and preselected.
+#[derive(Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct MarkupTargets {
+    pub rows: Vec<crate::markup::targets::Row>,
+    pub current: Option<String>,
+}
+
+#[tauri::command]
+pub async fn markup_targets(state: State<'_, AppState>, pane_id: String) -> Result<MarkupTargets, String> {
+    let infos = state.registry.lock().list();
+    let facts = crate::point::window::target_facts(&state.registry, &infos);
+    let owner = facts.iter().find(|t| t.pane_id == pane_id && refusal(t).is_none()).map(|t| t.pane_id.clone());
+    let (rows, default) = crate::markup::targets::rows(&facts, &infos, owner.as_deref());
+    Ok(MarkupTargets { rows, current: owner.or(default) })
 }
 
 /// The window tells us whether the app's "Less motion" switch is on (the bar in the agent browser follows it).

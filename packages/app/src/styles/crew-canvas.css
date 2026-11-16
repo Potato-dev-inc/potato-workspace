@@ -1,0 +1,413 @@
+/* The crew canvas (Labs "Crews"): a full-window layer with the crew as boxes and a side panel. Colour tokens only;
+   the one accent marks the selected box and the way a task would travel. Menus use the shared floating layer (z-index 1000). */
+.crewc {
+  position: fixed;
+  inset: 0;
+  z-index: 300;
+  display: flex;
+  flex-direction: column;
+  background: var(--bg);
+  color: var(--label);
+  font-size: 13px;
+}
+.crewc-loading {
+  padding: 24px;
+}
+.crewc-head {
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 12px 16px;
+  border-bottom: 1px solid var(--sep);
+  background: var(--bg-side);
+  flex-wrap: wrap;
+}
+.crewc-title {
+  margin: 0;
+  font-size: 16px;
+  font-weight: 600;
+}
+.crewc-name {
+  min-width: 240px;
+}
+.crewc-head-actions {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+  align-items: center;
+}
+.crewc-status {
+  display: flex;
+  gap: 16px;
+  flex-wrap: wrap;
+  min-height: 28px;
+  padding: 6px 16px;
+  color: var(--label-2);
+  border-bottom: 1px solid var(--sep);
+}
+.crewc-bad {
+  color: var(--accent-text);
+  font-weight: 500;
+}
+.crewc-body {
+  flex: 1 1 auto;
+  min-height: 0;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 340px;
+}
+@media (max-width: 760px) {
+  .crewc-body {
+    grid-template-columns: minmax(0, 1fr);
+    grid-template-rows: minmax(220px, 1fr) minmax(0, 1fr);
+  }
+}
+.crewc-stage {
+  position: relative;
+  min-width: 0;
+  min-height: 0;
+  display: flex;
+}
+.crewc-zoom {
+  position: absolute;
+  right: 12px;
+  bottom: 12px;
+  z-index: 3;
+  display: flex;
+  gap: 4px;
+}
+.crewc-btn--small {
+  padding: 2px 10px;
+  min-width: 32px;
+}
+.crewc-scroll {
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow: auto;
+  background: var(--bg);
+  background-image: radial-gradient(var(--sep) 1px, transparent 1px);
+  background-size: 20px 20px;
+}
+.crewc-surface {
+  position: relative;
+}
+.crewc-lines {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+}
+.crewc-line {
+  fill: none;
+  stroke: var(--label-4);
+  stroke-width: 1.5;
+}
+.crewc-line.is-hands {
+  stroke: var(--label-3);
+}
+.crewc-line.is-back {
+  stroke: var(--label-3);
+  stroke-dasharray: 5 4;
+}
+.crewc-arrow {
+  fill: var(--label-3);
+}
+.crewc-box {
+  position: absolute;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  box-sizing: border-box;
+  padding: 8px 10px;
+  border: 1px solid var(--sep);
+  border-radius: 10px;
+  background: var(--bg-raised);
+  cursor: grab;
+  user-select: none;
+  touch-action: none;
+}
+.crewc-box:hover {
+  background: var(--fill-hover);
+}
+.crewc-box:focus-visible {
+  outline: 2px solid var(--accent-line);
+  outline-offset: 2px;
+}
+.crewc-box.is-selected {
+  border-color: var(--accent-line);
+  box-shadow: 0 0 0 1px var(--accent-line);
+}
+.crewc-box.is-on-path {
+  background: var(--accent-soft);
+  border-color: var(--accent-line);
+}
+.crewc-box.has-problem {
+  border-style: dashed;
+}
+.crewc-box.is-dragging {
+  cursor: grabbing;
+  z-index: 2;
+}
+.crewc-box-top {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+}
+.crewc-box-top {
+  flex-wrap: wrap;
+}
+.crewc-box-name {
+  flex: 1 1 auto;
+  min-width: 0;
+  font-weight: 600;
+  overflow-wrap: anywhere;
+}
+.crewc-tag {
+  flex: none;
+  padding: 0 6px;
+  border-radius: 999px;
+  background: var(--fill-active);
+  color: var(--label-2);
+  font-size: 10.5px;
+}
+.crewc-step {
+  flex: none;
+  min-width: 18px;
+  height: 18px;
+  border-radius: 999px;
+  background: var(--accent);
+  color: var(--accent-fg);
+  font-size: 11px;
+  font-weight: 600;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+.crewc-box-agent,
+.crewc-box-rights,
+.crewc-box-foot {
+  font-size: 11.5px;
+  color: var(--label-3);
+  overflow-wrap: anywhere;
+}
+.crewc-box-foot {
+  display: flex;
+  gap: 8px;
+}
+.crewc-side {
+  overflow: auto;
+  padding: 12px 16px 24px;
+  border-left: 1px solid var(--sep);
+  background: var(--bg-side);
+}
+.crewc-tabs {
+  display: flex;
+  gap: 4px;
+  margin-bottom: 12px;
+}
+.crewc-tabs button {
+  flex: 1;
+  padding: 6px 8px;
+  border: 1px solid var(--sep);
+  border-radius: 6px;
+  background: transparent;
+  color: var(--label-2);
+  font: inherit;
+  cursor: pointer;
+}
+.crewc-tabs button.is-on {
+  background: var(--bg-raised);
+  color: var(--label);
+  border-color: var(--accent-line);
+}
+.crewc-editor,
+.crewc-try,
+.crewc-way {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+.crewc-way h4 {
+  margin: 4px 0 0;
+  font-size: 12px;
+}
+.crewc-way p {
+  margin: 0;
+}
+.crewc-field {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.crewc-field > span,
+.crewc-rights legend {
+  font-size: 11.5px;
+  color: var(--label-2);
+}
+.crewc-field input,
+.crewc-field select,
+.crewc-field textarea,
+.crewc-rules textarea {
+  width: 100%;
+  box-sizing: border-box;
+  padding: 6px 8px;
+  border: 1px solid var(--sep);
+  border-radius: 6px;
+  background: var(--bg);
+  color: var(--label);
+  font: inherit;
+}
+.crewc-field textarea,
+.crewc-rules textarea {
+  resize: vertical;
+}
+.crewc-field input:disabled,
+.crewc-field select:disabled,
+.crewc-field textarea:disabled,
+.crewc-rules textarea:disabled {
+  opacity: 0.6;
+}
+.crewc-rights {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin: 0;
+  padding: 8px 10px;
+  border: 1px solid var(--sep);
+  border-radius: 8px;
+}
+.crewc-check {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.crewc-hint {
+  margin: 0;
+  color: var(--label-3);
+  font-size: 12px;
+}
+.crewc-warn {
+  color: var(--accent-text);
+}
+.crewc-error {
+  margin: 0;
+  color: var(--accent-text);
+}
+.crewc-path {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  counter-reset: step;
+}
+.crewc-path li {
+  counter-increment: step;
+  padding: 2px 8px;
+  border-radius: 999px;
+  background: var(--accent-soft);
+  color: var(--accent-text);
+}
+.crewc-path li::before {
+  content: counter(step) ". ";
+}
+.crewc-rules summary {
+  cursor: pointer;
+  color: var(--label-2);
+  margin-bottom: 6px;
+}
+.crewc-btn {
+  padding: 5px 12px;
+  border: 1px solid var(--sep);
+  border-radius: 6px;
+  background: var(--bg-raised);
+  color: var(--label);
+  font: inherit;
+  cursor: pointer;
+}
+.crewc-btn:hover:not(:disabled) {
+  background: var(--fill-hover);
+}
+.crewc-btn:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+.crewc-btn:focus-visible {
+  outline: 2px solid var(--accent-line);
+  outline-offset: 2px;
+}
+.crewc-btn--primary {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: var(--accent-fg);
+}
+.crewc-btn--primary:hover:not(:disabled) {
+  background: var(--accent-hover);
+}
+.crewc-btn--quiet {
+  background: transparent;
+}
+.crewc-scrim {
+  position: fixed;
+  inset: 0;
+  z-index: 310;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--fill-active);
+}
+.crewc-modal {
+  width: min(460px, calc(100vw - 32px));
+  max-height: calc(100vh - 48px);
+  overflow: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding: 16px 18px;
+  border: 1px solid var(--sep);
+  border-radius: 12px;
+  background: var(--bg);
+  color: var(--label);
+}
+.crewc-modal h2 {
+  margin: 0;
+  font-size: 15px;
+}
+.crewc-modal p {
+  margin: 0;
+}
+.crewc-folder {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+}
+.crewc-folder code {
+  flex: 1;
+  min-width: 0;
+  overflow-wrap: anywhere;
+  font-family: var(--font-mono);
+  font-size: 11.5px;
+}
+.crewc-result {
+  margin: 0;
+  padding-left: 18px;
+}
+.crewc-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+}
+.crewc-static {
+  padding: 6px 8px;
+  border: 1px solid var(--sep);
+  border-radius: 6px;
+  color: var(--label-2);
+}
+.crewc-field .mp {
+  width: 100%;
+}
+.crewc-field .mp-chip {
+  width: 100%;
+  justify-content: space-between;
+}

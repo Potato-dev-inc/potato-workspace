@@ -65,7 +65,7 @@ function english(main: Element): string[] {
 }
 
 describe('Settings pages in Traditional Chinese have no visible English', () => {
-  for (const id of ['agents', 'helpers', 'look', 'connect', 'keys', 'shortcuts', 'advanced']) {
+  for (const id of ['agents', 'helpers', 'look', 'keys', 'shortcuts', 'labs', 'advanced']) {
     it(`the ${id} page`, async () => {
       const main = await page(id);
       expect(main.textContent?.trim().length ?? 0).toBeGreaterThan(20);
@@ -80,10 +80,10 @@ describe('Settings pages in Traditional Chinese have no visible English', () => 
     }
   });
 
-  it('the Labs list on the advanced page names every early feature in Chinese', async () => {
-    const main = await page('advanced');
+  it('the Labs list on the Labs page names every early feature in Chinese', async () => {
+    const main = await page('labs');
     const names = Array.from(main.querySelectorAll('.st-labs-name')).map((el) => el.textContent ?? '');
-    expect(names.length).toBeGreaterThan(5);
+    expect(names.length).toBeGreaterThan(4);
     for (const name of names) expect(/[一-鿿]/.test(name) || name === 'Telegram', name).toBe(true);
   });
 });

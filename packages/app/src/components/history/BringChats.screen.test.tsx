@@ -11,7 +11,7 @@ import * as chatImport from '../../lib/chatImport';
 import type { BrowseRow, ImportApi, ImportFound, ImportProgress } from '../../lib/chatImport';
 import type { ShipApi } from '../../lib/ship-api';
 import { Sidebar } from '../cockpit/Sidebar';
-import { agentsRows } from '../settings/sections/AgentsSection';
+import { generalRows } from '../settings/sections/GeneralSection';
 import { BringChatsSettings } from '../settings/blocks/BringChatsSettings';
 import type { SettingsEnv } from '../settings/model';
 import { BringChatsHost } from './ImportHost';
@@ -178,9 +178,9 @@ describe('Bring my chats: the entry points', () => {
     expect(document.body.textContent).toContain('No chats found');
   });
 
-  it('Settings > Agents has a "Bring my chats" row that opens the same panel', async () => {
+  it('Settings > Advanced > App and files has one "Bring my chats" row that opens the same panel', async () => {
     const { api } = fakeApi();
-    const row = agentsRows.find((r) => r.id === 'bring-chats-agents')!;
+    const row = generalRows.find((r) => r.id === 'bring-old-chats')!;
     expect(row).toBeDefined();
     await act(async () =>
       root.render(

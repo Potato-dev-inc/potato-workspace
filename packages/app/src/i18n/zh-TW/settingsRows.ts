@@ -111,7 +111,7 @@ export const settingsRows: Partial<Record<EnglishKey, string>> = {
   'settings.row.rust-mcp.hint': '開啟：AI 助理啟動 App 內附的輔助程式。關閉：改用 npx。',
   'settings.row.mcp-install.hint': '把輔助程式寫進它們的設定。',
   'settings.row.snippet-claude-desktop.hint': '把這段貼到 Claude Desktop 的設定中。App 不會幫你寫入。',
-  'settings.row.snippet-codex.hint': '如果你不想用「連結」，就複製這段。',
+  'settings.row.snippet-codex.hint': '複製這段，自己手動設定。',
   'settings.row.librarian-indexer.hint': '留空：由 OpenCode 建立。或填入你自己腳本的路徑。',
   'settings.row.opencode-provider.hint': '啟動 OpenCode 時沒有指定模型，就會使用它。',
   'settings.row.opencode-model.hint': '搭配上面的服務使用的模型。',

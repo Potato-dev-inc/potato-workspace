@@ -27,7 +27,7 @@ describe('settings search', () => {
     expect(ids('subagent')).toContain('helper-agents');
     expect(ids('hotkey')).toContain('shortcuts-reset-all');
     expect(ids('wsl')).toContain('linux');
-    expect(ids('delete')).toEqual(expect.arrayContaining(['uninstall', 'remove-all-keys', 'revoke-all-devices']));
+    expect(ids('delete')).toEqual(expect.arrayContaining(['uninstall', 'remove-all-keys']));
   });
 
   it('each deleted Coming later word still returns a live row', () => {
@@ -69,13 +69,11 @@ describe('settings search', () => {
   });
 
   it('a row hidden by a Labs flag is not listed, and its Labs switch is', () => {
-    const off = visibleSections(SECTIONS, { acp_chat_enabled: false, model_bridge_enabled: false, lend_enabled: false });
-    expect(ids('lend an agent', off)).not.toContain('lend-page');
+    const off = visibleSections(SECTIONS, { lend_enabled: false });
+    expect(ids('lend an agent', off)).not.toContain('lend-labs');
     expect(ids('lend', off)).toContain(LABS_INDEX_ID);
-    expect(ids('model bridge', off)).not.toContain('model-bridge');
-    expect(ids('model bridge', off)).toContain(LABS_INDEX_ID);
-    const on = visibleSections(SECTIONS, { acp_chat_enabled: true, model_bridge_enabled: true, lend_enabled: true });
-    expect(ids('lend an agent', on)).toContain('lend-page');
+    const on = visibleSections(SECTIONS, { lend_enabled: true });
+    expect(ids('lend', on)).toContain(LABS_INDEX_ID);
     expect(ids('labs', off)).toContain(LABS_INDEX_ID);
   });
 

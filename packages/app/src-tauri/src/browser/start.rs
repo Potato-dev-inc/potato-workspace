@@ -109,7 +109,7 @@ pub fn respond(method: &str, path: &str, query: &str, accept_language: &str) -> 
             ("Content-Length", len.to_string()),
             ("Cache-Control", "no-store".to_string()),
             ("X-Content-Type-Options", "nosniff".to_string()),
-            ("Content-Security-Policy", "default-src 'none'; style-src 'unsafe-inline'; base-uri 'none'; form-action 'none'".to_string()),
+            ("Content-Security-Policy", "default-src 'none'; style-src 'unsafe-inline'; img-src data:; base-uri 'none'; form-action 'none'".to_string()),
         ]
     };
     if method != "GET" || path != "/" {
@@ -191,6 +191,8 @@ mod tests {
         assert!(String::from_utf8(body).unwrap().contains("私人網路"));
         let csp = headers.iter().find(|(n, _)| *n == "Content-Security-Policy").unwrap();
         assert!(csp.1.contains("default-src 'none'") && !csp.1.contains("script-src"));
+        // The mark-up bar shows the picture of the page as a data: image; on this page the CSP must let it (1.1.7 real-app check).
+        assert!(csp.1.contains("img-src data:"));
         assert_eq!(respond("POST", "/", "", "").0, 405);
         assert_eq!(respond("GET", "/secret", "", "").0, 404);
         assert_eq!(respond("GET", "/", "why=<b>", "en").0, 200);

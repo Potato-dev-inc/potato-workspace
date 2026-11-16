@@ -7,7 +7,6 @@
   padding: 6px 10px;
   margin: 4px 0;
   border: 1px solid var(--sep);
-  border-left: 3px solid var(--accent);
   border-radius: 6px;
   background: var(--fill);
   color: var(--label);

@@ -30,6 +30,7 @@ pub mod bar;
 pub mod live;
 pub mod shot;
 pub mod store;
+pub mod targets;
 
 #[cfg(test)]
 mod tests;

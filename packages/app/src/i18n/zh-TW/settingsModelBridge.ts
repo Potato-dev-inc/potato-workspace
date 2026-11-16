@@ -16,6 +16,7 @@ export const settingsModelBridge: Partial<Record<EnglishKey, string>> = {
   'modelBridge.copyVar': '複製變數那一行',
   'modelBridge.doneNote': 'Potato Workspace 啟動的 AI 助理會自動取得金鑰。如果是你自己啟動的 Codex，請先設定這個變數。',
   'modelBridge.connect': '連結模型服務',
+  'modelBridge.needsSafe': '需要一個安全的地方存放金鑰。',
   'modelBridge.serviceName': '服務名稱',
   'modelBridge.myService': '我的服務',
   'modelBridge.keptIn': '會存放在 {store}。Potato Workspace 之後不會再顯示它。',

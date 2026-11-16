@@ -33,7 +33,7 @@ export const bridgeRows: RowDef[] = [
   },
   {
     id: 'bridge-endpoint',
-    label: 'Local address',
+    label: "This app's address",
     hint: 'Where other tools reach this app on this computer. Found by itself.',
     keywords: 'bridge address endpoint port ports url local http address 17421 17499',
     group: 'Bridge',
@@ -87,7 +87,7 @@ export const bridgeRows: RowDef[] = [
   {
     id: 'snippet-codex',
     label: 'Set up Codex by hand',
-    hint: 'Copy this if you would rather not use Connect.',
+    hint: 'Copy this to set it up by hand.',
     keywords: 'codex config toml mcp_servers npx node manual copy',
     group: 'Install',
     render: () => <CodeBlock title={t('settings.row.snippet-codex.label')} code={CODEX_MCP} />,

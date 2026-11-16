@@ -10,14 +10,15 @@ import type { SettingsPatch } from '../../lib/settings';
 import { queryUnits, wordsOf } from './synonyms';
 
 /** The pages a person sees, in nav order. Rows are defined in the older section files (`BASE_SECTION_IDS`) and placed by `arrange.tsx`. */
-export const SECTION_IDS = ['overview', 'agents', 'helpers', 'look', 'connect', 'keys', 'shortcuts', 'advanced'] as const;
+export const SECTION_IDS = ['overview', 'agents', 'helpers', 'look', 'keys', 'shortcuts', 'labs', 'advanced'] as const;
 export type SectionId = (typeof SECTION_IDS)[number];
 
 /** The section files that define the rows. Old links may still name them (see `LEGACY_TABS`). */
 export const BASE_SECTION_IDS = ['general', 'agents', 'models', 'keys', 'bridge', 'phone', 'team', 'lend', 'devices', 'crews', 'shortcuts'] as const;
 export type BaseSectionId = (typeof BASE_SECTION_IDS)[number];
 
-export type SettingsPageId = SectionId;
+/** A page of Settings. `connect` is not a Settings page: only the separate Settings window (Individual mode) draws it, as the same ConnectPage the cockpit has. */
+export type SettingsPageId = SectionId | 'connect';
 
 export interface ConfirmOptions {
   title: string;
@@ -80,7 +81,7 @@ export interface RowDef {
   /** A link left where a row used to be. Never searched (the real row is), and has no setting of its own. */
   pointer?: boolean;
   /** An early feature's own row: shown (and searched) only while this Labs flag is on. Hidden otherwise, as if it did not exist. */
-  labsFlag?: 'acp_chat_enabled' | 'model_bridge_enabled' | 'lend_enabled' | 'devices_enabled' | 'crews_enabled';
+  labsFlag?: 'model_bridge_enabled' | 'lend_enabled' | 'devices_enabled' | 'crews_enabled';
   /** The saved keys this row owns. Rows without it are actions or panels. (Used by the Changed dot, Reset and Undo.) */
   keys?: (keyof Settings)[];
   /** A small frame drawn at the right of, or under, the control. */

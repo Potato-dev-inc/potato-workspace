@@ -5,8 +5,8 @@ import { useState } from 'react';
 import { useT, type MessageKey } from '../../../i18n';
 import { useAgentRegistry } from '../../../lib/agentRegistry';
 import { errorSentence } from '../../../lib/sayError';
-import { tauriStandbyHelpersApi, useStandbyHelpers, type AfterTask, type StandbyHelperEntry, type StandbyHelpersApi, type StandbyHelpersView } from '../../../lib/standbyHelpers';
-import { NumberControl, Popup, TextControl } from '../controls';
+import { tauriStandbyHelpersApi, useStandbyHelpers, type StandbyHelperEntry, type StandbyHelpersApi, type StandbyHelpersView } from '../../../lib/standbyHelpers';
+import { NumberControl, TextControl } from '../controls';
 import { Btn, Note, SettingBlock } from '../settings-ui';
 
 type Change = () => Promise<StandbyHelpersView | null>;
@@ -84,10 +84,6 @@ function StandbyRow({ helper, onChange, api }: { helper: StandbyHelperEntry; onC
       </span>
       <span className="font-mono text-xs text-pm-muted">{helper.project}</span>
       {note && <span className="text-xs text-pm-text">{note}</span>}
-      <Popup aria-label={t('standby.afterAria', { name: helper.name })} value={helper.after_task} onChange={(e) => void onChange(() => api.update(helper.id, { after_task: e.target.value as AfterTask }))}>
-        <option value="wait">{t('standby.after.wait')}</option>
-        <option value="close">{t('standby.after.close')}</option>
-      </Popup>
       {(helper.state === 'asleep' || helper.state === 'problem') && helper.note !== 'needs_chat' && helper.note !== 'folder_missing' && (
         <Btn small onClick={() => void onChange(() => api.start(helper.id))}>
           {t('standby.start')}

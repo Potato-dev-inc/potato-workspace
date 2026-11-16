@@ -134,6 +134,7 @@ const click = async (el: HTMLElement | undefined | null) => {
   await act(async () => {});
 };
 const q = <T extends HTMLElement>(id: string) => host.querySelector<T>(`[data-testid="${id}"]`);
+const handoverSwitch = () => q('handover-toggle')?.querySelector<HTMLButtonElement>('[role="switch"]') ?? null;
 async function type(el: HTMLInputElement | HTMLTextAreaElement, value: string) {
   const proto = el instanceof HTMLTextAreaElement ? HTMLTextAreaElement.prototype : HTMLInputElement.prototype;
   await act(async () => {
@@ -483,8 +484,10 @@ describe('Tasks tab: You passed', () => {
     await show(tasks);
     await open('tasks');
     expect(q('tasks-empty')!.textContent).toBe("Nothing passed around yet. Pass a task from a person's card, or from any chat's menu.");
-    expect(q<HTMLInputElement>('handover-toggle')!.checked).toBe(false);
-    await click(q('handover-toggle'));
+    // the hand-over switch is the same Switch as elsewhere on Connect (a role="switch" button, not a checkbox)
+    expect(q('handover-toggle')!.querySelector('input[type="checkbox"]')).toBeNull();
+    expect(handoverSwitch()!.getAttribute('aria-checked')).toBe('false');
+    await click(handoverSwitch()!);
     expect(q('handover-confirm')).not.toBeNull();
     expect(tasks.calls.some((c) => c.startsWith('handoverSet'))).toBe(false);
     await click(q('handover-yes'));
@@ -495,7 +498,8 @@ describe('Tasks tab: You passed', () => {
     const tasks = tasksFake({ handoverOn: true });
     await show(tasks);
     await open('tasks');
-    await click(q('handover-toggle'));
+    expect(handoverSwitch()!.getAttribute('aria-checked')).toBe('true');
+    await click(handoverSwitch()!);
     expect(tasks.calls).toContain('handoverSet(false)');
   });
 });

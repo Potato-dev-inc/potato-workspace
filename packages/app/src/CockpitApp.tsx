@@ -286,6 +286,9 @@ export default function CockpitApp() {
           viewHandlers.current.select(null);
           setView('inbox');
           setInboxVisit((n) => n + 1);
+        } else if (e.view === 'newagent') {
+          setNewAgentProject(null);
+          setView('newagent');
         }
       })
       .then((u) => (disposed ? u() : (off = u)));
@@ -929,6 +932,7 @@ export default function CockpitApp() {
           setView('newagent');
         }}
         newAgentOpen={view === 'newagent'}
+        settingsOpen={view === 'settings'}
         spaces={{ enabled: spacesOn }}
         devices={
           deviceGroups.enabled
@@ -1169,10 +1173,6 @@ export default function CockpitApp() {
           currentPaneId={goLive.paneId ?? c.selectedId ?? undefined}
           teamRelay={teamRelay}
           onClose={() => setGoLive(null)}
-          onOpenSettings={() => {
-            setGoLive(null);
-            void nav.openSettings('live-room');
-          }}
         />
       )}
       {shortcutsOpen && <ShortcutsSheet onClose={() => setShortcutsOpen(false)} />}
@@ -1206,7 +1206,7 @@ export default function CockpitApp() {
         />
       )}
       {welcome.open && c.mode !== 'individual' && <FirstRun key={welcome.openKey} c={nav} seed={welcome.seed} onFinish={welcome.finish} />}
-      {!welcome.open && welcome.pending && c.mode !== 'individual' && <FinishSetupChip onOpen={welcome.reopen} />}
+      {!welcome.open && welcome.pending && c.mode !== 'individual' && view !== 'settings' && <FinishSetupChip onOpen={welcome.reopen} />}
       {c.mode !== 'individual' && <TellTeamToast />}
       <ImportHost c={nav} />
       <AddAgentActionHost c={nav} />

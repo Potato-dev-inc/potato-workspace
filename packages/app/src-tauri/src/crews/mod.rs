@@ -18,10 +18,12 @@
 //! A started pane is a normal pane: its trust and permission questions are never answered here.
 
 pub mod agents;
+pub mod apply;
 pub mod config_format;
 pub mod draft;
 pub mod live;
 pub mod model;
+pub mod routing;
 pub mod start;
 pub mod starters;
 pub mod store;

@@ -272,14 +272,14 @@ describe('standby helpers in the sidebar', () => {
     expect(c.select).toHaveBeenCalledWith('chat-9');
   });
 
-  it('a row says how often it was used today and why an agent last passed it by; Try it opens it for the person', async () => {
+  it('a row says why an agent last passed it by (and never counts uses: a standby is used once); Try it opens it for the person', async () => {
     const { api } = fakeApi([helper({ id: 'x', name: 'Reviewer', used_today: 3, skip_reason: 'different_model' }), helper({ id: 'y', name: 'Second', used_today: 1 })]);
     await show(cockpit([pane('a1', 'idle', 'Right panel rebuild')]), api);
     const row = (id: string) => rows().find((r) => r.dataset.helperId === id)!;
-    expect(row('x').querySelector('[data-testid="standby-used"]')?.textContent).toBe('Used 3 times today');
     expect(row('x').querySelector('[data-testid="standby-skip"]')?.textContent).toBe('Skipped: different model');
-    expect(row('y').querySelector('[data-testid="standby-used"]')?.textContent).toBe('Used once today');
-    expect(row('y').querySelector('[data-testid="standby-skip"]')).toBeNull();
+    expect(row('x').textContent).not.toMatch(/Used (once|\d+ times) today/);
+    expect(row('y').textContent).not.toMatch(/Used (once|\d+ times) today/);
+    expect(row('y').querySelector('[data-testid="standby-meta"]')).toBeNull();
     await act(async () => row('x').querySelector<HTMLButtonElement>('.ck-row-more')!.click());
     const tryIt = [...document.querySelectorAll<HTMLElement>('[data-testid="standby-row-menu"] [role="menuitem"]')].find((e) => e.textContent === 'Try it')!;
     expect(tryIt).toBeDefined();
@@ -288,16 +288,14 @@ describe('standby helpers in the sidebar', () => {
     expect(api.open).toHaveBeenCalledWith('x');
   });
 
-  it('the row menu: rename, after a task, remove from the agent, close', async () => {
+  it('the row menu: rename, remove from the agent, close (no "after a task" choice: a standby is used once)', async () => {
     const { api } = fakeApi([helper()]);
     await show(cockpit([pane('a1', 'idle', 'Right panel rebuild')]), api);
     await act(async () => rows()[0].querySelector('.ck-row')!.dispatchEvent(new MouseEvent('contextmenu', { bubbles: true, cancelable: true, clientX: 5, clientY: 5 })));
     const menu = document.querySelector('[data-testid="standby-row-menu"]')!;
     const labels = [...menu.querySelectorAll('[role^="menuitem"]')].map((e) => e.textContent?.replace('✓', ''));
-    expect(labels).toEqual(expect.arrayContaining(['Open', 'Rename', 'After a task: wait again', 'After a task: close until needed', 'Remove from Right panel rebuild', 'Close']));
-    const rest = [...menu.querySelectorAll<HTMLElement>('[role^="menuitem"]')].find((e) => e.textContent?.endsWith('After a task: close until needed'))!;
-    await act(async () => rest.click());
-    expect(api.update).toHaveBeenCalledWith('sb-1', { after_task: 'close' });
+    expect(labels).toEqual(expect.arrayContaining(['Open', 'Rename', 'Remove from Right panel rebuild', 'Close']));
+    expect(labels.some((l) => /after a task/i.test(l ?? ''))).toBe(false);
   });
 
   it('with "Show helpers in the sidebar" off there are no standby rows and the chat is an ordinary row again', async () => {

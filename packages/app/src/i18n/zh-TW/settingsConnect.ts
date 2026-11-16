@@ -64,6 +64,7 @@ export const settingsConnect: Partial<Record<EnglishKey, string>> = {
   'discord.linkAria': 'Discord webhook 連結',
   'discord.savedEnds': '已儲存。結尾是 {tail}',
   'discord.save': '儲存',
+  'discord.pasteFirst': '請先貼上 Webhook 連結。',
   'discord.working': '處理中…',
   'discord.addFirst': '請先加入 webhook 連結',
   'discord.savedNote': '已存放在這台電腦的安全儲存區。結尾是 {tail}。',

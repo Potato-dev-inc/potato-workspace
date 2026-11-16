@@ -245,7 +245,7 @@ describe('Ask to borrow is reachable from Teams', () => {
 
 // ---- the Lend page: nav and search ------------------------------------------------------------------------------------
 
-describe('Settings > Lend', () => {
+describe('Connect > Lending (the Connect page of the separate Settings window)', () => {
   const api = (lend: boolean): SettingsApi => ({
     load: async () => ({ ...BASE_SETTINGS, ...(lend ? { lend_enabled: true } : {}) }),
     patch: async () => ({ ...BASE_SETTINGS }),
@@ -254,18 +254,18 @@ describe('Settings > Lend', () => {
   });
   const mount = async (lend: boolean, props: Partial<React.ComponentProps<typeof SettingsPanel>> = {}) => {
     lendIs(lend ? lendState() : null);
-    await act(async () => root.render(<SettingsPanel open api={api(lend)} {...props} />));
+    await act(async () => root.render(<SettingsPanel open withConnect api={api(lend)} {...props} />));
     await settle(6);
   };
   const navTitles = () => [...host.querySelectorAll('.st-nav .st-nav-row')].map((b) => b.textContent);
   const search = () => host.querySelector('input[aria-label="Search settings"]') as HTMLInputElement;
   const main = () => host.querySelector('.st-main') as HTMLElement;
 
-  it('is a card on the Connect page, with its sections', async () => {
-    await mount(true, { initialTab: 'connect', initialRow: 'lend-page' });
+  it('is a tab of the Connect page, with its sections', async () => {
+    await mount(true, { initialTab: 'connect', initialConnectTab: 'lending' });
     expect(navTitles()).not.toContain('Lend');
     // The page loads its state when it opens: poll for what the test needs, no fixed wait.
-    for (let i = 0; i < 200 && !(main().querySelector('section[aria-label="Active lends"]') && main().querySelector('[data-row="lend-page"]')); i++) {
+    for (let i = 0; i < 200 && !main().querySelector('section[aria-label="Active lends"]'); i++) {
       await act(async () => void (await new Promise((r) => setTimeout(r, 25))));
     }
     expect(main().querySelector('h1')!.textContent).toBe('Connect');
@@ -277,13 +277,11 @@ describe('Settings > Lend', () => {
       expect(main().querySelector(`section[aria-label="${label}"]`), label).toBeNull();
     }
     expect(main().textContent).not.toContain('.pm');
-    // A basic row: it is not hidden behind "Advanced".
-    expect(main().querySelector('[data-row="lend-page"]')).not.toBeNull();
   });
 
   /** Opens Settings on the Lend page and waits for it. */
   const openLendPage = async () => {
-    await mount(true, { initialTab: 'connect', initialRow: 'lend-page' });
+    await mount(true, { initialTab: 'connect', initialConnectTab: 'lending' });
     for (let i = 0; i < 200 && !main().querySelector('section[aria-label="Who may borrow"]'); i++) {
       await act(async () => void (await new Promise((r) => setTimeout(r, 25))));
     }
@@ -298,7 +296,7 @@ describe('Settings > Lend', () => {
   };
 
   it('puts the switch at the top: "Lending from this PC: On · Change", and Change opens that switch', async () => {
-    await mount(true, { initialTab: 'connect', initialRow: 'lend-page' });
+    await mount(true, { initialTab: 'connect', initialConnectTab: 'lending' });
     const row = await waitStatus();
     expect(row.getAttribute('data-state')).toBe('on');
     expect(row.textContent).toContain('Lending from this PC: On');
@@ -318,7 +316,7 @@ describe('Settings > Lend', () => {
       findBridgeUrl: async () => null,
       subscribe: () => () => {},
     };
-    await act(async () => root.render(<SettingsPanel open api={settings} initialTab="connect" initialRow="lend-page" />));
+    await act(async () => root.render(<SettingsPanel open withConnect api={settings} initialTab="connect" initialConnectTab="lending" />));
     await settle(6);
     const row = await waitStatus();
     expect(row.getAttribute('data-state')).toBe('off');
@@ -383,21 +381,17 @@ describe('Settings > Lend', () => {
     expect(sheetInput('Name').value).toBe('Work account');
   });
 
-  it.each(['lend', 'borrow', 'usage'])('searching "%s" finds it', async (word) => {
+  it.each(['lend', 'borrow'])('searching "%s" ends in one "Open Connect" result that opens the Connect page', async (word) => {
     await mount(true, { initialTab: 'look' });
     await typeInto(search(), word);
     await settle(6);
-    expect([...main().querySelectorAll('.st-results > section')].map((s) => s.getAttribute('data-section'))).toContain('connect');
-    expect(main().querySelector('[data-row="lend-page"]')).not.toBeNull();
-  });
-
-  it.each(['lend', 'borrow', 'usage'])('with the switch off, "%s" finds no Lend page', async (word) => {
-    await mount(false, { initialTab: 'look' });
-    await typeInto(search(), word);
-    await settle(6);
     expect(main().querySelector('[data-row="lend-page"]')).toBeNull();
+    const open = main().querySelector<HTMLElement>('[data-testid="settings-open-connect"] button')!;
+    expect(open.textContent).toContain('Open Connect');
+    await click(open);
+    await settle(4);
+    expect(main().querySelector('h1')!.textContent).toBe('Connect');
   });
-
 });
 
 // ---- the New agent menu ------------------------------------------------------------------------------------------------

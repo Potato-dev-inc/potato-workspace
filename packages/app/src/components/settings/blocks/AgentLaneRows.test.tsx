@@ -220,18 +220,14 @@ describe('the settings rows', () => {
   const ids = (settings: { acp_chat_enabled?: boolean } | null) =>
     visibleSections(SECTIONS, settings).flatMap((s) => s.rows.map((r) => r.id));
 
-  it('the How to run row exists only while the Labs switch is on', () => {
-    expect(ids({})).not.toContain('agent-lane');
-    expect(ids(null)).not.toContain('agent-lane');
-    expect(ids({ acp_chat_enabled: false })).not.toContain('agent-lane');
-    expect(ids({ acp_chat_enabled: true })).toContain('agent-lane');
+  it('the How to run row is always there: chat is always on (the Chat view Labs flag is gone)', () => {
+    expect(ids({})).toContain('agent-lane');
+    expect(ids(null)).toContain('agent-lane');
+    expect(ids({ acp_chat_enabled: false })).toContain('agent-lane');
   });
 
-  it('the Labs switch row is named in plain words', () => {
-    const row = collectLabs(BASE_SECTIONS).find((r) => r.id === 'acp-chat-labs')!;
-    expect(row.labs?.name).toBe('Chat view');
-    expect(row.labs?.about).toBe('Use an agent as a chat instead of a terminal.');
-    // It is listed on the Labs page, not as a row of its own.
+  it('there is no Chat view Labs feature any more', () => {
+    expect(collectLabs(BASE_SECTIONS).some((r) => r.id === 'acp-chat-labs')).toBe(false);
     expect(SECTIONS.flatMap((s) => s.rows).some((r) => r.id === 'acp-chat-labs')).toBe(false);
   });
 });

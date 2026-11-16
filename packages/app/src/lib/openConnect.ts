@@ -1,6 +1,6 @@
 // The Connect page: one place for the phone, other PCs, the team and lending. Cards, links and old Settings
 // rows send people there through `openConnect`. The cockpit registers how (its view + tab); the separate
-// Settings window has no Connect page, so there the old rows keep their own content (`connectPageAvailable`).
+// Settings window (Individual mode) has no cockpit view; there Connect is one page of that window, drawn by SettingsPanel.
 export const CONNECT_TABS = ['phone', 'pcs', 'team', 'lending'] as const;
 export type ConnectTab = (typeof CONNECT_TABS)[number];
 
@@ -23,7 +23,9 @@ export function openConnect(tab: ConnectTab = 'phone'): void {
 
 /** Settings page and row names that now live on a Connect tab (old deep links keep working). */
 const TARGETS: Record<string, ConnectTab> = {
+  connect: 'phone',
   phone: 'phone',
+  telegram: 'phone',
   mobile: 'phone',
   pairing: 'phone',
   tunnel: 'phone',

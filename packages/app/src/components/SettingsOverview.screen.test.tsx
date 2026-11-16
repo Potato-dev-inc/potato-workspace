@@ -7,6 +7,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { Settings } from '@potato-workspace/shared';
 import type { CheckRow } from '../lib/setup-checks';
 import { fakeOverviewSources } from './settings/overview-test-utils';
+import type { FixEverythingSources } from './settings/FixEverything';
 import { BASE_SETTINGS, click, settle } from './settings/test-utils';
 import { SettingsPanel, type SettingsApi } from './SettingsPanel';
 
@@ -96,14 +97,19 @@ describe('Settings > Overview on the real page', () => {
     expect(host.querySelector('.st-setupcheck-summary')!.textContent).toBe('Everything works');
   });
 
-  it('pressing Test on a row re-runs the one source, and the cards follow', async () => {
+  const FRESH = (tested: boolean): CheckRow[] => [
+    tested
+      ? { id: 'agent-claude', status: 'ok', sentence: 'Claude is signed in', fix: { kind: 'test', label: 'Test again', agentId: 'claude' } }
+      : { id: 'agent-claude', status: 'warn', sentence: 'Claude is not tested yet', fix: { kind: 'test', label: 'Test', agentId: 'claude' } },
+  ];
+
+  const mountFresh = async () => {
     let tested = false;
-    const run = vi.fn(async (): Promise<CheckRow[]> => [
-      tested
-        ? { id: 'agent-claude', status: 'ok', sentence: 'Claude is signed in', fix: null }
-        : { id: 'agent-claude', status: 'warn', sentence: 'Claude is not tested yet', fix: { kind: 'test', label: 'Test', agentId: 'claude' } },
-    ]);
+    let release: () => void = () => undefined;
+    const gate = new Promise<void>((r) => (release = r));
+    const run = vi.fn(async (): Promise<CheckRow[]> => FRESH(tested));
     const test = vi.fn(async () => {
+      await gate;
       tested = true;
     });
     const sources = fakeOverviewSources({ checks: run, actions: { signIn: () => undefined, installAddon: async () => undefined, test } });
@@ -111,13 +117,97 @@ describe('Settings > Overview on the real page', () => {
       root.render(<SettingsPanel open initialTab="overview" api={api()} overviewSources={sources} />);
     });
     await settle(10);
-    expect(card('agents').textContent).toContain('1 to check');
-    const button = [...listRows()[0].querySelectorAll('button')].find((b) => b.textContent === 'Test');
-    await click(button);
-    await settle(10);
+    return { run, test, release: () => act(async () => void release()) };
+  };
+
+  it('a fresh install: the checks run by themselves, and no card says "not tested yet" while or after they do', async () => {
+    const { run, test, release } = await mountFresh();
+    // The agent is being tested right now: the cards say Checking, never the amber "1 to check".
     expect(test).toHaveBeenCalledWith('claude');
+    expect(card('agents').textContent).toContain('Checking');
+    expect(card('agents').textContent).not.toContain('to check');
+    expect(card('signed-in').textContent).not.toMatch(/not checked yet/i);
+    await release();
+    await settle(10);
     expect(run).toHaveBeenCalledTimes(2);
     expect(card('agents').textContent).toContain('1 agent ready');
+    expect(host.querySelector('.st-main')!.textContent).not.toMatch(/not tested yet|not checked yet/i);
+    // Each agent is tested once, not again and again.
+    expect(test).toHaveBeenCalledTimes(1);
+  });
+
+  it('pressing Test again on a row still works, and the cards follow', async () => {
+    const { run, test, release } = await mountFresh();
+    await release();
+    await settle(10);
+    expect(run).toHaveBeenCalledTimes(2);
+    const button = [...listRows()[0].querySelectorAll('button')].find((b) => b.textContent === 'Test again');
+    expect(button).toBeTruthy();
+    await click(button);
+    await settle(10);
+    expect(test).toHaveBeenCalledTimes(2);
+    expect(card('agents').textContent).toContain('1 agent ready');
+  });
+
+  const everything = (over: Partial<FixEverythingSources['apis']> = {}, extra: Partial<FixEverythingSources> = {}): FixEverythingSources => ({
+    apis: {
+      addons: { list: async () => ({ labsEnabled: false, addons: [] }) as never, install: async () => ({}) as never },
+      pack: { apply: vi.fn(async () => ({}) as never) },
+      warm: { status: async () => null, setConfig: async () => null, setProject: async () => true, warmable: () => [] },
+      ...over,
+    },
+    agents: async () => [{ id: 'claude', label: 'Claude' }],
+    pauseMs: 0,
+    loadAgents: async () =>
+      ({ labs_enabled: true, agents: [{ id: 'claude', label: 'Claude', lane: 'acp', effective_lane: 'acp', disabled: false, disabled_note: null, saved: true }] }) as never,
+    ...extra,
+  });
+  const GREEN = async (): Promise<CheckRow[]> => [{ id: 'agent-claude', status: 'ok', sentence: 'Claude is signed in', fix: null }];
+  const NEEDS = async (): Promise<CheckRow[]> => [{ id: 'agent-codex', status: 'warn', sentence: 'Codex needs sign-in', fix: { kind: 'signin', label: 'Sign in', agentId: 'codex' } }];
+  const mountWith = async (checks: () => Promise<CheckRow[]>, everythingSources: FixEverythingSources) => {
+    const sources = fakeOverviewSources({ checks, everything: everythingSources });
+    await act(async () => {
+      root.render(<SettingsPanel open initialTab="overview" api={api()} overviewSources={sources} />);
+    });
+    await settle(10);
+  };
+  const goButton = () => host.querySelector<HTMLButtonElement>('[data-testid="fix-everything-go"]');
+
+  it('shows one "Fix everything" button while something is not fine, and none when all is green', async () => {
+    await mountWith(NEEDS, everything());
+    expect(host.querySelectorAll('[data-testid="fix-everything-go"]')).toHaveLength(1);
+    expect(goButton()!.textContent).toBe('Fix everything');
+    await act(async () => root.unmount());
+    window.localStorage.clear();
+    root = createRoot(host);
+    await mountWith(GREEN, everything());
+    expect(goButton()).toBeNull();
+  });
+
+  it('Fix everything runs the three steps and says it is done', async () => {
+    const apply = vi.fn(async () => ({}) as never);
+    await mountWith(NEEDS, everything({ pack: { apply } }));
+    await click(goButton());
+    await settle(20);
+    expect(apply).toHaveBeenCalledTimes(1);
+    expect(host.querySelector('[data-testid="fix-everything-done"]')?.textContent).toContain('Everything is set up.');
+    expect(host.querySelector('.st-main')!.textContent).not.toContain('`');
+  });
+
+  it('a step that fails is tried 3 times, then "Let Claude fix it" hands the job to the agent', async () => {
+    const apply = vi.fn(async () => {
+      throw new Error('could not write the file');
+    });
+    const handOff = vi.fn();
+    await mountWith(NEEDS, everything({ pack: { apply } }, { handOff }));
+    await click(goButton());
+    await settle(30);
+    expect(apply).toHaveBeenCalledTimes(3);
+    const fixButton = host.querySelector<HTMLElement>('[data-testid="fix-everything-fix"]')!;
+    expect(fixButton.textContent).toContain('Claude');
+    await click(fixButton);
+    await settle(6);
+    expect(handOff).toHaveBeenCalledWith('chat', 'claude', expect.stringContaining('could not write the file'));
   });
 
   it('the Overview page never says Bridge', async () => {

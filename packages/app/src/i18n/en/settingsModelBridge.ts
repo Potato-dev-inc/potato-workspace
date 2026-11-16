@@ -14,6 +14,7 @@ export const settingsModelBridge = {
   "modelBridge.copyVar": "Copy variable line",
   "modelBridge.doneNote": "Agents that Potato Workspace starts get the key by themselves. In a Codex you start yourself, set the variable first.",
   "modelBridge.connect": "Connect a model service",
+  "modelBridge.needsSafe": "Needs a safe place for the key.",
   "modelBridge.serviceName": "Service name",
   "modelBridge.myService": "My service",
   "modelBridge.keptIn": "It is kept in {store}. Potato Workspace never shows it again.",

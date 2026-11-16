@@ -426,22 +426,65 @@ fn a_full_shim_answers_rate_limited_as_a_retryable_tool_error() {
 // ---- 5. idempotency keys ----
 
 #[test]
-fn a_missing_key_is_derived_so_an_identical_retry_repeats_it() {
+fn run_agent_without_a_key_is_a_new_run_each_time_and_only_a_named_key_repeats() {
     let bridge = FakeBridge::start(|_, _, _, _| ok_json());
     bridge.use_session();
     let args = json!({"agent_type":"claude","project_path":"C:/x","task":"same task"});
+    // "Do it again": the same words with no key start a new run each time.
     call_tool(json!({"name":"run_agent","arguments":args})).unwrap();
     call_tool(json!({"name":"run_agent","arguments":args})).unwrap();
-    call_tool(json!({"name":"run_agent","arguments":{"agent_type":"claude","project_path":"C:/x","task":"another task"}})).unwrap();
+    // A key the caller names and reuses is how a retry says "this is the same run".
+    let mut named = args.clone();
+    named["idempotency_key"] = json!("my-retry");
+    call_tool(json!({"name":"run_agent","arguments":named})).unwrap();
+    call_tool(json!({"name":"run_agent","arguments":named})).unwrap();
     let keys: Vec<String> = bridge
         .seen()
         .iter()
         .filter(|(_, p, _)| p == "/agents/run")
         .map(|(_, _, body)| body["idempotency_key"].as_str().unwrap().to_owned())
         .collect();
-    assert_eq!(keys.len(), 3);
-    assert_eq!(keys[0], keys[1], "same session, tool and arguments");
-    assert_ne!(keys[0], keys[2], "different arguments");
+    assert_eq!(keys.len(), 4);
+    assert_ne!(keys[0], keys[1], "no key: every call is a new run");
+    assert!(!keys[0].starts_with("auto-"), "no key is derived from the words: {}", keys[0]);
+    assert_eq!(keys[2], "my-retry");
+    assert_eq!(keys[3], "my-retry");
+}
+
+#[test]
+fn followup_task_without_a_key_is_a_new_turn_each_time() {
+    let bridge = FakeBridge::start(|_, _, _, _| ok_json());
+    bridge.use_session();
+    let args = json!({"handle":"h1","project_path":"C:/x","task":"again"});
+    call_tool(json!({"name":"followup_task","arguments":args})).unwrap();
+    call_tool(json!({"name":"followup_task","arguments":args})).unwrap();
+    let keys: Vec<String> = bridge.seen().iter().filter(|(_, p, _)| p == "/agents/followup").map(|(_, _, body)| body["idempotency_key"].as_str().unwrap().to_owned()).collect();
+    assert_eq!(keys.len(), 2);
+    assert_ne!(keys[0], keys[1]);
+}
+
+#[test]
+fn run_agent_reads_prompt_message_or_instructions_as_the_task() {
+    for alias in ["prompt", "message", "instructions"] {
+        let bridge = FakeBridge::start(|_, _, _, _| ok_json());
+        bridge.use_session();
+        call_tool(json!({"name":"run_agent","arguments":{"agent_type":"claude","project_path":"C:/x", alias: "do the work"}})).unwrap();
+        let seen = bridge.seen();
+        let (_, _, body) = seen.iter().find(|(_, p, _)| p == "/agents/run").expect("sent to the bridge");
+        assert_eq!(body["task"], "do the work", "{alias} is read as task");
+        assert!(body.get(alias).is_none(), "{alias} is not passed on");
+    }
+}
+
+#[test]
+fn run_agent_without_a_task_says_so_in_one_plain_sentence_and_sends_nothing() {
+    let bridge = FakeBridge::start(|_, _, _, _| ok_json());
+    bridge.use_session();
+    for args in [json!({}), json!({"agent_type":"claude","task":"   "})] {
+        let error = call_tool(json!({"name":"run_agent","arguments":args})).unwrap_err();
+        assert_eq!(error, "run_agent needs `task`: the work to do.");
+    }
+    assert_eq!(bridge.count("/agents/run"), 0, "nothing reached the app");
 }
 
 #[test]
@@ -479,37 +522,6 @@ fn the_drift_notice_names_the_tools_whose_schema_differs() {
     let mut health = health_for(&shim);
     health["catalog_version"] = json!("different-string");
     assert!(schema_drift_with(&health, &shim).is_none());
-}
-
-// ---- 6b. replay honesty: a derived key that names an earlier run says so ----
-
-#[test]
-fn a_derived_key_answer_from_an_earlier_run_is_marked_replayed() {
-    let mut caller = json!({"task": "t"});
-    assert!(!caller_gave_idempotency_key(&caller));
-    caller["idempotency_key"] = json!("mine");
-    assert!(caller_gave_idempotency_key(&caller));
-    let mut empty = json!({"idempotency_key": ""});
-    assert!(!caller_gave_idempotency_key(&empty));
-    empty["idempotency_key"] = json!(null);
-    assert!(!caller_gave_idempotency_key(&empty));
-
-    let answer = json!({"handle": "h1", "status": "running"}).to_string();
-    let earlier = json!({"operation_id": "op-1", "created_at_ms": 1_700_000_000_000u64});
-    let replayed: Value = serde_json::from_str(&mark_replayed(answer.clone(), Some(&earlier))).unwrap();
-    assert_eq!(replayed["replayed"], true);
-    assert_eq!(replayed["started_at_ms"], 1_700_000_000_000u64);
-    assert_eq!(replayed["handle"], "h1", "the answer itself is kept");
-}
-
-#[test]
-fn a_fresh_run_gets_no_replay_marker_and_an_unparsable_answer_passes_through() {
-    let answer = json!({"handle": "h1", "status": "running"}).to_string();
-    assert_eq!(mark_replayed(answer.clone(), None), answer, "fresh runs are unchanged");
-    let text = "not json at all";
-    assert_eq!(mark_replayed(text.to_string(), Some(&json!({"operation_id": "op-1"}))), text);
-    let fresh: Value = serde_json::from_str(&answer).unwrap();
-    assert!(fresh.get("replayed").is_none());
 }
 
 // ---- 7. heartbeats ----

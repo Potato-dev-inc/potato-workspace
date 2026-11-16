@@ -45,6 +45,7 @@ pub fn tick(app: &AppHandle, preview_id: &str, key: &str, window: &WebviewWindow
         match event {
             Event::Open => opened(app, preview_id, key, window, st),
             Event::Close => closed(preview_id, st),
+            Event::NewAgent => new_agent(app),
             Event::Prepare { marks, area, vw } => prepare(app, preview_id, key, window, st, &bar::clean_marks(&marks), area.h, vw),
             Event::Send { request, marks, to } => send(app, preview_id, key, window, st, &request, &bar::clean_marks(&marks), &to),
         }
@@ -63,8 +64,11 @@ fn opened(app: &AppHandle, preview_id: &str, key: &str, window: &WebviewWindow, 
     let state = app.state::<AppState>();
     let infos = state.registry.lock().list();
     let facts = target_facts(&state.registry, &infos);
-    let (list, default) = target::targets(&facts, owner.as_ref().map(|t| t.pane_id.as_str()), None);
-    let targets: Vec<Value> = list.iter().map(|t| json!({ "id": t.pane_id, "label": format!("{} \u{b7} {}", t.agent_label, t.title), "ok": t.can_send })).collect();
+    let (rows, default) = super::targets::rows(&facts, &infos, owner.as_ref().map(|t| t.pane_id.as_str()));
+    let targets: Vec<Value> = rows
+        .iter()
+        .map(|r| json!({ "id": r.id, "agent": r.agent_id, "name": r.name, "task": r.task, "project": r.project, "status": r.status, "ok": r.ok, "reason": r.reason }))
+        .collect();
     push(
         window,
         key,
@@ -74,8 +78,20 @@ fn opened(app: &AppHandle, preview_id: &str, key: &str, window: &WebviewWindow, 
             "owner": owner.as_ref().map(|t| format!("{} \u{b7} {}", t.agent_label, t.title)),
             "targets": targets,
             "to": owner.as_ref().map(|t| t.pane_id.clone()).or(default),
+            "ownerId": owner.as_ref().map(|t| t.pane_id.clone()),
         }),
     );
+}
+
+/// "New agent" in the bar's list: show the New agent page in the main window.
+fn new_agent(app: &AppHandle) {
+    use tauri::Emitter;
+    crate::app_windows::open_cockpit_window(app, None, true);
+    let app = app.clone();
+    std::thread::spawn(move || {
+        std::thread::sleep(Duration::from_millis(1200));
+        let _ = app.emit("cockpit://view", json!({ "view": "newagent" }));
+    });
 }
 
 fn closed(preview_id: &str, st: &mut Loop) {
@@ -103,6 +119,7 @@ fn prepare(app: &AppHandle, preview_id: &str, key: &str, window: &WebviewWindow,
         let _ = window.eval(bar::call(key, "shoot", if on { "true" } else { "false" }));
     };
     let Some(target) = owner_target(app, preview_id, window).or_else(|| default_target(app)) else {
+        tracing::warn!(preview = %preview_id, "markup: no chat to keep the picture for");
         return push(window, key, json!({ "taking": false, "noPicture": true }));
     };
     shown(true);
@@ -125,7 +142,10 @@ fn prepare(app: &AppHandle, preview_id: &str, key: &str, window: &WebviewWindow,
             }
             push(window, key, json!({ "taking": false, "noPicture": false, "thumb": thumb.unwrap_or_default() }));
         }
-        Err(_) => push(window, key, json!({ "taking": false, "noPicture": true })),
+        Err(why) => {
+            tracing::warn!(preview = %preview_id, "markup: the picture could not be taken: {why}");
+            push(window, key, json!({ "taking": false, "noPicture": true }))
+        }
     }
 }
 
@@ -134,19 +154,25 @@ fn default_target(app: &AppHandle) -> Option<TargetFacts> {
     let state = app.state::<AppState>();
     let infos = state.registry.lock().list();
     let facts = target_facts(&state.registry, &infos);
-    let (_, default) = target::targets(&facts, None, None);
-    facts.into_iter().find(|t| Some(&t.pane_id) == default.as_ref())
+    // `target::targets` names no default without an opener or a folder, so a window nobody owns never had a chat to keep
+    // its picture for ("The picture could not be taken"). The picture only needs a project folder to be filed in.
+    let (list, _) = target::targets(&facts, None, None);
+    let keeper = super::targets::keeper(&list)?;
+    facts.into_iter().find(|t| t.pane_id == keeper)
 }
 
 #[allow(clippy::too_many_arguments)]
 fn send(app: &AppHandle, preview_id: &str, key: &str, window: &WebviewWindow, st: &mut Loop, request: &str, marks: &[MarkIn], to: &str) {
     let fail = |why: String| push(window, key, json!({ "status": why }));
     let state = app.state::<AppState>();
-    let target = match owner_target(app, preview_id, window) {
-        Some(t) => t,
-        None => match target_of(&state, to) {
-            Ok(t) => t,
-            Err(why) => return fail(why),
+    // The person's pick wins; with none, the chat that owns the page.
+    let picked = if to.trim().is_empty() { None } else { Some(target_of(&state, to)) };
+    let target = match picked {
+        Some(Ok(t)) => t,
+        Some(Err(why)) => return fail(why),
+        None => match owner_target(app, preview_id, window) {
+            Some(t) => t,
+            None => return fail("Choose an agent to send to.".to_string()),
         },
     };
     if let Some(why) = refusal(&target) {
@@ -179,7 +205,8 @@ fn send(app: &AppHandle, preview_id: &str, key: &str, window: &WebviewWindow, st
         Ok(t) => t,
         Err(why) => return fail(why),
     };
-    let waiting = st.waiting.as_ref().filter(|(pane, _)| *pane == target.pane_id).and_then(|(pane, id)| store::get(pane, id));
+    // The picture belongs to the window, not to one agent: it goes with the message to whoever was picked.
+    let waiting = st.waiting.as_ref().and_then(|(pane, id)| store::get(pane, id)).map(|w| refile(w, &target.cwd, st.seq));
     let (text, attachments) = with_picture(&target, waiting.as_ref(), &text);
     let host = LiveOutbox { app: app.clone(), registry: state.registry.clone() };
     match send_with(&host, &target.pane_id, &text, &attachments) {
@@ -190,6 +217,19 @@ fn send(app: &AppHandle, preview_id: &str, key: &str, window: &WebviewWindow, st
             push(window, key, json!({ "sent": true }));
         }
         Err(why) => fail(why),
+    }
+}
+
+/// The picture was filed in the project of the agent that was first in the list when it was taken. When the person picked an
+/// agent of another project, the picture is copied into that project, so the path in the message is one the agent can open.
+fn refile(w: store::Waiting, cwd: &str, seq: u32) -> store::Waiting {
+    if w.abs_path.starts_with(cwd) {
+        return w;
+    }
+    let copied = std::fs::read(&w.abs_path).ok().and_then(|png| shot::save(std::path::Path::new(cwd), &png, audit::now_ms(), seq).ok());
+    match copied {
+        Some((abs_path, rel_path)) => store::Waiting { abs_path, rel_path, ..w },
+        None => w,
     }
 }
 

@@ -29,6 +29,7 @@ export const settingsBridge: Partial<Record<EnglishKey, string>> = {
   'bridge.connectEverywhere': '連結所有專案',
   'bridge.projectLine': '專案：{path}',
   'bridge.chooseFolder': '請先在「一般」選擇專案資料夾',
+  'bridge.pickFolderFirst': '請先選擇專案資料夾。',
   'bridge.uninstallProjectTitle': '從專案移除 MCP？',
   'bridge.uninstallProjectBody': '要從這個專案的 .mcp.json、.codex/config.toml 和 opencode.json 移除 potato-workspace 嗎？',
   'bridge.uninstallGlobalTitle': '移除全域 MCP？',

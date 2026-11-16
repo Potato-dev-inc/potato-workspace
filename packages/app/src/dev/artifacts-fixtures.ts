@@ -60,6 +60,19 @@ export function artifactsMock(cmd: string, args: Record<string, unknown>): { han
     case 'markup_less_motion':
     case 'markup_send':
       return { handled: true, value: null };
+    case 'markup_targets':
+      return {
+        handled: true,
+        value: {
+          current: 'pane-claude-1',
+          rows: [
+            { id: 'pane-claude-1', agentId: 'claude', name: 'Claude', task: 'Sign-in report', project: 'shop', status: 'working', ok: true, reason: null },
+            { id: 'pane-codex-1', agentId: 'codex', name: 'Codex', task: '', project: 'shop', status: 'waiting', ok: true, reason: null },
+            { id: 'pane-gemini-1', agentId: 'gemini', name: 'Gemini', task: 'Docs pass', project: 'blog', status: 'idle', ok: true, reason: null },
+            { id: 'pane-kimi-1', agentId: 'kimi', name: 'Kimi', task: '', project: 'blog', status: 'waiting', ok: false, reason: 'It is waiting on a question.' },
+          ],
+        },
+      };
     case 'markup_capture':
       return { handled: true, value: { shotId: 'mk-demo', thumb: PICTURE } };
     case 'artifacts_open_in_browser':

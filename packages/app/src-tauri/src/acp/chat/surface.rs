@@ -303,7 +303,7 @@ pub fn view(chat: &AcpChat) -> Value {
             "used": true,
             "id": seat,
             "name": name,
-            "note": "Your standby took this task in its own place. No new helper was started. When the task is over the standby is ready again with clean memory (this chat stays open as a normal chat), so use run_agent (not followup_task) for the next task.",
+            "note": "Your standby took this task in its own place. No new helper was started. A standby is one-time: it is used up now and no new one is made. This chat is a normal helper, so use followup_task (handle) to continue it, or run_agent for a new one.",
         }));
         map.insert("pane_policy".into(), json!("stays_open_until_you_close_it"));
     }

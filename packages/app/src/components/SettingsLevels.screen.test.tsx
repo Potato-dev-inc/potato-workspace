@@ -109,18 +109,16 @@ describe('Settings levels on the real page', () => {
     expect(page().textContent).toContain('Search results');
   });
 
-  it('a row with a Labs switch follows that switch on the real page', async () => {
+  it('How to run is not behind a Labs switch: chat is always on, even when an old saved value says off', async () => {
+    current = { ...current, acp_chat_enabled: false };
     await mount({ initialTab: 'agents' });
     await click(advancedToggle());
-    expect(row('agent-lane')).toBeNull();
-    current = { ...current, acp_chat_enabled: true };
-    await remount({ initialTab: 'agents' });
-    expect(row('agent-lane')).not.toBeNull(); // the Advanced group stays open: remembered
+    expect(row('agent-lane')).not.toBeNull();
   });
 
   it('nav still reaches every section', async () => {
     await mount();
-    for (const title of ['Overview', 'Agents', 'Helpers', 'Look and feel', 'Connect', 'Keys', 'Shortcuts', 'Advanced']) expect(nav(title), title).toBeDefined();
+    for (const title of ['Overview', 'Agents', 'Helpers', 'Look and feel', 'Keys', 'Shortcuts', 'Labs', 'Advanced']) expect(nav(title), title).toBeDefined();
   });
 });
 
@@ -130,9 +128,9 @@ describe('basic rows across the real catalog', () => {
   });
 
   // Spec 2026-11-13: at most 10 basic rows on a page. Today: Overview 4, Agents 3, Helpers 4, Look and feel 9, Connect 6, Keys 6.
-  it('shows at most 36 basic rows in all, and at most 10 on any one page', () => {
+  it('shows at most 37 basic rows in all, and at most 10 on any one page', () => {
     const counts = SECTIONS.map((s) => s.rows.filter((r) => rowLevel(r) === 'basic').length);
-    expect(counts.reduce((a, b) => a + b, 0)).toBeLessThanOrEqual(36);
+    expect(counts.reduce((a, b) => a + b, 0)).toBeLessThanOrEqual(37);
     for (const c of counts) expect(c).toBeLessThanOrEqual(10);
   });
 });

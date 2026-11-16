@@ -482,6 +482,11 @@
   gap: 8px;
   color: var(--label);
 }
+/* A label with the Connect switch on its right (Tasks: allow repo hand-over). */
+.cockpit .tpg-tick--switch {
+  align-items: center;
+  justify-content: space-between;
+}
 .cockpit .tpg-risk {
   display: flex;
   flex-direction: column;

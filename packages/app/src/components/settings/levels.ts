@@ -20,7 +20,6 @@ export const BASIC_ROW_IDS: readonly string[] = [
   'version',
   'whats-new',
   'welcome',
-  'discord-alerts',
   // Agents: sign in first, and check that the setup works. Writing your own agent file is advanced.
   'accounts',
   'setup-check',
@@ -37,16 +36,9 @@ export const BASIC_ROW_IDS: readonly string[] = [
   'key-openai',
   'key-openrouter',
   'opencode-keys',
-  'opencode-restart',
   'remove-all-keys',
-  // Team: the whole page is one row
-  'team-page',
-  // Phone: pair a phone, and the phones that are paired
-  'pairing',
-  'paired-devices',
-  'phone-notifications',
-  // Lend: the whole page is one row (shown only while its Labs flag is on)
-  'lend-page',
+  // Crews: the whole page is one row (shown only while its Labs flag is on)
+  'crews-page',
 ];
 
 export const DEVELOPER_ROW_IDS: readonly string[] = [

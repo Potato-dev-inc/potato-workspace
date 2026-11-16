@@ -86,6 +86,8 @@ import { appUx } from './zh-TW/appUx';
 import { deskReview } from './zh-TW/deskReview';
 import { devices } from './zh-TW/devices';
 import { crews } from './zh-TW/crews';
+import { crewCanvas } from './zh-TW/crewCanvas';
+import { account } from './zh-TW/account';
 import { agentRules } from './zh-TW/agentRules';
 import { rail } from './zh-TW/rail';
 import { connect } from './zh-TW/connect';
@@ -161,6 +163,8 @@ export const zhTW: Partial<Record<EnglishKey, string>> = {
   ...deskReview,
   ...devices,
   ...crews,
+  ...crewCanvas,
+  ...account,
   ...agentRules,
   ...rail,
   ...connect,

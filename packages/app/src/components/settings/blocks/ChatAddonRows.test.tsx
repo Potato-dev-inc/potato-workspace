@@ -114,10 +114,10 @@ describe('Settings > Agents > Chat add-ons', () => {
     expect(host.querySelector('[role="alert"]')?.textContent).toContain('If a chat with this agent is open, close it first');
   });
 
-  it('the Settings row exists only while Chat (ACP) is on in Labs', () => {
+  it('the Settings row is always there: chat is always on (no Labs flag gates it)', () => {
     const rowIds = (settings: { acp_chat_enabled?: boolean } | null) => (visibleSections(SECTIONS, settings).find((x) => x.id === 'agents')?.rows ?? []).map((r) => r.id);
-    expect(rowIds(null)).not.toContain('chat-addons');
-    expect(rowIds({ acp_chat_enabled: false })).not.toContain('chat-addons');
+    expect(rowIds(null)).toContain('chat-addons');
+    expect(rowIds({ acp_chat_enabled: false })).toContain('chat-addons');
     expect(rowIds({ acp_chat_enabled: true })).toContain('chat-addons');
   });
 });

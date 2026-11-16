@@ -5,6 +5,7 @@
 import { lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState, type KeyboardEvent, type ReactNode } from 'react';
 import type { PairedDeviceInfo, Settings } from '@potato-workspace/shared';
 import { useT } from '../../i18n';
+import { accountApi, type AccountApi } from '../../lib/account';
 import { devicesApi, type DevicesApi } from '../../lib/devices';
 import { isActiveIn, isActiveOut, lendApi, type LendApi } from '../../lib/lend';
 import { CONNECT_TABS, type ConnectTab } from '../../lib/openConnect';
@@ -14,6 +15,7 @@ import { tauri } from '../../lib/tauri';
 import { teamApi, type TeamApi } from '../../lib/team';
 import { DEVICES_CHANGED_EVENT, MobilePairingPanel } from '../MobilePairingPanel';
 import { useTeam, type TeamHandle } from '../cockpit/team/useTeam';
+import { AccountPanel } from '../account/AccountPanel';
 import { EmptyState } from '../common/EmptyState';
 import { DevicesPage } from '../devices/DevicesPage';
 import { useDevices } from '../devices/useDevices';
@@ -38,6 +40,7 @@ export interface ConnectApi {
   patchSettings: (patch: SettingsPatch) => Promise<Settings>;
   listPhones: () => Promise<PairedDeviceInfo[]>;
   devices: DevicesApi;
+  account: AccountApi;
   lend: LendApi;
   team: TeamApi;
 }
@@ -47,6 +50,7 @@ const DEFAULT_API: ConnectApi = {
   patchSettings,
   listPhones: () => tauri.listPairedMobileDevices(),
   devices: devicesApi,
+  account: accountApi,
   lend: lendApi,
   team: teamApi,
 };
@@ -260,9 +264,19 @@ function PhoneTab({ api, env }: { api: ConnectApi; env: SettingsEnv | null }) {
           <h2 className="cn-h2">{t('connect.phone.moreTitle')}</h2>
           <Embed>
             <RowShell row={rowOf('phone-notifications')} env={env} />
+            <RowShell row={rowOf('mobile-keyboard-resizes')} env={env} />
+            <RowShell row={rowOf('mobile-input-visible')} env={env} />
             <RowShell row={rowOf('revoke-all-devices')} env={env} />
           </Embed>
         </div>
+      )}
+      {env && (
+        <details className="cn-more" data-testid="connect-telegram">
+          <summary className="cn-h2">{t('connect.phone.telegram')}</summary>
+          <Embed>
+            <RowShell row={rowOf('telegram')} env={env} />
+          </Embed>
+        </details>
       )}
     </>
   );
@@ -274,9 +288,12 @@ function PcsTab({ api, settings, patch }: { api: ConnectApi; settings: Settings 
   const t = useT();
   const { view, enabled } = useDevices(api.devices);
   const off = settings !== null && settings.devices_enabled !== true && !enabled;
+  // Potato account (Labs): the sign-in and "My devices" come first, whether or not PC pairing is on.
+  const account = settings?.account_enabled === true ? <AccountPanel api={api.account} /> : null;
   if (off) {
     return (
       <>
+        {account}
         <Status tab="pcs" line={t('connect.pcs.none')} />
         <EmptyState
           testId="connect-pcs-off"
@@ -291,6 +308,7 @@ function PcsTab({ api, settings, patch }: { api: ConnectApi; settings: Settings 
   const online = devices.filter((d) => d.state === 'online').length;
   return (
     <>
+      {account}
       <Status tab="pcs" on={devices.length > 0} line={view ? (devices.length > 0 ? t('connect.pcs.count', { count: devices.length, online }) : t('connect.pcs.none')) : '…'} />
       <Embed>
         <DevicesPage api={api.devices} variant="connect" />

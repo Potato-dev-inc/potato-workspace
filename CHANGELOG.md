@@ -1,5 +1,36 @@
 # Changelog
 
+## 1.1.7
+
+This is a beta.
+
+- Crews (Labs › Crews, off by default):
+  - A canvas shows each crew's roles as boxes and lines, and you can change a role and pick its model from the menu.
+  - "Try a task" shows which roles a task would go through. Nothing runs.
+  - "Get helpers ready now" sets up one-time standbys for the crew.
+- Settings is simpler:
+  - Connect has moved to the sidebar.
+  - Agents have a "Sign in" button instead of a command to type.
+  - Overview checks itself, and one "Fix everything" button sorts out what it finds.
+  - Agents found on this PC have an "Add" button.
+  - Labs has its own page.
+  - Plainer names, a reason next to everything greyed out, and fewer duplicate choices.
+- Standbys are used once. After a standby takes a task it stays open as a normal helper, and no new standby is started in its place.
+- Helpers:
+  - "Do it again" starts a new run instead of handing back the last result.
+  - What an agent says after you message it mid-task now shows in Summary.
+  - A helper request with the task missing gets one plain sentence instead of a long error.
+- Mark up:
+  - You pick which agent gets your marks from a list with names, icons and status.
+  - The address bar no longer takes focus away from the mark-up box.
+  - The picture is kept on pages no agent opened.
+- Connect:
+  - Removing a phone asks first.
+  - Repo hand-over uses a switch.
+  - Settings opened from Connect is highlighted in the sidebar.
+- Cleaner look: the orange side stripes are gone.
+- First part of the Potato account, the server side; it isn't switched on yet.
+
 ## 1.1.6
 
 This is a beta.

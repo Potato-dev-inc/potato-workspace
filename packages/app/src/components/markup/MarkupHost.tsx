@@ -8,7 +8,8 @@ import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } fro
 import { useT } from '../../i18n';
 import { errorSentence } from '../../lib/sayError';
 import type { ArtifactPick } from '../../lib/artifact-point';
-import { markupApi, type MarkupApi, type MarkupShot } from '../../lib/markup/api';
+import { markupApi, type MarkupAgent, type MarkupApi, type MarkupShot } from '../../lib/markup/api';
+import { requestNewAgent } from '../../lib/newAgentRequest';
 import {
   addMark,
   canSend,
@@ -48,9 +49,27 @@ const frames = (n: number) =>
     step(n);
   });
 
+const TO_KEY = 'potato.markupTo.v1';
+const lastTo = (): string | null => {
+  try {
+    return localStorage.getItem(TO_KEY);
+  } catch {
+    return null;
+  }
+};
+const rememberTo = (id: string) => {
+  try {
+    localStorage.setItem(TO_KEY, id);
+  } catch {
+    // Storage is blocked: the page's own agent is preselected next time.
+  }
+};
+
 const typingIn = (el: EventTarget | null): boolean => {
   const n = el as HTMLElement | null;
   if (!n || !n.tagName) return false;
+  // The agent list is open: its keys (arrows, Enter, Escape) are its own, not the bar's.
+  if (n.closest?.('[role="menu"]')) return true;
   return n.tagName === 'INPUT' || n.tagName === 'TEXTAREA' || n.tagName === 'SELECT' || n.isContentEditable === true;
 };
 
@@ -95,6 +114,8 @@ export function MarkupHost({
   const [request, setRequest] = useState('');
   const [needText, setNeedText] = useState(false);
   const [busy, setBusy] = useState(false);
+  const [agents, setAgents] = useState<MarkupAgent[] | null>(null);
+  const [to, setTo] = useState<string | null>(null);
   const probe = useRef<FrameProbe | null>(null);
   const probed = useRef(new Set<number>());
   const statusTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -261,7 +282,40 @@ export function MarkupHost({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [sending, sig]);
 
-  const send = async () => {
+  // Who can get it: the running agents. The page's own agent is picked first, else the one used last, else the newest here.
+  const loadAgents = useCallback(async () => {
+    if (!api.targets) return;
+    try {
+      const got = await api.targets(paneId);
+      const rows = got.rows;
+      setAgents(rows);
+      setTo((now) => {
+        const keep = (id: string | null) => (id && rows.some((r) => r.id === id && r.ok) ? id : null);
+        const mine = rows.some((r) => r.id === paneId && r.ok) ? paneId : null;
+        return keep(now) ?? mine ?? keep(lastTo()) ?? keep(got.current) ?? rows.find((r) => r.ok)?.id ?? null;
+      });
+    } catch {
+      setAgents(null);
+    }
+  }, [api, paneId]);
+  useEffect(() => {
+    if (sending) void loadAgents();
+  }, [sending, loadAgents]);
+
+  const newAgent = () => {
+    if (requestNewAgent()) say(t('markup.openedNewAgent'));
+    else {
+      // This window is not the cockpit (the page's own window): open the cockpit and ask it for the New agent page.
+      void Promise.all([import('../../lib/cockpit-api'), import('@tauri-apps/api/event')])
+        .then(async ([m, ev]) => {
+          await m.cockpitApi.openCockpit();
+          setTimeout(() => void ev.emit('cockpit://view', { view: 'newagent' }), 1200);
+        })
+        .catch(() => undefined);
+    }
+  };
+
+  const send = async (override?: string) => {
     const s = live.current;
     if (!canSend(s.marks, request)) {
       setNeedText(true);
@@ -276,13 +330,17 @@ export function MarkupHost({
     }
     setBusy(true);
     try {
-      await api.send(paneId, shot?.shotId ?? null, text);
+      const dest = override ?? (agents ? to : null);
+      const away = dest && dest !== paneId ? dest : undefined;
+      await (away ? api.send(paneId, shot?.shotId ?? null, text, away) : api.send(paneId, shot?.shotId ?? null, text));
+      if (dest) rememberTo(dest);
+      const who = agents?.find((a) => a.id === dest)?.name;
       setState(clearMarks);
       setRequest('');
       setShot(null);
       setNeedText(false);
       probed.current.clear();
-      say(t('markup.sent'));
+      say(who ? t('markup.sentTo', { agent: who }) : t('markup.sent'));
       onSent?.();
     } catch (err) {
       say(errorSentence(err));
@@ -347,11 +405,16 @@ export function MarkupHost({
                 request={request}
                 needText={needText}
                 busy={busy}
+                agents={agents}
+                to={to}
+                owner={paneId}
+                onOpenTo={() => void loadAgents()}
+                onNewAgent={newAgent}
                 onRequest={(v) => {
                   setRequest(v);
                   setNeedText(false);
                 }}
-                onSend={() => void send()}
+                onSend={(dest) => void send(dest)}
               />
             )}
             <MarkupBar state={state} width={width} actions={actions} selectDisabled={selectDisabled} />

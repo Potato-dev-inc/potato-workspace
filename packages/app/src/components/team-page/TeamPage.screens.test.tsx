@@ -355,4 +355,11 @@ describe('Team page: no team yet', () => {
     await click('I have an invite');
     expect(host.querySelector('.tp-form')).not.toBeNull();
   });
+
+  it('the solo line points at My PCs (the Connect tab), not Devices', async () => {
+    await show(teamFake({ config: { team: '', members: [], joins: [] } }), lendFake(null).api);
+    const empty = host.querySelector('[data-testid="team-empty"]')!.textContent ?? '';
+    expect(empty).toContain('Just you? You can still link your own PCs under My PCs.');
+    expect(empty).not.toContain('under Devices');
+  });
 });

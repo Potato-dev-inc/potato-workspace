@@ -3,7 +3,7 @@
 import { useRef, useState, type KeyboardEvent } from 'react';
 import { useT, type MessageKey } from '../../i18n';
 import { tauriModelOptionsApi, useModelOptions, type ModelOptionsApi } from '../../lib/modelOptions';
-import type { AfterTask, SkipReason } from '../../lib/standbyHelpers';
+import type { SkipReason } from '../../lib/standbyHelpers';
 import { AgentLogo } from '../common/AgentLogo';
 import { Menu } from '../common/Floating';
 import { IconClose, IconMore } from './Icons';
@@ -18,7 +18,6 @@ export interface StandbyRowActions {
   close: (row: StandbyRow) => void;
   rename: (row: StandbyRow, name: string) => void;
   setModel: (row: StandbyRow, model: string | null) => void;
-  setAfter: (row: StandbyRow, after: AfterTask) => void;
   moveUnder: (row: StandbyRow, agentId: string) => void;
   start: (row: StandbyRow) => void;
 }
@@ -75,8 +74,6 @@ export function SidebarStandbyRow({
   const problemNote = row.state === 'problem' && h.note ? t(`standby.note.${h.note}` as MessageKey) : null;
   const tip = problemNote ?? t('standby.tip', { name: h.name, agent: h.model ? `${agentLabel} · ${h.model}` : agentLabel, state: t(TIP[row.state]) });
   const canRemove = row.state !== 'working' && row.state !== 'withYou';
-  const usedToday = h.used_today ?? 0;
-  const usedLine = usedToday === 1 ? t('standby.usedOnce') : usedToday > 1 ? t('standby.usedTimes', { count: usedToday }) : null;
   const skipLine = h.skip_reason ? t(SKIP[h.skip_reason]) : null;
   const leave = () => (warm ? actions.close(row) : actions.detach(row));
   const from = useRef<HTMLElement | null>(null);
@@ -137,11 +134,9 @@ export function SidebarStandbyRow({
           <span className="ck-sb-word">{word}</span>
         </span>
       </button>
-      {(usedLine || skipLine) && (
+      {skipLine && (
         <div className="ck-sb-meta" data-testid="standby-meta">
-          {usedLine && <span data-testid="standby-used">{usedLine}</span>}
-          {usedLine && skipLine && <span aria-hidden="true"> · </span>}
-          {skipLine && <span data-testid="standby-skip">{skipLine}</span>}
+          <span data-testid="standby-skip">{skipLine}</span>
         </div>
       )}
       {canRemove && (
@@ -230,9 +225,6 @@ function StandbyRowMenu({
       {models.length > 0 && head(t('standby.menu.model'))}
       {models.length > 0 && item(t('models.agentDefault'), () => actions.setModel(row, null), !h.model)}
       {models.map((m) => item(m, () => actions.setModel(row, m), h.model?.toLowerCase() === m.toLowerCase()))}
-      {head(t('standby.menu.after'))}
-      {item(t('standby.after.wait'), () => actions.setAfter(row, 'wait'), h.after_task === 'wait')}
-      {item(t('standby.after.close'), () => actions.setAfter(row, 'close'), h.after_task === 'close')}
       {movable.length > 0 && head(h.warm ? t('standby.menu.makeFor') : t('standby.menu.move'))}
       {movable.map((a) => plain(a.title, () => actions.moveUnder(row, a.id)))}
       <div className="ck-menu-sep" role="separator" />

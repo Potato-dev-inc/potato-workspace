@@ -35,13 +35,13 @@ describe('the layout names real rows', () => {
     expect(after).toEqual(before);
   });
 
-  it('keeps the eight pages, in order', () => {
+  it('keeps the seven pages, in order', () => {
     expect(SECTIONS.map((s) => s.id)).toEqual([...SECTION_IDS]);
     expect(Object.keys(LAYOUT).sort()).toEqual([...SECTION_IDS].sort());
   });
 
   it('does not touch a row: same hint and render function as its own definition (two labels are changed on purpose)', () => {
-    const relabelled = new Set(['welcome', 'phone-notifications']);
+    const relabelled = new Set(['welcome']);
     for (const row of SECTIONS.flatMap((s) => s.rows).filter((r) => r.id !== LABS_INDEX_ID)) {
       const own = baseRow(row.id);
       if (!relabelled.has(row.id)) expect(row.label).toBe(own.label);
@@ -50,7 +50,7 @@ describe('the layout names real rows', () => {
       expect(row.danger).toBe(own.danger);
     }
     expect(rowIn('overview', 'welcome')?.label).toBe('Run setup again');
-    expect(rowIn('connect', 'phone-notifications')?.label).toBe('Phone alerts');
+    expect(rowIn('look', 'discord-alerts')?.group).toBe('While agents work');
   });
 });
 
@@ -80,38 +80,32 @@ describe('groups inside the pages', () => {
     expect(groupRows(section('overview').rows).map((g) => g.head)).toEqual(['Setup', 'Updates']);
   });
 
-  it('Connect reads: Phone, Team, Lend, Discord, then the folded groups, then Revoke', () => {
-    const heads = groupRows(section('connect').rows).map((g) => g.head);
-    expect(heads.filter(Boolean)).toEqual(['Phone', 'Team', 'Lend', 'Devices', 'Discord', 'Share a chat', 'On the phone', 'Public address']);
-    expect(section('connect').rows[0].id).toBe('pairing');
-  });
-
   it('the agent safety switches are in Agents > Rules for all agents', () => {
     for (const id of ['security-ask-before-control', 'security-agents-merge', 'security-recent-approvals']) {
       expect(rowIn('agents', id)?.group, id).toBe('Rules for all agents');
     }
   });
 
-  it('Helpers starts with how helpers run; "Connect your agents" is a fold group with the agent pack', () => {
+  it('Helpers starts with how helpers run; "Let agents ask each other" is a group with the agent pack', () => {
     expect(section('helpers').rows[0].id).toBe('helper-agents');
-    expect(rowIn('helpers', 'agent-pack')?.group).toBe('Connect your agents');
+    expect(rowIn('helpers', 'agent-pack')?.group).toBe('Let agents ask each other');
   });
 });
 
 describe('Advanced > Early features (Labs)', () => {
-  const labsRows = () => section('advanced').rows.filter((r) => r.group === LABS_GROUP);
+  const labsRows = () => section('labs').rows.filter((r) => r.group === LABS_GROUP);
 
-  it('under Advanced > Early features (Labs): the Labs page, then each feature that is more than a switch (its Open button lands there)', () => {
-    expect(labsRows().map((r) => r.id)).toEqual([LABS_INDEX_ID, 'ask-bar', 'live-updates', 'opencode-automation', 'assign-issue', 'red-to-green', 'telegram']);
+  it('on the Labs page: the Labs index, then each feature that is more than a switch (its Open button lands there)', () => {
+    expect(labsRows().map((r) => r.id)).toEqual([LABS_INDEX_ID, 'ask-bar', 'live-updates', 'opencode-automation', 'assign-issue', 'red-to-green']);
     expect(labsRows().filter((r) => LABS_SWITCH_KEYS[r.id])).toEqual([]);
     expect(collectLabs(BASE_SECTIONS).map((r) => r.id)).toEqual([
       'ask-bar', 'simple-mode', 'live-updates', 'opencode-automation', 'missions', 'assign-issue', 'night-shift',
-      'red-to-green', 'acp-chat-labs', 'model-bridge-labs', 'spaces-labs', 'lend-labs', 'devices-labs', 'desktop-potato-labs', 'agent-browser-labs', 'companion-vault-labs', 'discord-bot-labs', 'timeline-labs', 'project-guide-labs', 'markup-bar-labs', 'smaller-updates-labs', 'crews-labs', 'telegram',
+      'red-to-green', 'spaces-labs', 'lend-labs', 'devices-labs', 'account-labs', 'desktop-potato-labs', 'agent-browser-labs', 'companion-vault-labs', 'discord-bot-labs', 'timeline-labs', 'project-guide-labs', 'markup-bar-labs', 'smaller-updates-labs', 'crews-labs',
     ]);
     // They were defined in different files: Agents, Keys, Phone, General, Models.
     const homes = new Set(BASE_SECTIONS.filter((s) => s.rows.some((r) => r.labs)).map((s) => s.id));
     expect(homes.size).toBeGreaterThan(2);
-    for (const page of SECTIONS.filter((s) => s.id !== 'advanced')) expect(page.rows.some((r) => r.labs), page.id).toBe(false);
+    for (const page of SECTIONS.filter((s) => s.id !== 'advanced' && s.id !== 'labs')) expect(page.rows.some((r) => r.labs), page.id).toBe(false);
   });
 
   it('each feature has a short name and one plain line (no second sentence, no raw ids)', () => {
@@ -135,12 +129,12 @@ describe('Advanced > Early features (Labs)', () => {
       group: 'Missions',
       render: () => null,
     };
-    const base: BaseSectionDef[] = BASE_SECTIONS.map((s) => (s.id === 'phone' ? { ...s, rows: [...s.rows, extra] } : s));
+    const base: BaseSectionDef[] = BASE_SECTIONS.map((s) => (s.id === 'crews' ? { ...s, rows: [...s.rows, extra] } : s));
     const arranged = arrangeSections(base);
-    expect(arranged.find((s) => s.id === 'advanced')!.rows.filter((r) => r.group === LABS_GROUP).map((r) => r.id)).toEqual([LABS_INDEX_ID, 'ask-bar', 'live-updates', 'opencode-automation', 'assign-issue', 'red-to-green', 'telegram', 'later-feature']);
+    expect(arranged.find((s) => s.id === 'labs')!.rows.filter((r) => r.group === LABS_GROUP).map((r) => r.id)).toEqual([LABS_INDEX_ID, 'ask-bar', 'live-updates', 'opencode-automation', 'assign-issue', 'red-to-green', 'later-feature']);
     const labs = collectLabs(base).map((r) => r.id);
-    expect(labs.slice(-17)).toEqual(['red-to-green', 'acp-chat-labs', 'model-bridge-labs', 'spaces-labs', 'lend-labs', 'devices-labs', 'desktop-potato-labs', 'agent-browser-labs', 'companion-vault-labs', 'discord-bot-labs', 'timeline-labs', 'project-guide-labs', 'markup-bar-labs', 'smaller-updates-labs', 'crews-labs', 'telegram', 'later-feature']);
-    expect(arranged.find((s) => s.id === 'connect')!.rows.some((r) => r.id === 'later-feature')).toBe(false);
+    expect(labs.slice(-15)).toEqual(['red-to-green', 'spaces-labs', 'lend-labs', 'devices-labs', 'account-labs', 'desktop-potato-labs', 'agent-browser-labs', 'companion-vault-labs', 'discord-bot-labs', 'timeline-labs', 'project-guide-labs', 'markup-bar-labs', 'smaller-updates-labs', 'crews-labs', 'later-feature']);
+    expect(arranged.find((s) => s.id === 'look')!.rows.some((r) => r.id === 'later-feature')).toBe(false);
   });
 
   it('a row the layout does not name lands in Advanced > Other and is reported', () => {
@@ -160,7 +154,7 @@ describe('the Advanced page', () => {
     // Four named groups; "Other" only shows when a row was left unplaced (it is empty now).
     expect(advanced.closedGroups).toEqual(ADVANCED_CLOSED_GROUPS);
     const withRows = ADVANCED_CLOSED_GROUPS.filter((g) => advanced.rows.some((r) => r.group === g));
-    expect(withRows).toEqual(['Connections to other tools', 'Models', LABS_GROUP, 'App and files']);
+    expect(withRows).toEqual(['Connections to other tools', 'Models', 'App and files']);
     // No other page has closed groups: they use the one "Advanced" fold.
     for (const s of SECTIONS.filter((x) => x.id !== 'advanced')) expect(s.closedGroups, s.id).toBeUndefined();
   });

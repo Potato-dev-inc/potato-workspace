@@ -9,6 +9,8 @@ import { removability, tauriAgentDefinitionsApi, type AgentDefinitionsApi, type 
 import { handleDefinitionsChanged } from '../../../lib/agentRegistry';
 import { errorSentence } from '../../../lib/sayError';
 import { useT } from '../../../i18n';
+import { SIGN_IN } from '../../../lib/glossary';
+import { openSignInAgain } from '../../../lib/agentSignIn';
 import { AgentLogo } from '../../common/AgentLogo';
 import { AccountsGroup } from '../accounts/AccountsGroup';
 import { AgentDefaultModels } from '../blocks/AgentDefaultModels';
@@ -22,7 +24,6 @@ import { openAddAgentWith } from './agentTarget';
 import { CapChips } from './CapChips';
 import { ChatAdapterRow, type ChatAdapterApi } from './ChatAdapterRow';
 import { standingWords, type AgentRow } from './useAgentRows';
-import { CodeText } from '../../common/CodeText';
 
 /** Only an agent the person added themselves can be removed here; a built-in one or one from a project folder shows no Remove row at all. */
 function removable(def: DefinitionRow | undefined, loaded: boolean): def is DefinitionRow {
@@ -164,9 +165,14 @@ export function AgentPage({ row, env, onBack, onCheck, apis = defaultPageApis }:
           <AgentLogo id={row.id} name={row.label} size={28} decorative />
         </span>
         <h3 className="ag-title">{row.label}</h3>
-        <span className="ag-standing" data-state={row.state} title={row.state === 'needs_login' && row.loginHint ? row.loginHint.replaceAll('`', '') : undefined}>
+        <span className="ag-standing" data-state={row.state}>
           {standingWords(row)}
         </span>
+        {row.state === 'needs_login' && (
+          <Btn small data-testid="agent-sign-in" onClick={() => openSignInAgain({ agentId: row.id, label: row.label })}>
+            {SIGN_IN.action}
+          </Btn>
+        )}
         <CheckNow row={row} onCheck={onCheck} />
       </div>
 
@@ -176,7 +182,6 @@ export function AgentPage({ row, env, onBack, onCheck, apis = defaultPageApis }:
         {cli ? <p className="ag-terminal-note">{t('agentPage.terminalOnly', { label: row.label })}</p> : row.caps ? <CapChips caps={row.caps} name={row.label} /> : <p className="ag-caption">{t('agentPage.nothingChecked')}</p>}
       </SettingBlock>
 
-      {row.state === 'needs_login' && row.loginHint && <p className="ag-caption ag-hint"><CodeText text={row.loginHint} /></p>}
       <AccountsGroup only={row.id} />
 
       <AgentDefaultModels only={row.id} saved={env.settings.agent_default_models} onChange={(next) => void env.patch({ agent_default_models: next })} />

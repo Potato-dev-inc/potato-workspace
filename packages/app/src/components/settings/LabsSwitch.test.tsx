@@ -58,7 +58,7 @@ describe('the Labs page note', () => {
       rows: [{ id: 'night-shift', label: 'Night Shift', labs: { name: 'Night Shift', about: 'Agents work overnight.' }, render: () => <span>switch</span> }],
     },
   ];
-  const labsIndexRow = (): RowDef => arrangeSections(base).find((s) => s.id === 'advanced')!.rows.find((r) => r.id === LABS_INDEX_ID)!;
+  const labsIndexRow = (): RowDef => arrangeSections(base).find((s) => s.id === 'labs')!.rows.find((r) => r.id === LABS_INDEX_ID)!;
 
   it('is the first line of the Labs page while the development override is on', async () => {
     setDevLabsOverrideForTests(true);

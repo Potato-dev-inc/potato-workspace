@@ -14,7 +14,8 @@ import { resolveSettingsTarget } from '../lib/settings-target';
 import { SECTIONS } from './settings/catalog';
 import { ConfirmSheet } from './settings/controls';
 import { ErrorBoundary } from './common/ErrorBoundary';
-import { CONNECT_CARDS, isConnectCard } from './settings/connect-cards';
+import { ConnectPage } from './connect/ConnectPage';
+import { connectPageAvailable, openConnect, type ConnectTab } from '../lib/openConnect';
 import { ClosedGroups, LevelledRows, SectionRows, onRowKeyDown, type RowChrome } from './settings/SectionView';
 import { applyPatch, changedRows, resetPatch, sayValue, undoPatch } from './settings/changes';
 import { UndoToast, PUT_BACK_MS, type ToastState } from './settings/UndoToast';
@@ -24,10 +25,9 @@ import { setOpenAgent, useOpenAgent } from './settings/agents/agentTarget';
 import { useAgentRegistry } from '../lib/agentRegistry';
 import { MAX_HITS, limitHits } from './settings/search';
 import { groupTitle, localizeSections, searchLocalized } from './settings/i18n-labels';
-import { useT, type MessageKey } from '../i18n';
+import { useT } from '../i18n';
 import { Btn } from './settings/settings-ui';
 import { readAdvancedOpen, writeAdvancedOpen } from './settings/levels';
-import { LABS_INDEX_ID } from './settings/arrange';
 import {
   findRowSection,
   rowLevel,
@@ -71,6 +71,13 @@ interface Props {
   onPageChange?: (page: SettingsPageId) => void;
   /** Rendered inside the cockpit's main area (Orchestration) instead of filling a window. */
   inline?: boolean;
+  /**
+   * The separate Settings window (Individual mode) has no sidebar, so it draws the one Connect page as a page of its own.
+   * In the cockpit Connect is in the sidebar and Settings has no Connect page.
+   */
+  withConnect?: boolean;
+  /** The Connect tab to open on (a deep link such as `?tab=lend`). Only used with `withConnect`. */
+  initialConnectTab?: ConnectTab;
   /** Called after any control saved. */
   onSaved?: () => void;
   projectPath?: string | null;
@@ -102,7 +109,7 @@ const IconSearch = () => (
 );
 const ICON_PROPS = { width: 14, height: 14, viewBox: '0 0 16 16', fill: 'none', stroke: 'currentColor', strokeWidth: 1.5, strokeLinecap: 'round', strokeLinejoin: 'round', 'aria-hidden': true } as const;
 /** One small line icon per page, in the same style as the search and back icons. */
-const SECTION_ICONS: Record<SectionId, JSX.Element> = {
+const SECTION_ICONS: Record<SettingsPageId, JSX.Element> = {
   overview: (
     <svg {...ICON_PROPS}>
       <rect x="2" y="2.5" width="5" height="5" rx="1.2" />
@@ -149,6 +156,12 @@ const SECTION_ICONS: Record<SectionId, JSX.Element> = {
       <path d="M4.5 7h.01M7 7h.01M9.5 7h.01M12 7h.01M5 9.5h6" />
     </svg>
   ),
+  labs: (
+    <svg {...ICON_PROPS}>
+      <path d="M6 2.5h4M6.75 2.5v3.6L3.4 11.6A1.2 1.2 0 0 0 4.45 13.5h7.1a1.2 1.2 0 0 0 1.05-1.9L9.25 6.1V2.5" />
+      <path d="M5.2 10.2h5.6" />
+    </svg>
+  ),
   advanced: (
     <svg {...ICON_PROPS}>
       <rect x="4" y="4" width="8" height="8" rx="1.5" />
@@ -164,6 +177,8 @@ export function SettingsPanel({
   initialRow,
   onPageChange,
   inline = false,
+  withConnect = false,
+  initialConnectTab = 'phone',
   onSaved,
   projectPath = null,
   onProjectPathChange,
@@ -174,6 +189,7 @@ export function SettingsPanel({
   const t = useT();
   const [page, setPage] = useState<SettingsPageId>(initialTab);
   const [query, setQuery] = useState('');
+  const [connectTab, setConnectTab] = useState<ConnectTab>(initialConnectTab);
   // A row to scroll to once its page is showing. `n` makes asking for the same row twice work.
   const [focus, setFocus] = useState<{ id: string; n: number } | null>(initialRow ? { id: initialRow, n: 0 } : null);
   const [marked, setMarked] = useState<string | null>(null);
@@ -227,16 +243,7 @@ export function SettingsPanel({
     if (!home || !row) return;
     const level = rowLevel(row);
     // On the Advanced page the closed group that holds the row opens; elsewhere it is the page's Advanced fold.
-    // On Connect, a row inside a card opens that card.
-    const key = home.closedGroups
-      ? row.group && home.closedGroups.includes(row.group)
-        ? groupKey(row.group)
-        : null
-      : home.id === 'connect' && isConnectCard(row.group)
-        ? groupKey(row.group as string)
-        : level === 'advanced'
-          ? home.id
-          : null;
+    const key = home.closedGroups ? (row.group && home.closedGroups.includes(row.group) ? groupKey(row.group) : null) : level === 'advanced' ? home.id : null;
     if (key) {
       writeAdvancedOpen(key, true);
       setAdvancedState((prev) => ({ ...prev, [key]: true }));
@@ -524,7 +531,7 @@ export function SettingsPanel({
     ...visibleHits.flatMap((h) => h.rows.map((r) => ({ kind: 'row' as const, id: r.id }))),
   ];
   const activeItem = items[Math.min(activeHit, Math.max(items.length - 1, 0))];
-  const goToPage = (id: SectionId) => {
+  const goToPage = (id: SettingsPageId) => {
     setOpenAgent(null); // a page button always lands on the page's top, not inside an agent
     setPage(id);
     setQuery('');
@@ -537,7 +544,15 @@ export function SettingsPanel({
     else openRow(item.id);
   };
   // A page of a feature that is switched off (the link was kept, or the switch just moved) shows the first page instead.
-  const section = shown.find((s) => s.id === page) ?? (settings ? shown[0] : undefined);
+  const connectOn = withConnect && page === 'connect' && !trimmed && !showChanged;
+  const section = connectOn ? undefined : (shown.find((s) => s.id === page) ?? (settings ? shown[0] : undefined));
+  // Settings has no Connect page of its own: a search for the phone, the team or lending ends in one "Open Connect" button.
+  const connectHit = CONNECT_WORDS.test(trimmed) && (withConnect || connectPageAvailable());
+  const openConnectPage = () => (withConnect ? goToPage('connect') : openConnect('phone'));
+  const navPages: Array<{ id: SettingsPageId; title: string }> = shown.flatMap((item) => [
+    { id: item.id as SettingsPageId, title: item.title },
+    ...(withConnect && item.id === 'look' ? [{ id: 'connect' as SettingsPageId, title: t('settings.page.connect.title') }] : []),
+  ]);
   const chrome: RowChrome = { saved: savedIds, errors, target: marked ?? undefined, active: activeItem?.kind === 'row' ? activeItem.id : undefined, onReset: resetRow };
   const changed = changedRows(shown, settings);
   const changedCount = changed.reduce((n, hit) => n + hit.rows.length, 0);
@@ -553,7 +568,7 @@ export function SettingsPanel({
   // With an agent's page open, the window shows only that page, and the title reads "Agents › Claude".
   const openAgent = !trimmed && !filtering && section?.id === 'agents' ? openAgentId : null;
   const openAgentLabel = openAgent ? (registry.agents.find((a) => a.id === openAgent)?.label ?? openAgent) : null;
-  const title = trimmed ? t('settings.title.search') : filtering ? t('settings.title.changed') : (section?.title ?? t('settings.title.default'));
+  const title = trimmed ? t('settings.title.search') : filtering ? t('settings.title.changed') : connectOn ? t('settings.page.connect.title') : (section?.title ?? t('settings.title.default'));
   const blurb = trimmed
     ? result && result.total + result.names.length > 0
       ? t('settings.blurb.search', { count: result.total, query: trimmed })
@@ -562,7 +577,9 @@ export function SettingsPanel({
       ? changedCount > 0
         ? t('settings.blurb.changed', { count: changedCount })
         : undefined
-      : section?.blurb;
+      : connectOn
+        ? t('connect.lead')
+        : section?.blurb;
 
   return (
     <div className={inline ? 'settings settings--inline' : 'settings'} role="region" aria-label={t('settings.region')}>
@@ -579,7 +596,7 @@ export function SettingsPanel({
               ref={searchRef}
               type="search"
               aria-label={t('settings.search')}
-              placeholder={t('settings.search')}
+              placeholder={t('settings.searchPlaceholder')}
               value={query}
               onChange={(e) => setQuery(e.target.value)}
               onKeyDown={(e) => {
@@ -622,26 +639,22 @@ export function SettingsPanel({
           )}
         </div>
         <nav className="st-nav" aria-label={t('settings.pages')}>
-          {shown.map((item) => (
+          {navPages.map((item) => (
             <Fragment key={item.id}>
               {item.id === 'advanced' && <div className="st-navsep" role="separator" />}
               <button
                 type="button"
                 className="st-nav-row"
-                aria-current={!trimmed && !filtering && section?.id === item.id ? 'page' : undefined}
+                aria-current={!trimmed && !filtering && (connectOn ? item.id === 'connect' : section?.id === item.id) ? 'page' : undefined}
                 onClick={() => goToPage(item.id)}
               >
                 {SECTION_ICONS[item.id]}
                 <span>{item.title}</span>
-                {changedPages.has(item.id) && <i className="st-nav-dot" role="img" title={t('settings.changedFromDefault')} aria-label={t('settings.hasChanged')} />}
+                {changedPages.has(item.id as SectionId) && <i className="st-nav-dot" role="img" title={t('settings.changedFromDefault')} aria-label={t('settings.hasChanged')} />}
               </button>
             </Fragment>
           ))}
         </nav>
-        {/* Labs: one click from anywhere in Settings. A link, not a page: it opens the Labs page under Advanced. */}
-        <button type="button" className="st-nav-row st-labs-nav" onClick={() => openRow(LABS_INDEX_ID)}>
-          <span>{t('settings.nav.labs')}</span>
-        </button>
       </aside>
 
       <main className="st-main">
@@ -674,6 +687,7 @@ export function SettingsPanel({
                 <Skeleton />
               ) : result && result.hits.length === 0 && result.names.length === 0 ? (
                 <>
+                  {connectHit && <ConnectResult onOpen={openConnectPage} />}
                   <div className="st-emptycard">
                     <p>
                       <b>{t('settings.empty.title', { query: trimmed })}</b>
@@ -699,6 +713,7 @@ export function SettingsPanel({
                 </>
               ) : (
                 <div className="st-results">
+                  {connectHit && <ConnectResult onOpen={openConnectPage} />}
                   {result && result.names.length > 0 && (
                     <div className="st-names">
                       {result.names.map((n) => (
@@ -727,6 +742,13 @@ export function SettingsPanel({
                   )}
                 </div>
               )
+            ) : connectOn ? (
+              <ErrorBoundary where="Connect page" resetKeys={[connectTab]}>
+                {/* The Connect styles are scoped to the cockpit's look (colours, buttons): this wrapper lends it without its full-window layout. */}
+                <div className="cockpit st-connect-host">
+                <ConnectPage tab={connectTab} onTab={setConnectTab} api={{ loadSettings: api.load, patchSettings: api.patch }} />
+                </div>
+              </ErrorBoundary>
             ) : settings === null ? (
               <Skeleton />
             ) : filtering ? (
@@ -755,19 +777,6 @@ export function SettingsPanel({
                   {section.id === 'overview' && (
                     <Overview settings={settings} bridgeUrl={bridgeUrl} openRow={openRow} openPage={goToPage} sources={overviewSources} />
                   )}
-                  {section.id === 'connect' && !openAgent && (
-                    <ClosedGroups
-                      key="connect-cards"
-                      rows={section.rows.filter((r) => isConnectCard(r.group))}
-                      closed={[...CONNECT_CARDS]}
-                      lines={Object.fromEntries(CONNECT_CARDS.map((c) => [c, t(`settings.connectLine.${c}` as MessageKey)]))}
-                      envFor={envFor}
-                      chrome={chrome}
-                      isOpen={groupOpen}
-                      onToggle={toggleGroup}
-                      showDeveloper={showDeveloper}
-                    />
-                  )}
                   {section.closedGroups ? (
                     <ClosedGroups
                       key={section.id}
@@ -782,7 +791,7 @@ export function SettingsPanel({
                   ) : (
                     <LevelledRows
                       key={section.id}
-                      rows={openAgent ? section.rows.filter((r) => r.id === 'agent-list').map((r) => ({ ...r, group: undefined })) : section.id === 'connect' ? section.rows.filter((r) => !isConnectCard(r.group)) : section.rows}
+                      rows={openAgent ? section.rows.filter((r) => r.id === 'agent-list').map((r) => ({ ...r, group: undefined })) : section.rows}
                       envFor={envFor}
                       chrome={chrome}
                       advancedOpen={advancedOpenFor(section)}
@@ -819,6 +828,21 @@ export function SettingsPanel({
           onCancel={() => settle(false)}
         />
       )}
+    </div>
+  );
+}
+
+/** The words that mean "the phone, other PCs, the team or lending": all of it is on the Connect page. */
+const CONNECT_WORDS = /\b(phone|phones|pair|pairing|mobile|qr|team|teammate|lend|lending|borrow|devices?|pcs?|tunnel|telegram|connect)\b/i;
+
+function ConnectResult({ onOpen }: { onOpen: () => void }) {
+  const t = useT();
+  return (
+    <div className="st-names" data-testid="settings-open-connect">
+      <button type="button" className="st-name-hit" onClick={onOpen}>
+        <span>{t('connect.moved.open')}</span>
+        <small>{t('settings.goToPage')}</small>
+      </button>
     </div>
   );
 }

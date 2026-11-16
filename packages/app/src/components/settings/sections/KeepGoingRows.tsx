@@ -168,6 +168,7 @@ export function KeepGoingRows({ onSaved }: { onSaved?: () => void }) {
             <Btn small disabled={!chosen || full} onClick={add}>
               {t('keepGoing.add')}
             </Btn>
+            {!chosen && !full && choices.length > 0 && <span className="text-xs text-pm-muted">{t('keepGoing.pickFirst')}</span>}
             {full && <span className="text-xs text-pm-muted">{t('keepGoing.full', { n: KEEP_GOING_ORDER_CAP })}</span>}
           </div>
           <p className="text-xs text-pm-muted">{t('keepGoing.asks')}</p>

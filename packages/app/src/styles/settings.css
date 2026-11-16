@@ -482,9 +482,6 @@
 .settings .st-labs-feature + .st-labs-feature {
   border-top: 1px solid var(--sep);
 }
-.settings .st-labs-nav {
-  margin-top: 4px;
-}
 .settings .st-rowwrap + .st-rowwrap,
 .settings .st-rowwrap > .st-row + .st-row {
   border-top: 1px solid var(--sep);

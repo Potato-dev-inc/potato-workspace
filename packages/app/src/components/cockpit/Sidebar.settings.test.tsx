@@ -126,6 +126,24 @@ describe('Sidebar Settings button', () => {
   });
 });
 
+describe('Sidebar: Settings is the active row while Settings is on screen', () => {
+  const inboxRow = () => Array.from(host.querySelectorAll<HTMLButtonElement>('button.ck-row')).find((b) => b.textContent?.includes('Inbox'))!;
+
+  it('the gear is the active one and the Inbox row is not (Settings > Advanced from a card)', () => {
+    act(() => root.render(<Sidebar c={fakeApi()} onOpenPalette={() => {}} settingsOpen />));
+    expect(settingsButton().classList.contains('is-active')).toBe(true);
+    expect(settingsButton().getAttribute('aria-current')).toBe('page');
+    expect(inboxRow().classList.contains('is-active')).toBe(false);
+  });
+
+  it('with Settings closed, the Inbox row is the active one and the gear is not', () => {
+    act(() => root.render(<Sidebar c={fakeApi()} onOpenPalette={() => {}} />));
+    expect(settingsButton().classList.contains('is-active')).toBe(false);
+    expect(settingsButton().getAttribute('aria-current')).toBeNull();
+    expect(inboxRow().classList.contains('is-active')).toBe(true);
+  });
+});
+
 describe('Palette Settings deep links go through the cockpit (inline in Orchestration)', () => {
   const row = (title: string) => Array.from(host.querySelectorAll('[role="option"]')).find((r) => r.textContent?.includes(title)) as HTMLElement;
 

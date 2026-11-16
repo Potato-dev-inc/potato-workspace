@@ -27,7 +27,7 @@ const words = new Proxy({}, { get: (_t, k) => String(k) });
 
 function load(win: Window = window): { key: string; api: Api } {
   const key = `__pm_test_markup_${++loads}`;
-  const js = BAR_JS.replace('__PM_MARKUP_KEY__', JSON.stringify(key)).replace('__PM_MARKUP_SPEC__', JSON.stringify(spec)).replace('__PM_MARKUP_STR__', '{"en":__WORDS__,"zh-TW":__WORDS__}').replace('__PM_MARKUP_TOP__', '36');
+  const js = BAR_JS.replace('__PM_MARKUP_KEY__', JSON.stringify(key)).replace('__PM_MARKUP_SPEC__', JSON.stringify(spec)).replace('__PM_MARKUP_LOGOS__', '{"claude":{"path":"M0 0h24v24H0z","dark":null,"light":null}}').replace('__PM_MARKUP_STR__', '{"en":__WORDS__,"zh-TW":__WORDS__}').replace('__PM_MARKUP_TOP__', '36');
   const words2 = js.replace(/__WORDS__/g, 'new Proxy({}, { get: function (t, k) { return String(k); } })');
   new (win as unknown as { Function: FunctionConstructor }).Function(words2)();
   return { key, api: (win as unknown as Record<string, Api>)[key] };
@@ -80,7 +80,7 @@ afterEach(() => {
   delete document.documentElement.dataset.motion;
 });
 
-const open = (api: Api) => api.set(JSON.stringify({ open: true, theme: 'dark', targets: [{ id: 'pane-1', label: 'Claude', ok: true }] }));
+const open = (api: Api) => api.set(JSON.stringify({ open: true, theme: 'dark', targets: [{ id: 'pane-1', agent: 'claude', name: 'Claude', task: 'Pricing', project: 'shop', status: 'working', ok: true, reason: null }, { id: 'pane-2', agent: 'codex', name: 'Codex', task: '', project: 'blog', status: 'waiting', ok: true, reason: null }], to: 'pane-1', ownerId: 'pane-1' }));
 
 describe('where it lives', () => {
   it('is in the top document only, in a closed shadow root the page cannot read, under a name the page does not know', () => {
@@ -312,4 +312,59 @@ describe('one spec, one set of words with the app bar', () => {
   });
 
   void words;
+});
+
+describe('the "send to" list in the bar', () => {
+  const ready = () => {
+    const { api } = load();
+    open(api);
+    events(api);
+    window.dispatchEvent(new KeyboardEvent('keydown', { key: 'r', bubbles: true }));
+    const ink = q('svg')!;
+    const at = (type: string, x: number, y: number) => ink.dispatchEvent(new MouseEvent(type, { bubbles: true, clientX: x, clientY: y, button: 0 }));
+    at('pointerdown', 20, 160);
+    at('pointermove', 100, 200);
+    at('pointerup', 100, 200);
+    click([...root().querySelectorAll('button')].find((b) => b.textContent === 'sendToChat' || b.textContent?.startsWith('sendCount'))!);
+    events(api);
+    api.set(JSON.stringify({ thumb: 'data:image/png;base64,AAAA', taking: false }));
+    const req = q<HTMLInputElement>('input[aria-label="request"]')!;
+    req.value = 'fix it';
+    req.dispatchEvent(new Event('input', { bubbles: true }));
+    return api;
+  };
+  const menuItems = () => [...root().querySelectorAll('[role="menuitem"]')] as HTMLButtonElement[];
+
+  it('shows the own agent by name, lists every agent with a status, and one click sends to it', () => {
+    const api = ready();
+    const to = q<HTMLButtonElement>('button[aria-label="toPick"]')!;
+    expect(to.textContent).toContain('Claude');
+    expect(to.textContent).not.toContain('pane-');
+    click(to);
+    const items = menuItems();
+    expect(items).toHaveLength(3);
+    expect(items[0].textContent).toContain('Pricing');
+    expect(items[0].textContent).toContain('working');
+    expect(items[0].textContent).toContain('thisPage');
+    expect(items[1].textContent).toContain('blog');
+    expect(items[2].textContent).toBe('+newAgent');
+    expect(items.every((i) => !/pane-\d/.test(i.textContent ?? ''))).toBe(true);
+    click(items[1]);
+    const sent = events(api).find((e) => e.kind === 'send') as { to: string; request: string };
+    expect(sent.to).toBe('pane-2');
+    expect(sent.request).toBe('fix it');
+    expect(menuItems()).toHaveLength(0);
+  });
+
+  it('"New agent" asks Rust for the New agent page, and Escape closes only the list', () => {
+    const api = ready();
+    click(q<HTMLButtonElement>('button[aria-label="toPick"]')!);
+    click(menuItems()[2]);
+    expect(events(api).some((e) => e.kind === 'newagent')).toBe(true);
+    click(q<HTMLButtonElement>('button[aria-label="toPick"]')!);
+    expect(menuItems()).toHaveLength(3);
+    window.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true, cancelable: true }));
+    expect(menuItems()).toHaveLength(0);
+    expect(q('input[aria-label="request"]')).toBeTruthy();
+  });
 });

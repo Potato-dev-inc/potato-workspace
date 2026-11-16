@@ -1,9 +1,9 @@
 // @vitest-environment jsdom
-// Settings > Phone: every control renders, saves the right partial patch, and revoking all devices is confirmed.
+// The phone rows Connect > Phone draws: every control renders, saves the right partial patch, and revoking all devices is confirmed.
 import { unsearchableLabels } from '../test-utils';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { blur, buttonByText, byLabel, click, hasText, mountRows, settle, type as typeInto, type Mounted } from '../test-utils';
-import { phoneRows } from './PhoneSection';
+import { phoneRowsOriginal as phoneRows } from './PhoneSection';
 
 const mocks = vi.hoisted(() => ({
   devices: [] as Array<{ id: string; name: string; public_key: string; paired_at: number }>,
@@ -69,35 +69,21 @@ afterEach(async () => {
 const switchFor = (label: string) => m.host.querySelector<HTMLButtonElement>(`[role="switch"][aria-label="${label}"]`);
 
 describe('Phone: every control renders', () => {
-  it('shows every live control of the old Mobile PWA tab that belongs here', async () => {
+  it('shows every phone row that is not on the Connect page itself', async () => {
     await mount();
-    for (const id of [
-      'tunnel',
-      'phone-notifications',
-      'mobile-input-delay',
-      'mobile-keyboard-resizes',
-      'mobile-input-visible',
-      'pairing',
-      'revoke-all-devices',
-      'telegram',
-    ]) {
+    for (const id of ['phone-notifications', 'mobile-keyboard-resizes', 'mobile-input-visible', 'revoke-all-devices', 'telegram']) {
       expect(m.host.querySelector(`[data-row="${id}"]`), `missing row: ${id}`).not.toBeNull();
     }
-    expect(hasText(m.host, 'Tunnel stub')).toBe(true);
     expect(hasText(m.host, 'Telegram')).toBe(true);
     expect(hasText(m.host, 'Telegram stub')).toBe(true);
     expect(hasText(m.host, 'Tag Your Agent')).toBe(false);
     expect(hasText(m.host, 'Phone alerts')).toBe(true);
     expect(hasText(m.host, 'On the phone')).toBe(true);
-    expect(byLabel(m.host, 'Typing delay (ms)')).toBeTruthy();
     expect(switchFor('Keyboard resizes the agent')).toBeTruthy();
     expect(switchFor('Show the typing box on the phone')).toBeTruthy();
-    expect(hasText(m.host, 'Pairing stub')).toBe(true);
-    expect(buttonByText(m.host, 'Stub set URL')).toBeTruthy();
-    expect(buttonByText(m.host, 'Stub set port')).toBeTruthy();
     expect(hasText(m.host, 'Revoke all devices')).toBe(true);
     expect(buttonByText(m.host, 'Revoke…')).toBeTruthy();
-    expect(m.host.querySelectorAll('[data-row]')).toHaveLength(9);
+    expect(m.host.querySelectorAll('[data-row]')).toHaveLength(5);
   });
 
   it('Telegram is its own list with the setup block in it', async () => {
@@ -127,59 +113,7 @@ describe('Phone: every control renders', () => {
   });
 });
 
-describe('Phone: phone and remote activity', () => {
-  it('says "Nothing yet." when no phone did anything', async () => {
-    mocks.activity = [];
-    await mount();
-    expect(m.host.querySelector('[data-testid="phone-activity-none"]')?.textContent).toBe('Nothing yet.');
-    expect(buttonByText(m.host, 'Clear')).toBeUndefined();
-  });
-
-  it('lists what phones did (newest first, a kind and a name only) and Clear empties the list', async () => {
-    mocks.activity = [
-      { at: 1_700_000_000, node: 'aa', name: 'Pixel 8', dir: 'in', kind: 'connected' },
-      { at: 1_700_000_100, node: 'aa', name: 'Pixel 8', dir: 'in', kind: 'answered' },
-    ];
-    await mount();
-    const lines = [...m.host.querySelectorAll('[data-testid="phone-activity-list"] li')].map((li) => li.textContent ?? '');
-    expect(lines).toHaveLength(2);
-    expect(lines[0]).toContain('Pixel 8 answered a question');
-    expect(lines[1]).toContain('Pixel 8 connected');
-    await click(buttonByText(m.host, 'Clear'));
-    await settle(5);
-    expect(tauri.phoneActivityClear).toHaveBeenCalledTimes(1);
-    expect(m.host.querySelector('[data-testid="phone-activity-none"]')).not.toBeNull();
-  });
-});
-
 describe('Phone: each control saves a partial patch', () => {
-  it('Typing delay clamps on blur: 10 -> 50, 5000 -> 1000, 0 -> 0', async () => {
-    await mount();
-    const field = byLabel<HTMLInputElement>(m.host, 'Typing delay (ms)')!;
-    await typeInto(field, '10');
-    expect(m.env.patches).toEqual([]);
-    await blur(field);
-    expect(m.env.patches).toEqual([{ mobile_input_delay_ms: 50 }]);
-    await m.rerender();
-    await typeInto(field, '5000');
-    await blur(field);
-    expect(m.env.patches.at(-1)).toEqual({ mobile_input_delay_ms: 1000 });
-    await m.rerender();
-    await typeInto(field, '0');
-    await blur(field);
-    expect(m.env.patches.at(-1)).toEqual({ mobile_input_delay_ms: 0 });
-    expect(m.env.patches).toHaveLength(3);
-  });
-
-  it('a delay typed on the way to a value saves nothing until blur', async () => {
-    await mount();
-    const field = byLabel<HTMLInputElement>(m.host, 'Typing delay (ms)')!;
-    await typeInto(field, '1');
-    expect(m.env.patches).toEqual([]);
-    await blur(field);
-    expect(m.env.patches).toEqual([{ mobile_input_delay_ms: 50 }]);
-  });
-
   it('Keyboard resizes the agent saves only {mobile_keyboard_resizes_agent}', async () => {
     await mount();
     await click(switchFor('Keyboard resizes the agent'));
@@ -192,13 +126,6 @@ describe('Phone: each control saves a partial patch', () => {
     expect(m.env.patches).toEqual([{ mobile_input_visible: false }]);
   });
 
-  it('the pairing panel saves the public URL, a cleared URL as null, and the dev server port', async () => {
-    await mount();
-    await click(buttonByText(m.host, 'Stub set URL'));
-    await click(buttonByText(m.host, 'Stub clear URL'));
-    await click(buttonByText(m.host, 'Stub set port'));
-    expect(m.env.patches).toEqual([{ public_pwa_url: 'https://x.example' }, { public_pwa_url: null }, { dev_server_port: 4000 }]);
-  });
 });
 
 describe('Phone: revoke all devices', () => {

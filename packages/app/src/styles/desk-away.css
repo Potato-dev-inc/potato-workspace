@@ -32,7 +32,7 @@
   border-radius: 999px;
   background: var(--bg-float, var(--bg-raised));
   color: var(--label);
-  box-shadow: var(--float-shadow, none), 0 0 0 1px var(--sep), inset 3px 0 0 var(--accent);
+  box-shadow: var(--float-shadow, none), 0 0 0 1px var(--sep);
   font: 400 12px/1.3 var(--font-ui);
 }
 .cockpit .ck-desk-banner-text {

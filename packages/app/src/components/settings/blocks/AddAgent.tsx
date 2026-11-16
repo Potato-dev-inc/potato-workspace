@@ -305,12 +305,15 @@ export function AddAgent({ api = addAgentApi, wizardApi, onStartChat, onOpenTerm
         <div className="aa-body">
           {/* The agents already on this computer come first: one click each. Typing a name is the second way. */}
           <AddAgentFound api={api} projectDir={projectDir} disabled={busy} onAdd={(id) => void begin(id)} onAddAll={addAll} />
+          {/* Typing a name (or pasting an install command) is not the first thing a person sees: it lives under Advanced. */}
           <div className="aa-head">
-            <p className="aa-sub aa-or">{t('addAgent.orType')}</p>
             <button type="button" className="aa-link" aria-expanded={advanced} onClick={() => setAdvanced((v) => !v)}>
               {advanced ? t('addAgent.hideAdvanced') : t('addAgent.advanced')}
             </button>
           </div>
+          {advanced && (
+            <>
+          <p className="aa-sub aa-or">{t('addAgent.orType')}</p>
           <form
             className="aa-form"
             onSubmit={(e) => {
@@ -334,6 +337,8 @@ export function AddAgent({ api = addAgentApi, wizardApi, onStartChat, onOpenTerm
               {t('addAgent.add')}
             </Btn>
           </form>
+            </>
+          )}
           {note && (
             <p className="aa-note" role="status">
               {note}

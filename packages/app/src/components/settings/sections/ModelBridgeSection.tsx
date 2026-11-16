@@ -5,7 +5,7 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { t, useT } from '../../../i18n';
 import { keySavedLine, modelBridgeApi, plainError, type ModelBridgeApi, type ModelBridgeList, type ModelBridgePreview, type ModelBridgeService } from '../../../lib/model-bridge';
 import type { RowDef } from '../model';
-import { Btn, FieldInput, FieldLabel, FieldSelect, Note, SettingBlock } from '../settings-ui';
+import { Btn, FieldInput, FieldLabel, FieldSelect, Note, SettingBlock, SettingToggle } from '../settings-ui';
 
 /** An example address in the empty field: the same in every language. */
 const EXAMPLE_URL = 'https://example.com/v1';
@@ -227,6 +227,7 @@ export function ModelBridge({ api = modelBridgeApi }: Props) {
           <Btn primary={connected.length === 0} disabled={busy || !data.secure} onClick={openConnect}>
             {t('modelBridge.connect')}
           </Btn>
+          {!data.secure && <span className="text-xs text-pm-muted">{t('modelBridge.needsSafe')}</span>}
         </div>
       )}
 
@@ -305,7 +306,17 @@ export const modelBridgeRows: RowDef[] = [
     hint: 'Connect a model service with a key, then add it to Codex. A backup is kept.',
     keywords: 'orchestrator model bridge service key codex provider connect responses api credential backup undo',
     group: 'Model Bridge',
-    labsFlag: 'model_bridge_enabled',
-    render: () => <ModelBridge />,
+    // The on/off switch is at the top of the panel (it used to be a second row under Labs). Off: nothing else is shown.
+    render: (env) => (
+      <>
+        <SettingToggle
+          label={t('settings.row.model-bridge-labs.label')}
+          description={t('settings.row.model-bridge-labs.hint')}
+          checked={env.settings.model_bridge_enabled === true}
+          onChange={(value) => void env.patch({ model_bridge_enabled: value })}
+        />
+        {env.settings.model_bridge_enabled === true && <ModelBridge />}
+      </>
+    ),
   },
 ];

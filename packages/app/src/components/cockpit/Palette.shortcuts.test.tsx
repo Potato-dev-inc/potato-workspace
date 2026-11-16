@@ -6,6 +6,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { CockpitApi } from '../../hooks/useCockpit';
 import * as settings from '../../lib/settings';
 import { resolveSettingsTarget } from '../../lib/settings-target';
+import { connectTabFor } from '../../lib/openConnect';
 import { Palette } from './Palette';
 import { settingsShortcuts } from './palette-shortcuts';
 import { onOpenStartMission } from '../../lib/missions';
@@ -113,13 +114,17 @@ describe('palette commands for features that hide', () => {
   });
 
   it.each([
-    ['live-updates', 'advanced'],
+    ['live-updates', 'labs'],
     ['budget-turns', 'agents'],
-    ['team-page', 'connect'],
-    ['pairing', 'connect'],
     ['diagnostic-file', 'advanced'],
   ])('the row %s is a real Settings row (in %s)', (row, page) => {
     expect(resolveSettingsTarget(row)).toEqual({ page, row });
+  });
+
+  it('the phone and team commands land on the Connect page: Settings has no such rows any more', () => {
+    expect(connectTabFor('pairing')).toBe('phone');
+    expect(connectTabFor('team')).toBe('team');
+    expect(resolveSettingsTarget('team-page')).toBeNull();
   });
 
   it('has one Simple mode command, next to the welcome flow\'s "Welcome tour"', () => {
@@ -134,7 +139,7 @@ describe('palette commands for features that hide', () => {
     act(() => rowFor('Missions…')!.click());
     expect(c.openSettings).toHaveBeenCalledWith('missions');
     // Missions is a plain switch: it is on the Labs page, which is the row the link opens.
-    expect(resolveSettingsTarget('missions')).toEqual({ page: 'advanced', row: 'labs-index' });
+    expect(resolveSettingsTarget('missions')).toEqual({ page: 'labs', row: 'labs-index' });
     const heard: (string | null)[] = [];
     const off = onOpenStartMission((p) => heard.push(p));
     const on = settingsShortcuts(c, { missionsOn: true, projectPath: 'C:\work\shop' });

@@ -1,5 +1,5 @@
 // @vitest-environment jsdom
-// Team is a card on the Connect page: reachable from the nav, a deep link and search, and no other page shows it.
+// Team is a tab of the Connect page, which only the separate Settings window draws (in the cockpit Connect is in the sidebar).
 // This uses the real catalog (the shell test next to it uses a tiny one).
 import { act } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
@@ -57,47 +57,41 @@ const main = () => host.querySelector('.st-main') as HTMLElement;
 const cardHeads = () => [...main().querySelectorAll('.st-closed-group')].map((c) => c.getAttribute('data-group'));
 const card = (name: string) => main().querySelector(`.st-closed-group[data-group="${name}"]`) as HTMLElement;
 
-describe('Settings > Connect > Team', () => {
-  it('has its own group on the Connect page, and every page has a nav entry with an icon', async () => {
-    await mount();
-    expect(nav()).toEqual(['Overview', 'Agents', 'Helpers', 'Look and feel', 'Connect', 'Keys', 'Shortcuts', 'Advanced']);
+describe('Settings window > Connect > Team', () => {
+  const winMount = (props: Partial<React.ComponentProps<typeof SettingsPanel>> = {}) => mount({ withConnect: true, ...props });
+
+  it('the separate window has a Connect page in its nav, with an icon', async () => {
+    await winMount();
+    expect(nav()).toEqual(['Overview', 'Agents', 'Helpers', 'Look and feel', 'Connect', 'Keys', 'Shortcuts', 'Labs', 'Advanced']);
     expect(navButton('Connect').querySelector('svg')).not.toBeNull();
   });
 
-  it('opens from the nav on the two choices, "Start a team" and "Join a team"', async () => {
-    await mount();
+  it('opens from the nav on the Connect page, and the Team tab offers "Start a team"', async () => {
+    await winMount();
     await click(navButton('Connect'));
     await settle(6);
     expect(main().querySelector('h1')!.textContent).toBe('Connect');
     expect(navButton('Connect').getAttribute('aria-current')).toBe('page');
-    // The four cards start closed: the Team card shows one plain line, not its choices.
     expect(main().textContent).not.toContain('Start a team');
-    expect(cardHeads()).toEqual(['Phone', 'Team', 'Discord']);
-    expect(card('Team').textContent).toContain('Share what your agents did');
-    await click(card('Team').querySelector('.st-adv-toggle') as HTMLElement);
+    await click(main().querySelector('[data-testid="connect-tab-team"]') as HTMLElement);
     await settle(6);
     expect(main().textContent).toContain('Start a team');
-    expect(main().textContent).toContain('Join a team');
-    // settings.css hides a group whose row has no .st-row or <section> child; the page must be one of them.
-    expect(main().querySelector('[data-row="team-page"] > section')).not.toBeNull();
   });
 
-  it.each(['team', 'relay', 'invite', 'join'])('searching "%s" lands on the Team row under Connect', async (word) => {
-    await mount({ initialTab: 'look' });
+  it.each(['team', 'relay', 'invite', 'join'])('searching "%s" shows no Team row in Settings', async (word) => {
+    await winMount({ initialTab: 'look' });
     await typeInto(search(), word);
     await settle(6);
-    const sections = [...main().querySelectorAll('.st-results > section')];
-    expect(sections.map((s) => s.getAttribute('data-section'))).toContain('connect');
-    expect(main().querySelector('[data-row="team-page"]')).not.toBeNull();
-    expect(main().querySelector('[data-section="look"] [data-row="team-page"]')).toBeNull();
+    expect(main().querySelector('[data-row="team-page"]')).toBeNull();
+    if (word === 'team') expect(main().querySelector('[data-testid="settings-open-connect"]')).not.toBeNull();
   });
 
-  it('opens straight on the page from a deep link (?tab=team and the old Team command)', async () => {
-    await mount({ initialTab: 'connect', initialRow: 'team-page' });
+  it('opens straight on the Team tab from a deep link (?tab=team and the old Team command)', async () => {
+    await winMount({ initialTab: 'connect', initialConnectTab: 'team' });
     expect(main().querySelector('h1')!.textContent).toBe('Connect');
     expect(main().textContent).toContain('Start a team');
-    expect(settingsEntryTarget('?settings=1&tab=team')).toEqual({ page: 'connect', row: 'team-page' });
-    expect(settingsEntryTarget('?settings=1&tab=phone')).toEqual({ page: 'connect', row: 'pairing' });
+    expect(settingsEntryTarget('?settings=1&tab=team')).toEqual({ page: 'connect', connectTab: 'team' });
+    expect(settingsEntryTarget('?settings=1&tab=phone')).toEqual({ page: 'connect', connectTab: 'phone' });
   });
 
   it('Look and feel shows no team rows: not in its rows, not in Labs, not on the page', async () => {

@@ -213,7 +213,9 @@ describe('Settings > Agents', () => {
     expect(p.textContent).toContain('How it opens');
     expect(p.querySelector('select[aria-label="How Kimi runs"]')).toBeNull();
     expect(p.textContent).toContain('Not signed in');
-    expect(p.textContent).toContain('Run kimi once and sign in.');
+    // The hint is a command line: never shown. A Sign in button is.
+    expect(p.textContent).not.toContain('Run kimi once');
+    expect(p.querySelector('[data-testid="agent-sign-in"]')?.textContent).toBe('Sign in');
     // Comes with Potato: no Remove row at all.
     expect(p.querySelector('button[aria-label="Remove Kimi"]')).toBeNull();
     expect(p.textContent).not.toContain('Remove Kimi');

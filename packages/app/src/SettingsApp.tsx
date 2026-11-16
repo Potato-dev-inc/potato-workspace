@@ -12,6 +12,8 @@ import { cockpitApi } from './lib/cockpit-api';
 import { settingsEntryTarget } from './lib/settings-target';
 import { useComfortRoot } from './lib/comfort/root';
 import { setWhatsNewRemote } from './whatsnew/store';
+// The Connect page (Individual mode's Settings window draws it) is styled by the cockpit's scoped rules.
+import './styles/cockpit.css';
 
 export default function SettingsApp() {
   useComfortRoot();
@@ -50,6 +52,8 @@ export default function SettingsApp() {
     <>
       <SettingsPanel
         open
+        withConnect
+        initialConnectTab={target.connectTab}
         initialTab={initialTab}
         initialRow={target.row}
         onPageChange={(p) => {

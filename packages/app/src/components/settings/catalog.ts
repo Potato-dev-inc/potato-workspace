@@ -12,10 +12,6 @@ import { generalRows } from './sections/GeneralSection';
 import { keysRows } from './sections/KeysSection';
 import { modelBridgeRows } from './sections/ModelBridgeSection';
 import { modelsRows } from './sections/ModelsSection';
-import { phoneRows } from './sections/PhoneSection';
-import { teamRows } from './sections/TeamSection';
-import { lendRows } from './sections/LendSection';
-import { devicesRows } from './sections/DevicesSection';
 import { crewsRows } from './sections/CrewsSection';
 import { shortcutsRows } from './sections/ShortcutsSection';
 
@@ -26,11 +22,7 @@ const RAW_SECTIONS: BaseSectionDef[] = [
   { id: 'models', title: 'Orchestrator & Models', blurb: 'The project index, OpenCode defaults and Model Bridge.', rows: [...modelsRows, ...modelBridgeRows] },
   { id: 'keys', title: 'Keys', blurb: 'API keys. They are kept in your system keychain when there is one.', rows: keysRows },
   { id: 'bridge', title: 'Bridge & MCP', blurb: 'How other tools and agents connect to Potato Workspace.', rows: bridgeRows },
-  { id: 'phone', title: 'Phone', blurb: 'Pair a phone to watch and steer your agents.', rows: phoneRows },
-  { id: 'team', title: 'Team', blurb: 'Work with teammates: see when their agents push, and tell them about yours.', rows: teamRows },
-  { id: 'lend', title: 'Lend', blurb: 'Lend an agent sign-in to another PC, or borrow one. Early feature.', rows: lendRows },
-  { id: 'devices', title: 'Devices', blurb: 'Pair another PC and run a chat or a terminal on it. Early feature.', rows: devicesRows },
-  { id: 'crews', title: 'Crews', blurb: 'Saved crews of agents. Read-only for now. Early feature.', rows: crewsRows },
+  { id: 'crews', title: 'Crews', blurb: 'Crews of agents, shown as boxes. Early feature.', rows: crewsRows },
   { id: 'shortcuts', title: 'Shortcuts', blurb: 'Change the keys, or turn a shortcut off. Terminals keep their own keys.', rows: shortcutsRows },
 ];
 

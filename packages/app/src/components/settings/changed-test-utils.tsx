@@ -76,7 +76,6 @@ export function testSections(): SectionDef[] {
         ),
       },
     ]),
-    page('connect', 'Connect'),
     page('keys', 'Keys', [
       {
         id: 'key-anthropic',

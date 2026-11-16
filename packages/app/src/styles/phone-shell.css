@@ -1024,7 +1024,7 @@
   color: var(--sh-fg, var(--label));
 }
 .ph .ph-desk[data-away] {
-  box-shadow: inset 0 0 0 1px var(--line, var(--sep)), inset 3px 0 0 var(--accent);
+  box-shadow: inset 0 0 0 1px var(--line, var(--sep));
 }
 .ph .ph-desk p {
   margin: 0;

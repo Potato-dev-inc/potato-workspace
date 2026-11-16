@@ -18,11 +18,21 @@ export function fakeOverviewSources(over: Partial<OverviewSources> = {}): Overvi
         { id: 'a2', agent_id: 'codex', label: 'Personal', home: '' },
       ],
     }),
-    phones: async () => 1,
     version: async () => '1.0.19',
     update: async () => null,
     helpers: async () => ({ mode: 'always_show', keepOpen: true, connected: true }),
     actions: { signIn: () => undefined, installAddon: async () => undefined },
+    // Nothing real runs under a test: "Fix everything" finds nothing to install and nothing to warm.
+    everything: {
+      apis: {
+        addons: { list: async () => ({ labsEnabled: false, addons: [] }) as never, install: async () => ({}) as never },
+        pack: { apply: async () => ({}) as never },
+        warm: { status: async () => null, setConfig: async () => null, setProject: async () => true, warmable: () => [] },
+      },
+      agents: async () => [],
+      pauseMs: 0,
+      loadAgents: async () => null,
+    },
     ...over,
   };
 }

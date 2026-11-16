@@ -10,7 +10,7 @@ export const crewsRows: RowDef[] = [
     id: 'crews-page',
     group: 'Crews',
     label: 'Crews',
-    hint: 'Your saved crews of agents. Read-only for now.',
+    hint: 'Your crews of agents, and ready-made ones to start from.',
     keywords: 'crews crew team roles agents orchestrator checker difficulty routing standby workers canvas',
     labsFlag: 'crews_enabled',
     render: () => (

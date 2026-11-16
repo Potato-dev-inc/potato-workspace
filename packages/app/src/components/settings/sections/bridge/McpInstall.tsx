@@ -24,6 +24,7 @@ export function McpInstallBlock({ env }: { env: SettingsEnv }) {
         </Btn>
       </div>
       <Note>{t('bridge.projectLine', { path: installPath || t('bridge.chooseFolder') })}</Note>
+      {!installPath && <Note>{t('bridge.pickFolderFirst')}</Note>}
       {results && <ResultLines results={results} note={t('bridge.restartNote')} />}
       {error && <Note role="alert">{error}</Note>}
     </SettingBlock>

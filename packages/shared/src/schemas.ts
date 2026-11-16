@@ -81,6 +81,8 @@ export const SettingsSchema = z.object({
   lend_enabled: z.boolean().optional(),
   /** Devices (Settings > General > Labs): pair two Workspaces and run a chat or terminal on the other one. Off unless chosen. Rust: device_link. */
   devices_enabled: z.boolean().optional(),
+  /** Potato account (Settings > General > Labs): sign in once and see your devices on each other. Off unless chosen. Rust: account. */
+  account_enabled: z.boolean().optional(),
   /** Desktop Potato (Settings > General > Labs): a small pet window on the desktop. Off unless chosen. Rust: pet. */
   desktop_pet_enabled: z.boolean().optional(),
   agent_browser_enabled: z.boolean().optional(),

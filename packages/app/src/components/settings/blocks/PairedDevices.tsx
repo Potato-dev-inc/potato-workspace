@@ -7,7 +7,7 @@ import { useCallback, useEffect, useState } from 'react';
 import { tauri } from '../../../lib/tauri';
 import { DEVICE_NAMES_CHANGED } from '../../../lib/deviceNames';
 import { DEVICES_CHANGED_EVENT } from '../../MobilePairingPanel';
-import { Switch } from '../controls';
+import { ConfirmSheet, Switch } from '../controls';
 import { Btn, Note } from '../settings-ui';
 
 
@@ -50,6 +50,7 @@ function DeviceRow({
 }) {
   const t = useT();
   const [renaming, setRenaming] = useState(false);
+  const [confirming, setConfirming] = useState(false);
   const [name, setName] = useState(device.name);
   const caps = deviceCaps(device);
   const toggle = (cap: DeviceCap, on: boolean) =>
@@ -102,10 +103,24 @@ function DeviceRow({
             {t('devices.rename')}
           </Btn>
         )}
-        <Btn small onClick={onRevoke} disabled={busy}>
+        {/* An active phone is signed out only after a confirm sheet, as "Revoke all devices" asks first.
+            A signed-out phone is only removed from the list, so it goes straight through. */}
+        <Btn small onClick={() => (device.expired ? onRevoke() : setConfirming(true))} disabled={busy}>
           {device.expired ? t('settings.remove') : t('phone.device.revoke')}
         </Btn>
       </div>
+      {confirming && (
+        <ConfirmSheet
+          title={t('phone.device.signOut.title')}
+          body={t('phone.device.signOut.body')}
+          confirmLabel={t('phone.device.signOut.confirm')}
+          onConfirm={() => {
+            setConfirming(false);
+            onRevoke();
+          }}
+          onCancel={() => setConfirming(false)}
+        />
+      )}
       {!device.expired && (
         <ul className="st-abilities" aria-label={t('phone.device.canDo', { name: device.name })}>
           {ABILITIES.map(({ cap }) => (

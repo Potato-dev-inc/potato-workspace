@@ -11,6 +11,8 @@ use serde_json::{json, Value};
 
 const BAR_JS: &str = include_str!("bar.js");
 /// The shared spec (one file, read by the app's bar and by this one).
+/// The brand marks of the agents (path, dark and light colour), one file made from the app's logo table.
+pub const LOGOS_JSON: &str = include_str!("../../../src/lib/markup/agent-logos.json");
 pub const SPEC_JSON: &str = include_str!("../../../src/lib/markup/markup-spec.json");
 
 pub fn strings() -> Value {
@@ -49,7 +51,16 @@ pub fn strings() -> Value {
             "countN": "{n} marks",
             "element1": "1 element",
             "elementsN": "{n} elements",
-            "to": "To:",
+            "to": "To",
+            "toPick": "Choose an agent",
+            "thisPage": "made this page",
+            "working": "Working",
+            "waiting": "Waiting for you",
+            "idle": "Idle",
+            "stopped": "Stopped",
+            "newAgent": "New agent",
+            "noAgents": "No agent is running.",
+            "startAgent": "Start an agent",
             "toOwner": "This picture goes to {agent}",
             "sent": "Sent to the chat.",
             "shotOf": "Picture of the page with your marks",
@@ -90,7 +101,16 @@ pub fn strings() -> Value {
             "countN": "{n} 個標記",
             "element1": "1 個元素",
             "elementsN": "{n} 個元素",
-            "to": "傳給：",
+            "to": "傳給",
+            "toPick": "選擇 AI 助理",
+            "thisPage": "做了這個頁面",
+            "working": "工作中",
+            "waiting": "等你回應",
+            "idle": "閒置",
+            "stopped": "已停止",
+            "newAgent": "新增 AI 助理",
+            "noAgents": "目前沒有執行中的 AI 助理。",
+            "startAgent": "啟動 AI 助理",
             "toOwner": "這張圖片會傳給 {agent}",
             "sent": "已傳到聊天。",
             "shotOf": "附有你的標記的頁面圖片",
@@ -106,6 +126,7 @@ pub fn script(key: &str, top: u32) -> String {
     BAR_JS
         .replace("__PM_MARKUP_KEY__", &json(&Value::String(key.to_string())))
         .replace("__PM_MARKUP_SPEC__", SPEC_JSON)
+        .replace("__PM_MARKUP_LOGOS__", LOGOS_JSON)
         .replace("__PM_MARKUP_STR__", &json(&strings()))
         .replace("__PM_MARKUP_TOP__", &top.to_string())
 }
@@ -162,6 +183,9 @@ pub struct WireArea {
 pub enum Event {
     Open,
     Close,
+    /// "New agent" at the end of the send list.
+    #[serde(rename = "newagent")]
+    NewAgent,
     Prepare { marks: Vec<WireMark>, area: WireArea, vw: f64 },
     Send { request: String, marks: Vec<WireMark>, #[serde(default)] to: String },
 }

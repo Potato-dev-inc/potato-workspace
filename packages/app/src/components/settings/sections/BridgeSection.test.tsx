@@ -73,7 +73,7 @@ describe('Bridge & MCP: every row renders', () => {
       expect(m.host.querySelector(`[data-row="${row.id}"]`), `missing row: ${row.id}`).not.toBeNull();
     }
     expect(m.host.querySelector('[aria-label="Tools for every agent"]')).not.toBeNull();
-    for (const label of ['Local address', 'Connection check', 'Use the built-in helper program', 'Connect Claude, Codex and OpenCode', 'Set up Claude Desktop by hand', 'Set up Codex by hand', 'Disconnect agents from Potato Workspace']) {
+    for (const label of ["This app's address", 'Connection check', 'Use the built-in helper program', 'Connect Claude, Codex and OpenCode', 'Set up Claude Desktop by hand', 'Set up Codex by hand', 'Disconnect agents from Potato Workspace']) {
       expect(hasText(m.host, label), `missing: ${label}`).toBe(true);
     }
     for (const text of ['Check and repair', 'Connect for this project', 'Connect everywhere', 'Uninstall from project…', 'Uninstall globally…', 'Copy']) {

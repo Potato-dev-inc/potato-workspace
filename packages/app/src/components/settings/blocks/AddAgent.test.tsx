@@ -38,13 +38,19 @@ const mount = async (api: AddAgentApi, props: Partial<AddAgentProps> = {}) => {
 };
 const text = () => host.textContent ?? '';
 const input = () => host.querySelector('input[aria-label="Agent name"]') as HTMLInputElement;
+/** The typing box is under Advanced (collapsed): open it the way a person would, then return it. */
+async function openInput(host: HTMLElement): Promise<HTMLInputElement> {
+  if (!host.querySelector('input[aria-label="Agent name"]')) await click(buttonByText(host, 'Advanced'));
+  return host.querySelector('input[aria-label="Agent name"]') as HTMLInputElement;
+}
+
 const advance = async (ms: number) => {
   await act(async () => {
     await vi.advanceTimersByTimeAsync(ms);
   });
 };
 const addIt = async (value: string) => {
-  await typeInto(input(), value);
+  await typeInto(await openInput(host), value);
   await click(buttonByText(host, 'Add'));
 };
 const chip = (key: string) => host.querySelector(`[data-chip="${key}"]`) as HTMLElement;
@@ -78,8 +84,9 @@ describe('Add an agent', () => {
     const api = mockAddAgentApi('native_ok');
     await mount(api);
     expect(host.querySelector('section[aria-label="Add an agent"]')).toBeTruthy();
-    expect(text()).toContain('Or type a name, or paste its install command.');
-    expect(buttonByText(host, 'Add')?.disabled).toBe(true);
+    // The typing box is under Advanced, collapsed: not shown first.
+    expect(text()).not.toContain('Or type a name, or paste its install command.');
+    expect(input()).toBeNull();
     await addIt('fakenat');
     expect(text()).toContain('Adding');
     await advance(4000);
@@ -361,6 +368,8 @@ describe('Add an agent', () => {
     const m = await mountRows([agentsRows[0]]);
     try {
       expect(m.host.querySelector('section[aria-label="Add an agent"]')).toBeTruthy();
+      expect(hasText(m.host, 'Or type a name, or paste its install command.')).toBe(false);
+      await click(buttonByText(m.host, 'Advanced'));
       expect(hasText(m.host, 'Or type a name, or paste its install command.')).toBe(true);
       expect(m.host.querySelector('input[aria-label="Agent name"]')).toBeTruthy();
     } finally {

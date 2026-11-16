@@ -69,12 +69,14 @@ const button = (scope: ParentNode, label: string) =>
   Array.from(scope.querySelectorAll('button')).find((b) => b.textContent?.trim() === label);
 
 describe('AccountsGroup', () => {
-  it('lists only agents that support accounts, with their login hint', async () => {
+  it('lists only agents that support accounts, with a Sign in button instead of the login hint', async () => {
     await render(fakeApi());
     const claude = host.querySelector('[data-testid="accounts-claude"]')!;
-    expect(claude.textContent).toContain('Run claude and log in');
+    // The login hint is a shell command: it is never shown. A "Sign in" button takes its place.
+    expect(claude.textContent).not.toContain('Run claude and log in');
     expect(claude.textContent).not.toContain('`');
-    expect(claude.querySelector('code')?.textContent).toBe('claude');
+    expect(claude.querySelector('code')).toBeNull();
+    expect(claude.querySelector('[data-testid="signin-claude"]')?.textContent).toBe('Sign in');
     expect(host.querySelector('[data-testid="accounts-codex"]')).toBeTruthy();
     expect(host.querySelector('[data-testid="accounts-opencode"]')).toBeNull();
     expect(host.querySelector('.st-tip')?.getAttribute('title')).toContain('never reads or shares');

@@ -36,9 +36,6 @@ export const connect = {
   'connect.lending.offLine': 'Let another PC use one of your agent sign-ins through this PC for a while, or ask to use theirs.',
   'connect.lending.turnOn': 'Turn on lending',
 
-  'connect.moved.phone': 'Pairing, paired phones, alerts and the public address are now in Connect › Phone.',
-  'connect.moved.pcs': 'Your other PCs are now in Connect › My PCs.',
-  'connect.moved.team': 'Your team is now in Connect › Team.',
-  'connect.moved.lending': 'Lending is now in Connect › Lending.',
+  'connect.phone.telegram': 'Telegram (early feature)',
   'connect.moved.open': 'Open Connect',
 } as const;

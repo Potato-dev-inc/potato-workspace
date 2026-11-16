@@ -552,6 +552,36 @@ fn steering_text_is_the_persons_message_inside_the_turn_and_the_next_words_are_a
 }
 
 #[test]
+fn the_agents_words_after_a_message_sent_mid_turn_are_shown_in_summary() {
+    // The founder's case: a message sent while the agent worked was answered, but Summary (final answers only) folded the
+    // answer away because it was not the last message of the turn (and a turn with a background task stays open after its
+    // last message), so the message looked unanswered.
+    let mut run = Run::new();
+    run.turn(1, "go");
+    run.updates(&[json!({"sessionUpdate": "agent_message_chunk", "content": {"type": "text", "text": "working"}})], false);
+    let items = run.mapper.steered("how is it?", AT);
+    run.put(items);
+    run.updates(&[json!({"sessionUpdate": "agent_message_chunk", "content": {"type": "text", "text": "Still on it."}})], false);
+    run.updates(&[json!({"sessionUpdate": "tool_call", "toolCallId": "t1", "title": "Read", "kind": "read", "status": "completed"})], false);
+    run.updates(&[json!({"sessionUpdate": "agent_message_chunk", "content": {"type": "text", "text": "Done now."}})], false);
+    let all = serde_json::to_value(run.feed.all()).unwrap();
+    let say = |text: &str| all.as_array().unwrap().iter().find(|i| i["kind"] == "assistant" && i["text"] == text).cloned().expect("said");
+    assert_eq!(say("working")["finalAnswer"], false, "before the person's message the usual rule holds");
+    assert_eq!(say("Still on it.")["finalAnswer"], true, "the reply to the person's message");
+    assert_eq!(say("Done now.")["finalAnswer"], true, "later words of the turn too: the turn may never report an end");
+    run.event(&SessionEvent::TurnEnded(summary(1, StopKind::EndTurn)));
+    let ended = serde_json::to_value(run.feed.all()).unwrap();
+    let still = ended.as_array().unwrap().iter().find(|i| i["kind"] == "assistant" && i["text"] == "Still on it.").unwrap();
+    assert_eq!(still["finalAnswer"], true, "it stays shown when the turn ends");
+    // A turn nobody steered keeps the usual rule: only its last message is the answer.
+    let mut plain = Run::new();
+    plain.turn(1, "go");
+    plain.updates(&[json!({"sessionUpdate": "agent_message_chunk", "content": {"type": "text", "text": "first"}})], false);
+    let first = serde_json::to_value(plain.feed.all()).unwrap();
+    assert_eq!(first.as_array().unwrap().iter().find(|i| i["kind"] == "assistant").unwrap()["finalAnswer"], false);
+}
+
+#[test]
 fn updates_this_build_cannot_type_add_nothing() {
     let mut run = Run::new();
     run.turn(1, "go");

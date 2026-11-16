@@ -52,6 +52,8 @@ async function show(run: AddAgentRun): Promise<string[]> {
   globalThis.sessionStorage.clear();
   const root = createRoot(host);
   await act(async () => root.render(createElement(AddAgent, { api })));
+  // The name box is under the collapsed Advanced link: open it first, as a person would.
+  if (!host.querySelector('input')) await act(async () => (Array.from(host.querySelectorAll('button')).find((b) => b.textContent === 'Advanced') as HTMLButtonElement).click());
   const box = host.querySelector('input') as HTMLInputElement;
   await act(async () => {
     Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value')?.set?.call(box, run.input);
@@ -69,7 +71,8 @@ describe('default path copy', () => {
     await act(async () => idle.render(createElement(AddAgent, {})));
     const first = lines();
     await act(async () => idle.unmount());
-    expect(first).toContain('Or type a name, or paste its install command.');
+    // The name box is under the collapsed Advanced link, so it is not on the first screen.
+    expect(first).not.toContain('Or type a name, or paste its install command.');
     expect(first).toContain('Advanced');
 
     const all = [...first];

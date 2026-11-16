@@ -32,7 +32,7 @@ export const OTHER_GROUP = 'Other';
 const LABS_ORDER = ['ask-bar', 'simple-mode', 'live-updates', 'opencode-automation'];
 
 /** The closed groups of the Advanced page, in order (Developer and the danger list follow them, open). */
-export const ADVANCED_CLOSED_GROUPS = ['Connections to other tools', 'Models', LABS_GROUP, 'App and files', OTHER_GROUP];
+export const ADVANCED_CLOSED_GROUPS = ['Connections to other tools', 'Models', 'App and files', OTHER_GROUP];
 
 export interface PageMeta {
   id: SectionId;
@@ -45,9 +45,9 @@ export const PAGES: PageMeta[] = [
   { id: 'agents', title: 'Agents', blurb: 'Your agents, how they sign in and what they may do.' },
   { id: 'helpers', title: 'Helpers', blurb: 'When an agent asks another agent for help.' },
   { id: 'look', title: 'Look and feel', blurb: 'How the app looks and behaves.' },
-  { id: 'connect', title: 'Connect', blurb: 'Your phone, your team and alerts.' },
   { id: 'keys', title: 'Keys', blurb: 'API keys. Kept in your system keychain when there is one.' },
   { id: 'shortcuts', title: 'Shortcuts', blurb: 'Click the keys to change them. Shortcuts work while Potato Workspace is in front, except those tagged Any app.' },
+  { id: 'labs', title: 'Labs', blurb: 'Early features. Off by default; turn one on to try it, and read what it does.' },
   { id: 'advanced', title: 'Advanced', blurb: 'For developers and the curious. Most people never need this page.' },
 ];
 
@@ -64,53 +64,42 @@ export const LAYOUT: Record<SectionId, LayoutGroup[]> = {
     { group: 'Moving work', rows: ['handoff-mode', 'keep-going'] },
     { group: 'All agents', rows: ['show-terminals', 'message-rail', 'chat-view', 'done-card', 'preload', 'agent-default-models', 'agent-lane', 'chat-addons', 'hidden-agents', 'versions'] },
     { group: 'Standby helpers', rows: ['standby-helpers', 'helper-answers'] },
-    { group: 'Your chats', rows: ['bring-chats-agents'] },
     {
       group: 'Rules for all agents',
       rows: ['security-ask-before-control', 'security-agents-merge', 'agent-rules', 'loop-guard', 'package-check', 'collision', 'security-recent-approvals'],
     },
     { group: 'Limits', rows: ['budget-turns', 'budget-minutes', 'project-budget', 'right-size'] },
-    { group: 'Undo and memory', rows: ['checkpoints', 'checkpoints-keep', 'shared-memory'] },
+    { group: 'Undo and memory', rows: ['checkpoints', 'shared-memory'] },
     { group: 'Your own agents', rows: ['definitions'] },
   ],
   helpers: [
     { group: 'How helpers run', rows: ['helper-agents', 'helpers-in-sidebar', 'helper-default-models', 'keep-helpers-open', 'close-helpers-with-agent'] },
     { group: 'Limits', rows: ['most-helpers-at-once', 'stuck-helper-minutes'] },
     { group: 'Crews', rows: ['crews-page'] },
-    { group: 'Connect your agents', rows: ['agent-pack'] },
+    { group: 'Let agents ask each other', rows: ['agent-pack'] },
   ],
   look: [
     { group: 'Appearance', rows: ['theme', 'language', 'mode-switch-animation', 'individual-window-layout', 'usage-bar', 'usage-login-reads'] },
     { group: 'Comfort', rows: ['text-size', 'strong-contrast', 'less-motion', 'speak-results'] },
     { group: 'You', rows: ['your-name'] },
     { group: 'Startup', rows: ['start-at-sign-in'] },
-    { group: 'While agents work', rows: ['confirm-close', 'keep-awake', 'away-minutes', 'quiet-hours', 'pc-notifications'] },
-  ],
-  connect: [
-    { group: 'Phone', rows: ['pairing', 'paired-devices', { row: 'phone-notifications', label: 'Phone alerts' }] },
-    { group: 'Team', rows: ['team-page'] },
-    { group: 'Lend', rows: ['lend-page'] },
-    { group: 'Devices', rows: ['devices-page'] },
-    { group: 'Discord', rows: ['discord-alerts'] },
-    { group: 'Share a chat', rows: ['live-room'] },
-    { group: 'On the phone', rows: ['mobile-input-delay', 'mobile-keyboard-resizes', 'mobile-input-visible'] },
-    { group: 'Public address', rows: ['tunnel'] },
-    { group: 'Revoke', rows: ['revoke-all-devices'] },
+    { group: 'While agents work', rows: ['confirm-close', 'keep-awake', 'away-minutes', 'quiet-hours', 'pc-notifications', 'discord-alerts'] },
   ],
   keys: [
     { group: 'Provider keys', rows: ['key-anthropic', 'key-openai', 'key-openrouter'] },
-    { group: 'OpenCode keys', rows: ['opencode-keys', 'opencode-restart'] },
+    { group: 'OpenCode keys', rows: ['opencode-keys'] },
     { group: 'Remove keys', rows: ['remove-all-keys'] },
   ],
   // Shortcuts: one group per kind of shortcut, in the order lib/shortcuts.ts lists them (the section file names the groups).
   shortcuts: [{ group: 'Shortcuts', rows: ['@base:shortcuts'] }],
+  // Labs: its own page in the nav. The index row draws every switch; features with more than a switch are listed under it.
+  labs: [{ group: LABS_GROUP, rows: [LABS_INDEX_ID, '@labs'] }],
   advanced: [
     {
       group: 'Connections to other tools',
       rows: ['toolbelt', 'helper-tools', 'bridge-endpoint', 'mcp-status', 'rust-mcp', 'mcp-install', 'snippet-claude-desktop', 'snippet-codex'],
     },
     { group: 'Models', rows: ['librarian-indexer', 'opencode-provider', 'opencode-model', 'model-bridge'] },
-    { group: LABS_GROUP, rows: [LABS_INDEX_ID, '@labs'] },
     { group: 'App and files', rows: ['storage', 'settings-file', 'diagnostic-file', 'chat-search-index', 'early-versions', 'settings-recovery', 'bring-old-chats'] },
     { group: 'Developer', rows: ['show-developer-settings'] },
     { group: 'Uninstall', rows: ['uninstall', 'mcp-uninstall'] },
@@ -155,7 +144,7 @@ function labsIndexRow(labs: RowDef[]): RowDef | null {
   if (labs.length === 0) return null;
   return {
     id: LABS_INDEX_ID,
-    level: 'advanced',
+    level: 'basic',
     label: 'Early features',
     hint: 'Turn each early feature on or off, and read what it does.',
     // A search for any early feature's name or words lands on this page, since the features are listed only here.
@@ -208,7 +197,7 @@ export function arrangeSections(base: BaseSectionDef[], layout: Partial<Record<S
         // One with more than a switch (Ask bar, Live updates, Telegram...) keeps its own row, which the Labs
         // page's Open button and a deep link jump to.
         if (entry === '@labs') {
-          for (const row of labs) if (!LABS_SWITCH_KEYS[row.id]) rows.push({ ...row, group: g.group, keywords: `${row.keywords ?? ''} labs early` });
+          for (const row of labs) if (!LABS_SWITCH_KEYS[row.id]) rows.push({ ...row, group: g.group, keywords: `${row.keywords ?? ''} labs early`, ...(page.id === 'labs' ? { level: 'basic' as const } : {}) });
           continue;
         }
         if (typeof entry === 'string' && entry.startsWith('@base:')) {

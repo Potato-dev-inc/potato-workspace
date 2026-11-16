@@ -8,7 +8,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { MobilePairingPanel } from '../MobilePairingPanel';
 import { statusLine } from './tunnel-model';
 import { backendName, ResultLines } from './sections/bridge/shared';
-import { phoneRows } from './sections/PhoneSection';
+import { phoneRowsOriginal as phoneRows } from './sections/PhoneSection';
 import { mountRows, settle } from './test-utils';
 
 vi.mock('qrcode', () => ({ default: { toCanvas: vi.fn(async () => undefined) } }));

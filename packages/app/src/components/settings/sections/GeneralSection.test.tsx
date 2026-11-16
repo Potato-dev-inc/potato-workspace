@@ -90,9 +90,8 @@ describe('General: every control renders', () => {
       'Quiet for too long',
       'Global shortcut: stop all agents',
       'Check packages before installs',
-      'Away digest after',
+      'Tell me what happened while I was away',
       'Checkpoints',
-      'Keep last N checkpoints',
       'Shared project memory',
       'Task and activity data',
       'Tasks',
@@ -193,21 +192,11 @@ describe('General: each control saves a partial patch', () => {
     expect(m.env.patches).toEqual([{ early_versions_enabled: true }]);
   });
 
-  it('Checkpoints saves immediately; Keep last N clamps on blur and is disabled when checkpoints are off', async () => {
+  it('Checkpoints saves immediately (the keep-N choice is gone: 20 is kept by itself)', async () => {
     await mount();
     await click(switchFor('Checkpoints'));
     expect(m.env.patches).toEqual([{ checkpoints_enabled: false }]);
-    await m.rerender();
-    expect(byLabel<HTMLInputElement>(m.host, 'Keep last N checkpoints')!.disabled).toBe(true);
-    await click(switchFor('Checkpoints'));
-    await m.rerender();
-    const keep = byLabel<HTMLInputElement>(m.host, 'Keep last N checkpoints')!;
-    expect(keep.disabled).toBe(false);
-    await typeInto(keep, '2');
-    expect(m.env.patches).toHaveLength(2); // typing "2" on the way to "200" saved nothing
-    await typeInto(keep, '9000');
-    await blur(keep);
-    expect(m.env.patches.at(-1)).toEqual({ checkpoints_keep: 500 });
+    expect(byLabel(m.host, 'Keep last N checkpoints')).toBeNull();
   });
 
   it('Night Shift (Labs) is off by default and saves only {night_shift_enabled}', async () => {
@@ -217,9 +206,9 @@ describe('General: each control saves a partial patch', () => {
     expect(m.env.patches).toEqual([{ night_shift_enabled: true }]);
   });
 
-  it('Away digest minutes clamps on blur', async () => {
+  it('Away minutes clamps on blur', async () => {
     await mount();
-    const away = byLabel<HTMLInputElement>(m.host, 'Away digest after (minutes)')!;
+    const away = byLabel<HTMLInputElement>(m.host, 'Minutes away before I hear what happened (0 is off)')!;
     await typeInto(away, '-4');
     await blur(away);
     expect(m.env.patches).toEqual([{ away_minutes: 0 }]);
@@ -285,16 +274,11 @@ describe('General: each control saves a partial patch', () => {
 });
 
 describe('General: Live Room', () => {
-  it('is its own group with the relay field and the privacy line, and saves the relay on blur', async () => {
+  it('has no Live Room settings any more: the defaults are saved from the Go live sheet', async () => {
     await mount();
-    expect([...m.host.querySelectorAll('section.st-group')].some((s) => s.textContent?.includes('Relay address'))).toBe(true);
-    expect(hasText(m.host, 'Rooms are end-to-end encrypted. The link sees only sizes and times.')).toBe(true);
-    const relay = byLabel<HTMLInputElement>(m.host, 'Relay address')!;
-    await typeInto(relay, 'https://relay.example.test');
-    await blur(relay);
-    await settle();
-    expect(liveRoomApi.configSet).toHaveBeenCalledWith({ relay: 'https://relay.example.test', minutes: 60, maxViewers: 10 });
-    expect(m.env.markSaved).toHaveBeenCalled();
+    expect(m.host.querySelector('[data-row="live-room"]')).toBeNull();
+    expect(hasText(m.host, 'Relay address')).toBe(false);
+    expect(liveRoomApi.configSet).not.toHaveBeenCalled();
   });
 });
 

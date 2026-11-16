@@ -28,7 +28,7 @@ export function ConnectorsSection({
       {n === 0 && !outOfDate ? (
         <div className="rp-row is-empty">
           <span className="rp-name">{t('rail.con.none')}</span>
-          <button type="button" className="rp-link" onClick={() => openSettingsAt('connect')}>
+          <button type="button" className="rp-link" onClick={() => openSettingsAt('advanced', 'toolbelt')}>
             {t('rail.con.add')}
           </button>
         </div>

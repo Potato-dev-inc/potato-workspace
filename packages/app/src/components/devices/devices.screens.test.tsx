@@ -202,12 +202,13 @@ describe('Settings > Devices', () => {
     expect(host.innerHTML).toBe('');
   });
 
-  it('the page is a Settings page only while its Labs flag is on', () => {
+  it('Settings has no Devices page (it is the My PCs tab of Connect); the Labs list still carries its switch', () => {
     const rows = (flag: boolean) =>
       visibleSections(SECTIONS, { devices_enabled: flag })
         .flatMap((s) => s.rows)
         .map((r) => r.id);
-    expect(rows(true)).toContain('devices-page');
+    expect(rows(true)).not.toContain('devices-page');
     expect(rows(false)).not.toContain('devices-page');
+    expect(rows(false)).toContain('labs-index');
   });
 });

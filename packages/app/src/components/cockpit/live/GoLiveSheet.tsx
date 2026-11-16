@@ -67,7 +67,6 @@ export function GoLiveSheet({
   teamRelay = '',
   api = liveRoomApi,
   onClose,
-  onOpenSettings,
   onStarted,
 }: {
   panes: SharePane[];
@@ -77,7 +76,6 @@ export function GoLiveSheet({
   teamRelay?: string;
   api?: LiveRoomApi;
   onClose: () => void;
-  onOpenSettings?: () => void;
   onStarted?: (endsAtMs: number) => void;
 }) {
   const initial = panes.find((p) => p.id === currentPaneId && !p.blocked);
@@ -92,11 +90,13 @@ export function GoLiveSheet({
   const [endsAtMs, setEndsAtMs] = useState<number | null>(null);
   const [masked, setMasked] = useState<string | null>(null);
   const [copied, setCopied] = useState(false);
+  const [relayDraft, setRelayDraft] = useState('');
+  const [remembered, setRemembered] = useState(false);
 
   const pickedKey = picked.join('\n');
   const rows = useMemo(() => orderPanes(panes), [panes]);
 
-  // The defaults the person set in Settings › General › Live Room.
+  // The defaults the person saved with "Remember these" last time.
   useEffect(() => {
     let live = true;
     api
@@ -131,6 +131,20 @@ export function GoLiveSheet({
   }, [api, pickedKey]);
 
   const noRelay = config !== null && !config.relay.trim() && !teamRelay.trim();
+
+  /** Saves the relay address, the length and the viewers as the defaults for the next room (they used to live in Settings). */
+  const remember = (patch: Partial<LiveRoomConfig>) => {
+    if (!config) return;
+    const next: LiveRoomConfig = { ...config, minutes, maxViewers, ...patch };
+    setError(null);
+    api
+      .configSet(next)
+      .then(() => {
+        setConfig(next);
+        setRemembered(true);
+      })
+      .catch((err) => setError(errorText(err)));
+  };
 
   const toggle = (id: string) => setPicked((cur) => (cur.includes(id) ? cur.filter((x) => x !== id) : [...cur, id]));
 
@@ -246,6 +260,19 @@ export function GoLiveSheet({
         <SegTabs options={VIEWER_OPTIONS} value={String(maxViewers)} onChange={(v) => setMaxViewers(Number(v))} label="Viewers" small />
       </div>
 
+      {config && !noRelay && (
+        <div className="ck-live-field">
+          <button
+            type="button"
+            className="ck-btn ck-btn--plain"
+            disabled={starting || (minutes === config.minutes && maxViewers === config.maxViewers)}
+            onClick={() => remember({})}
+          >
+            {remembered && minutes === config.minutes && maxViewers === config.maxViewers ? 'Remembered for next time' : 'Remember these for next time'}
+          </button>
+        </div>
+      )}
+
       <div className="ck-live-field-label">What viewers see</div>
       <LivePreview items={preview?.items ?? []} hidden={preview?.hidden ?? 0} panes={preview?.panes} />
 
@@ -257,13 +284,22 @@ export function GoLiveSheet({
       {noRelay && (
         <div className="ck-live-norelay">
           <p className="ck-sub" role="status">
-            Live Room needs a relay address. Set it in Settings › General › Live Room.
+            Live Room needs a relay address. Paste the link of the server that carries the room, or your team's.
           </p>
-          {onOpenSettings && (
-            <button type="button" className="ck-btn ck-btn--secondary" onClick={onOpenSettings}>
-              Open Live Room settings
-            </button>
-          )}
+          <label className="ck-live-field">
+            <span className="ck-live-field-label">Relay address</span>
+            <input
+              className="ck-live-input"
+              aria-label="Relay address"
+              value={relayDraft}
+              placeholder="https://relay.example.com"
+              spellCheck={false}
+              onChange={(e) => setRelayDraft(e.target.value)}
+            />
+          </label>
+          <button type="button" className="ck-btn ck-btn--secondary" disabled={!relayDraft.trim()} onClick={() => remember({ relay: relayDraft.trim() })}>
+            Save address
+          </button>
         </div>
       )}
 

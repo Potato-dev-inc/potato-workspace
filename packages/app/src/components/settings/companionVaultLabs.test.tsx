@@ -25,7 +25,7 @@ describe('the Companion memory and mood Labs switch', () => {
 
   it('is on the Early features page with a short name and one plain line', () => {
     // Early features are listed once, on the Labs page (the Labs row under Advanced), not as their own rows.
-    const advanced = SECTIONS.find((s) => s.id === 'advanced')!.rows;
+    const advanced = SECTIONS.find((s) => s.id === 'labs')!.rows;
     expect(advanced.some((r) => r.id === LABS_INDEX_ID && r.group === LABS_GROUP)).toBe(true);
     expect(advanced.some((r) => r.id === row().id)).toBe(false);
     expect(row().labs!.name).toBe('Companion memory and mood');

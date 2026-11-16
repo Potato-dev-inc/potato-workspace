@@ -198,3 +198,20 @@
 .settings .st-group.st-group:has(.st-rowwrap > .st-setupcheck) {
   display: block;
 }
+
+/* The Connect page in the separate Settings window: the cockpit's colours and buttons, none of its full-window layout.
+   The window's own header already says "Connect" and the lead line, so the page's own copies are hidden. */
+.cockpit.st-connect-host {
+  position: static;
+  inset: auto;
+  display: block;
+  overflow: visible;
+  background: transparent;
+}
+.st-connect-host .cn-title,
+.st-connect-host .cn-lead {
+  display: none;
+}
+.st-connect-host .cn-page {
+  padding-top: 4px;
+}

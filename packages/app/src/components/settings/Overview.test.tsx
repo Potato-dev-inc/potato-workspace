@@ -36,16 +36,16 @@ afterEach(async () => {
 });
 
 describe('Overview cards', () => {
-  it('shows the five cards: Agents, Signed in, Phone, Updates, Helpers', async () => {
+  it('shows four cards: Agents, Signed in, Updates, Helpers (the phone is on the Connect page)', async () => {
     await mount(fakeOverviewSources());
     const names = [...host.querySelectorAll('.st-card')].map((c) => c.getAttribute('aria-label'));
-    expect(names).toEqual(['Agents', 'Signed in', 'Phone', 'Updates', 'Helpers']);
+    expect(names).toEqual(['Agents', 'Signed in', 'Updates', 'Helpers']);
     expect(card('agents').textContent).toContain('2 agents ready');
     expect(card('signed-in').textContent).toContain('Claude and Codex are signed in');
-    expect(card('phone').textContent).toContain('1 phone paired');
+    expect(host.querySelector('[data-card="phone"]')).toBeNull();
     expect(card('updates').textContent).toContain('Up to date (1.0.19)');
     expect(card('helpers').textContent).toContain('Helpers open in a window and stay open');
-    for (const id of ['agents', 'signed-in', 'phone', 'updates', 'helpers']) expect(glyph(id)).toBe('✓');
+    for (const id of ['agents', 'signed-in', 'updates', 'helpers']) expect(glyph(id)).toBe('✓');
   });
 
   it('says what needs a fix, with the first problem as the sub-line', async () => {
@@ -71,9 +71,6 @@ describe('Overview cards', () => {
         accounts: async () => {
           throw new Error('boom');
         },
-        phones: async () => {
-          throw new Error('boom');
-        },
         update: async () => {
           throw new Error('no internet');
         },
@@ -82,7 +79,7 @@ describe('Overview cards', () => {
         },
       }),
     );
-    for (const id of ['agents', 'signed-in', 'phone', 'updates', 'helpers']) {
+    for (const id of ['agents', 'signed-in', 'updates', 'helpers']) {
       expect(card(id).textContent, id).toContain(CANT_CHECK_YET);
       expect(glyph(id), id).toBe('…');
       expect(card(id).textContent, id).not.toContain('✓');
@@ -97,15 +94,15 @@ describe('Overview cards', () => {
 
   it('one slow card does not block the others', async () => {
     let release: () => void = () => undefined;
-    const slow = new Promise<number>((r) => (release = () => r(2)));
-    await mount(fakeOverviewSources({ phones: () => slow }));
-    expect(card('phone').textContent).toContain('Checking');
-    expect(glyph('phone')).toBe('…');
+    const slow = new Promise<Awaited<ReturnType<ReturnType<typeof fakeOverviewSources>['helpers']>>>((r) => (release = () => r({ mode: 'always_show', keepOpen: true, connected: true })));
+    await mount(fakeOverviewSources({ helpers: () => slow }));
+    expect(card('helpers').textContent).toContain('Checking');
+    expect(glyph('helpers')).toBe('…');
     expect(card('agents').textContent).toContain('2 agents ready');
     expect(card('updates').textContent).toContain('Up to date');
     await act(async () => release());
     await settle(3);
-    expect(card('phone').textContent).toContain('2 phones paired');
+    expect(card('helpers').textContent).toContain('Helpers open in a window');
   });
 
   it('a failed beta check shows its own line on the Updates card, never Up to date', async () => {
@@ -116,27 +113,23 @@ describe('Overview cards', () => {
   });
 
   it('each card action lands on the row the spec names', async () => {
-    await mount(fakeOverviewSources({ phones: async () => 0, helpers: async () => ({ mode: 'always_show', keepOpen: true, connected: false }) }));
+    await mount(fakeOverviewSources({ helpers: async () => ({ mode: 'always_show', keepOpen: true, connected: false }) }));
     await click(button('agents', 'Check my setup'));
     expect(openRow).toHaveBeenLastCalledWith('setup-check');
     await click(button('signed-in', 'Manage'));
     expect(openRow).toHaveBeenLastCalledWith('accounts');
-    await click(button('phone', 'Pair a phone'));
-    expect(openRow).toHaveBeenLastCalledWith('pairing');
     await click(button('updates', "What's new"));
     expect(openRow).toHaveBeenLastCalledWith('whats-new');
-    // Not connected: the Helpers card offers Connect, which opens the agent-pack row.
-    await click(button('helpers', 'Connect'));
+    // Not connected: the Helpers card offers Turn on, which opens the agent-pack row.
+    await click(button('helpers', 'Turn on'));
     expect(openRow).toHaveBeenLastCalledWith('agent-pack');
   });
 
-  it('Your phones, Update and Change go where the spec says', async () => {
+  it('Update and Change go where the spec says', async () => {
     await mount(fakeOverviewSources({ update: async () => ({ currentVersion: '1.0.19', version: '1.0.20', notes: null }) }));
     expect(card('updates').textContent).toContain('1.0.20 is ready');
     await click(button('updates', 'Update'));
     expect(openRow).toHaveBeenLastCalledWith('version');
-    await click(button('phone', 'Your phones'));
-    expect(openRow).toHaveBeenLastCalledWith('paired-devices');
     await click(button('helpers', 'Change'));
     expect(openPage).toHaveBeenLastCalledWith('helpers');
   });

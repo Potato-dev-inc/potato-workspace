@@ -25,11 +25,10 @@ describe('settings search keywords', () => {
     expect(keys?.rows.map((r) => r.id)).toEqual(expect.arrayContaining(['key-anthropic', 'key-openai', 'key-openrouter']));
   });
 
-  it('"team", "relay", "invite" and "join" find the Team row, under Connect', () => {
+  it('Settings has no Team row: the team lives on the Connect page', () => {
     for (const word of ['team', 'relay', 'invite', 'join']) {
-      const hits = searchSections(SECTIONS, word);
-      expect(hits.find((h) => h.section.id === 'connect')?.rows.map((r) => r.id) ?? [], word).toContain('team-page');
-      expect(hits.find((h) => h.section.id === 'look')?.rows.map((r) => r.id) ?? [], word).not.toContain('team-page');
+      const ids = searchSections(SECTIONS, word).flatMap((h) => h.rows.map((r) => r.id));
+      expect(ids, word).not.toContain('team-page');
     }
   });
 

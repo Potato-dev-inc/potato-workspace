@@ -37,9 +37,6 @@ export const connect: Partial<Record<EnglishKey, string>> = {
   'connect.lending.offLine': '讓另一台電腦經由這台電腦,暫時使用你的 AI 助理登入,或向對方借用。',
   'connect.lending.turnOn': '開啟出借',
 
-  'connect.moved.phone': '配對、已配對的手機、通知和公開網址,現在都在「連結 › 手機」。',
-  'connect.moved.pcs': '你的其他電腦現在在「連結 › 我的電腦」。',
-  'connect.moved.team': '你的團隊現在在「連結 › 團隊」。',
-  'connect.moved.lending': '出借現在在「連結 › 出借」。',
+  'connect.phone.telegram': 'Telegram（早期功能）',
   'connect.moved.open': '開啟連結',
 };

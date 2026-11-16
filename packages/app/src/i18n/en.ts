@@ -71,6 +71,8 @@ import { appUx } from './en/appUx';
 import { deskReview } from './en/deskReview';
 import { devices } from './en/devices';
 import { crews } from './en/crews';
+import { crewCanvas } from './en/crewCanvas';
+import { account } from './en/account';
 import { agentRules } from './en/agentRules';
 import { rail } from './en/rail';
 
@@ -144,6 +146,8 @@ export const en = {
   ...deskReview,
   ...devices,
   ...crews,
+  ...crewCanvas,
+  ...account,
   ...agentRules,
   ...rail,
   ...timeline,

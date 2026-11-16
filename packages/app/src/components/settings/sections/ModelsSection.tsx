@@ -12,10 +12,10 @@ const trim = (text: string) => text.trim();
 export const modelsRows: RowDef[] = [
   {
     id: 'librarian-indexer',
-    label: 'Project index',
+    label: 'Search inside my project',
     hint: 'Empty: OpenCode builds it. Or the path to your own script.',
     keywords: 'orchestrator project index builder librarian indexer path script static project-indexer.py opencode',
-    group: 'Project index',
+    group: 'Search inside my project',
     render: (env) => (
       <SettingRow
         label={t('settings.row.librarian-indexer.label')}

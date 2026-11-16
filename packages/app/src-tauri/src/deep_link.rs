@@ -61,6 +61,10 @@ pub fn deliver<S: AsRef<str>>(app: &AppHandle, urls: &[S]) -> bool {
     if crate::desktop_toast::handle_links(app, urls) {
         return true;
     }
+    // The account sign-in this app started (`potato-workspace://signin?...`): checked against the pending sign-in.
+    if crate::account::handle_link(app, urls) {
+        return true;
+    }
     let Some(link) = first_join_link(urls) else {
         tracing::info!("deep link ignored: not an invite link");
         return false;

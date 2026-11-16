@@ -1,21 +1,14 @@
-// Settings > Phone: how the phone reaches this computer, typing on the phone, pairing and paired devices.
-// The public address saves through its own command (TunnelSection), because saving restarts the tunnel.
+// The phone rows that Connect > Phone draws (phone alerts, keyboard and typing box, revoke all, Telegram). Settings no longer
+// has a Phone page: ConnectPage reads these rows with `phoneRowsOriginal` and shows them through RowShell.
 import { errorSentence } from '../../../lib/sayError';
 import { t, useT } from '../../../i18n';
 import { useEffect, useState } from 'react';
-import { clampMobileInputDelayMs } from '../../../lib/bridge-settings';
-import { parseDevServerPort } from '../../../lib/public-bridge-url';
 import { tauri } from '../../../lib/tauri';
-import { DEVICES_CHANGED_EVENT, MobilePairingPanel } from '../../MobilePairingPanel';
-import { NumberControl } from '../controls';
+import { DEVICES_CHANGED_EVENT } from '../../MobilePairingPanel';
 import type { RowDef, SettingsEnv } from '../model';
 import { SendTest, type TestResult } from '../previews/Previews';
 import { Btn, SettingRow, SettingToggle } from '../settings-ui';
-import { TunnelSection } from '../TunnelSection';
-import { PairedDevices } from '../blocks/PairedDevices';
-import { PhoneActivity } from '../blocks/PhoneActivity';
 import { TelegramSetup } from '../blocks/TelegramSetup';
-import { movedToConnect } from '../../connect/movedRow';
 
 type PairedDevice = Awaited<ReturnType<typeof tauri.listPairedMobileDevices>>[number];
 
@@ -90,40 +83,12 @@ const NOTIFICATIONS =
 
 export const phoneRowsOriginal: RowDef[] = [
   {
-    id: 'tunnel',
-    label: 'Public address',
-    hint: 'A fixed address means you pair your phone once.',
-    keywords: 'tunnel cloudflare hostname token custom address named restart test connection',
-    render: () => <TunnelSection />,
-  },
-  {
     id: 'phone-notifications',
     label: 'Phone alerts',
     hint: NOTIFICATIONS,
     keywords: 'alerts push lock screen previews needs you',
     group: 'Phone app',
     render: () => <PhoneAlerts />,
-  },
-  {
-    id: 'mobile-input-delay',
-    label: 'Typing delay',
-    hint: 'How long to wait before sending what you type on the phone to the agent.',
-    keywords: 'mobile input buffer ms delay',
-    group: 'Phone app',
-    render: (env) => (
-      <SettingRow label={t('settings.row.mobile-input-delay.label')} description={t('settings.row.mobile-input-delay.hint')}>
-        <NumberControl
-          aria-label={t('phone.typingDelay.aria')}
-          min={0}
-          max={1000}
-          step={10}
-          suffix="ms"
-          value={env.settings.mobile_input_delay_ms ?? 60}
-          normalize={clampMobileInputDelayMs}
-          onCommit={(ms) => env.patch({ mobile_input_delay_ms: ms })}
-        />
-      </SettingRow>
-    ),
   },
   {
     id: 'mobile-keyboard-resizes',
@@ -156,34 +121,6 @@ export const phoneRowsOriginal: RowDef[] = [
     ),
   },
   {
-    id: 'pairing',
-    label: 'Pair a phone',
-    hint: 'Scan the QR code with your phone camera. It opens a link and signs you in.',
-    keywords: 'qr code pairing code refresh public pwa url dev server port full control watch answer only',
-    group: 'Pairing',
-    render: (env) => (
-      <MobilePairingPanel
-        publicPwaUrl={env.settings.public_pwa_url ?? ''}
-        devServerPort={parseDevServerPort(env.settings.dev_server_port)}
-        onPublicPwaUrlChange={(value) => env.patch({ public_pwa_url: value.trim() || null })}
-        onDevServerPortChange={(port) => env.patch({ dev_server_port: port })}
-      />
-    ),
-  },
-  {
-    id: 'paired-devices',
-    label: 'Paired phones',
-    hint: 'What each phone may do, and when it signs out if unused.',
-    keywords: 'devices phones abilities permissions watch answer terminal start tasks expiry revoke sign out phone and remote activity log history clear',
-    group: 'Devices',
-    render: () => (
-      <>
-        <PairedDevices />
-        <PhoneActivity />
-      </>
-    ),
-  },
-  {
     id: 'revoke-all-devices',
     label: 'Revoke all devices',
     hint: 'Every paired phone is signed out and must pair again.',
@@ -202,6 +139,3 @@ export const phoneRowsOriginal: RowDef[] = [
     render: (env) => <TelegramSetup env={env} />,
   },
 ];
-
-/** In the cockpit, pairing, paired phones, alerts, the public address and "Revoke all" live on Connect > Phone; these rows link there. */
-export const phoneRows: RowDef[] = movedToConnect(phoneRowsOriginal, ['pairing', 'paired-devices', 'phone-notifications', 'tunnel', 'revoke-all-devices'], 'phone');

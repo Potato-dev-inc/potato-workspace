@@ -78,9 +78,9 @@ export const RUN_WAYS = {
 
 /** Words nobody should read in the app, and what to say. The glossary test scans rendered text for these. */
 export const BANNED_TERMS: { pattern: RegExp; use: string; where: 'everywhere' | 'agent-screens' }[] = [
-  // "login" and "account" are fine for GitHub or Cloudflare; the test checks them only on screens about agents.
+  // "login" and "account" are fine for GitHub or Cloudflare, and "Potato account" is the product name; the test checks them only on screens about agents.
   { pattern: /\blogins?\b/i, use: SIGN_IN.action, where: 'agent-screens' },
-  { pattern: /\baccounts?\b/i, use: SIGN_IN.action, where: 'agent-screens' },
+  { pattern: /(?<!Potato )\baccounts?\b/i, use: SIGN_IN.action, where: 'agent-screens' },
   { pattern: /\bACP\b/, use: RUN_WAYS.chat, where: 'everywhere' },
   { pattern: /\bAgent Client Protocol\b/i, use: RUN_WAYS.chat, where: 'everywhere' },
   { pattern: /Puppet Master/, use: 'Potato Workspace', where: 'everywhere' },

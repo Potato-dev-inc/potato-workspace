@@ -44,6 +44,8 @@ export interface SidebarFooterProps {
   helpersOf?: (paneId: string) => readonly HelperRow[];
   onStopHelper?: (id: string) => Promise<void> | void;
   onOpenSettings: (tab?: string) => void;
+  /** Settings is on screen: the gear is the active row. */
+  settingsOpen?: boolean;
   bridgeLine?: string | null;
   onOpenDoctor?: () => void;
   onOpenMemory?: () => void;
@@ -90,7 +92,7 @@ export function SidebarFooter(p: SidebarFooterProps) {
       </div>
       <div className="ck-foot-icons">
         <HelpMenu />
-        <button type="button" className="ck-icon-btn" aria-label={t('sidebar.settings')} title={t('sidebar.settings')} onClick={() => p.onOpenSettings()}>
+        <button type="button" className={`ck-icon-btn${p.settingsOpen ? ' is-active' : ''}`} aria-label={t('sidebar.settings')} title={t('sidebar.settings')} aria-current={p.settingsOpen ? 'page' : undefined} onClick={() => p.onOpenSettings()}>
           <GearIcon />
           <Label>{t('sidebar.settings')}</Label>
         </button>

@@ -81,7 +81,6 @@ describe('Keys: every control renders', () => {
       'OpenRouter API key',
       'OpenCode keys (main and spare)',
       AUTOMATION,
-      'Restart OpenCode after a key switch',
       'Remove all keys',
     ]) {
       expect(hasText(m.host, label), `missing: ${label}`).toBe(true);
@@ -90,7 +89,6 @@ describe('Keys: every control renders', () => {
       expect(byLabel<HTMLInputElement>(m.host, aria), `missing field: ${aria}`).toBeTruthy();
     }
     expect(byLabel(m.host, AUTOMATION)).toBeTruthy();
-    expect(byLabel(m.host, 'Restart OpenCode after a key switch')).toBeTruthy();
     expect(buttonByText(m.host, 'Check keys')).toBeTruthy();
     expect(buttonByText(m.host, 'Remove…')).toBeTruthy();
   });
@@ -228,12 +226,11 @@ describe('Keys: OpenCode A / B keys', () => {
 });
 
 describe('Keys: key automation', () => {
-  it('is off by default and the restart switch is enabled once the status has loaded', async () => {
+  it('is off by default, and enabled once the status has loaded', async () => {
     await mount();
     const automation = byLabel<HTMLButtonElement>(m.host, AUTOMATION)!;
     expect(automation.disabled).toBe(false);
     expect(automation.getAttribute('aria-checked')).toBe('false');
-    expect(byLabel<HTMLButtonElement>(m.host, 'Restart OpenCode after a key switch')!.disabled).toBe(false);
   });
 
   it('the label says the provider terms apply and there is no select any more', async () => {
@@ -255,27 +252,20 @@ describe('Keys: key automation', () => {
     expect(m.env.patches).toEqual([]);
   });
 
-  it('a person who opted in earlier sees it on, and the restart switch keeps that choice', async () => {
+  it('a person who opted in earlier sees it on; the restart after a key switch is always on (true is sent)', async () => {
     mocks.opencode.status.key_automation_mode = 'auto_if_backup';
     await mount();
     expect(byLabel<HTMLButtonElement>(m.host, AUTOMATION)!.getAttribute('aria-checked')).toBe('true');
-    await click(byLabel<HTMLButtonElement>(m.host, 'Restart OpenCode after a key switch'));
+    await click(byLabel<HTMLButtonElement>(m.host, AUTOMATION));
     await settle();
-    expect(tauri.setOpenCodeAutomationSettings).toHaveBeenCalledExactlyOnceWith('auto_if_backup', false);
+    expect(tauri.setOpenCodeAutomationSettings).toHaveBeenLastCalledWith('notify_only', true);
     mocks.opencode.status.key_automation_mode = 'notify_only';
-  });
-
-  it('the restart switch never turns key switching on', async () => {
-    await mount();
-    await click(byLabel<HTMLButtonElement>(m.host, 'Restart OpenCode after a key switch'));
-    await settle();
-    expect(tauri.setOpenCodeAutomationSettings).toHaveBeenCalledExactlyOnceWith('notify_only', false);
   });
 
   it('a failed automation save shows the error on the row', async () => {
     await mount();
     vi.mocked(tauri.setOpenCodeAutomationSettings).mockRejectedValueOnce(new Error('pane busy'));
-    await click(byLabel<HTMLButtonElement>(m.host, 'Restart OpenCode after a key switch'));
+    await click(byLabel<HTMLButtonElement>(m.host, AUTOMATION));
     await settle();
     expect(m.env.setError).toHaveBeenCalledWith('Not saved: pane busy');
   });

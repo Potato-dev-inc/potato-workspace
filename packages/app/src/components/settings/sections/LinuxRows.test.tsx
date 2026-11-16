@@ -17,6 +17,15 @@ import {
   WINDOWS_VALUE,
 } from './LinuxRows';
 
+const handoff = vi.hoisted(() => ({ sent: [] as Array<[string, string, string | undefined]> }));
+vi.mock('../../../lib/addAgentActions', () => ({
+  requestAddAgentAction: (kind: string, agent: string, task?: string) => void handoff.sent.push([kind, agent, task]),
+}));
+vi.mock('../../../lib/workerUpdate', () => ({
+  loadAgentView: async () => ({}),
+  pickHandoffAgent: () => ({ id: 'fake_a', label: 'Agent A' }),
+}));
+
 vi.mock('../../../lib/wsl', async (importOriginal) => {
   const real = await importOriginal<typeof import('../../../lib/wsl')>();
   return { ...real, wslStatus: vi.fn(), wslCheck: vi.fn(), wslPlacesGet: vi.fn(), wslPlaceSet: vi.fn() };
@@ -87,12 +96,19 @@ describe('Run agents in Linux: the WSL states', () => {
     expect(hasText(m.host, 'Runs on')).toBe(false);
   });
 
-  it('not installed: says the install command, and Copy puts that exact command on the clipboard', async () => {
+  it('not installed: says so in plain words, shows no command, and one button gives the job to an agent', async () => {
+    handoff.sent = [];
     await mount({ state: 'not_installed', command: 'wsl --install' });
-    expect(hasText(m.host, 'WSL is not installed. To use Linux, open PowerShell as administrator and run: wsl --install')).toBe(true);
-    expect(hasText(m.host, 'Potato Workspace does not install it for you.')).toBe(true);
-    await click(buttonByText(m.host, 'Copy'));
-    expect(navigator.clipboard.writeText).toHaveBeenCalledExactlyOnceWith('wsl --install');
+    expect(hasText(m.host, 'Linux is not set up on this PC yet.')).toBe(true);
+    expect(m.host.textContent).not.toContain('wsl --install');
+    expect(m.host.querySelector('code')).toBeNull();
+    expect(buttonByText(m.host, 'Copy')).toBeUndefined();
+    await click(buttonByText(m.host, 'Let an agent set it up'));
+    await settle();
+    expect(handoff.sent).toHaveLength(1);
+    expect(handoff.sent[0][0]).toBe('chat');
+    expect(handoff.sent[0][2]).toContain('wsl --install');
+    expect(hasText(m.host, 'Agent A has the job. Press Send in its chat.')).toBe(true);
   });
 
   it('not installed: Check again asks the status again, without the cache', async () => {
@@ -104,11 +120,14 @@ describe('Run agents in Linux: the WSL states', () => {
     expect(distroLine('Ubuntu-Test')).toBeTruthy();
   });
 
-  it('no distro: says to install Ubuntu, and Copy puts that exact command on the clipboard', async () => {
+  it('no distro: says so in plain words, shows no command, and hands the job to an agent', async () => {
+    handoff.sent = [];
     await mount({ state: 'no_distro', command: 'wsl --install -d Ubuntu' });
-    expect(hasText(m.host, 'WSL has no Linux yet. Run: wsl --install -d Ubuntu')).toBe(true);
-    await click(buttonByText(m.host, 'Copy'));
-    expect(navigator.clipboard.writeText).toHaveBeenCalledExactlyOnceWith('wsl --install -d Ubuntu');
+    expect(hasText(m.host, 'Windows has no Linux yet.')).toBe(true);
+    expect(m.host.textContent).not.toContain('wsl --install');
+    await click(buttonByText(m.host, 'Let an agent set it up'));
+    await settle();
+    expect(handoff.sent[0][2]).toContain('wsl --install -d Ubuntu');
   });
 
   it('broken: says WSL did not answer and shows the first line it printed', async () => {
@@ -130,7 +149,13 @@ describe('Run agents in Linux: distros and checks', () => {
     await mount(READY);
     expect(hasText(m.host, 'Ubuntu-Test (default) · WSL 2')).toBe(true);
     expect(hasText(m.host, 'Debian-Test · WSL 1')).toBe(true);
-    expect(hasText(m.host, 'Uses WSL 1. Agents need WSL 2: wsl --set-version Debian-Test 2')).toBe(true);
+    expect(hasText(m.host, 'Debian-Test needs a newer Linux setup before agents can run in it.')).toBe(true);
+    expect(m.host.textContent).not.toContain('--set-version');
+    handoff.sent = [];
+    await click(buttonByText(m.host, 'Let an agent upgrade it'));
+    await settle();
+    expect(handoff.sent[0][2]).toContain('Debian-Test');
+    expect(handoff.sent[0][2]).toContain('WSL 2');
     expect(buttonByText(m.host, 'Check Ubuntu-Test')!.disabled).toBe(false);
     expect(buttonByText(m.host, 'Check Debian-Test')!.disabled).toBe(true);
   });

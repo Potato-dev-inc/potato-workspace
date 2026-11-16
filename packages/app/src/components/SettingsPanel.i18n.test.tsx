@@ -60,7 +60,7 @@ describe('Settings in Traditional Chinese', () => {
     expect(host.textContent).toContain(t('settings.row.theme.label'));
     expect(host.textContent).toContain(t('settings.row.start-at-sign-in.label'));
     expect(host.textContent).toContain(t('settings.row.away-minutes.label'));
-    expect(search().placeholder).toBe(t('settings.search'));
+    expect(search().placeholder).toBe(t('settings.searchPlaceholder'));
     expect(visibleEnglish(host, ALLOWED)).toEqual([]);
   });
 
@@ -93,6 +93,6 @@ describe('Settings in Traditional Chinese', () => {
     await mount('look');
     expect(host.querySelector('h1')?.textContent).toBe('Look and feel');
     expect(host.textContent).toContain('Start Potato Workspace when I sign in');
-    expect(search().placeholder).toBe('Search settings');
+    expect(search().placeholder).toBe('Search');
   });
 });

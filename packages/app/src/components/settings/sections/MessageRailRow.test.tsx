@@ -9,7 +9,7 @@ import { agentsRows } from './AgentsSection';
 
 let m: Mounted;
 const rows = agentsRows.filter((row) => row.id === 'message-rail');
-const toggle = () => m.host.querySelector<HTMLButtonElement>('[role="switch"][aria-label="Message rail"]')!;
+const toggle = () => m.host.querySelector<HTMLButtonElement>('[role="switch"][aria-label="Jump marks beside the chat"]')!;
 
 beforeEach(() => {
   setLanguagePref('en', false);
@@ -43,7 +43,7 @@ describe('Message rail setting', () => {
 
   it('has Traditional Chinese words', () => {
     setLanguagePref('zh-TW', false);
-    expect(t('settings.row.message-rail.label')).toBe('訊息導覽列');
+    expect(t('settings.row.message-rail.label')).toBe('對話旁的跳轉標記');
     expect(t('chatUx.rail.you')).toBe('你');
     setLanguagePref('en', false);
   });

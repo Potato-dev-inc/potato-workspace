@@ -18,6 +18,7 @@ pub const DEV_LABS_KEYS: &[&str] = &[
     "spaces_enabled",
     "lend_enabled",
     "devices_enabled",
+    "account_enabled",
     "desktop_pet_enabled",
     "agent_browser_enabled",
     "companion_vault_enabled",
@@ -96,6 +97,7 @@ const PATCHABLE_KEYS: &[&str] = &[
     "handoff_fixed_notes",
     "lend_enabled",
     "devices_enabled",
+    "account_enabled",
     "desktop_pet_enabled",
     "agent_browser_enabled",
     "companion_vault_enabled",
@@ -142,9 +144,8 @@ pub fn default_public_settings() -> Value {
         "missions_enabled": false,
         // Night Shift (Labs): hours of unattended work, so off until the person turns it on.
         "night_shift_enabled": false,
-        // Chat over the Agent Client Protocol: agents driven through a protocol instead of a terminal screen.
-        // On until the person turns it off (the "+" menu starts chats by default); it is also the kill switch
-        // (off closes every ACP session). Rust: acp.
+        // Chat over the Agent Client Protocol. Always on: the Labs switch was removed and Rust ignores this key
+        // (kept so old settings files still load). Rust: acp.
         "acp_chat_enabled": true,
         // Terminals (Settings > General): off = every agent starts as a chat and terminal-only controls are hidden; open
         // terminals keep working. Off for new and existing profiles. Rust: show_terminals.
@@ -160,6 +161,8 @@ pub fn default_public_settings() -> Value {
         // Share an agent (Labs): lend an agent sign-in to another PC through this one. Off until chosen. Rust: capacity_proxy.
         "lend_enabled": false,
         "devices_enabled": false,
+        // Potato account (Labs): one sign-in lists your devices on each other. Off until chosen. Rust: account.
+        "account_enabled": false,
         // Desktop Potato (Labs): a small pet window on the desktop. Off until chosen. Rust: pet.
         "desktop_pet_enabled": false,
         // Agent browser (Labs): agents open, read and click pages on this computer, in the Point and Fix preview window. Off until chosen. Rust: browser.
@@ -399,10 +402,11 @@ mod tests {
         // A profile that never touched the switch (no key in its file) gets Chat.
         let untouched = public_settings_from_store_file(&json!({"settings": {"theme": "dark"}}));
         assert_eq!(untouched["acp_chat_enabled"], true);
-        // A person who turned it off keeps it off.
+        // The Labs switch is gone: a profile saved with it off still gets chat (the saved value is ignored).
         let off = public_settings_from_store_file(&json!({"settings": {"acp_chat_enabled": false}}));
-        assert_eq!(off["acp_chat_enabled"], false);
-        assert!(!crate::acp::labs_on(&off));
+        assert_eq!(off["acp_chat_enabled"], false, "the old key still loads");
+        assert!(crate::acp::labs_on(&off), "chat stays on");
+        assert!(crate::acp::chat_enabled());
         assert!(crate::acp::labs_on(&untouched));
     }
 

@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 // Crews is an early (Labs) feature: off by default, a development build turns it on like the others, the switch is on the
-// Early features page, and while it is on Settings > Helpers shows a read-only Crews page (one line and the saved crews).
+// Early features page, and while it is on Settings > Helpers shows the Crews page (one line, the saved crews, and a way to open each on the canvas).
 import { act } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
@@ -63,7 +63,7 @@ describe('the Crews Labs switch', () => {
   });
 
   it('is on the Early features page with a short name and one plain line', () => {
-    const advanced = SECTIONS.find((s) => s.id === 'advanced')!.rows;
+    const advanced = SECTIONS.find((s) => s.id === 'labs')!.rows;
     expect(advanced.some((r) => r.id === LABS_INDEX_ID && r.group === LABS_GROUP)).toBe(true);
     expect(advanced.some((r) => r.id === row().id)).toBe(false);
     expect(row().labs!.name).toBe('Crews');
@@ -110,7 +110,7 @@ describe('Settings > Helpers > Crews, through the real Settings screen', () => {
     await mountPanel({ initialTab: 'helpers' });
     expect(main().querySelector('h1')!.textContent).toBe('Helpers');
     expect(main().querySelector('[data-row="crews-page"]')).toBeNull();
-    expect(main().textContent).not.toContain('Crews are coming');
+    expect(main().textContent).not.toContain('A crew is a team of agents');
   });
 
   it('with the switch on the page is empty but for one line, and says there are no saved crews', async () => {
@@ -119,14 +119,14 @@ describe('Settings > Helpers > Crews, through the real Settings screen', () => {
     await pageReady();
     const page = main().querySelector('[data-row="crews-page"]');
     expect(page).not.toBeNull();
-    expect(page!.textContent).toContain('Crews are coming. For now you can check a crew file with the command line.');
+    expect(page!.textContent).toContain('A crew is a team of agents, each with a job. Open one to see it as boxes, change it, and try a task on it.');
     expect(page!.textContent).toContain('No saved crews yet.');
     expect(page!.querySelectorAll('[data-testid="crew-row"]')).toHaveLength(0);
     // settings.css hides a group whose row has no .st-row or <section> child.
     expect(main().querySelector('[data-row="crews-page"] > section')).not.toBeNull();
   });
 
-  it('lists the saved crews read-only: name, roles, agents and why one cannot be used', async () => {
+  it('lists the saved crews: name, roles, agents, why one cannot be used, and a button that opens it on the canvas', async () => {
     settings = { ...BASE_SETTINGS, crews_enabled: true };
     saved = [
       { slug: 'review', name: 'Review team', roles: 2, agents: ['claude', 'codex'], problem: null },
@@ -140,7 +140,7 @@ describe('Settings > Helpers > Crews, through the real Settings screen', () => {
     expect(rows[0].textContent).toContain('claude, codex');
     expect(rows[1].textContent).toContain('1 role');
     expect(rows[1].textContent).toContain('Cannot be used yet: The agent "gone" for Lead is not set up here.');
-    // Read-only: nothing on the page can be pressed.
-    expect(main().querySelector('[data-row="crews-page"] button')).toBeNull();
+    // The only buttons are the ones that open a crew on the canvas.
+    expect([...main().querySelectorAll('[data-row="crews-page"] button')].map((b) => b.textContent)).toEqual(['Open the canvas', 'Open the canvas']);
   });
 });

@@ -1,5 +1,6 @@
 #![recursion_limit = "512"]
 
+mod account;
 mod accounts;
 mod acp;
 mod actors;
@@ -354,6 +355,12 @@ pub fn run() {
             commands::model_bridge_preview,
             commands::model_bridge_apply,
             commands::model_bridge_undo,
+            commands::account_state,
+            commands::account_sign_in,
+            commands::account_cancel_sign_in,
+            commands::account_devices,
+            commands::account_revoke_device,
+            commands::account_sign_out_here,
             commands::devices_state,
             commands::devices_show_code,
             commands::devices_cancel_code,
@@ -861,6 +868,12 @@ pub fn run() {
             commands::crews_draft,
             commands::crews_save,
             commands::crews_remove,
+            commands::crews_templates,
+            commands::crews_open,
+            commands::crews_check,
+            commands::crews_save_canvas,
+            commands::crews_try_task,
+            commands::crews_apply,
             commands::crews_start,
             commands::first_run_state,
             commands::first_run_start_task,
@@ -1046,6 +1059,7 @@ pub fn run() {
             commands::artifacts_open_in_agent_browser,
             commands::markup_capture,
             commands::markup_send,
+            commands::markup_targets,
             commands::markup_less_motion,
             commands::tab_window_open,
             commands::tab_window_put_back,

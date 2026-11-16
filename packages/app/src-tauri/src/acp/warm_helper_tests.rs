@@ -19,6 +19,8 @@ struct Fake {
     cancelled: Mutex<Vec<String>>,
     /// Task chats the seats gave up (the host is told so the screens read the pane list again). A chat is never closed by the pool.
     released: Mutex<Vec<String>>,
+    /// Seats a task used up (a standby is one-time: the host takes them off the person's list).
+    spent: Mutex<Vec<String>>,
     /// Starts wait for memory while this is set.
     low_memory: std::sync::atomic::AtomicBool,
 }
@@ -48,6 +50,9 @@ impl WarmHost for Fake {
     }
     fn seat_released(&self, pane_id: &str) {
         self.released.lock().push(pane_id.to_string());
+    }
+    fn seat_spent(&self, helper_id: &str) {
+        self.spent.lock().push(helper_id.to_string());
     }
 }
 
@@ -141,39 +146,11 @@ fn a_chat_that_never_ran_a_turn_frees_its_helper_after_ten_minutes() {
     settle(&pool, &host, 0);
     claim(&pool, "codex", None, 1).unwrap();
     host.chats.lock().insert("chat-1".into(), false);
-    assert_eq!(settle(&pool, &host, 9 * 60_000), 1, "only the seat's next clean session is prepared meanwhile");
+    assert_eq!(settle(&pool, &host, 9 * 60_000), 0, "nothing is started in the standby's place while its task holds it");
     assert_eq!(state(&pool, "a"), HelperState::Busy, "still held for the task");
     assert_eq!(settle(&pool, &host, 11 * 60_000), 0);
-    assert_eq!(state(&pool, "a"), HelperState::Ready, "given back after ten minutes");
-    assert_eq!(pool.seat_count(), 1);
-}
-
-#[test]
-fn a_helper_set_to_close_stays_asleep_until_a_task_asks_for_it() {
-    let (pool, host) = pool(vec![want("a", "codex", None, true)], 4);
-    settle(&pool, &host, 0);
-    claim(&pool, "codex", None, 1).unwrap();
-    host.chats.lock().insert("chat-1".into(), true);
-    settle(&pool, &host, 2);
-    host.chats.lock().insert("chat-1".into(), false);
-    assert_eq!(settle(&pool, &host, 3), 0, "not started again");
-    assert_eq!(state(&pool, "a"), HelperState::Asleep);
-    assert!(claim(&pool, "codex", None, 4).is_none(), "the task that asks finds it asleep");
-    assert_eq!(settle(&pool, &host, 5), 1, "and wakes it for the next one");
-    assert_eq!(state(&pool, "a"), HelperState::Ready);
-}
-
-#[test]
-fn start_wakes_a_sleeping_helper() {
-    let (pool, host) = pool(vec![want("a", "codex", None, true)], 4);
-    settle(&pool, &host, 0);
-    claim(&pool, "codex", None, 1).unwrap();
-    host.chats.lock().clear();
-    settle(&pool, &host, 3);
-    assert_eq!(state(&pool, "a"), HelperState::Asleep);
-    pool.wake_helper("a");
-    assert_eq!(settle(&pool, &host, 4), 1);
-    assert_eq!(state(&pool, "a"), HelperState::Ready);
+    assert_eq!(pool.seat_count(), 0, "a task had it (its chat exists), so it is used up after ten idle minutes");
+    assert_eq!(host.spent.lock().clone(), vec!["a".to_string()]);
 }
 
 #[test]
@@ -297,17 +274,12 @@ fn a_ready_helper_opens_as_a_chat_and_stays_in_the_pool() {
 
 #[test]
 fn a_helper_that_is_not_ready_says_so_in_a_sentence() {
-    let (pool, host) = pool(vec![want("a", "codex", None, true)], 4);
-    settle(&pool, &host, 0);
-    claim(&pool, "codex", None, 1).unwrap();
-    host.chats.lock().insert("chat-1".into(), true);
-    settle(&pool, &host, 2);
-    host.chats.lock().insert("chat-1".into(), false);
-    settle(&pool, &host, 3);
+    // A standby nobody used for the idle time sleeps (its program is closed to give the memory back).
+    let (pool, host) = sleeping(vec![want("a", "codex", None, false)]);
     assert_eq!(state(&pool, "a"), HelperState::Asleep);
     let err = open(&pool, &host, "a").unwrap_err();
     assert!(err.contains("asleep"), "{err}");
-    assert_eq!(settle(&pool, &host, 4), 1, "and it was woken");
+    assert_eq!(settle(&pool, &host, 5 * 60_000 + 2), 1, "and it was woken");
 }
 
 #[test]
@@ -400,7 +372,7 @@ fn every_spelling_and_lane_wording_of_an_agent_is_one_type() {
 }
 
 #[test]
-fn a_task_takes_the_seat_and_the_seat_goes_back_to_ready_with_nothing_else_made() {
+fn a_task_takes_the_seat_and_the_seat_is_used_up_with_nothing_else_made() {
     let (pool, host) = pool(vec![seat("s1", "opencode", Some("deepseek"), "orch")], 4);
     host.chats.lock().insert("orch".into(), false);
     assert_eq!(settle(&pool, &host, 0), 1, "the seat starts once");
@@ -417,30 +389,29 @@ fn a_task_takes_the_seat_and_the_seat_goes_back_to_ready_with_nothing_else_made(
     assert_eq!((status.state, status.used_by, status.pane_id.as_deref()), (HelperState::Busy, Some(HelperUser::Agent), Some("chat-1")));
     assert_eq!(pool.seat_count(), 1, "still one seat");
 
-    // While the task runs: the seat is busy, it is not claimed twice, and only its own next clean session is prepared.
+    // While the task runs: the seat is busy, it is not claimed twice, and NOTHING is started in its place (a standby is one-time).
     host.chats.lock().insert("chat-1".into(), true);
-    assert_eq!(settle(&pool, &host, 2), 1, "the seat's next clean session, for the same seat");
-    assert_eq!(settle(&pool, &host, 3), 0, "and never a second one");
-    assert_eq!(counts(&pool), (1, 1), "one seat, one waiting session: nothing extra");
-    assert_eq!(state(&pool, "s1"), HelperState::Busy, "busy until the task is over, whatever waits behind it");
+    assert_eq!(settle(&pool, &host, 2), 0, "no replacement session");
+    assert_eq!(settle(&pool, &host, 3), 0);
+    assert_eq!(state(&pool, "s1"), HelperState::Busy);
     assert!(pool.claim_helper_for(&ask("opencode", Some("orch"), None), 4).is_none(), "a busy seat is not taken twice");
 
-    // The task ends: the same seat is ready again at once, under the same owner.
+    // The task ends: the seat is used up. No new standby is made, ever (the founder adds one by hand).
     host.chats.lock().insert("chat-1".into(), false);
     assert_eq!(settle(&pool, &host, 5), 0, "nothing is started when the task ends");
-    let status = pool.helper_statuses()["s1"].clone();
-    assert_eq!((status.state, status.used_by, status.pane_id), (HelperState::Ready, None, None));
-    assert_eq!(host.released.lock().clone(), vec!["chat-1".to_string()], "the screens are told the chat is no longer the seat's own");
-    assert_eq!(counts(&pool), before, "the counts are what they were before the task");
+    assert!(pool.helper_statuses().get("s1").is_none(), "the standby is gone");
+    assert_eq!(host.spent.lock().clone(), vec!["s1".to_string()], "the host takes it off the person's list");
+    assert_eq!(host.released.lock().clone(), vec!["chat-1".to_string()], "the screens are told the chat is an ordinary helper now");
+    assert_eq!(counts(&pool), (0, 0), "no seat and no waiting session");
     assert!(host.closed.lock().is_empty() && host.cancelled.lock().is_empty());
 
-    // The finished chat is never closed by the pool (founder 2026-11-16): not after the grace, not ever. The seat stays ready.
+    // The finished chat is never closed by the pool (founder 2026-11-16), and no standby appears later either.
     assert_eq!(settle(&pool, &host, 5 + A_WHILE_MS), 0);
     assert_eq!(settle(&pool, &host, 5 + 2 * A_WHILE_MS), 0);
-    assert!(host.chats.lock().contains_key("chat-1"), "the person decides when a finished standby chat closes: the pool never does");
-    let status = pool.helper_statuses()["s1"].clone();
-    assert_eq!(status.state, HelperState::Ready);
-    assert_eq!(counts(&pool), before);
+    assert!(host.chats.lock().contains_key("chat-1"), "the person decides when a finished helper chat closes: the pool never does");
+    assert_eq!(pool.seat_count(), 0);
+    assert_eq!(host.next.load(Ordering::SeqCst), 1, "only the one session the task used was ever started");
+    assert!(pool.claim_helper_for(&ask("opencode", Some("orch"), None), 6).is_none(), "the next task finds no standby: it starts a normal helper");
 }
 
 #[test]
@@ -458,37 +429,32 @@ fn a_finished_standby_chat_is_not_drawn_as_a_standby_any_more() {
     assert_eq!(crate::standby::seat_panes::get("chat-7001").as_deref(), Some("s9"));
     host.chats.lock().insert("chat-7001".into(), false);
     settle(&pool, &host, 3);
-    // Done: the chat stays open as a normal chat (no standby label), and the seat is ready again.
+    // Done: the chat stays open as a normal chat (no standby label), and the standby is used up.
     assert_eq!(crate::standby::seat_panes::get("chat-7001"), None, "a normal chat never carries the standby label");
-    assert_eq!(state(&pool, "s9"), HelperState::Ready);
+    assert!(pool.helper_statuses().get("s9").is_none());
     assert!(host.chats.lock().contains_key("chat-7001"), "the finished chat is kept");
     assert_eq!(host.released.lock().clone(), vec!["chat-7001".to_string()], "and the screens are told it is an ordinary chat now");
     crate::standby::seat_panes::forget("chat-7001");
 }
 
 #[test]
-fn the_same_seat_takes_task_after_task_and_the_counts_never_change() {
+fn a_standby_takes_one_task_only_the_next_task_gets_no_standby() {
     let (pool, host) = pool(vec![seat("s1", "claude", Some("haiku"), "orch")], 4);
     host.chats.lock().insert("orch".into(), false);
     settle(&pool, &host, 0);
-    let before = counts(&pool);
-    let mut now = 1;
-    for round in 1..=3u32 {
-        let claimed = pool.claim_helper_for(&ask("claude", Some("orch"), None), now).unwrap_or_else(|| panic!("round {round}: the seat takes it"));
-        assert_eq!((claimed.meta.id.as_str(), claimed.meta.model.as_deref(), claimed.meta.home.as_deref()), ("s1", Some("haiku"), Some("orch")));
-        let chat = format!("chat-{}", claimed.item.unwrap());
-        host.chats.lock().insert(chat.clone(), true);
-        settle(&pool, &host, now + 1);
-        assert_eq!(pool.seat_count(), 1, "round {round}: one seat while it works");
-        host.chats.lock().insert(chat.clone(), false);
-        settle(&pool, &host, now + 2);
-        assert_eq!(state(&pool, "s1"), HelperState::Ready, "round {round}: ready again");
-        assert_eq!(counts(&pool), before, "round {round}: the counts are unchanged");
-        now += 10;
+    let claimed = pool.claim_helper_for(&ask("claude", Some("orch"), None), 1).expect("the standby takes the first task");
+    let chat = format!("chat-{}", claimed.item.unwrap());
+    host.chats.lock().insert(chat.clone(), true);
+    settle(&pool, &host, 2);
+    host.chats.lock().insert(chat.clone(), false);
+    settle(&pool, &host, 3);
+    assert_eq!(pool.seat_count(), 0, "used up");
+    assert!(pool.claim_helper_for(&ask("claude", Some("orch"), None), 4).is_none(), "the second task gets no standby");
+    for now in [10, 100, 10_000, 10 * A_WHILE_MS] {
+        assert_eq!(settle(&pool, &host, now), 0, "nothing is started at {now}");
     }
-    // Finished task chats are kept (the person closes them), so the same standby takes the next task and nothing is closed.
-    assert!(host.chats.lock().contains_key("chat-1") && host.chats.lock().contains_key("chat-2"), "no finished chat is closed by the pool");
-    assert_eq!(host.next.load(Ordering::SeqCst), 4, "one session per task plus the one waiting now, all for the same seat");
+    assert_eq!(host.next.load(Ordering::SeqCst), 1, "no session was ever started in its place");
+    assert!(host.chats.lock().contains_key(&chat), "the finished chat is kept");
 }
 
 #[test]
@@ -550,13 +516,14 @@ fn a_task_runs_in_the_chat_the_person_has_open_on_the_seat() {
     assert_eq!((status.state, status.used_by, status.pane_id.as_deref(), status.open_pane), (HelperState::Busy, Some(HelperUser::Agent), Some("chat-1"), None));
     assert!(host.cancelled.lock().is_empty() && host.closed.lock().is_empty(), "nothing was stopped or closed");
     assert_eq!(pool.seat_count(), 1);
-    // After the task the seat is ready again.
+    // After the task the standby is used up (one-time): the chat the person had open is an ordinary chat now.
     host.chats.lock().insert("chat-1".into(), true);
     settle(&pool, &host, 2);
     host.chats.lock().insert("chat-1".into(), false);
     settle(&pool, &host, 3);
-    assert_eq!(state(&pool, "s1"), HelperState::Ready);
-    assert_eq!(pool.seat_count(), 1);
+    assert!(pool.helper_statuses().get("s1").is_none());
+    assert_eq!(pool.seat_count(), 0);
+    assert!(host.chats.lock().contains_key("chat-1"), "the chat stays open");
 }
 
 #[test]
@@ -621,7 +588,8 @@ fn the_seat_follows_the_chat_its_task_runs_in() {
     assert_eq!(pool.helper_statuses()["a"].pane_id.as_deref(), Some("task-1"));
     host.chats.lock().insert("task-1".into(), false);
     settle(&pool, &host, 3);
-    assert_eq!(state(&pool, "a"), HelperState::Ready);
+    assert!(pool.helper_statuses().get("a").is_none(), "its task is over: used up, no new standby");
+    assert_eq!(host.spent.lock().clone(), vec!["a".to_string()]);
 }
 
 #[test]
@@ -637,10 +605,10 @@ fn taking_a_seat_back_stops_the_task_turn() {
     assert_eq!(pane, "task-1");
     pool.cancel_helper_turn(&pane);
     assert_eq!(host.cancelled.lock().clone(), vec!["task-1".to_string()]);
-    // The cancelled turn ends: the seat goes back to ready as after any task.
+    // The cancelled turn ends: the standby was used, so it is used up as after any task.
     host.chats.lock().insert("task-1".into(), false);
     settle(&pool, &host, 3);
-    assert_eq!(state(&pool, "a"), HelperState::Ready);
+    assert!(pool.helper_statuses().get("a").is_none());
 }
 
 #[test]
@@ -677,102 +645,6 @@ fn every_claim_writes_one_line_that_says_matched_or_skipped_and_why() {
     assert!(pool.claim_helper_for(&ask("opencode", Some("orch"), None), 3).is_some());
     let line = lines("claim MATCHED").into_iter().filter(|l| l.contains("(s1)")).last().expect("a line for the match");
     assert!(line.contains("nothing new is started") && line.contains("the task runs in the seat's own chat"), "{line}");
-}
-
-#[test]
-fn a_task_shorter_than_the_seats_restart_never_shows_starting_in_between() {
-    let (pool, host) = pool(vec![seat("s1", "opencode", None, "orch")], 4);
-    host.chats.lock().insert("orch".into(), false);
-    settle(&pool, &host, 0);
-    pool.claim_helper_for(&ask("opencode", Some("orch"), None), 1).unwrap();
-    host.chats.lock().insert("chat-1".into(), true);
-    // The seat's next clean session is started, and is slow: it has not come up when the task ends.
-    let (_, jobs) = pool.plan(2);
-    assert_eq!(jobs.len(), 1);
-    host.chats.lock().insert("chat-1".into(), false);
-    assert_eq!(settle(&pool, &host, 3), 0);
-    assert_eq!(state(&pool, "s1"), HelperState::Busy, "still Working while its clean session finishes starting, never Starting");
-    assert_eq!(settle(&pool, &host, 20_000), 0);
-    assert_eq!(state(&pool, "s1"), HelperState::Busy);
-    // The session is up: Ready at the next look.
-    for job in jobs {
-        pool.run(job, || 21_000);
-    }
-    settle(&pool, &host, 21_001);
-    assert_eq!(state(&pool, "s1"), HelperState::Ready);
-    assert_eq!(counts(&pool), (1, 1));
-    // A session that never comes up does not hold the seat for ever: after a minute the row says what is true.
-    pool.claim_helper_for(&ask("opencode", Some("orch"), None), 30_000).unwrap();
-    host.chats.lock().insert("chat-2".into(), true);
-    let (_, stuck) = pool.plan(30_001);
-    assert_eq!(stuck.len(), 1);
-    host.chats.lock().insert("chat-2".into(), false);
-    settle(&pool, &host, 30_002);
-    assert_eq!(state(&pool, "s1"), HelperState::Busy);
-    settle(&pool, &host, 30_002 + CLEAN_HOLD_MS);
-    assert_eq!(state(&pool, "s1"), HelperState::Starting);
-    assert_eq!(pool.seat_count(), 1);
-}
-
-/// A host whose next start fails once (a real OpenCode did: "Internal error: Internal service failure").
-#[derive(Default)]
-struct Flaky {
-    inner: Fake,
-    fail_next: std::sync::atomic::AtomicBool,
-}
-
-impl WarmHost for Flaky {
-    type Item = u32;
-    fn start(&self, key: &WarmKey, folder: &Path) -> Result<u32, WarmFail> {
-        if self.fail_next.swap(false, Ordering::SeqCst) {
-            return Err(WarmFail { message: "Internal error: Internal service failure".into(), auth: false });
-        }
-        self.inner.start(key, folder)
-    }
-    fn alive(&self, item: &u32) -> bool {
-        self.inner.alive(item)
-    }
-    fn close(&self, item: u32) {
-        self.inner.close(item)
-    }
-    fn pane_of(&self, item: &u32) -> Option<String> {
-        self.inner.pane_of(item)
-    }
-    fn working(&self, pane_id: &str) -> Option<bool> {
-        self.inner.working(pane_id)
-    }
-}
-
-#[test]
-fn a_seat_whose_restart_failed_once_stays_working_until_the_retry_is_up_and_never_says_cannot_start() {
-    let host = Arc::new(Flaky::default());
-    let pool = Pool::new(host.clone());
-    pool.set_policy(Policy { cap: 4, idle_ms: 20 * 60_000, helper_idle_ms: 5 * 60_000, recent_ms: 3_600_000, helpers: vec![seat("s1", "opencode", None, "orch")], ..Policy::default() });
-    let pass = |now: i64| {
-        let (_, jobs) = pool.plan(now);
-        for job in jobs {
-            pool.run(job, || now);
-        }
-        pool.take_released();
-        pool.helper_statuses()["s1"].state
-    };
-    host.inner.chats.lock().insert("orch".into(), false);
-    assert_eq!(pass(0), HelperState::Ready);
-    pool.claim_helper_for(&ask("opencode", Some("orch"), None), 1_000).unwrap();
-    host.inner.chats.lock().insert("chat-1".into(), true);
-    // The seat's next clean session fails to start while the task runs.
-    host.fail_next.store(true, Ordering::SeqCst);
-    assert_eq!(pass(2_000), HelperState::Busy);
-    // The task ends: the row keeps saying Working, never "Can't start" or "Starting".
-    host.inner.chats.lock().insert("chat-1".into(), false);
-    for now in [20_000, 25_000, 31_000] {
-        assert_eq!(pass(now), HelperState::Busy, "at {now}");
-    }
-    // The retry (30 s after the failure) comes up, and the seat is Ready at the next look.
-    pass(32_500);
-    assert_eq!(pass(33_000), HelperState::Ready);
-    assert_eq!(host.inner.next.load(Ordering::SeqCst), 2, "one session for the task, one clean one waiting: nothing extra");
-    assert_eq!(pool.seat_count(), 1);
 }
 
 #[test]

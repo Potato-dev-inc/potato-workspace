@@ -14,7 +14,7 @@ afterEach(async () => {
   setDevLabsOverrideForTests(false);
 });
 
-const labsIndex = () => arrangeSections(BASE_SECTIONS).find((s) => s.id === 'advanced')!.rows.find((r) => r.id === LABS_INDEX_ID)!;
+const labsIndex = () => arrangeSections(BASE_SECTIONS).find((s) => s.id === 'labs')!.rows.find((r) => r.id === LABS_INDEX_ID)!;
 const areaTitles = () => [...(m?.host.querySelectorAll('.st-labs-area h4') ?? [])].map((h) => h.textContent);
 const nightSwitch = () => m?.host.querySelector<HTMLButtonElement>('[role="switch"][aria-label="Night Shift"]');
 const search = () => m!.host.querySelector<HTMLInputElement>('input[type="search"]')!;

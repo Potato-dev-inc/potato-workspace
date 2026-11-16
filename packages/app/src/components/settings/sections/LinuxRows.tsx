@@ -17,6 +17,7 @@ import {
 } from '../../../lib/wsl';
 import { Popup } from '../controls';
 import { Btn, Note, SettingBlock } from '../settings-ui';
+import { FixWithAgent, fixTask } from '../blocks/FixWithAgent';
 
 /** The "Runs on" value for Windows. Distro names are never empty, so this cannot clash with one. */
 export const WINDOWS_VALUE = '';
@@ -55,21 +56,13 @@ export function isLockedToWindows(row: AgentPlaceRow): boolean {
   return Boolean(row.whyNot) && !row.distro;
 }
 
-function copyText(text: string): void {
-  navigator.clipboard?.writeText(text).catch(() => undefined);
-}
-
-function MissingWsl({ command, onCopy, onAgain }: { command: ReactNode; onCopy?: () => void; onAgain: () => void }) {
+function MissingWsl({ command, fixTask: task, onAgain }: { command: ReactNode; fixTask?: string; onAgain: () => void }) {
   const t = useT();
   return (
     <div className="space-y-2 text-sm">
       {command}
       <div className="flex flex-wrap gap-2">
-        {onCopy && (
-          <Btn small onClick={onCopy}>
-            {t('settings.copy')}
-          </Btn>
-        )}
+        {task && <FixWithAgent label={t('linux.setUp')} task={task} testId="linux-set-up" />}
         <Btn small onClick={onAgain}>
           {t('linux.checkAgain')}
         </Btn>
@@ -155,13 +148,11 @@ export function LinuxRows({ onSaved }: { onSaved?: () => void }) {
       <MissingWsl
         command={
           <>
-            <p>
-              {t('linux.notInstalled')} <code className="font-mono">{status.command}</code>
-            </p>
+            <p>{t('linux.notInstalled')}</p>
             <p className="text-xs text-pm-muted">{t('linux.weDoNotInstall')}</p>
           </>
         }
-        onCopy={() => copyText(status.command)}
+        fixTask={fixTask('Set up Linux (WSL) on this PC so my agents can run in it.', [`Windows needs WSL installed first. The usual step is \`${status.command}\`, from an administrator terminal.`])}
         onAgain={() => void checkAgain()}
       />
     );
@@ -169,11 +160,9 @@ export function LinuxRows({ onSaved }: { onSaved?: () => void }) {
     body = (
       <MissingWsl
         command={
-          <p>
-            {t('linux.noDistro')} <code className="font-mono">{status.command}</code>
-          </p>
+          <p>{t('linux.noDistro')}</p>
         }
-        onCopy={() => copyText(status.command)}
+        fixTask={fixTask('Add a Linux distribution to WSL on this PC so my agents can run in it.', [`WSL is installed but has no Linux yet. The usual step is \`${status.command}\`.`])}
         onAgain={() => void checkAgain()}
       />
     );
@@ -200,6 +189,13 @@ export function LinuxRows({ onSaved }: { onSaved?: () => void }) {
               <li key={d.name} data-distro={d.name} className="flex flex-wrap items-center gap-x-3 gap-y-1 rounded-lg border border-pm-border px-3 py-2">
                 <span className="font-medium">{`${d.name}${d.default ? ` ${t('linux.default')}` : ''} · WSL ${d.version}`}</span>
                 {d.version !== 2 && <span className="text-xs text-pm-muted">{t('linux.wsl1', { name: d.name })}</span>}
+                {d.version !== 2 && (
+                  <FixWithAgent
+                    label={t('linux.upgrade')}
+                    testId={`linux-upgrade-${d.name}`}
+                    task={fixTask(`Upgrade the Linux distro "${d.name}" from WSL 1 to WSL 2 on this PC.`, ['Agents can only run in WSL 2. The usual step is `wsl --set-version ' + d.name + ' 2`; it can take a few minutes.'])}
+                  />
+                )}
                 <span className="ml-auto flex items-center gap-2">
                   <Btn small disabled={d.version !== 2 || checking !== null} onClick={() => void check(d.name)}>
                     {t('linux.check', { name: d.name })}

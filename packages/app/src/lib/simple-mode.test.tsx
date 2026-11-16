@@ -65,6 +65,6 @@ describe('useSimpleMode', () => {
     expect(row?.label).toBe('Simple look');
     // An early feature (it has a Labs entry), and the Advanced page collects every one of those.
     expect(row?.labs).toBeTruthy();
-    expect(LAYOUT.advanced.some((g) => g.group === LABS_GROUP && g.rows.includes('@labs'))).toBe(true);
+    expect(LAYOUT.labs.some((g) => g.group === LABS_GROUP && g.rows.includes('@labs'))).toBe(true);
   });
 });

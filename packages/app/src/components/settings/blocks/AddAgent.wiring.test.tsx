@@ -55,6 +55,11 @@ const fakeCockpit = () => {
   return { c, startChat };
 };
 const box = (m: { host: HTMLElement }) => m.host.querySelector('input[aria-label="Agent name"]') as HTMLInputElement;
+/** The typing box is under Advanced (collapsed): open it the way a person would, then return it. */
+async function openBox(m: { host: HTMLElement }): Promise<HTMLInputElement> {
+  if (!box(m)) await click(buttonByText(m.host, 'Advanced'));
+  return box(m);
+}
 
 /** The Settings row and the cockpit host side by side, as they are in the app. */
 async function withHost(folder?: string | null) {
@@ -77,7 +82,7 @@ describe('Add an agent: result buttons reach a pane', () => {
     fakeBackend('native_ok');
     const w = await withHost();
     try {
-      await typeInto(box(w.m), 'fakenat');
+      await typeInto(await openBox(w.m), 'fakenat');
       await click(buttonByText(w.m.host, 'Add'));
       await settle();
       await click(buttonByText(w.m.host, 'Start a chat'));
@@ -93,7 +98,7 @@ describe('Add an agent: result buttons reach a pane', () => {
     fakeBackend('native_ok');
     const w = await withHost();
     try {
-      await typeInto(box(w.m), 'fakenat');
+      await typeInto(await openBox(w.m), 'fakenat');
       await click(buttonByText(w.m.host, 'Add'));
       await settle();
       await click(buttonByText(w.m.host, 'Open in a terminal'));
@@ -112,7 +117,7 @@ describe('Add an agent: result buttons reach a pane', () => {
       fakeBackend('native_ok');
       let w = await withHost();
       try {
-        await typeInto(box(w.m), 'fakenat');
+        await typeInto(await openBox(w.m), 'fakenat');
         await click(buttonByText(w.m.host, 'Add'));
         await settle();
         expect(buttonByText(w.m.host, 'Start a chat')).toBeTruthy();
@@ -123,7 +128,7 @@ describe('Add an agent: result buttons reach a pane', () => {
       fakeBackend('terminal_only');
       w = await withHost();
       try {
-        await typeInto(box(w.m), 'faketerm');
+        await typeInto(await openBox(w.m), 'faketerm');
         await click(buttonByText(w.m.host, 'Add'));
         await settle();
         expect(buttonByText(w.m.host, 'Open Faketerm')).toBeUndefined();
@@ -140,7 +145,7 @@ describe('Add an agent: result buttons reach a pane', () => {
     fakeBackend('terminal_only');
     const w = await withHost();
     try {
-      await typeInto(box(w.m), 'faketerm');
+      await typeInto(await openBox(w.m), 'faketerm');
       await click(buttonByText(w.m.host, 'Add'));
       await settle();
       await click(buttonByText(w.m.host, 'Open Faketerm'));
@@ -149,7 +154,7 @@ describe('Add an agent: result buttons reach a pane', () => {
       w.c.newAgent.mockClear();
       await click(buttonByText(w.m.host, 'Add another'));
       fakeBackend('already_added');
-      await typeInto(box(w.m), 'fakenat');
+      await typeInto(await openBox(w.m), 'fakenat');
       await click(buttonByText(w.m.host, 'Add'));
       await settle();
       await click(buttonByText(w.m.host, 'Open Fakenat'));
@@ -165,7 +170,7 @@ describe('Add an agent: result buttons reach a pane', () => {
     const w = await withHost();
     try {
       w.startChat.mockRejectedValueOnce(new Error('Chat is turned off in Labs.'));
-      await typeInto(box(w.m), 'fakenat');
+      await typeInto(await openBox(w.m), 'fakenat');
       await click(buttonByText(w.m.host, 'Add'));
       await settle();
       await click(buttonByText(w.m.host, 'Start a chat'));
@@ -184,7 +189,7 @@ describe('Add an agent: result buttons reach a pane', () => {
     fakeBackend('install_failed');
     const m = await mountRows([agentsRows[0]]);
     try {
-      await typeInto(box(m), 'fakereg');
+      await typeInto(await openBox(m), 'fakereg');
       await click(buttonByText(m.host, 'Add'));
       await settle();
       await click(buttonByText(m.host, 'Show the install window'));
@@ -202,7 +207,7 @@ describe('Add an agent: result buttons reach a pane', () => {
     for (const withRestart of [false, true]) {
       const onRestartApp = vi.fn();
       await act(async () => root.render(<AddAgent api={api} onRestartApp={withRestart ? onRestartApp : undefined} />));
-      await typeInto(box({ host }), 'fakereg');
+      await typeInto(await openBox({ host }), 'fakereg');
       await click(buttonByText(host, 'Add'));
       await settle();
       const restart = buttonByText(host, 'Restart Potato');

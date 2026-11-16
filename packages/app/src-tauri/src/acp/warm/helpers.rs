@@ -1,15 +1,15 @@
 //! Standby helpers inside the warm chat pool: sessions the person asked for by name ("Reviewer · Codex · gpt-5").
 //!
 //! A standby is a **seat** under the agent it was added to (`HelperMeta::home`). The seat is made and removed by the
-//! person only. Everything else is the seat changing state:
+//! person only (and a task that used it up). Everything else is the seat changing state:
 //!
 //! * `Ready`: its session is started and waits, with no tokens spent.
 //! * A task that matches takes the seat (`claim_helper_for`): the task runs **in the seat's own chat**. Nothing else is
 //!   started, and the seat does not move. A chat the person has open on the seat is that same chat: the task runs there.
-//! * While the task runs the seat is `Busy` (the pool starts the seat's next clean session in the background, so the seat
-//!   is ready again the moment the task ends).
-//! * When the task's turn is over the seat is `Ready` again with clean memory. The finished task's chat is never closed by the
-//!   pool: it stays open as an ordinary chat (no standby tag) and the seat is told to the screens (`WarmHost::seat_released`).
+//! * While the task runs the seat is `Busy`. A standby is one-time (founder, 2026-11-16): nothing is started in its place.
+//! * When the task's turn is over the seat is used up: it leaves the person's list (`WarmHost::seat_spent`). The finished
+//!   task's chat is never closed by the pool: it stays open as an ordinary chat (no standby tag; `WarmHost::seat_released`).
+//!   The person adds a new standby by hand.
 //!
 //! What matches: the same agent type (`agent_family`: "OpenCode", "opencode" and "opencode_native" are one type), the same
 //! folder and account, a model that agrees (a task that names no model takes any; one that names a model takes a seat with
@@ -66,8 +66,6 @@ pub struct Busy {
     /// The chat's turn count that means the task's turn has started (`WarmHost::turns`). A task shorter than one look of
     /// the pool is still seen to be over: the count says a turn ran. `None`: the host does not count turns.
     pub turns_needed: Option<u64>,
-    /// When the task's turn was seen to be over, while the seat still waits for its next clean session (`CLEAN_HOLD_MS`).
-    pub over_at: Option<i64>,
 }
 
 /// Who has a busy helper.
@@ -110,14 +108,8 @@ pub struct SeatLook {
     pub agent: String,
 }
 
-/// A chat that never ran a turn is given this long before its helper goes back to standby.
+/// A chat that never ran a turn is given this long before its helper is given back (not used up).
 const IDLE_CLAIM_MS: i64 = 10 * 60_000;
-
-/// After a task the seat says Working for at most this long while its next clean session finishes starting, so the row
-/// goes Ready -> Working -> Ready and never shows "Starting" or "Can't start" in between. A slow agent takes about 20 s
-/// to start, and one whose start failed once (a real OpenCode did, with its own "Internal service failure") is tried
-/// again after 30 s: both fit.
-pub const CLEAN_HOLD_MS: i64 = 90_000;
 
 /// The stage a sleeping standby shows while it wakes.
 pub const WAKING_STAGE: &str = "waking up";
@@ -282,6 +274,7 @@ impl<H: WarmHost> Pool<H> {
     /// Ends the busy state of helpers whose task is over (or whose chat is gone). The seat goes back to Ready (its next clean
     /// session); a finished task chat is kept open, never closed by the pool.
     pub(super) fn release_finished(inner: &mut Inner<H::Item>, host: &H, now: i64) {
+        let mut spent: Vec<(WarmKey, String)> = Vec::new();
         for (key, slot) in inner.slots.iter_mut() {
             let Some(busy) = slot.busy.as_mut() else { continue };
             if busy.awaiting_pane {
@@ -304,14 +297,7 @@ impl<H: WarmHost> Pool<H> {
             if !over {
                 continue;
             }
-            // The task is over. The seat is handed back the moment its next clean session is ready (it was started when
-            // the task began); only a session that is still starting is waited for, a short while.
-            let over_at = *busy.over_at.get_or_insert(now);
-            // (A start that failed is tried again when its wait is over: that counts while the try still fits the hold.)
-            let refilling = matches!(slot.state, State::Starting { .. }) || (matches!(slot.state, State::Empty) && !slot.cold && slot.backoff_until - over_at < CLEAN_HOLD_MS);
-            if busy.by == HelperUser::Agent && state.is_some() && refilling && now - over_at < CLEAN_HOLD_MS {
-                continue;
-            }
+            // The task is over.
             let Some(done) = slot.busy.take() else { continue };
             let id = key.slot.as_deref().unwrap_or("?");
             match done.by {
@@ -321,17 +307,23 @@ impl<H: WarmHost> Pool<H> {
                     if state.is_some() && !done.pane.is_empty() {
                         crate::standby::seat_panes::forget(&done.pane);
                         inner.released.push(done.pane.clone());
+                        // A standby is one-time: a task took it, so the chat is a normal helper now and no replacement is made.
+                        // (The person adds a new standby by hand.)
+                        spent.push((key.clone(), id.to_string()));
+                        seat_log::line(&format!("seat {id} used up: task over in chat {}; the chat is an ordinary helper now and no new standby is made", done.pane));
+                    } else {
+                        // The task never ran a turn (the chat is gone): the seat is not spent, it starts its session again.
+                        seat_log::line(&format!("seat {id} returned: its task's chat is gone; the seat is not used up"));
                     }
-                    let next = match slot.state {
-                        State::Ready { .. } => "ready",
-                        State::Starting { .. } => "starting its next clean session",
-                        State::Empty if slot.cold => "asleep (close after one task)",
-                        State::Empty => "starting its next clean session",
-                    };
-                    seat_log::line(&format!("seat {id} returned: task over in chat {}; the seat is {next}; same seat, same owner, nothing else was made", done.pane));
                 }
                 HelperUser::Person => seat_log::line(&format!("seat {id} returned: the person's turn is over")),
             }
+        }
+        for (key, id) in spent {
+            inner.slots.remove(&key);
+            inner.policy.helpers.retain(|want| want.meta.id != id);
+            inner.tally.forget(&id);
+            host.seat_spent(&id);
         }
     }
 
@@ -453,7 +445,7 @@ impl<H: WarmHost> Pool<H> {
                 let open = slot.opened.take().filter(|pane| self.host.working(pane).is_some());
                 let pane = open.clone().or_else(|| self.host.pane_of(&item)).unwrap_or_default();
                 let turns_needed = self.host.turns(&pane).map(|turns| turns + 1);
-                slot.busy = Some(Busy { pane, since: now, by: HelperUser::Agent, saw_work: false, awaiting_pane: awaiting && open.is_none(), turns_needed, over_at: None });
+                slot.busy = Some(Busy { pane, since: now, by: HelperUser::Agent, saw_work: false, awaiting_pane: awaiting && open.is_none(), turns_needed });
                 // "Close after one task": it is not started again until a task asks for it (or the person presses Start).
                 slot.cold = meta.close_after_use;
                 inner.tally.count_claim(&meta.id, &day);
@@ -502,7 +494,7 @@ impl<H: WarmHost> Pool<H> {
             let State::Ready { item, .. } = &slot.state else { return false };
             let pane = slot.opened.clone().or_else(|| self.host.pane_of(item)).unwrap_or_default();
             let turns_needed = if sent { self.host.turns(&pane) } else { None };
-            slot.busy = Some(Busy { pane, since: now, by: HelperUser::Person, saw_work: false, awaiting_pane: false, turns_needed, over_at: None });
+            slot.busy = Some(Busy { pane, since: now, by: HelperUser::Person, saw_work: false, awaiting_pane: false, turns_needed });
             seat_log::line(&format!("seat {helper_id} is with the person (they sent a message in its chat)"));
             return true;
         }

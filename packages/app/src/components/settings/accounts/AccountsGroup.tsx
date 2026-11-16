@@ -14,7 +14,6 @@ import {
 } from '../../../lib/accounts';
 import { agentLabel, useAgentRegistry } from '../../../lib/agentRegistry';
 import { SettingBlock, Tip } from '../settings-ui';
-import { CodeText } from '../../common/CodeText';
 import { openSignInAgain } from '../../../lib/agentSignIn';
 import { openSettingsAt } from '../../../lib/openSettingsAt';
 
@@ -97,11 +96,21 @@ export function AccountsGroup({ api = tauriAccountsApi, only }: { api?: Accounts
             <section key={agent.agent_id} aria-label={t('accounts.signIns', { agent: agent.agent_id })} data-testid={`accounts-${agent.agent_id}`}>
               {!only && <h4 className="text-sm font-medium">{agentLabel(registry, agent.agent_id)}</h4>}
               {mine.length === 0 && (
-                <p className="mt-0.5 text-xs text-pm-muted">
-                  <CodeText text={agent.login_hint} />
-                </p>
+                <div className="mt-2 flex items-center gap-2">
+                  <p className="flex-1 text-xs text-pm-muted">{t('accounts.none')}</p>
+                  {!only && (
+                  <button
+                    type="button"
+                    className={BTN}
+                    disabled={busy}
+                    data-testid={`signin-${agent.agent_id}`}
+                    onClick={() => openSignInAgain({ agentId: agent.agent_id, label: agentLabel(registry, agent.agent_id) })}
+                  >
+                    {SIGN_IN.action}
+                  </button>
+                  )}
+                </div>
               )}
-              {mine.length === 0 && <p className="mt-2 text-xs text-pm-muted">{t('accounts.none')}</p>}
               <ul className="mt-2 divide-y divide-pm-border rounded-lg border border-pm-border">
                 {mine.map((a) => (
                   <li key={a.id} className="flex items-center gap-2 px-3 py-2">

@@ -133,14 +133,30 @@ describe('PairedDevices', () => {
     expect(tauri.revokePairedMobileDevice).toHaveBeenCalledOnce();
   });
 
-  it('Revoke signs one phone out and reloads the list', async () => {
+  it('Revoke asks "Sign out this phone?" first, then signs that one phone out and reloads the list', async () => {
     mocks.devices = [device({})];
     await mount();
     mocks.devices = [];
     await click(buttonByText(host, 'Revoke'));
     await settle();
+    expect(tauri.revokePairedMobileDevice).not.toHaveBeenCalled();
+    expect(hasText(host, 'Sign out this phone?')).toBe(true);
+    await click(buttonByText(host, 'Sign out'));
+    await settle();
     expect(tauri.revokePairedMobileDevice).toHaveBeenCalledExactlyOnceWith('00000000-0000-4000-8000-000000000001');
     expect(hasText(host, 'No phones paired yet')).toBe(true);
+  });
+
+  it('Cancel on the sign-out sheet keeps the phone paired and signs nothing out', async () => {
+    mocks.devices = [device({})];
+    await mount();
+    await click(buttonByText(host, 'Revoke'));
+    await settle();
+    await click(buttonByText(host, 'Cancel'));
+    await settle();
+    expect(tauri.revokePairedMobileDevice).not.toHaveBeenCalled();
+    expect(hasText(host, 'Sign out this phone?')).toBe(false);
+    expect(hasText(host, 'Pixel 8')).toBe(true);
   });
 
   it('reloads when devices change elsewhere (a new pairing, Revoke all)', async () => {

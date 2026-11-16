@@ -20,7 +20,6 @@ const OPENCODE_HINT = 'For OpenCode only. Never sent to the phone.';
 /** The opt-in's name (founder decision 2026-10-15). Off by default; a person's earlier explicit choice is kept by the backend. */
 const AUTOMATION_LABEL = 'Switch OpenCode keys at the limit';
 const AUTOMATION_HINT = "Uses your other key when one is limited. Check your provider's terms.";
-const RESTART_HINT = 'So it picks up the new key.';
 const REMOVE_ALL_HINT = 'Deletes Anthropic, OpenAI and OpenRouter keys here. Agents lose access. OpenCode stays.';
 
 // ---------- OpenCode key status (each row keeps its own copy) ----------
@@ -162,7 +161,7 @@ function AutomationMode({ env }: { env: SettingsEnv }) {
     setBusy(true);
     env.setError(null);
     try {
-      setStatus(await tauri.setOpenCodeAutomationSettings(on ? 'auto_if_backup' : 'notify_only', status?.restart_pane_on_rotate ?? true));
+      setStatus(await tauri.setOpenCodeAutomationSettings(on ? 'auto_if_backup' : 'notify_only', true));
       env.markSaved();
     } catch (e) {
       env.setError(`Not saved: ${errorSentence(e)}`);
@@ -182,36 +181,6 @@ function AutomationMode({ env }: { env: SettingsEnv }) {
       />
       {error && <Note role="alert">{t('keys.readFailed', { error })}</Note>}
     </>
-  );
-}
-
-function RestartPane({ env }: { env: SettingsEnv }) {
-  const t = useT();
-  const { status, setStatus } = useOpenCodeKeyStatus();
-  const [busy, setBusy] = useState(false);
-
-  const change = async (restart: boolean) => {
-    setBusy(true);
-    env.setError(null);
-    const mode: AutomationMode = status?.key_automation_mode === 'auto_if_backup' ? 'auto_if_backup' : 'notify_only';
-    try {
-      setStatus(await tauri.setOpenCodeAutomationSettings(mode, restart));
-      env.markSaved();
-    } catch (e) {
-      env.setError(`Not saved: ${errorSentence(e)}`);
-    } finally {
-      setBusy(false);
-    }
-  };
-
-  return (
-    <SettingToggle
-      label={t('settings.row.opencode-restart.label')}
-      description={t('settings.row.opencode-restart.hint')}
-      checked={status?.restart_pane_on_rotate ?? true}
-      disabled={!status || busy}
-      onChange={(value) => void change(value)}
-    />
   );
 }
 
@@ -281,14 +250,6 @@ export const keysRows: RowDef[] = [
     keywords: `${KEYWORDS} automation key automation mode switch backup second key terms`,
     group: 'OpenCode keys',
     render: (env) => <AutomationMode env={env} />,
-  },
-  {
-    id: 'opencode-restart',
-    label: 'Restart OpenCode after a key switch',
-    hint: RESTART_HINT,
-    keywords: `${KEYWORDS} restart pane rotate switch`,
-    group: 'OpenCode keys',
-    render: (env) => <RestartPane env={env} />,
   },
   {
     id: 'remove-all-keys',

@@ -7,7 +7,7 @@ import { ERROR_COPY, type AddAgentApi, type AddAgentRun } from '../../../lib/add
 import { mockAddAgentApi } from '../../../lib/addAgent.mocks';
 import { t } from '../../../i18n';
 import { useChinese, useEnglish, visibleEnglish } from '../../../i18n/test-utils';
-import { click, settle, type as typeInto } from '../test-utils';
+import { buttonByText, click, settle, type as typeInto } from '../test-utils';
 import { AddAgent } from './AddAgent';
 
 vi.mock('@tauri-apps/api/core', () => ({ invoke: vi.fn(async () => null) }));
@@ -44,6 +44,7 @@ const advance = async (ms: number) => {
   });
 };
 const addIt = async (value: string) => {
+  if (!host.querySelector('input[aria-label="Agent name"]')) await click(buttonByText(host, t('addAgent.advanced')));
   await typeInto(host.querySelector('input') as HTMLInputElement, value);
   await click(host.querySelector('button[type="submit"]'));
 };

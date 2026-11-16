@@ -1,6 +1,6 @@
 //! The ACP lane (A1, the core): drive an agent through the Agent Client Protocol instead of through its
 //! terminal screen. No UI and no chat items here; those come in A2 and later. Behind the Labs switch
-//! `acp_chat_enabled` (default on), and the terminal stays a full way to run every agent
+//! always on (the old `acp_chat_enabled` switch is ignored), and the terminal stays a full way to run every agent
 //! (`lane::RunLane`).
 //!
 //! ```text
@@ -124,32 +124,23 @@ mod warm_tests;
 #[cfg(test)]
 mod warm_helper_tests;
 
-use std::sync::atomic::{AtomicBool, Ordering};
-
 use serde_json::Value;
 
-/// The Labs switch in the public settings. Off: no ACP session starts.
+/// The old Labs switch in the public settings. The Labs switch was removed: chat is always on, so this key is
+/// kept only so old settings files still load. Its saved value is never read.
 pub const LABS_KEY: &str = "acp_chat_enabled";
 
-static ENABLED: AtomicBool = AtomicBool::new(false);
-
-/// The Chat switch in a settings value: on when absent (the default) or `true`; anything else is off.
-pub fn labs_on(public: &Value) -> bool {
-    public.get(LABS_KEY).map_or(true, |v| v.as_bool() == Some(true))
+/// Chat is always on. Whatever the saved `acp_chat_enabled` says (an old profile may hold `false`), the answer is
+/// `true`. The value is ignored, so a stale off cannot block chat.
+pub fn labs_on(_public: &Value) -> bool {
+    true
 }
 
-/// Called with the public settings whenever they change (and once at startup from the saved file). Turning
-/// the switch off closes every live ACP session: the switch is also the kill switch.
+/// Called with the public settings whenever they change (and once at startup from the saved file).
 pub fn apply_settings(public: &Value) {
     chat::default_model::note_settings(public);
     chat::helper_answers::apply_settings(public);
     sweep_leftovers_once();
-    let on = labs_on(public);
-    let was = ENABLED.swap(on, Ordering::SeqCst);
-    if was && !on {
-        chat::close_all();
-        supervisor::global().close_all();
-    }
 }
 
 /// At the first settings load of a run: tool servers an earlier run left behind in an agent's shared server are ended
@@ -169,9 +160,9 @@ fn sweep_leftovers_once() {
     });
 }
 
-/// Whether the Labs switch is on.
+/// Whether chat is on. Always true: the Labs switch was removed.
 pub fn chat_enabled() -> bool {
-    ENABLED.load(Ordering::SeqCst)
+    true
 }
 
 #[cfg(test)]
@@ -180,11 +171,12 @@ mod labs_tests {
     use serde_json::json;
 
     #[test]
-    fn the_switch_is_on_unless_turned_off() {
+    fn chat_stays_on_even_when_a_saved_profile_says_off() {
         assert!(labs_on(&json!({})), "on by default");
-        assert!(!labs_on(&json!({"acp_chat_enabled": false})));
-        assert!(!labs_on(&json!({"acp_chat_enabled": "yes"})));
-        assert!(!labs_on(&json!({"acp_chat_enabled": null})));
         assert!(labs_on(&json!({"acp_chat_enabled": true})));
+        assert!(labs_on(&json!({"acp_chat_enabled": false})), "a stale saved off does not block chat");
+        assert!(labs_on(&json!({"acp_chat_enabled": "yes"})));
+        assert!(labs_on(&json!({"acp_chat_enabled": null})));
+        assert!(chat_enabled());
     }
 }

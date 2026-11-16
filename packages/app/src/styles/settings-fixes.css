@@ -369,4 +369,4 @@
 .stable-steps p { margin: 2px 0 6px; opacity: 0.75; }
 .stable-cmd { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin: 4px 0; padding: 4px 8px; border: 1px solid rgb(var(--pm-border)); border-radius: 8px; }
 .stable-status { margin: 0 0 12px; font-size: 12px; }
-.stable-status[data-linked='true'] { border-left: 2px solid var(--accent); padding-left: 8px; }
+.stable-status[data-linked='true'] { border: 1px solid var(--sep); border-radius: 8px; padding: 6px 8px; }

@@ -91,3 +91,34 @@ export interface CrewCheck {
   crews: Array<{ id: string; name: string; roles: number; problems: CrewProblem[] }>;
   problems: CrewProblem[];
 }
+
+/** A crew opened on the canvas (Rust: `commands/crews_canvas.rs`). A template is read-only until copied. */
+export interface CrewOpened {
+  slug: string;
+  kind: 'saved' | 'template';
+  crew: Crew;
+  /** The rules for routing work, in plain words. */
+  routing_text: string;
+  problems: CrewProblem[];
+}
+
+/** "Try a task": where a task would go. A dry run; nothing runs. */
+export interface CrewRoutePreview {
+  route: { role: string; why: string; fallback: boolean };
+  /** Role ids in order: the lead, the chosen role, then each checker. */
+  path: string[];
+  /** Words of the task the rules say need the person first. */
+  needs_you: string[];
+  /** Other roles the rules point at. */
+  others: string[];
+}
+
+/** What applying a crew did: which standby helpers are now kept ready. */
+export interface CrewApplied {
+  added: string[];
+  already: number;
+  skipped: Array<{ role: string; why: string }>;
+  /** Set when the standby limit is too low: applying needs this many. Nothing was added. */
+  needs_limit: number | null;
+  problems: CrewProblem[];
+}

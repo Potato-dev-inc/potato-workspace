@@ -65,8 +65,8 @@ describe('Settings has no row for the cut features', () => {
     }
   });
 
-  it('has the Discord alerts row on Connect, with a short hint, and search finds it', () => {
-    const general = SECTIONS.find((s) => s.id === 'connect')!;
+  it('has the Discord alerts row on Look and feel, with a short hint, and search finds it', () => {
+    const general = SECTIONS.find((s) => s.id === 'look')!;
     const row = general.rows.find((r) => r.id === 'discord-alerts');
     expect(row?.label).toBe('Discord alerts');
     expect((row?.hint ?? '').length).toBeLessThanOrEqual(90);

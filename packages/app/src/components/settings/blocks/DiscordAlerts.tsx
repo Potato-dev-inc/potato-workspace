@@ -98,9 +98,12 @@ export function DiscordAlertsBlock({ api = tauriDiscordAlertsApi, onSaved }: { a
             />
           )}
           {!status.saved && (
-            <Btn primary disabled={busy || draft.trim() === ''} onClick={() => void save()}>
-              {t('discord.save')}
-            </Btn>
+            <>
+              <Btn primary disabled={busy || draft.trim() === ''} onClick={() => void save()}>
+                {t('discord.save')}
+              </Btn>
+              {draft.trim() === '' && <span className="text-xs text-pm-muted">{t('discord.pasteFirst')}</span>}
+            </>
           )}
           <SendTest
             disabledReason={status.saved ? (busy ? t('discord.working') : null) : t('discord.addFirst')}

@@ -137,3 +137,81 @@ describe('the browser bar in the browser window', () => {
     expect(document.body.textContent).not.toContain('Reload');
   });
 });
+
+// The founder's report (1.1.6): "i cant take focus on anything here cuz it keeps getting grabbed by the top url bar input".
+// On the start page Rust sends `start: true` on every tick, and the old bar asked for the focus each time unless its own box held it,
+// so the mark-up bar's note box and "To:" list lost the focus a moment after every click.
+describe('the address box and the focus', () => {
+  const start = JSON.stringify({ url: '', error: '', start: true });
+  const host = () => document.documentElement.querySelector('[aria-hidden="true"]') as HTMLElement;
+  // A stand-in for the mark-up bar: another box in the page's top document that the person is typing in.
+  const otherBox = () => {
+    const box = document.createElement('textarea');
+    document.body.appendChild(box);
+    return box;
+  };
+
+  it('takes the focus once on a brand-new start page', () => {
+    const api = load();
+    api.set(start);
+    expect(document.activeElement).toBe(host());
+  });
+
+  it('does not take the focus back on later ticks when the mark-up bar (or the page) has it', () => {
+    const api = load();
+    api.set(start);
+    const note = otherBox();
+    note.focus();
+    expect(document.activeElement).toBe(note);
+    for (let i = 0; i < 20; i++) api.set(start);
+    expect(document.activeElement).toBe(note);
+  });
+
+  it('does not take the focus from the mark-up bar when the box never got it first', () => {
+    const api = load();
+    const note = otherBox();
+    note.focus();
+    api.set(start);
+    api.set(start);
+    expect(document.activeElement).toBe(note);
+  });
+
+  it('does not call focus() on the box when the focus has been lost to nothing after it was taken once', () => {
+    const api = load();
+    api.set(start);
+    input().blur();
+    document.body.focus();
+    const calls: number[] = [];
+    const real = HTMLElement.prototype.focus;
+    HTMLElement.prototype.focus = function (...a: []) {
+      if (this === input()) calls.push(1);
+      return real.apply(this, a);
+    };
+    try {
+      for (let i = 0; i < 10; i++) api.set(start);
+    } finally {
+      HTMLElement.prototype.focus = real;
+    }
+    expect(calls).toEqual([]);
+  });
+
+  it('does not ask for the focus on a page that is not the start page', () => {
+    const api = load();
+    api.set(JSON.stringify({ url: 'https://example.com/', error: '' }));
+    expect(document.activeElement).not.toBe(host());
+  });
+
+  it('takes the focus when the person presses Ctrl+L', () => {
+    load();
+    expect(document.activeElement).not.toBe(host());
+    document.dispatchEvent(new KeyboardEvent('keydown', { key: 'l', ctrlKey: true, bubbles: true, cancelable: true }));
+    expect(document.activeElement).toBe(host());
+  });
+
+  it('does not take the focus when a script in the page presses Ctrl+L', () => {
+    load();
+    trusted = false;
+    document.dispatchEvent(new KeyboardEvent('keydown', { key: 'l', ctrlKey: true, bubbles: true, cancelable: true }));
+    expect(document.activeElement).not.toBe(host());
+  });
+});
