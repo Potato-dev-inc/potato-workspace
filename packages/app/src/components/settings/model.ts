@@ -14,7 +14,7 @@ export const SECTION_IDS = ['overview', 'agents', 'helpers', 'look', 'connect', 
 export type SectionId = (typeof SECTION_IDS)[number];
 
 /** The section files that define the rows. Old links may still name them (see `LEGACY_TABS`). */
-export const BASE_SECTION_IDS = ['general', 'agents', 'models', 'keys', 'bridge', 'phone', 'team', 'lend', 'devices', 'shortcuts'] as const;
+export const BASE_SECTION_IDS = ['general', 'agents', 'models', 'keys', 'bridge', 'phone', 'team', 'lend', 'devices', 'crews', 'shortcuts'] as const;
 export type BaseSectionId = (typeof BASE_SECTION_IDS)[number];
 
 export type SettingsPageId = SectionId;
@@ -80,7 +80,7 @@ export interface RowDef {
   /** A link left where a row used to be. Never searched (the real row is), and has no setting of its own. */
   pointer?: boolean;
   /** An early feature's own row: shown (and searched) only while this Labs flag is on. Hidden otherwise, as if it did not exist. */
-  labsFlag?: 'acp_chat_enabled' | 'model_bridge_enabled' | 'lend_enabled' | 'devices_enabled';
+  labsFlag?: 'acp_chat_enabled' | 'model_bridge_enabled' | 'lend_enabled' | 'devices_enabled' | 'crews_enabled';
   /** The saved keys this row owns. Rows without it are actions or panels. (Used by the Changed dot, Reset and Undo.) */
   keys?: (keyof Settings)[];
   /** A small frame drawn at the right of, or under, the control. */
@@ -128,7 +128,7 @@ export function splitByLevel(rows: RowDef[], showDeveloper: boolean): { basic: R
 /**
  * The sections a person sees now: rows of an early feature appear only while their switch is on.
  */
-export function visibleSections(sections: SectionDef[], settings: { acp_chat_enabled?: boolean; model_bridge_enabled?: boolean; lend_enabled?: boolean; devices_enabled?: boolean } | null): SectionDef[] {
+export function visibleSections(sections: SectionDef[], settings: { acp_chat_enabled?: boolean; model_bridge_enabled?: boolean; lend_enabled?: boolean; devices_enabled?: boolean; crews_enabled?: boolean } | null): SectionDef[] {
   return sections
     .map((s) => (s.rows.some((r) => r.labsFlag) ? { ...s, rows: s.rows.filter((r) => !r.labsFlag || settings?.[r.labsFlag] === true) } : s))
     .filter((s) => s.rows.length > 0);

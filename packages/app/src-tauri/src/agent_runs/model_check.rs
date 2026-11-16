@@ -152,6 +152,9 @@ mod tests {
         assert!(check_for_agent("claude", "sonnet").is_ok());
         assert!(check_for_agent("claude", "claude-sonnet-4-5").is_ok());
         assert!(check_for_agent("claude", "sonnet[1m]").is_ok());
+        assert!(check_for_agent("claude", "fable").is_ok());
+        assert!(check_for_agent("claude", "claude-fable-5-2").is_ok());
+        assert!(check_for_agent("claude", "Fable 5.2").is_ok());
         let error = check_for_agent("claude", "sonet").unwrap_err();
         assert_eq!(error.context["closest"], "sonnet");
     }

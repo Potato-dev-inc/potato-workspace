@@ -1,5 +1,26 @@
 # Changelog
 
+## 1.1.6
+
+This is a beta.
+
+- Menus and pop-ups are built one way now:
+  - They always open on top and are never cut off.
+  - A click in a sub-menu no longer closes the menu it came from.
+  - Escape closes the innermost one first.
+  - Arrow keys move through menu items.
+- Save and share your setup:
+  - `potato-workspace config export` writes your settings, Labs switches and standbys to one file, without secrets, sign-ins or devices.
+  - `config diff` shows what a file would change, and `config import` applies it, with an Allow card if an agent runs it.
+- First steps toward crews (Labs › Crews, off by default):
+  - Crews can be saved and checked with `potato-workspace crew validate`.
+  - A starter crew, "Our way", comes with it.
+  - The canvas comes in 1.1.7.
+- Fixed:
+  - The Connect tab bar showed small scroll arrows.
+  - Fable was missing from the known Claude models.
+  - The command line showed version 0.0.0.
+
 ## 1.1.5
 
 This is a beta.

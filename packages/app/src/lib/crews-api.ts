@@ -1,20 +1,10 @@
 // Typed wrappers for the crew commands (`commands/crews.rs`): a crew is a saved team of agents.
 // "Save this team" reads a draft from a live pane; "Start crew" starts a saved one in a folder.
+// The crew shape is shared with the command line (`@potato-workspace/shared`, crews.ts).
 import { invoke } from '@tauri-apps/api/core';
+import type { Crew, CrewProblem, CrewRole, CrewSummary } from '@potato-workspace/shared';
 
-export interface CrewRole {
-  name: string;
-  agent_type: string;
-  /** May use `{folder}`. */
-  task: string;
-  /** The role this one is under; null or missing for the lead. */
-  parent?: string | null;
-}
-
-export interface Crew {
-  name: string;
-  roles: CrewRole[];
-}
+export type { Crew, CrewProblem, CrewRole, CrewSummary };
 
 /** The agent a starter role has until the crew starts: the person's default agent. */
 export const DEFAULT_AGENT = '{default}';
@@ -35,21 +25,6 @@ export interface CrewDraft {
   crew: Crew;
   /** Helpers left out because a crew holds at most 8 roles. */
   omitted: number;
-}
-
-export interface CrewSummary {
-  slug: string;
-  name: string;
-  roles: number;
-  agents: string[];
-  /** Why this crew cannot be started right now (a broken file, an agent that is gone). */
-  problem: string | null;
-}
-
-export interface CrewProblem {
-  code: string;
-  role: string | null;
-  message: string;
 }
 
 export interface CrewSaveOutcome {

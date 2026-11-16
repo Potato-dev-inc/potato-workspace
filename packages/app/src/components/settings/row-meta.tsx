@@ -82,6 +82,7 @@ export const ROW_META: Record<string, Meta> = {
   'markup-bar-labs': { keys: ['markup_bar_enabled'] },
   'timeline-labs': { keys: ['timeline_day_enabled'] },
   'smaller-updates-labs': { keys: ['smaller_updates_enabled'] },
+  'crews-labs': { keys: ['crews_enabled'] },
   'early-versions': { keys: ['early_versions_enabled'] },
   'show-developer-settings': { keys: ['show_developer_settings'] },
 };

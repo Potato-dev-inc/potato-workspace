@@ -1,12 +1,11 @@
 // One standby helper in the sidebar, under its home agent. States: Ready, Working, With you, Starting, Resting, Can't start.
 // On hover the state word gives way to an X (remove, with Undo). Right-click or the "..." button: the row menu.
-import { useLayoutEffect, useRef, useState, type KeyboardEvent } from 'react';
-import { createPortal } from 'react-dom';
-import { useDismissable } from '../../hooks/useDismissable';
+import { useRef, useState, type KeyboardEvent } from 'react';
 import { useT, type MessageKey } from '../../i18n';
 import { tauriModelOptionsApi, useModelOptions, type ModelOptionsApi } from '../../lib/modelOptions';
 import type { AfterTask, SkipReason } from '../../lib/standbyHelpers';
 import { AgentLogo } from '../common/AgentLogo';
+import { Menu } from '../common/Floating';
 import { IconClose, IconMore } from './Icons';
 import type { StandbyRow } from './standby-rows';
 import '../../styles/standby-rows.css';
@@ -203,33 +202,8 @@ function StandbyRowMenu({
 }) {
   const t = useT();
   const h = row.helper;
-  const ref = useRef<HTMLDivElement>(null);
-  const [pos, setPos] = useState({ left: at.x, top: at.y });
   const options = useModelOptions(h.agent, modelApi);
   const models = options.status === 'ready' ? options.options.models.slice(0, 12) : [];
-  useLayoutEffect(() => {
-    const el = ref.current;
-    if (!el) return;
-    const r = el.getBoundingClientRect();
-    setPos({ left: Math.max(4, Math.min(at.x, window.innerWidth - r.width - 4)), top: Math.max(4, Math.min(at.y, window.innerHeight - r.height - 4)) });
-    el.querySelector<HTMLElement>('[role="menuitem"]')?.focus();
-  }, [at.x, at.y]);
-  useDismissable(true, { inside: [ref], anchor: ref, ignore: ['escape'], onDismiss: () => onClose(false) });
-
-  const onKeyDown = (e: React.KeyboardEvent) => {
-    const items = [...(ref.current?.querySelectorAll<HTMLElement>('[role="menuitem"]') ?? [])];
-    const i = items.indexOf(document.activeElement as HTMLElement);
-    if (e.key === 'Escape' || e.key === 'Tab') {
-      e.preventDefault();
-      onClose(true);
-    } else if (e.key === 'ArrowDown') {
-      e.preventDefault();
-      items[(i + 1) % items.length]?.focus();
-    } else if (e.key === 'ArrowUp') {
-      e.preventDefault();
-      items[(i - 1 + items.length) % items.length]?.focus();
-    }
-  };
   const item = (label: string, run: () => void, tick = false) => (
     <button key={label} type="button" role="menuitemradio" aria-checked={tick} className="ck-menu-item" tabIndex={-1} onClick={() => (onClose(false), run())}>
       <span className="ck-menu-ic">{tick ? '✓' : ''}</span>
@@ -247,9 +221,8 @@ function StandbyRowMenu({
       {label}
     </div>
   );
-  const scope = document.querySelector('.cockpit') ?? document.body;
-  return createPortal(
-    <div ref={ref} className="ck-menu ck-menu--fixed ck-menu--compact" role="menu" data-testid="standby-row-menu" aria-label={h.name} style={{ left: pos.left, top: pos.top }} onKeyDown={onKeyDown} onContextMenu={(e) => e.preventDefault()}>
+  return (
+    <Menu point={at} align="start" className="ck-menu--compact" testId="standby-row-menu" label={h.name} onClose={onClose}>
       {plain(t('standby.menu.open'), () => actions.open(row))}
       {plain(t('standby.menu.tryIt'), () => actions.open(row))}
       {plain(t('standby.menu.rename'), onRename)}
@@ -265,7 +238,6 @@ function StandbyRowMenu({
       <div className="ck-menu-sep" role="separator" />
       {!h.warm && plain(t('standby.menu.removeFrom', { agent: underTitle ?? t('standby.agentNow') }), () => actions.detach(row))}
       {plain(t('standby.menu.close'), () => actions.close(row))}
-    </div>,
-    scope,
+    </Menu>
   );
 }

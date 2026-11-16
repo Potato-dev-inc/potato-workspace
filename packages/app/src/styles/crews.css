@@ -1,0 +1,39 @@
+/* Settings > Helpers > Crews (Labs): a note, then the saved crews as a read-only list. Colour tokens only. */
+.crews-page {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+.crews-note {
+  margin: 0;
+  color: var(--label-2, var(--label-3));
+  font-size: 13px;
+}
+.crews-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.crews-row {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 8px 10px;
+  border: 1px solid var(--line, var(--label-3));
+  border-radius: 8px;
+}
+.crews-row-name {
+  font-weight: 500;
+  color: var(--label);
+}
+.crews-row-meta {
+  color: var(--label-3);
+  font-size: 12px;
+}
+.crews-row-problem {
+  color: var(--label);
+  font-size: 12px;
+}

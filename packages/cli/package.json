@@ -11,7 +11,7 @@
     "build": "tsc -p tsconfig.json",
     "start": "node --enable-source-maps dist/index.js",
     "dev": "tsx src/index.ts",
-    "test": "tsx --test src/watch.test.ts src/watch-args.test.ts src/pair-link.test.ts src/config-cli.test.ts src/standby-cli.test.ts",
+    "test": "tsx --test src/watch.test.ts src/watch-args.test.ts src/pair-link.test.ts src/config-cli.test.ts src/standby-cli.test.ts src/config-cmd.test.ts src/crew-cli.test.ts src/bundle-version.test.ts",
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {

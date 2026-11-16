@@ -82,6 +82,7 @@ import { DeviceGroups } from '../devices/DeviceGroups';
 import { NewAgentWhere, type WhereProps } from '../devices/NewAgentWhere';
 import type { DeviceGroup, RemoteRow } from '../devices/useDeviceGroups';
 import { useDismissable } from '../../hooks/useDismissable';
+import { useLayerHost } from '../common/Floating';
 import { openBrowserWindow } from '../../lib/browser-check';
 
 export function Sidebar({
@@ -372,7 +373,9 @@ export function Sidebar({
     return () => window.removeEventListener('pm:open-new-menu', open);
   }, []);
 
-  useDismissable(menuOpen, { inside: [menuRef], anchor: menuRef, onDismiss: () => setMenuOpen(false) });
+  // The quick-start menu holds the Where menu (a shared floating layer): a press in it is not "outside", and Escape goes to it first.
+  const layers = useLayerHost();
+  useDismissable(menuOpen, { inside: [menuRef], extra: layers.extra, anchor: menuRef, onDismiss: (why) => !(why === 'escape' && layers.busy()) && setMenuOpen(false) });
 
   type Pane = (typeof list)[number];
   const paneTitle = (p: Pane) => paneHeading(p.info, c.names.get(p.info.id) ?? p.info.agent_type).primary;
@@ -881,7 +884,7 @@ export function Sidebar({
           >
             <IconChevronDown />
           </button>
-          {menuOpen && (
+          {menuOpen && layers.wrap(
             <div className="ck-menu ck-menu--left ck-menu--wide" role="menu">
               <NewAgentWhere
                 where={
@@ -957,7 +960,7 @@ export function Sidebar({
                 }
               />
               </NewAgentWhere>
-            </div>
+            </div>,
           )}
         </div>
         <button type="button" data-testid="side-search" className="ck-side-new" onClick={onOpenPalette}>

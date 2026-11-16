@@ -96,7 +96,8 @@ describe('Default model per agent', () => {
     const menu = document.querySelector<HTMLElement>('.mp-menu');
     expect(menu).not.toBeNull();
     expect(m.host.contains(menu)).toBe(false);
-    expect(menu?.style.position).toBe('fixed');
+    // The shared floating layer (position: fixed in floating.css, drawn at the top of the cockpit) holds it.
+    expect(menu?.closest('.fl-layer') ?? menu?.classList.contains('fl-layer')).toBeTruthy();
     const names = [...menu!.querySelectorAll('[role=option]')].map((o) => o.textContent);
     expect(names).toEqual(expect.arrayContaining(['Opus', 'Sonnet', 'Haiku']));
     expect(menu?.querySelector('input')).not.toBeNull();

@@ -1,12 +1,11 @@
 // A compact model dropdown, used by the New agent page and by Settings > Agents > Helper agents. "Default" comes
 // first (it names the default model when that is known). A long list gets a search box; with no list (loading failed,
 // or the agent lists none) the same box takes a typed model id.
-import { useCallback, useEffect, useId, useLayoutEffect, useMemo, useRef, useState, type MutableRefObject } from 'react';
-import { createPortal } from 'react-dom';
-import { useDismissable } from '../../hooks/useDismissable';
+import { useEffect, useId, useMemo, useRef, useState } from 'react';
 import { useT } from '../../i18n';
 import type { ModelListState } from '../../lib/modelOptions';
 import '../../styles/model-picker.css';
+import { Popover } from './Floating';
 
 export const LONG_LIST = 8;
 
@@ -69,12 +68,9 @@ export interface ModelPickerProps {
   label: string;
   className?: string;
   testId?: string;
-  /** Filled with the open menu (it floats in a portal, outside the card around the picker). A card that closes on outside
-   * presses lists it as inside, so using the menu does not close the card. */
-  menuRef?: MutableRefObject<HTMLDivElement | null>;
 }
 
-export function ModelPicker({ state, value, onChange, defaultWord: defaultWordProp, label, className, testId, menuRef }: ModelPickerProps) {
+export function ModelPicker({ state, value, onChange, defaultWord: defaultWordProp, label, className, testId }: ModelPickerProps) {
   const t = useT();
   const defaultWord = defaultWordProp ?? t('state.model.default');
   const [open, setOpen] = useState(false);
@@ -82,15 +78,6 @@ export function ModelPicker({ state, value, onChange, defaultWord: defaultWordPr
   const root = useRef<HTMLDivElement>(null);
   const box = useRef<HTMLInputElement>(null);
   const chipEl = useRef<HTMLButtonElement>(null);
-  const menuEl = useRef<HTMLDivElement | null>(null);
-  const setMenuEl = useCallback(
-    (el: HTMLDivElement | null) => {
-      menuEl.current = el;
-      if (menuRef) menuRef.current = el;
-    },
-    [menuRef],
-  );
-  const [place, setPlace] = useState<Place | null>(null);
   const id = useId();
   const options = state.status === 'ready' ? state.options : null;
   const models = options?.models ?? [];
@@ -104,32 +91,6 @@ export function ModelPicker({ state, value, onChange, defaultWord: defaultWordPr
   const shown = useMemo(() => (live ? [] : filterModels(models, query)), [live, models, query]);
   const q = query.trim();
   const custom = q !== '' && !models.some((m) => m.toLowerCase() === q.toLowerCase()) && !(live ?? []).some((m) => m.name.toLowerCase() === q.toLowerCase());
-
-  // One shared closing rule: outside press, Escape, focus leaving, the page scrolling behind it. A resize closes it too.
-  useDismissable(open, { inside: [root, menuEl], anchor: chipEl, onDismiss: () => setOpen(false) });
-  useEffect(() => {
-    if (!open) return undefined;
-    const closeIt = () => setOpen(false);
-    window.addEventListener('resize', closeIt);
-    return () => window.removeEventListener('resize', closeIt);
-  }, [open]);
-
-  useLayoutEffect(() => {
-    if (!open || !chipEl.current) {
-      setPlace(null);
-      return;
-    }
-    const r = chipEl.current.getBoundingClientRect();
-    setPlace(placeMenu(r, { width: window.innerWidth, height: window.innerHeight }));
-  }, [open]);
-
-  // A menu above the chip hangs from its own top edge (not from the window bottom), so it stays put if the window grows.
-  useLayoutEffect(() => {
-    const el = menuEl.current;
-    if (!open || !place || place.anchor === undefined || !el) return;
-    const top = Math.max(EDGE, place.anchor - el.offsetHeight);
-    if (place.top !== top) setPlace({ ...place, top, bottom: undefined });
-  }, [open, place, shown.length, state.status]);
 
   useEffect(() => {
     if (open && searchable) box.current?.focus();
@@ -151,8 +112,9 @@ export function ModelPicker({ state, value, onChange, defaultWord: defaultWordPr
           <path d="M2 3.5 5 6.5 8 3.5" fill="none" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round" strokeLinejoin="round" />
         </svg>
       </button>
-      {open && createPortal(
-        <div ref={setMenuEl} className="mp-menu" id={id} role="listbox" aria-label={label} style={place ? { left: place.left, top: place.top, bottom: place.top === undefined ? place.bottom : undefined, maxHeight: place.maxHeight, minWidth: place.minWidth, position: 'fixed' } : { visibility: 'hidden', position: 'fixed' }}>
+      {open && (
+        // The shared floating layer: top layer, anchored to the chip, and it counts as inside any card the picker sits in.
+        <Popover id={id} anchorRef={chipEl} align="start" role="listbox" className="mp-menu" label={label} minWidth={Math.max(260, Math.round(chipEl.current?.offsetWidth ?? 0))} maxHeight={MENU_MAX} onClose={() => setOpen(false)}>
           {searchable && (
             <input
               ref={box}
@@ -202,8 +164,7 @@ export function ModelPicker({ state, value, onChange, defaultWord: defaultWordPr
               <span className="mp-item-id">{modelName(value)}</span>
             </button>
           )}
-        </div>,
-        document.querySelector('.cockpit') ?? document.body,
+        </Popover>
       )}
     </div>
   );

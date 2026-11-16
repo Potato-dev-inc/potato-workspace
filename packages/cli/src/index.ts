@@ -84,6 +84,12 @@ Usage:
                                 (remove only takes it off its agent; close stops it). Plan first, then apply.
                                 Config flags: --json --yes --dry-run --wait-ms N. Exit 5 = needs --yes.
                                 From an agent window a change raises an Allow card the person answers in the app.
+  potato-workspace config export [--out FILE]   Write the setup (allowed settings, Labs switches, model
+                                defaults and standbys) to a TOML file. No secrets, logins, lending or devices.
+  potato-workspace config diff FILE             What importing the file would change (nothing is touched).
+  potato-workspace config import FILE [--yes] [--dry-run]
+                                Apply the file through the same plan: shows the changes, applies only with --yes.
+  potato-workspace crew ...        list | show ID | validate FILE (read-only; checks a crew file, saves nothing)
   potato-workspace version         Print version
   potato-workspace --help          Show this help
 
@@ -95,7 +101,11 @@ Worker examples:
 `);
 }
 
+/** Written in by the bundle step (scripts/cli-bundle-options.mjs); absent when run from source or dist. */
+declare const __CLI_VERSION__: string | undefined;
+
 function readVersion(): string {
+  if (typeof __CLI_VERSION__ === 'string' && __CLI_VERSION__) return __CLI_VERSION__;
   try {
     const pkgPath = join(__dirname, '..', 'package.json');
     const pkg = JSON.parse(readFileSync(pkgPath, 'utf-8'));

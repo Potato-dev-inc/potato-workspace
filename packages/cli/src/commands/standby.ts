@@ -10,6 +10,7 @@
 import { CliError, EXIT, type Bridge } from '../bridge.js';
 import type { ConfigArgs } from '../args.js';
 import { table, type Io } from '../output.js';
+import { planAndApply } from './plan.js';
 
 interface Ctx {
   bridge: Bridge;
@@ -35,56 +36,8 @@ interface HelpersView {
   idle_minutes?: number;
 }
 
-interface PlanReply {
-  plan_id: string;
-  lines: string[];
-  changes_anything?: boolean;
-}
-
-interface ApplyReply {
-  applied: boolean;
-  lines: string[];
-  standby_added?: Array<{ id: string; name: string }>;
-}
-
 const USAGE =
   'usage: potato-workspace standby list | add --name N --agent A [--model M] [--project P] [--after wait|close] | remove NAME | close NAME';
-
-/** Plan, show, then apply only with `--yes` (or a y at a terminal). Returns the exit code. */
-export async function planAndApply(ctx: Ctx, ops: unknown[]): Promise<number> {
-  const { bridge, io, args } = ctx;
-  const plan = await bridge.post<PlanReply>('/config/plan', { ops });
-  if (!args.json) for (const line of plan.lines) io.out(line);
-  if (plan.changes_anything === false) {
-    if (args.json) io.out(JSON.stringify({ plan, applied: false, reason: 'no change' }));
-    else io.out('Nothing to change.');
-    return EXIT.ok;
-  }
-  if (args.dryRun) {
-    if (args.json) io.out(JSON.stringify({ plan, applied: false, reason: 'dry run' }));
-    else io.out('Dry run: nothing was changed.');
-    return EXIT.ok;
-  }
-  if (!args.yes) {
-    if (io.interactive && !args.json) {
-      if (!(await io.confirm('Apply this? [y/N] '))) {
-        io.out('Nothing was changed.');
-        return EXIT.needsConfirmation;
-      }
-    } else {
-      if (args.json) io.out(JSON.stringify({ plan, applied: false, reason: 'needs --yes' }));
-      io.err('Nothing was changed. Run the same command again with --yes to apply it.');
-      return EXIT.needsConfirmation;
-    }
-  }
-  const done = await bridge.post<ApplyReply>('/config/apply', { plan_id: plan.plan_id });
-  if (args.json) {
-    io.out(JSON.stringify({ plan, applied: done.applied, standby_added: done.standby_added ?? [] }));
-  } else {
-    io.out('Done.');
-  }
-  return EXIT.ok;
-}
 
 function oneName(args: ConfigArgs, rest: string[], verb: string): string {
   if (rest.length !== 1) throw new CliError(EXIT.failed, `usage: potato-workspace standby ${verb} NAME`);

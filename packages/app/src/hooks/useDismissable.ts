@@ -14,6 +14,8 @@ export interface DismissOptions {
   /** Elements that count as inside: the popover itself and its anchor button. */
   inside: ReadonlyArray<RefObject<Element | null>>;
   onDismiss: (why: DismissReason) => void;
+  /** Elements that count as inside right now besides `inside`: layers opened from within this one (a menu in a card). */
+  extra?: () => ReadonlyArray<Element>;
   /** Which element's scroll ancestors close the popover. Defaults to the first of `inside`. */
   anchor?: RefObject<Element | null>;
   /** Turn single reasons off (a popover that must survive a window blur, for example). */
@@ -21,9 +23,9 @@ export interface DismissOptions {
 }
 
 /** True when `target` is inside one of the elements. */
-export function isInside(target: EventTarget | null, inside: DismissOptions['inside']): boolean {
+export function isInside(target: EventTarget | null, inside: DismissOptions['inside'], extra?: DismissOptions['extra']): boolean {
   if (!(target instanceof Node)) return false;
-  return inside.some((ref) => ref.current?.contains(target));
+  return inside.some((ref) => ref.current?.contains(target)) || (extra?.() ?? []).some((el) => el.contains(target));
 }
 
 export function useDismissable(open: boolean, options: DismissOptions): void {
@@ -36,18 +38,18 @@ export function useDismissable(open: boolean, options: DismissOptions): void {
       latest.current.onDismiss(why);
     };
     const press = (e: Event) => {
-      if (!isInside(e.target, latest.current.inside)) dismiss('outside');
+      if (!isInside(e.target, latest.current.inside, latest.current.extra)) dismiss('outside');
     };
     const key = (e: KeyboardEvent) => {
       if (e.key === 'Escape') dismiss('escape');
     };
     const focus = (e: FocusEvent) => {
-      if (e.target instanceof Node && !isInside(e.target, latest.current.inside)) dismiss('focus');
+      if (e.target instanceof Node && !isInside(e.target, latest.current.inside, latest.current.extra)) dismiss('focus');
     };
     const blur = () => dismiss('blur');
     const scroll = (e: Event) => {
-      const { inside, anchor } = latest.current;
-      if (isInside(e.target, inside)) return; // the popover's own list scrolling
+      const { inside, anchor, extra } = latest.current;
+      if (isInside(e.target, inside, extra)) return; // the popover's own list scrolling
       const anchorEl = anchor?.current ?? inside[0]?.current ?? null;
       const t = e.target;
       const isPage = t === document || t === document.documentElement || t === document.body || t === window;

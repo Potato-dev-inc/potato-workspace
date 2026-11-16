@@ -162,7 +162,7 @@ describe('Force yes and the session card in the chat header', () => {
     // It is drawn in the top layer, not inside the header (which clips), and it is fixed under its own chip.
     expect(warning!.closest(".ck-pane-head")).toBeNull();
     expect(warning!.parentElement).toBe(host);
-    expect((warning as HTMLElement).style.position).toBe("fixed");
+    expect((warning as HTMLElement).classList.contains("fl-layer")).toBe(true); // fixed in the top layer by the shared floating layer
     expect(card()).not.toBeNull();
     // The card is the same node as before: nothing reopened it.
     expect(card()).toBe(before);

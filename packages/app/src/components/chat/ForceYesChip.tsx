@@ -1,17 +1,12 @@
 // Force yes, as a chip in a pane's header. Off, it is a quiet word; clicking it shows what Force yes does and asks first.
 // On, it is a visible chip (risk tone) and one click turns it off. A chat keeps the switch in the app; a terminal pane keeps
 // it in the app too (`agent_rules::terminal`). Nothing here answers a question: it only flips the person's own switch.
-import { useEffect, useLayoutEffect, useRef, useState } from 'react';
-import { createPortal } from 'react-dom';
+import { useEffect, useRef, useState } from 'react';
 import { useT } from '../../i18n';
 import { ruleError, tauriAgentRulesApi, type AgentRulesApi } from '../../lib/agentRules';
 import { tauriAcpChatApi, type AcpChatApi, type AcpChatState } from '../../lib/acpChat';
 import '../../styles/cockpit-acp.css';
-import { useDismissable } from '../../hooks/useDismissable';
-import { placeFloating } from '../cockpit/FloatingMenu';
-
-/** The warning's width (px), as set in cockpit-acp.css. */
-const POP_W = 300;
+import { Popover } from '../common/Floating';
 
 interface Props {
   paneId: string;
@@ -32,11 +27,7 @@ export function ForceYesChip({ paneId, isAcp, state, agent, cwd, chatApi = tauri
   // The pick shows at once; what the backend says replaces it, and a refusal takes it back.
   const [pending, setPending] = useState<boolean | null>(null);
   const [terminalOn, setTerminalOn] = useState<boolean | null>(null);
-  // Where the warning goes (window pixels). It is drawn in the app's top layer, not inside the header: the header
-  // clips its overflow, so a warning inside it was cut off under the header and the rail.
-  const [place, setPlace] = useState<{ left: number; top: number } | null>(null);
   const wrap = useRef<HTMLSpanElement>(null);
-  const pop = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     if (isAcp) return undefined;
@@ -51,27 +42,6 @@ export function ForceYesChip({ paneId, isAcp, state, agent, cwd, chatApi = tauri
   }, [isAcp, paneId, agent, cwd, rulesApi]);
   const confirmed = isAcp ? (state?.forceYes ?? false) : terminalOn;
   useEffect(() => setPending(null), [confirmed, paneId]);
-
-  useDismissable(open, { inside: [wrap, pop], anchor: wrap, onDismiss: () => setOpen(false) });
-
-  // Under the chip, lined up with its start edge; above it when there is no room below. Measured again on resize.
-  const measure = () => {
-    const anchor = wrap.current;
-    if (!anchor) return;
-    const r = anchor.getBoundingClientRect();
-    const size = { width: POP_W, height: pop.current?.offsetHeight ?? 0 };
-    const p = placeFloating(r, size, { width: window.innerWidth, height: window.innerHeight }, 'start', 'down');
-    setPlace({ left: p.left, top: p.top });
-  };
-  useLayoutEffect(() => {
-    if (open) measure();
-    else setPlace(null);
-  }, [open]);
-  useEffect(() => {
-    if (!open) return undefined;
-    window.addEventListener('resize', measure);
-    return () => window.removeEventListener('resize', measure);
-  }, [open]);
 
   // A chat that has not reported yet, or one that is closed, has nothing to switch; a terminal pane waits for its answer.
   if (isAcp ? !state || state.closed || !chatApi.setForceYes : confirmed === null) return null;
@@ -93,14 +63,7 @@ export function ForceYesChip({ paneId, isAcp, state, agent, cwd, chatApi = tauri
 
   const warning =
     open && !on ? (
-      <div
-        ref={pop}
-        className="fy-pop"
-        role="dialog"
-        aria-label={t('forceYes.warnTitle')}
-        data-testid="force-yes-warning"
-        style={{ position: 'fixed', left: place?.left ?? 0, top: place?.top ?? 0, visibility: place ? undefined : 'hidden' }}
-      >
+      <Popover anchorRef={wrap} align="start" className="fy-pop" label={t('forceYes.warnTitle')} testId="force-yes-warning" onClose={() => setOpen(false)}>
         <p className="fy-pop-title">{t('forceYes.warnTitle')}</p>
         <p>{t('forceYes.warnBody')}</p>
         <div className="fy-actions">
@@ -119,7 +82,7 @@ export function ForceYesChip({ paneId, isAcp, state, agent, cwd, chatApi = tauri
             {t('forceYes.turnOn')}
           </button>
         </div>
-      </div>
+      </Popover>
     ) : null;
 
   return (
@@ -138,7 +101,7 @@ export function ForceYesChip({ paneId, isAcp, state, agent, cwd, chatApi = tauri
       >
         {on ? t('forceYes.chipOn') : t('forceYes.chip')}
       </button>
-      {warning && createPortal(warning, document.querySelector('.cockpit') ?? document.body)}
+      {warning}
       {error && (
         <span className="fy-error" role="alert">
           {error}

@@ -7,6 +7,8 @@
 //!   registry, at most 8 roles, one root, no cycles, plain text only).
 //! - `store`: the folder of crew files (`list`, `load`, `save`, `remove`).
 //! - `starters`: the three built-in starter crews (compiled in, never written to app data).
+//! - `templates`: read-only template crews with their routing file ("Our way"); `config_format`: the
+//!   `[crew.<id>]` sections of the CLI config file; `view`: what the bridge routes and the CLI show.
 //! - `agents`: `{default}` roles take the default agent at start; the Start sheet's per-role choices.
 //! - `draft`: a live tree of panes becomes a draft crew (folder path -> `{folder}`, redacted).
 //! - `start`: the order and the stop-on-first-failure loop, over a `Starter`.
@@ -16,13 +18,16 @@
 //! A started pane is a normal pane: its trust and permission questions are never answered here.
 
 pub mod agents;
+pub mod config_format;
 pub mod draft;
 pub mod live;
 pub mod model;
 pub mod start;
 pub mod starters;
 pub mod store;
+pub mod templates;
 pub mod validate;
+pub mod view;
 
 pub use model::{CrewError};
 
@@ -40,6 +45,8 @@ pub fn wants_new_pane(idempotency_key: &str) -> bool {
     idempotency_key.starts_with(KEY_PREFIX)
 }
 
+#[cfg(test)]
+mod base_tests;
 #[cfg(test)]
 mod starter_tests;
 #[cfg(test)]

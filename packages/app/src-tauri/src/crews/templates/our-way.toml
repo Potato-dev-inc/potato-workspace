@@ -1,0 +1,80 @@
+# Template: "Our way". The crew that copies how the founder and the lead work today
+# (D:\pm-night\WORKFLOW-DESIGN.md, section 3). A template is read-only: 1.1.6 can show and check it;
+# applying a crew (creating the roles, standbys and rules) comes with the canvas in 1.1.7.
+name = "Our way"
+budget = { turns = 300, minutes = 600 }
+max_helpers = 16
+fix_loops = 2
+routing_file = "difficulty.md"
+
+[[roles]]
+id = "lead"
+name = "Lead"
+agent = "claude"
+model = "opus"
+permissions = { read = true, write = "scoped", write_scope = "plans", run = "ask", start_helpers = true, merge = true }
+hands_to = ["scout", "worker-easy", "worker-medium", "worker-hard", "designer", "checker"]
+job = "You are the front desk and the orchestrator in one. Read the person's exact words. Pass those exact words along with your clear version to every role. Pick the cheapest helper that can finish the task in one go, using difficulty.md, and tell the person which way you went; they can change it. Review each report before anything is merged. Never push, publish a release, add a dependency, empty the trash or touch logins without the person."
+
+[[roles]]
+id = "scout"
+name = "Scout"
+agent = "claude"
+model = "haiku"
+parent = "lead"
+permissions = { read = true, write = "none", run = "read-only" }
+standbys = 1
+job = "Answer \"where is X\" questions about the code in {folder} in at most 20 lines: the files, the functions and what they do. Read only. Never change a file."
+
+[[roles]]
+id = "worker-easy"
+name = "Worker (easy)"
+agent = "claude"
+model = "haiku"
+parent = "lead"
+permissions = { read = true, write = "worktree", run = "worktree" }
+standbys = 2
+job = "Do one small task in your own worktree of {folder}: one area, a known pattern, every file listed in the brief. Commit on your branch only. Report what you changed and what you did not check."
+
+[[roles]]
+id = "worker-medium"
+name = "Worker (medium)"
+agent = "opencode"
+model = "opencode-go/deepseek-v4.1-flash"
+parent = "lead"
+permissions = { read = true, write = "worktree", run = "worktree" }
+standbys = 1
+hands_to = ["worker-hard"]
+job = "Do a task that spans several files in one layer, in your own worktree of {folder}. You have 90 minutes. If you fail or stall, say so plainly, and the task goes to the hard worker. Commit on your branch only."
+
+[[roles]]
+id = "worker-hard"
+name = "Worker (hard)"
+agent = "claude"
+model = "sonnet"
+parent = "lead"
+permissions = { read = true, write = "worktree", run = "worktree" }
+standbys = 1
+job = "Do the hard tasks in your own worktree of {folder}: work that touches Rust and the screen together, more than about five files, an unknown cause, or anything an agent calls. Commit on your branch only. Report what is proven and what is not."
+
+[[roles]]
+id = "designer"
+name = "Designer"
+agent = "claude"
+model = "fable"
+parent = "lead"
+permissions = { read = true, write = "worktree", run = "worktree" }
+standbys = 0
+job = "Design screens and mocks for {folder} in your own worktree: layout, colour tokens, short plain copy. Show light and dark. Commit on your branch only. Report what is a mock and what is built."
+
+[[roles]]
+id = "checker"
+name = "Checker"
+agent = "claude"
+model = "sonnet"
+parent = "lead"
+check = true
+permissions = { read = true, write = "scoped", write_scope = "evidence", run = "worktree" }
+standbys = 1
+hands_to = ["lead"]
+job = "Check a finished branch in the real app, headless, and keep the proof in the evidence folder. Say pass or fail. On a fail, hand it back to the lead with what broke. Stop after the allowed fix loops and let the lead decide."

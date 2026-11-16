@@ -159,3 +159,8 @@ fn wait_for_pane(project: &str, handle: &str) -> Result<String, StartFailure> {
         std::thread::sleep(POLL);
     }
 }
+
+/// Whether `model` is on `agent_type`'s own list of models (an agent without a list takes any name).
+pub fn model_ok(agent_type: &str, model: &str) -> bool {
+    crate::agent_runs::model_check::check_for_agent(agent_type, model).is_ok()
+}

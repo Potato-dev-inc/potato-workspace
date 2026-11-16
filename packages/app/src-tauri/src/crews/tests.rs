@@ -13,11 +13,11 @@ fn state(id: &str) -> AgentState {
 }
 
 fn role(name: &str, agent: &str, parent: Option<&str>) -> Role {
-    Role { name: name.into(), agent_type: agent.into(), task: format!("Do the {name} job in {{folder}}"), parent: parent.map(String::from) }
+    Role { name: name.into(), agent_type: agent.into(), task: format!("Do the {name} job in {{folder}}"), parent: parent.map(String::from), ..Role::default() }
 }
 
 fn crew(roles: Vec<Role>) -> Crew {
-    Crew { name: "Review team".into(), roles }
+    Crew { name: "Review team".into(), roles, ..Crew::default() }
 }
 
 fn codes(c: &Crew) -> Vec<&'static str> {

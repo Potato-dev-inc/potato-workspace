@@ -70,6 +70,7 @@ import { flow } from './en/flow';
 import { appUx } from './en/appUx';
 import { deskReview } from './en/deskReview';
 import { devices } from './en/devices';
+import { crews } from './en/crews';
 import { agentRules } from './en/agentRules';
 import { rail } from './en/rail';
 
@@ -142,6 +143,7 @@ export const en = {
   ...appUx,
   ...deskReview,
   ...devices,
+  ...crews,
   ...agentRules,
   ...rail,
   ...timeline,

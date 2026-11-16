@@ -20,6 +20,7 @@ export const DEV_LABS_KEYS = [
   'project_guide_enabled',
   'timeline_day_enabled',
   'smaller_updates_enabled',
+  'crews_enabled',
   'markup_bar_enabled',
 ] as const;
 

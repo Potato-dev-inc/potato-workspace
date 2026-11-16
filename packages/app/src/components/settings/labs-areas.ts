@@ -17,6 +17,7 @@ const AREA_OF: Record<string, LabsArea> = {
   'red-to-green': 'Helpers',
   'agent-browser-labs': 'Helpers',
   'project-guide-labs': 'Helpers',
+  'crews-labs': 'Helpers',
   'devices-labs': 'Devices',
   'lend-labs': 'Devices',
   'spaces-labs': 'Team',
@@ -50,4 +51,5 @@ export const LABS_SWITCH_KEYS: Partial<Record<string, keyof Settings>> = {
   'project-guide-labs': 'project_guide_enabled',
   'markup-bar-labs': 'markup_bar_enabled',
   'smaller-updates-labs': 'smaller_updates_enabled',
+  'crews-labs': 'crews_enabled',
 };

@@ -12,7 +12,7 @@ export interface ConfigArgs {
   values: Record<string, string>;
 }
 
-export const CONFIG_COMMANDS = new Set(['settings', 'labs', 'status', 'agents', 'models', 'projects', 'standby']);
+export const CONFIG_COMMANDS = new Set(['settings', 'labs', 'status', 'agents', 'models', 'projects', 'standby', 'config', 'crew']);
 
 export const CONFIG_USAGE = `usage:
   potato-workspace status
@@ -22,11 +22,14 @@ export const CONFIG_USAGE = `usage:
   potato-workspace models list AGENT
   potato-workspace projects list
   potato-workspace standby list | add --name N --agent A [--model M] [--project P] [--after wait|close] | remove NAME | close NAME
+  potato-workspace config export [--out FILE] | diff FILE | import FILE
+  potato-workspace crew list | show ID | validate FILE
 standby: "remove" only takes a standby off its agent (it keeps running); "close" stops it.
+config: the file holds allowed settings, Labs switches, model defaults and standbys. Secrets, logins, lending and devices are never in it.
 flags: --json  --yes (apply a change)  --dry-run (show only)  --wait-ms N (wait for the Allow card)
 exit codes: 0 ok, 1 failed, 4 app not reachable, 5 needs --yes (nothing changed), 6 refused`;
 
-const VALUE_FLAGS = new Set(['name', 'agent', 'model', 'project', 'after']);
+const VALUE_FLAGS = new Set(['name', 'agent', 'model', 'project', 'after', 'out']);
 const KNOWN = new Set(['json', 'yes', 'y', 'dry-run', 'help', 'h', 'wait-ms', ...VALUE_FLAGS]);
 
 /** The parsed args, or `{ problem }` for a flag the commands do not know. */

@@ -231,12 +231,12 @@ impl TuiProfile for Claude {
 
     /// The aliases plus the few special names `--model` takes; a full id (`claude-...`) passes by spelling.
     fn model_check_list(&self) -> Option<Vec<String>> {
-        Some(["opus", "sonnet", "haiku", "default", "best", "opusplan"].map(String::from).to_vec())
+        Some(["opus", "sonnet", "haiku", "fable", "default", "best", "opusplan"].map(String::from).to_vec())
     }
 
     fn model_spelling_valid(&self, model: &str) -> bool {
         let model = model.trim().to_ascii_lowercase();
-        model.starts_with("claude-") || model.strip_suffix("[1m]").is_some_and(|alias| ["opus", "sonnet", "haiku"].contains(&alias))
+        model.starts_with("claude-") || model.starts_with("fable") || model.strip_suffix("[1m]").is_some_and(|alias| ["opus", "sonnet", "haiku"].contains(&alias))
     }
 
     fn extract_result(&self, output: &str, exit_code: i32) -> Option<String> {

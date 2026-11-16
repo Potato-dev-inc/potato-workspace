@@ -2,8 +2,6 @@
 // row menu, `standby.new` from What's new). Agent + Model + Enter makes one; "What it does" is optional and only gives it a
 // name (with none, the helper is named "<Agent> · <model>"). Replaces the old modal dialog. Mounted once in the cockpit.
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { createPortal } from 'react-dom';
-import { useDismissable } from '../../hooks/useDismissable';
 import { useT, type MessageKey } from '../../i18n';
 import { errorSentence } from '../../lib/sayError';
 import { useAgentRegistry } from '../../lib/agentRegistry';
@@ -12,6 +10,7 @@ import { NEW_STANDBY_EVENT, tauriStandbyHelpersApi, useStandbyHelpers, type NewS
 import { registerAction } from '../../whatsnew/registry';
 import '../../styles/standby-rows.css';
 import { AgentLogo } from '../common/AgentLogo';
+import { Popover } from '../common/Floating';
 import { ModelPicker } from '../common/ModelPicker';
 
 export const HELPER_RECENT_KEY = 'potato.helperRecent.v1';
@@ -76,10 +75,7 @@ export function AddHelperPopover({
   const [model, setModel] = useState('');
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
-  const ref = useRef<HTMLFormElement>(null);
   const addRef = useRef<HTMLButtonElement>(null);
-  // The model menu floats outside the card (a portal): it counts as inside, or using it would close the card.
-  const modelMenuRef = useRef<HTMLDivElement | null>(null);
   const frontRef = useRef(front);
   frontRef.current = front;
   const [recent, setRecent] = useState<RecentHelper[]>([]);
@@ -109,8 +105,6 @@ export function AddHelperPopover({
       off();
     };
   }, [show]);
-  // Escape closes the model menu first (the menu's own rule); the card stays until the next one.
-  useDismissable(req !== null, { inside: [ref, modelMenuRef], anchor: ref, onDismiss: (why) => !(why === 'escape' && modelMenuRef.current) && setReq(null) });
   useEffect(() => {
     if (req) addRef.current?.focus();
   }, [req]);
@@ -149,26 +143,28 @@ export function AddHelperPopover({
     void create({ name: r.name ?? autoHelperName(label, r.model), agent: r.agent, model: r.model, remember: r });
   };
 
-  const x = Math.max(8, Math.min(req.anchor?.x ?? 24, window.innerWidth - W - 8));
-  const y = Math.max(8, Math.min(req.anchor?.y ?? 80, window.innerHeight - 340));
+  const point = { x: Math.max(8, Math.min(req.anchor?.x ?? 24, window.innerWidth - W - 8)), y: Math.max(8, req.anchor?.y ?? 80) };
   const under = req.home && homeLabel ? homeLabel(req.home) : null;
   const chip = 'ah-chip';
   const on = 'is-on';
   const off = '';
 
-  const body = (
-    <form
-      ref={ref}
-      role="dialog"
-      aria-label={t('standby.addTitle')}
-      data-testid="add-helper"
-      className="ah-pop fixed z-50 grid gap-3 rounded-xl p-3 text-sm shadow-xl"
-      style={{ left: x, top: y, width: W }}
+  // The shared floating layer: top layer, closes through useDismissable, and the model menu inside it is a child layer,
+  // so using it never counts as "outside" the card.
+  return (
+    <Popover
+      as="form"
+      point={point}
+      align="start"
+      label={t('standby.addTitle')}
+      testId="add-helper"
+      className="ah-pop grid gap-3 rounded-xl p-3 text-sm shadow-xl"
+      style={{ width: W }}
+      onClose={() => setReq(null)}
       onSubmit={(e) => {
         e.preventDefault();
         submit();
       }}
-      onKeyDown={(e) => e.key === 'Escape' && !modelMenuRef.current && setReq(null)}
     >
       <div>
         <div className="font-semibold">{t('standby.addTitle')}</div>
@@ -218,7 +214,7 @@ export function AddHelperPopover({
       </div>
       <div className="grid gap-1">
         <span className="text-xs ah-muted">{t('standby.model')}</span>
-        {agentId && <ModelPicker testId="add-helper-model" menuRef={modelMenuRef} label={t('standby.model')} state={options} value={model} onChange={setModel} defaultWord={t('models.agentDefault')} />}
+        {agentId && <ModelPicker testId="add-helper-model" label={t('standby.model')} state={options} value={model} onChange={setModel} defaultWord={t('models.agentDefault')} />}
       </div>
       <div className="grid gap-1">
         <span className="text-xs ah-muted">{t('standby.role')}</span>
@@ -254,7 +250,6 @@ export function AddHelperPopover({
           {t('standby.add')}
         </button>
       </div>
-    </form>
+    </Popover>
   );
-  return createPortal(body, document.querySelector('.cockpit') ?? document.body);
 }

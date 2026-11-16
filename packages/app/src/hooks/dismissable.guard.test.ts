@@ -28,8 +28,7 @@ describe('every dropdown closes through useDismissable', () => {
     const uses = (rel: string) => readFileSync(path.join(components, rel), 'utf8').includes('useDismissable');
     for (const rel of [
       'cockpit/newagent/NewAgentPage.tsx', // the New agent project picker
-      'cockpit/FloatingMenu.tsx', // the New agent menu and other floating menus
-      'common/ModelPicker.tsx', // the model picker
+      'common/Floating.tsx', // the shared Popover and Menu (the New agent menu and other floating menus)
       'chat/ChipMenu.tsx', // the chat chips (agent, mode, model)
       'chat/AttachMenu.tsx',
       'cockpit/UsageBar.tsx',

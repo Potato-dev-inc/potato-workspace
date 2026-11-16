@@ -797,6 +797,22 @@ export const generalRows: RowDef[] = [
       />
     ),
   },
+  {
+    id: 'crews-labs',
+    label: 'Crews',
+    hint: 'See your saved crews of agents. Read-only for now.',
+    keywords: 'crews crew team roles agents orchestrator checker difficulty routing workers canvas labs early',
+    group: 'Labs',
+    labs: { name: 'Crews', about: 'See your saved crews of agents (read-only for now).' },
+    render: (env) => (
+      <SettingToggle
+        label={t('settings.row.crews-labs.label')}
+        description={t('settings.row.crews-labs.hint')}
+        checked={env.settings.crews_enabled ?? false}
+        onChange={(value) => void env.patch({ crews_enabled: value })}
+      />
+    ),
+  },
   { id: 'live-room', label: 'Live Room', hint: 'Let people with a link watch a chat. Pick the link address, how long and how many.', keywords: 'live room share stream watch link relay viewers broadcast default length', group: 'Live Room', render: (env) => <LiveRoomRow onSaved={env.markSaved} /> },
   { id: 'version', label: 'Version', hint: 'Check for updates and download the installer.', keywords: 'app version update release download install', group: 'About', render: () => <VersionRow /> },
   {

@@ -8,7 +8,7 @@ var __export = (target, all) => {
 
 // packages/cli/src/index.ts
 import { spawn as spawn2 } from "node:child_process";
-import { existsSync as existsSync2, readFileSync } from "node:fs";
+import { existsSync as existsSync2, readFileSync as readFileSync2 } from "node:fs";
 import { fileURLToPath as fileURLToPath2 } from "node:url";
 import { dirname as dirname3, join as join3, resolve as resolve2 } from "node:path";
 
@@ -4958,7 +4958,7 @@ async function runPairLink() {
 }
 
 // packages/cli/src/args.ts
-var CONFIG_COMMANDS = /* @__PURE__ */ new Set(["settings", "labs", "status", "agents", "models", "projects", "standby"]);
+var CONFIG_COMMANDS = /* @__PURE__ */ new Set(["settings", "labs", "status", "agents", "models", "projects", "standby", "config"]);
 var CONFIG_USAGE = `usage:
   potato-workspace status
   potato-workspace settings list | get KEY | set KEY VALUE [KEY VALUE ...] | reset KEY
@@ -4967,10 +4967,12 @@ var CONFIG_USAGE = `usage:
   potato-workspace models list AGENT
   potato-workspace projects list
   potato-workspace standby list | add --name N --agent A [--model M] [--project P] [--after wait|close] | remove NAME | close NAME
+  potato-workspace config export [--out FILE] | diff FILE | import FILE
 standby: "remove" only takes a standby off its agent (it keeps running); "close" stops it.
+config: the file holds allowed settings, Labs switches, model defaults and standbys. Secrets, logins, lending and devices are never in it.
 flags: --json  --yes (apply a change)  --dry-run (show only)  --wait-ms N (wait for the Allow card)
 exit codes: 0 ok, 1 failed, 4 app not reachable, 5 needs --yes (nothing changed), 6 refused`;
-var VALUE_FLAGS = /* @__PURE__ */ new Set(["name", "agent", "model", "project", "after"]);
+var VALUE_FLAGS = /* @__PURE__ */ new Set(["name", "agent", "model", "project", "after", "out"]);
 var KNOWN = /* @__PURE__ */ new Set(["json", "yes", "y", "dry-run", "help", "h", "wait-ms", ...VALUE_FLAGS]);
 function parseConfigArgs(argv) {
   const [command = "", ...rest] = argv;
@@ -5325,11 +5327,13 @@ async function runLabs(ctx) {
   }
 }
 
-// packages/cli/src/commands/standby.ts
-var USAGE = "usage: potato-workspace standby list | add --name N --agent A [--model M] [--project P] [--after wait|close] | remove NAME | close NAME";
+// packages/cli/src/commands/plan.ts
+async function makePlan(ctx, ops) {
+  return ctx.bridge.post("/config/plan", { ops });
+}
 async function planAndApply(ctx, ops) {
   const { bridge, io, args } = ctx;
-  const plan = await bridge.post("/config/plan", { ops });
+  const plan = await makePlan(ctx, ops);
   if (!args.json) for (const line of plan.lines) io.out(line);
   if (plan.changes_anything === false) {
     if (args.json) io.out(JSON.stringify({ plan, applied: false, reason: "no change" }));
@@ -5361,6 +5365,9 @@ async function planAndApply(ctx, ops) {
   }
   return EXIT.ok;
 }
+
+// packages/cli/src/commands/standby.ts
+var USAGE = "usage: potato-workspace standby list | add --name N --agent A [--model M] [--project P] [--after wait|close] | remove NAME | close NAME";
 function oneName(args, rest, verb) {
   if (rest.length !== 1) throw new CliError(EXIT.failed, `usage: potato-workspace standby ${verb} NAME`);
   return rest[0];
@@ -5505,6 +5512,595 @@ async function runProjects(ctx) {
   return EXIT.ok;
 }
 
+// packages/cli/src/commands/config.ts
+import { readFileSync, writeFileSync } from "node:fs";
+
+// packages/cli/src/commands/config-file.ts
+var CONFIG_VERSION = 1;
+var FOLDER = "{folder}";
+var EXPORTABLE_SETTINGS = [
+  "opencode_model_provider",
+  "opencode_model_id",
+  "confirm_close_running_pane",
+  "checkpoints_enabled",
+  "checkpoints_keep",
+  "away_minutes",
+  "budget_default_turns",
+  "budget_default_minutes",
+  "right_size_suggest",
+  "agent_hooks_mode",
+  "pane_mcp_enabled",
+  "show_terminals",
+  "handoff_mode",
+  "handoff_fixed_notes",
+  "desktop_pet_size",
+  "desktop_pet_quiet",
+  "keep_awake_while_working",
+  "helper_answers_enabled",
+  "early_versions_enabled"
+];
+var EXPORTABLE = new Set(EXPORTABLE_SETTINGS);
+var MODEL_KEYS = { default: "agent_default_models", helper_default: "helper_default_models" };
+var ConfigFileError = class extends Error {
+};
+function projectLabel(project, currentFolder) {
+  const clean = project.trim();
+  if (!clean) return FOLDER;
+  if (currentFolder && sameFolder(clean, currentFolder)) return FOLDER;
+  const name = lastSegment(clean);
+  return name && name !== "." && name !== ".." ? name : FOLDER;
+}
+function sameFolder(a, b) {
+  const norm = (path) => path.trim().replace(/\\/g, "/").replace(/\/+$/, "").toLowerCase();
+  return norm(a) === norm(b);
+}
+function lastSegment(path) {
+  const parts = path.trim().replace(/\\/g, "/").replace(/\/+$/, "").split("/");
+  return parts[parts.length - 1] ?? "";
+}
+function exportDocument(catalog, standbys, currentFolder) {
+  const doc = { settings: /* @__PURE__ */ new Map(), labs: /* @__PURE__ */ new Map(), models: {}, standby: [] };
+  const byKey = new Map(catalog.settings.map((entry) => [entry.key, entry]));
+  const refused = new Set(catalog.refused ?? []);
+  for (const key of EXPORTABLE_SETTINGS) {
+    const entry = byKey.get(key);
+    if (!entry || refused.has(key) || looksSecret(key)) continue;
+    const value = entry.saved;
+    if (value === null || value === void 0) continue;
+    if (typeof value !== "string" && typeof value !== "number" && typeof value !== "boolean") continue;
+    doc.settings.set(key, value);
+  }
+  for (const key of catalog.labs) {
+    const entry = byKey.get(key);
+    if (!entry || refused.has(key) || looksSecret(key)) continue;
+    if (typeof entry.saved === "boolean") doc.labs.set(key, entry.saved);
+  }
+  for (const [section, settingKey] of Object.entries(MODEL_KEYS)) {
+    const saved = byKey.get(settingKey)?.saved;
+    const models = stringMap(saved);
+    if (models) doc.models[section] = models;
+  }
+  for (const helper of standbys) {
+    if (helper.warm) continue;
+    const after = helper.after_task === "close" ? "close" : "wait";
+    doc.standby.push({
+      name: helper.name,
+      agent: helper.agent,
+      ...helper.model ? { model: helper.model } : {},
+      project: projectLabel(helper.project, currentFolder),
+      after
+    });
+  }
+  return doc;
+}
+function stringMap(value) {
+  if (typeof value !== "object" || value === null || Array.isArray(value)) return void 0;
+  const out = {};
+  for (const [key, item] of Object.entries(value)) {
+    if (typeof item !== "string") return void 0;
+    out[key] = item;
+  }
+  return Object.keys(out).length > 0 ? out : void 0;
+}
+function toToml(doc) {
+  const lines = [
+    "# Potato Workspace setup. Secrets, logins, lending and devices are never in this file.",
+    `version = ${CONFIG_VERSION}`
+  ];
+  if (doc.settings.size > 0) {
+    lines.push("", "[settings]");
+    for (const key of EXPORTABLE_SETTINGS) {
+      const value = doc.settings.get(key);
+      if (value !== void 0) lines.push(`${key} = ${tomlValue(value)}`);
+    }
+  }
+  if (doc.labs.size > 0) {
+    lines.push("", "[labs]");
+    for (const [key, value] of doc.labs) lines.push(`${key} = ${tomlValue(value)}`);
+  }
+  const models = Object.entries(doc.models).filter(([, value]) => value !== void 0);
+  if (models.length > 0) {
+    lines.push("", "[models]");
+    for (const [section, value] of models) lines.push(`${section} = ${inlineTable(value)}`);
+  }
+  for (const helper of doc.standby) {
+    lines.push("", "[[standby]]");
+    lines.push(`name = ${tomlValue(helper.name)}`);
+    lines.push(`agent = ${tomlValue(helper.agent)}`);
+    if (helper.model) lines.push(`model = ${tomlValue(helper.model)}`);
+    lines.push(`project = ${tomlValue(helper.project)}`);
+    lines.push(`after = ${tomlValue(helper.after)}`);
+  }
+  return `${lines.join("\n")}
+`;
+}
+function tomlValue(value) {
+  if (typeof value === "string") return JSON.stringify(value);
+  if (typeof value === "boolean") return value ? "true" : "false";
+  return Number.isFinite(value) ? String(value) : "0";
+}
+function inlineTable(map) {
+  const parts = Object.keys(map).sort().map((key) => `${key} = ${tomlValue(map[key])}`);
+  return `{ ${parts.join(", ")} }`;
+}
+function parseConfigFile(text) {
+  const doc = { settings: /* @__PURE__ */ new Map(), labs: /* @__PURE__ */ new Map(), models: {}, standby: [] };
+  let section = "none";
+  let standby = null;
+  let standbyKeys = /* @__PURE__ */ new Set();
+  let sawVersion = false;
+  const lines = text.split(/\r?\n/);
+  for (let i = 0; i < lines.length; i++) {
+    const where = `line ${i + 1}: `;
+    const line = stripComment(lines[i]).trim();
+    if (!line) continue;
+    if (line.startsWith("[[")) {
+      if (!line.endsWith("]]")) throw new ConfigFileError(`${where}a section header ends with "]]".`);
+      const name = line.slice(2, -2).trim();
+      if (name !== "standby") throw new ConfigFileError(`${where}"${name}" is not a section this file may have.`);
+      standby = { name: "", agent: "", project: FOLDER, after: "wait" };
+      standbyKeys = /* @__PURE__ */ new Set();
+      doc.standby.push(standby);
+      section = "standby";
+      continue;
+    }
+    if (line.startsWith("[")) {
+      if (!line.endsWith("]")) throw new ConfigFileError(`${where}a section header ends with "]".`);
+      const name = line.slice(1, -1).trim();
+      standby = null;
+      if (name === "settings" || name === "labs" || name === "models") {
+        section = name;
+        continue;
+      }
+      throw new ConfigFileError(`${where}"${name}" is not a section this file may have. Allowed: [settings], [labs], [models], [[standby]].`);
+    }
+    const eq = indexOutsideString(line, "=");
+    if (eq < 0) throw new ConfigFileError(`${where}write "key = value".`);
+    const key = line.slice(0, eq).trim();
+    if (!/^[A-Za-z_][A-Za-z0-9_-]*$/.test(key)) throw new ConfigFileError(`${where}"${key}" is not a name this file may use.`);
+    const value = parseValue2(line.slice(eq + 1).trim(), where);
+    if (section === "none") {
+      if (key !== "version") throw new ConfigFileError(`${where}"${key}" must be inside a section.`);
+      if (sawVersion) throw new ConfigFileError(`${where}version is given twice.`);
+      if (value !== CONFIG_VERSION) throw new ConfigFileError(`${where}this file says version ${String(value)}. This version reads version ${CONFIG_VERSION}.`);
+      sawVersion = true;
+      continue;
+    }
+    if (section === "settings") {
+      if (doc.settings.has(key)) throw new ConfigFileError(`${where}"${key}" is given twice.`);
+      if (!EXPORTABLE.has(key)) {
+        throw new ConfigFileError(`${where}"${key}" is not a setting this file may change. The file may only change: ${EXPORTABLE_SETTINGS.join(", ")}.`);
+      }
+      if (typeof value === "object") throw new ConfigFileError(`${where}"${key}" needs a single value, not a table.`);
+      doc.settings.set(key, value);
+      continue;
+    }
+    if (section === "labs") {
+      if (doc.labs.has(key)) throw new ConfigFileError(`${where}"${key}" is given twice.`);
+      if (typeof value !== "boolean") throw new ConfigFileError(`${where}"${key}" needs true or false.`);
+      doc.labs.set(key, value);
+      continue;
+    }
+    if (section === "models") {
+      if (key !== "default" && key !== "helper_default") {
+        throw new ConfigFileError(`${where}"${key}" is not a models key. Use default or helper_default.`);
+      }
+      if (doc.models[key] !== void 0) throw new ConfigFileError(`${where}"${key}" is given twice.`);
+      if (typeof value !== "object") throw new ConfigFileError(`${where}"${key}" needs a table, like { claude = "sonnet" }.`);
+      const models = {};
+      for (const [agent, model] of Object.entries(value)) {
+        if (typeof model !== "string") throw new ConfigFileError(`${where}${key}.${agent} needs a model name in quotes.`);
+        models[agent] = model;
+      }
+      doc.models[key] = models;
+      continue;
+    }
+    if (!standby) throw new ConfigFileError(`${where}"${key}" must follow a [[standby]] line.`);
+    if (standbyKeys.has(key)) throw new ConfigFileError(`${where}"${key}" is given twice in one standby.`);
+    standbyKeys.add(key);
+    if (key === "name" || key === "agent" || key === "model" || key === "project" || key === "after") {
+      if (typeof value !== "string") throw new ConfigFileError(`${where}${key} needs text in quotes.`);
+      if (key === "after") {
+        if (value !== "wait" && value !== "close") {
+          throw new ConfigFileError(`${where}after is "wait" or "close", not "${value}".`);
+        }
+        standby.after = value;
+      } else if (key === "name") {
+        standby.name = value;
+      } else if (key === "agent") {
+        standby.agent = value;
+      } else if (key === "model") {
+        standby.model = value;
+      } else {
+        standby.project = value;
+      }
+      continue;
+    }
+    throw new ConfigFileError(`${where}a standby has name, agent, model, project and after, not "${key}".`);
+  }
+  if (!sawVersion) throw new ConfigFileError('the file needs "version = 1" at the top.');
+  validateStandbys(doc.standby);
+  return doc;
+}
+function validateStandbys(standbys) {
+  const names = /* @__PURE__ */ new Set();
+  for (const [index, helper] of standbys.entries()) {
+    const where = `standby ${index + 1}: `;
+    if (!helper.name.trim()) throw new ConfigFileError(`${where}a name is needed.`);
+    if (!helper.agent.trim()) throw new ConfigFileError(`${where}an agent is needed (for example "opencode").`);
+    if (!helper.project.trim()) throw new ConfigFileError(`${where}a project is needed ("{folder}" or a project name).`);
+    const lower = helper.name.trim().toLowerCase();
+    if (names.has(lower)) throw new ConfigFileError(`${where}two standbys are called "${helper.name}". Use one name each.`);
+    names.add(lower);
+    helper.name = helper.name.trim();
+    helper.agent = helper.agent.trim();
+    helper.project = helper.project.trim();
+    if (helper.model !== void 0) {
+      const model = helper.model.trim();
+      if (model) helper.model = model;
+      else delete helper.model;
+    }
+    if (!helper.after) helper.after = "wait";
+  }
+}
+function parseValue2(text, where) {
+  if (!text) throw new ConfigFileError(`${where}the value is missing.`);
+  if (text.startsWith('"')) {
+    const [value, rest] = readString(text, where);
+    if (rest.trim()) throw new ConfigFileError(`${where}unexpected text after the text value.`);
+    return value;
+  }
+  if (text === "true") return true;
+  if (text === "false") return false;
+  if (/^[+-]?\d+(?:\.\d+)?$/.test(text) && Number.isFinite(Number(text))) return Number(text);
+  if (text.startsWith("{")) return parseInlineTable(text, where);
+  throw new ConfigFileError(`${where}"${text}" is not a value this file may use (text in quotes, true, false, a number, or { key = "value" }).`);
+}
+function readString(text, where) {
+  let out = "";
+  for (let i = 1; i < text.length; i++) {
+    const ch = text[i];
+    if (ch === '"') return [out, text.slice(i + 1)];
+    if (ch !== "\\") {
+      out += ch;
+      continue;
+    }
+    const escape = text[++i];
+    switch (escape) {
+      case "n":
+        out += "\n";
+        break;
+      case "t":
+        out += "	";
+        break;
+      case "r":
+        out += "\r";
+        break;
+      case "b":
+        out += "\b";
+        break;
+      case "f":
+        out += "\f";
+        break;
+      case '"':
+        out += '"';
+        break;
+      case "\\":
+        out += "\\";
+        break;
+      case "u": {
+        const hex = text.slice(i + 1, i + 5);
+        if (!/^[0-9a-fA-F]{4}$/.test(hex)) throw new ConfigFileError(`${where}"\\u" needs four hex digits.`);
+        out += String.fromCharCode(Number.parseInt(hex, 16));
+        i += 4;
+        break;
+      }
+      default:
+        throw new ConfigFileError(`${where}"\\${escape ?? ""}" is not an escape this file may use.`);
+    }
+  }
+  throw new ConfigFileError(`${where}a text value is not closed.`);
+}
+var INLINE_VALUE = /^(?:"(?:[^"\\]|\\.)*"|true|false|[+-]?\d+(?:\.\d+)?)$/;
+function parseInlineTable(text, where) {
+  if (!text.endsWith("}")) throw new ConfigFileError(`${where}a table ends with "}".`);
+  const body = text.slice(1, -1).trim();
+  const out = {};
+  if (!body) return out;
+  for (const part of splitOutsideStrings(body, ",", where)) {
+    const piece = part.trim();
+    if (!piece) throw new ConfigFileError(`${where}a table has an empty entry.`);
+    const eq = indexOutsideString(piece, "=");
+    if (eq < 0) throw new ConfigFileError(`${where}a table entry is "key = value".`);
+    const key = piece.slice(0, eq).trim();
+    const raw = piece.slice(eq + 1).trim();
+    if (!/^[A-Za-z_][A-Za-z0-9_-]*$/.test(key)) throw new ConfigFileError(`${where}"${key}" is not a name this file may use.`);
+    if (Object.prototype.hasOwnProperty.call(out, key)) throw new ConfigFileError(`${where}"${key}" is given twice.`);
+    if (!INLINE_VALUE.test(raw)) throw new ConfigFileError(`${where}${key} needs text in quotes, true, false or a number.`);
+    out[key] = parseValue2(raw, where);
+  }
+  return out;
+}
+function splitOutsideStrings(text, separator, where) {
+  const parts = [];
+  let inString = false;
+  let start = 0;
+  for (let i = 0; i < text.length; i++) {
+    const ch = text[i];
+    if (inString) {
+      if (ch === "\\") i++;
+      else if (ch === '"') inString = false;
+      continue;
+    }
+    if (ch === '"') {
+      inString = true;
+      continue;
+    }
+    if (ch === separator) {
+      parts.push(text.slice(start, i));
+      start = i + 1;
+    }
+  }
+  if (inString) throw new ConfigFileError(`${where}a text value is not closed.`);
+  parts.push(text.slice(start));
+  return parts;
+}
+function stripComment(line) {
+  let inString = false;
+  for (let i = 0; i < line.length; i++) {
+    const ch = line[i];
+    if (inString) {
+      if (ch === "\\") i++;
+      else if (ch === '"') inString = false;
+      continue;
+    }
+    if (ch === '"') inString = true;
+    else if (ch === "#") return line.slice(0, i);
+  }
+  return line;
+}
+function indexOutsideString(line, needle) {
+  let inString = false;
+  for (let i = 0; i < line.length; i++) {
+    const ch = line[i];
+    if (inString) {
+      if (ch === "\\") i++;
+      else if (ch === '"') inString = false;
+      continue;
+    }
+    if (ch === '"') inString = true;
+    else if (ch === needle) return i;
+  }
+  return -1;
+}
+function checkAgainst(doc, catalog) {
+  const byKey = new Map(catalog.settings.map((entry) => [entry.key, entry]));
+  const refused = new Set(catalog.refused ?? []);
+  const labs = new Set(catalog.labs);
+  for (const [key, value] of doc.settings) {
+    if (!EXPORTABLE.has(key)) throw new ConfigFileError(`"${key}" is not a setting this file may change.`);
+    if (refused.has(key) || looksSecret(key)) throw new ConfigFileError(`"${key}" cannot be read or changed from the command line.`);
+    const entry = byKey.get(key);
+    if (!entry) throw new ConfigFileError(`this app has no setting "${key}".`);
+    if (!typeMatches(entry.type, value)) throw new ConfigFileError(`${key} takes a ${entry.type}, but the file says ${JSON.stringify(value)}.`);
+  }
+  for (const [key, value] of doc.labs) {
+    if (typeof value !== "boolean") throw new ConfigFileError(`${key} needs true or false.`);
+    if (refused.has(key) || looksSecret(key) || !byKey.has(key)) throw new ConfigFileError(`this app has no Labs switch "${key}".`);
+    if (!labs.has(key)) throw new ConfigFileError(`"${key}" is not a Labs switch in this app.`);
+  }
+  for (const section of ["default", "helper_default"]) {
+    const models = doc.models[section];
+    if (models === void 0) continue;
+    const setting = MODEL_KEYS[section];
+    if (refused.has(setting) || !byKey.has(setting)) throw new ConfigFileError(`this app cannot set ${section} models.`);
+  }
+}
+function typeMatches(type, value) {
+  switch (type) {
+    case "boolean":
+      return typeof value === "boolean";
+    case "number":
+      return typeof value === "number";
+    case "string":
+      return typeof value === "string";
+    case "any":
+      return typeof value === "string" || typeof value === "number" || typeof value === "boolean";
+    default:
+      return false;
+  }
+}
+function resolveProject(label, openFolders2) {
+  const clean = label.trim();
+  if (clean === FOLDER) return openFolders2[0];
+  if (!clean) throw new ConfigFileError('a standby needs a project ("{folder}" or a project name).');
+  if (/^[A-Za-z]:[\\/]/.test(clean) || clean.startsWith("/") || clean.startsWith("\\\\")) return clean;
+  const matches = openFolders2.filter((folder) => lastSegment(folder).toLowerCase() === clean.toLowerCase());
+  if (matches.length === 1) return matches[0];
+  if (matches.length === 0) {
+    throw new ConfigFileError(`the file names the project "${clean}", but no open window has that folder. Open it and run again.`);
+  }
+  throw new ConfigFileError(`more than one open folder is called "${clean}". Write the full folder path in the file.`);
+}
+function modelOf(helper) {
+  return helper.model ?? null;
+}
+function planOps(doc, catalog, standbys, openFolders2) {
+  const ops = [];
+  const byKey = new Map(catalog.settings.map((entry) => [entry.key, entry]));
+  const patch = {};
+  for (const [key, value] of doc.settings) {
+    const saved = byKey.get(key)?.saved;
+    if (!same(value, saved)) patch[key] = value;
+  }
+  for (const [key, value] of doc.labs) {
+    const saved = byKey.get(key)?.saved;
+    if (!same(value, saved)) patch[key] = value;
+  }
+  for (const section of ["default", "helper_default"]) {
+    const models = doc.models[section];
+    if (models === void 0) continue;
+    const setting = MODEL_KEYS[section];
+    if (!same(models, byKey.get(setting)?.saved)) patch[setting] = models;
+  }
+  if (Object.keys(patch).length > 0) ops.push({ kind: "settings", patch });
+  const current = standbys.filter((helper) => !helper.warm);
+  const byName = new Map(current.map((helper) => [helper.name.trim().toLowerCase(), helper]));
+  const wanted = /* @__PURE__ */ new Set();
+  for (const helper of doc.standby) {
+    const name = helper.name.trim();
+    const key = name.toLowerCase();
+    wanted.add(key);
+    const existing = byName.get(key);
+    const project = resolveProject(helper.project, openFolders2);
+    const input = { kind: "standby_add", name, agent: helper.agent };
+    if (helper.model) input.model = helper.model;
+    if (project) input.project = project;
+    if (helper.after !== "wait") input.after_task = helper.after;
+    if (!existing) {
+      ops.push(input);
+      continue;
+    }
+    const projectChanged = helper.project !== FOLDER && project !== void 0 && !sameFolder(project, existing.project);
+    const changed = existing.agent.toLowerCase() !== helper.agent.toLowerCase() || modelOf(existing) !== (helper.model ?? null) || (existing.after_task === "close" ? "close" : "wait") !== helper.after || projectChanged;
+    if (!changed) continue;
+    if (existing.id) ops.push({ kind: "standby_close", target: existing.id });
+    ops.push(input);
+  }
+  for (const helper of current) {
+    if (wanted.has(helper.name.trim().toLowerCase())) continue;
+    if (helper.id) ops.push({ kind: "standby_close", target: helper.id });
+  }
+  return ops;
+}
+function same(a, b) {
+  return JSON.stringify(a ?? null) === JSON.stringify(b ?? null);
+}
+
+// packages/cli/src/commands/config.ts
+var CONFIG_FILE_USAGE = "usage: potato-workspace config export [--out FILE] | diff FILE | import FILE [--yes] [--dry-run]";
+var DEFAULT_CONFIG_FILE = "potato-workspace.toml";
+async function openFolders(bridge) {
+  let state;
+  try {
+    state = await bridge.get("/workspace/state");
+  } catch {
+    return [];
+  }
+  const counts = /* @__PURE__ */ new Map();
+  for (const pane of state.panes ?? []) {
+    if (pane.killed || !pane.cwd) continue;
+    counts.set(pane.cwd, (counts.get(pane.cwd) ?? 0) + 1);
+  }
+  return [...counts.entries()].sort((a, b) => b[1] - a[1]).map(([folder]) => folder);
+}
+function asCliError(err) {
+  return err instanceof ConfigFileError ? new CliError(EXIT.failed, err.message) : err;
+}
+function readDoc(file) {
+  let text;
+  try {
+    text = readFileSync(file, "utf8");
+  } catch (err) {
+    throw new CliError(EXIT.failed, `Could not read ${file}: ${err.message}`);
+  }
+  try {
+    return parseConfigFile(text);
+  } catch (err) {
+    throw err instanceof ConfigFileError ? new CliError(EXIT.failed, `${file}: ${err.message}`) : err;
+  }
+}
+async function runExport(ctx, rest) {
+  const { bridge, io, args } = ctx;
+  if (rest.length > 0) throw new CliError(EXIT.failed, CONFIG_FILE_USAGE);
+  const out = args.values.out ?? DEFAULT_CONFIG_FILE;
+  const catalog = await loadCatalog(bridge);
+  const [view, folders] = await Promise.all([
+    bridge.get("/config/standby"),
+    openFolders(bridge)
+  ]);
+  const doc = exportDocument(catalog, view.helpers, folders[0]);
+  const text = toToml(doc);
+  try {
+    writeFileSync(out, text, "utf8");
+  } catch (err) {
+    throw new CliError(EXIT.failed, `Could not write ${out}: ${err.message}`);
+  }
+  const counts = { settings: doc.settings.size, labs: doc.labs.size, standbys: doc.standby.length };
+  if (args.json) {
+    io.out(JSON.stringify({ path: out, ...counts }));
+  } else {
+    io.out(`Wrote ${out} (${counts.settings} settings, ${counts.labs} Labs switches, ${counts.standbys} standbys).`);
+  }
+  return EXIT.ok;
+}
+async function runFileCommand(ctx, sub, rest) {
+  const { bridge, io, args } = ctx;
+  if (rest.length !== 1) throw new CliError(EXIT.failed, CONFIG_FILE_USAGE);
+  const file = rest[0];
+  const doc = readDoc(file);
+  const catalog = await loadCatalog(bridge);
+  const [view, folders] = await Promise.all([
+    bridge.get("/config/standby"),
+    openFolders(bridge)
+  ]);
+  let ops;
+  try {
+    checkAgainst(doc, catalog);
+    ops = planOps(doc, catalog, view.helpers, folders);
+  } catch (err) {
+    throw asCliError(err);
+  }
+  if (ops.length === 0) {
+    if (args.json) io.out(JSON.stringify({ plan: null, changes_anything: false, applied: false, reason: "no change" }));
+    else io.out("Nothing to change.");
+    return EXIT.ok;
+  }
+  if (sub === "diff") {
+    const plan = await makePlan(ctx, ops);
+    if (args.json) {
+      io.out(JSON.stringify({ plan, applied: false }));
+      return EXIT.ok;
+    }
+    for (const line of plan.lines) io.out(line);
+    if (plan.changes_anything === false) io.out("Nothing to change.");
+    return EXIT.ok;
+  }
+  return planAndApply(ctx, ops);
+}
+async function runConfig(ctx) {
+  const [sub, ...rest] = ctx.args.positional;
+  switch (sub) {
+    case "export":
+      return runExport(ctx, rest);
+    case "diff":
+    case "import":
+      return runFileCommand(ctx, sub, rest);
+    default:
+      throw new CliError(EXIT.failed, CONFIG_FILE_USAGE);
+  }
+}
+
 // packages/cli/src/config-cli.ts
 function terminalIo() {
   const inAgentWindow = Boolean((process.env.POTATO_WORKSPACE_PANE_ID ?? "").trim());
@@ -5554,6 +6150,8 @@ async function runConfigCli(argv, io, cliVersion, makeBridge = createBridge) {
         return await runProjects(ctx);
       case "standby":
         return await runStandby(ctx);
+      case "config":
+        return await runConfig(ctx);
       default:
         io.err(CONFIG_USAGE);
         return EXIT.failed;
@@ -5622,6 +6220,11 @@ Usage:
                                 (remove only takes it off its agent; close stops it). Plan first, then apply.
                                 Config flags: --json --yes --dry-run --wait-ms N. Exit 5 = needs --yes.
                                 From an agent window a change raises an Allow card the person answers in the app.
+  potato-workspace config export [--out FILE]   Write the setup (allowed settings, Labs switches, model
+                                defaults and standbys) to a TOML file. No secrets, logins, lending or devices.
+  potato-workspace config diff FILE             What importing the file would change (nothing is touched).
+  potato-workspace config import FILE [--yes] [--dry-run]
+                                Apply the file through the same plan: shows the changes, applies only with --yes.
   potato-workspace version         Print version
   potato-workspace --help          Show this help
 
@@ -5635,7 +6238,7 @@ Worker examples:
 function readVersion() {
   try {
     const pkgPath = join3(__dirname2, "..", "package.json");
-    const pkg = JSON.parse(readFileSync(pkgPath, "utf-8"));
+    const pkg = JSON.parse(readFileSync2(pkgPath, "utf-8"));
     return String(pkg.version);
   } catch {
     return "0.0.0";

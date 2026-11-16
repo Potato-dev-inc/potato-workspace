@@ -376,10 +376,7 @@
   color: var(--label);
 }
 .dev-where-menu {
-  position: absolute;
-  top: calc(100% + 4px);
-  left: 0;
-  z-index: 70;
+  /* Placed by the shared floating layer (components/common/Floating.tsx), in the top layer. */
   min-width: 240px;
   padding: 4px;
   display: flex;

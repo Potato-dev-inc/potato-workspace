@@ -102,6 +102,8 @@ export const SettingsSchema = z.object({
   early_versions_enabled: z.boolean().optional(),
   /** Smaller updates (Labs): an update may take the app-only package and leave the built-in tools alone. Off unless chosen. Rust: commands/update_plan. */
   smaller_updates_enabled: z.boolean().optional(),
+  /** Crews (Settings > General > Labs): shows saved crews, read-only, and lets the command line check a crew file. Off unless chosen. Rust: crews. */
+  crews_enabled: z.boolean().optional(),
   /** The version whose small update failed (written by the app); that version takes the full package. */
   app_only_failed_for: z.string().optional(),
   /** The first-switch sheet for Individual mode was shown and (with "Don't show again") dismissed for good. Absent: show it. */

@@ -7,7 +7,9 @@ import { CONFIG_USAGE, parseConfigArgs } from './args.js';
 import { CliError, DEFAULT_CONSENT_WAIT_MS, EXIT, createBridge, type Bridge, type BridgeOptions } from './bridge.js';
 import { runLabs, runSettings } from './commands/settings.js';
 import { runStandby } from './commands/standby.js';
+import { runCrew } from './commands/crew.js';
 import { runAgents, runModels, runProjects, runStatus } from './commands/read.js';
+import { runConfig } from './commands/config.js';
 import type { Io } from './output.js';
 
 export function terminalIo(): Io {
@@ -63,8 +65,12 @@ export async function runConfigCli(
         return await runModels(ctx);
       case 'projects':
         return await runProjects(ctx);
+      case 'crew':
+        return await runCrew(ctx);
       case 'standby':
         return await runStandby(ctx);
+      case 'config':
+        return await runConfig(ctx);
       default:
         io.err(CONFIG_USAGE);
         return EXIT.failed;

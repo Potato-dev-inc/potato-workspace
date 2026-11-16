@@ -26,6 +26,7 @@ pub const DEV_LABS_KEYS: &[&str] = &[
     "markup_bar_enabled",
     "timeline_day_enabled",
     "smaller_updates_enabled",
+    "crews_enabled",
 ];
 
 /// Tests turn the override on through this; it is off in every test unless a test sets it.
@@ -111,6 +112,7 @@ const PATCHABLE_KEYS: &[&str] = &[
     "agent_default_models",
     "early_versions_enabled",
     "smaller_updates_enabled",
+    "crews_enabled",
     "app_only_failed_for",
 ];
 
@@ -187,6 +189,8 @@ pub fn default_public_settings() -> Value {
         "early_versions_enabled": false,
         // Smaller updates (Labs): an update may take the app-only package and leave the built-in tools alone. Off until chosen. Rust: commands/update_plan.
         "smaller_updates_enabled": false,
+        // Crews (Labs): shows saved crews, read-only, and lets the command line check a crew file. Off until chosen. Rust: crews.
+        "crews_enabled": false,
         // The version whose small update failed; it takes the full package from then on. Written by the app, empty when none.
         "app_only_failed_for": "",
     })
@@ -607,6 +611,14 @@ mod early_versions_tests {
         assert_eq!(with_dev_labs(&default_public_settings(), true)["early_versions_enabled"], json!(false));
         let on = merge_public_settings(&default_public_settings(), &json!({"early_versions_enabled": true}));
         assert!(crate::commands::update_channel::early_versions_on(&on));
+    }
+
+    #[test]
+    fn crews_is_a_dev_labs_key_patchable_and_off_by_default() {
+        assert_eq!(DEV_LABS_KEYS.iter().filter(|k| **k == "crews_enabled").count(), 1);
+        assert!(PATCHABLE_KEYS.contains(&"crews_enabled"));
+        assert_eq!(default_public_settings()["crews_enabled"], json!(false));
+        assert_eq!(with_dev_labs(&default_public_settings(), true)["crews_enabled"], json!(true));
     }
 
     #[test]

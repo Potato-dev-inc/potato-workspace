@@ -15,7 +15,7 @@ import { PhoneNewChat } from '../mobile/PhoneNewChat';
 import { DisabledReason } from '../common/DisabledReason';
 import { SshPanel, WslPanel } from './PlacePanels';
 import '../../styles/devices.css';
-import { useDismissable } from '../../hooks/useDismissable';
+import { Menu } from '../common/Floating';
 
 export interface WhereProps {
   view: DevicesView | null;
@@ -80,6 +80,7 @@ export function NewAgentWhere({ where, children, remember }: { where?: WhereProp
   const [distros, setDistros] = useState<string[]>([]);
   const [hosts, setHosts] = useState<SshHost[]>([]);
   const wrap = useRef<HTMLDivElement>(null);
+  const pillBtn = useRef<HTMLButtonElement>(null);
   const enabled = where?.view?.enabled === true;
   // The Linux places and the SSH machines are read when the picker opens (the list of distros never boots one).
   useEffect(() => {
@@ -104,8 +105,7 @@ export function NewAgentWhere({ where, children, remember }: { where?: WhereProp
   const pickedWsl = pick?.startsWith('wsl:') ? runtimes.find((r) => r.id === pick && r.kind === 'wsl') : undefined;
   const pickedSsh = pick?.startsWith('ssh:') ? runtimes.find((r) => r.id === pick && r.kind === 'ssh') : undefined;
   const bridge = useMemo(() => (picked ? makeRemoteClient(picked.node, api) : null), [picked?.node, api]);
-  // A closed menu and a click elsewhere end the picker; a device that went away ends the pick.
-  useDismissable(open, { inside: [wrap], anchor: wrap, ignore: ['escape'], onDismiss: () => setOpen(false) });
+  // A device that went away ends the pick. The menu itself closes through the shared floating layer.
   useEffect(() => {
     if (pick && !pick.startsWith('wsl:') && !pick.startsWith('ssh:') && !where?.view?.devices.some((d) => d.node === pick)) setPickRaw(null);
   }, [pick, where?.view]);
@@ -131,11 +131,11 @@ export function NewAgentWhere({ where, children, remember }: { where?: WhereProp
   const pill = (
       <div className={`dev-where${inline ? ' dev-where--row' : ''}`} ref={wrap} data-testid="where">
         {!inline && <span>{t('devices.where')}</span>}
-        <button type="button" className="dev-where-pill" aria-label={inline ? `${t('devices.where')}: ${here}` : undefined} aria-haspopup="menu" aria-expanded={open} onClick={() => setOpen((v) => !v)} data-testid="where-pill">
+        <button ref={pillBtn} type="button" className="dev-where-pill" aria-label={inline ? `${t('devices.where')}: ${here}` : undefined} aria-haspopup="menu" aria-expanded={open} onClick={() => setOpen((v) => !v)} data-testid="where-pill">
           {here} ▾
         </button>
         {open && (
-          <div className="dev-where-menu" role="menu" aria-label={t('devices.pickWhere')}>
+          <Menu anchorRef={pillBtn} align="start" className="dev-where-menu" label={t('devices.pickWhere')} onClose={() => setOpen(false)}>
             {runtimes.map((r) => {
               const pickable = r.kind === 'device' ? r.pickable : true;
               const on = r.kind === 'this' ? pick === null : pick === r.id;
@@ -162,7 +162,7 @@ export function NewAgentWhere({ where, children, remember }: { where?: WhereProp
             <button type="button" role="menuitem" className="dev-where-row" data-testid="where-add" onClick={() => (setOpen(false), where!.onAddDevice())}>
               <span>{t('devices.addDots')}</span>
             </button>
-          </div>
+          </Menu>
         )}
       </div>
   );

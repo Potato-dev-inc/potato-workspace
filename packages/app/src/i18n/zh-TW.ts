@@ -85,6 +85,7 @@ import { flow } from './zh-TW/flow';
 import { appUx } from './zh-TW/appUx';
 import { deskReview } from './zh-TW/deskReview';
 import { devices } from './zh-TW/devices';
+import { crews } from './zh-TW/crews';
 import { agentRules } from './zh-TW/agentRules';
 import { rail } from './zh-TW/rail';
 import { connect } from './zh-TW/connect';
@@ -159,6 +160,7 @@ export const zhTW: Partial<Record<EnglishKey, string>> = {
   ...appUx,
   ...deskReview,
   ...devices,
+  ...crews,
   ...agentRules,
   ...rail,
   ...connect,

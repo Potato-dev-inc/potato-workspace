@@ -36,10 +36,11 @@
 
 .cn-tabs {
   display: flex;
+  flex-wrap: wrap;
   gap: 4px;
   margin-top: 6px;
   border-bottom: 1px solid var(--sep);
-  overflow-x: auto;
+  overflow: visible;
 }
 .cockpit .cn-tab {
   padding: 8px 14px;

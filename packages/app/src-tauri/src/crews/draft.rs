@@ -46,10 +46,10 @@ pub fn draft(panes: &[TreePane], root_id: &str, env: &Env<'_>) -> Result<Draft, 
         let name = unique_name(&role_name(pane, env), &roles);
         let parent = pane.parent.as_ref().filter(|_| pane.id != root_id).and_then(|p| names.iter().find(|(id, _)| id == p)).map(|(_, n)| n.clone());
         let own: Vec<String> = pane.folders.iter().chain(folders.iter()).cloned().collect();
-        roles.push(Role { name: name.clone(), agent_type: pane.agent_type.clone(), task: task_template((env.first_task_of)(&pane.id).as_deref(), &own, env), parent });
+        roles.push(Role { name: name.clone(), agent_type: pane.agent_type.clone(), task: task_template((env.first_task_of)(&pane.id).as_deref(), &own, env), parent, ..Role::default() });
         names.push((pane.id.clone(), name));
     }
-    Ok(Draft { crew: Crew { name: crew_name(&roles), roles }, omitted })
+    Ok(Draft { crew: Crew { name: crew_name(&roles), roles, ..Crew::default() }, omitted })
 }
 
 /// The root and everything under it, breadth first, at most `MAX_ROLES`; and how many were left out.
