@@ -17,9 +17,55 @@ use serde::Serialize;
 use std::io::Read;
 use std::path::{Path, PathBuf};
 use std::process::Stdio;
+use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::Arc;
 use std::time::{Duration, Instant};
 
 const KEEP_OUTPUT: usize = 6000;
+
+/// One setup step runs at a time in the whole app: a second one (a second window, a second press) is refused while a
+/// tool process of the first is still going. `prepare` of a new run is a step like any other, so it is refused too.
+static BUSY: AtomicBool = AtomicBool::new(false);
+/// The cancel flag of the step that holds `BUSY`. "Cancel" sets it; only that step's own thread reads it (see `run_raw`).
+static CANCEL: std::sync::Mutex<Option<Arc<AtomicBool>>> = std::sync::Mutex::new(None);
+
+thread_local! {
+    /// The flag of the step running on THIS thread (none outside `exclusive`).
+    static MY_CANCEL: std::cell::RefCell<Option<Arc<AtomicBool>>> = const { std::cell::RefCell::new(None) };
+}
+
+const BUSY_MESSAGE: &str = "Another setup is still running. Wait for it to stop, then try again.";
+
+/// Runs `step` as the only running setup step, or says another one is still running.
+pub fn exclusive(step: impl FnOnce() -> StepOut) -> StepOut {
+    if BUSY.compare_exchange(false, true, Ordering::SeqCst, Ordering::SeqCst).is_err() {
+        return fail(BUSY_MESSAGE);
+    }
+    let flag = Arc::new(AtomicBool::new(false));
+    *CANCEL.lock().unwrap_or_else(|e| e.into_inner()) = Some(flag.clone());
+    MY_CANCEL.with(|m| *m.borrow_mut() = Some(flag));
+    struct Release;
+    impl Drop for Release {
+        fn drop(&mut self) {
+            MY_CANCEL.with(|m| *m.borrow_mut() = None);
+            *CANCEL.lock().unwrap_or_else(|e| e.into_inner()) = None;
+            BUSY.store(false, Ordering::SeqCst);
+        }
+    }
+    let _release = Release;
+    step()
+}
+
+/// Asks the running step (if any) to stop. Only the tool process that step started is killed.
+pub fn request_cancel() -> bool {
+    match CANCEL.lock().unwrap_or_else(|e| e.into_inner()).as_ref() {
+        Some(flag) => {
+            flag.store(true, Ordering::SeqCst);
+            true
+        }
+        None => false,
+    }
+}
 
 #[derive(Debug, Clone, Serialize, PartialEq, Eq)]
 pub struct StepOut {
@@ -121,12 +167,21 @@ pub fn scrub(text: &str) -> String {
     }
 }
 
-/// The first `https://....workers.dev` address in `text`.
-pub fn workers_dev_url(text: &str) -> Option<String> {
+/// The first address in `text` that is EXACTLY `https://<name>.<you>.workers.dev` (no path, no extra labels, no other
+/// host), in its lower-case form. `name`: when given, only that Worker's address counts.
+pub fn workers_dev_url_for(text: &str, name: Option<&str>) -> Option<String> {
     text.split(|c: char| c.is_whitespace() || c == '"' || c == '\'' || c == '(' || c == ')')
         .map(|w| w.trim_end_matches(['.', ',', '/']))
-        .find(|w| w.starts_with("https://") && w.ends_with(".workers.dev") && w.len() > "https://.workers.dev".len())
-        .map(str::to_string)
+        .filter(|w| !w.contains(['/', '?', '#']) || w.strip_prefix("https://").is_some_and(|r| !r.contains(['/', '?', '#'])))
+        .find_map(|w| {
+            let (n, sub) = parts_from_address(w)?;
+            name.is_none_or(|want| want == n).then(|| format!("https://{n}.{sub}.workers.dev"))
+        })
+}
+
+/// The first valid `https://<name>.<you>.workers.dev` address in `text`.
+pub fn workers_dev_url(text: &str) -> Option<String> {
+    workers_dev_url_for(text, None)
 }
 
 fn plain(p: &Path) -> PathBuf {
@@ -160,6 +215,7 @@ fn collect(stream: Option<impl Read + Send + 'static>) -> std::thread::JoinHandl
 struct Raw {
     ok: bool,
     timed_out: bool,
+    cancelled: bool,
     stdout: String,
     /// Both streams, as printed (not cleaned: only for parsing in memory).
     text: String,
@@ -196,14 +252,29 @@ fn run_raw(env: &Env, script: &Path, args: &[&str], limit: Duration, account: Op
         .env("npm_config_update_notifier", "false")
         .env("NO_COLOR", "1")
         .env_remove("CI");
+    // The tool starts helpers of its own (npm's install scripts, esbuild): the whole tree is held in a job (Windows) or a
+    // process group, so a stop ends all of it, and so does the app closing during a run. Only THIS child's tree.
+    crate::acp::job::prepare(&mut cmd);
     let mut child = cmd.spawn().map_err(|e| format!("The built-in Node could not start ({e})."))?;
+    let contain = crate::acp::job::Containment::attach(&child);
     let out = collect(child.stdout.take());
     let err = collect(child.stderr.take());
     let started = Instant::now();
+    let mut cancelled = false;
+    let cancel_flag = MY_CANCEL.with(|m| m.borrow().clone());
     let status = loop {
         match child.try_wait() {
             Ok(Some(s)) => break Some(s),
+            // "Cancel": stop only the child this run started (our own handle), never anything else.
+            Ok(None) if cancel_flag.as_ref().is_some_and(|f| f.load(Ordering::SeqCst)) => {
+                cancelled = true;
+                contain.terminate();
+                let _ = child.kill();
+                let _ = child.wait();
+                break None;
+            }
             Ok(None) if started.elapsed() > limit => {
+                contain.terminate();
                 let _ = child.kill();
                 let _ = child.wait();
                 break None;
@@ -214,12 +285,13 @@ fn run_raw(env: &Env, script: &Path, args: &[&str], limit: Duration, account: Op
     };
     let stdout = out.join().unwrap_or_default();
     let text = format!("{stdout}\n{}", err.join().unwrap_or_default());
-    Ok(Raw { ok: status.is_some_and(|s| s.success()), timed_out: status.is_none(), stdout, text })
+    Ok(Raw { ok: status.is_some_and(|s| s.success()), timed_out: status.is_none() && !cancelled, cancelled, stdout, text })
 }
 
 fn run_node_as(env: &Env, script: &Path, args: &[&str], limit: Duration, account: Option<&str>) -> StepOut {
     match run_raw(env, script, args, limit, account) {
         Err(e) => fail(e),
+        Ok(r) if r.cancelled => fail("Cancelled."),
         Ok(r) if r.ok => StepOut { ok: true, url: workers_dev_url(&r.text), output: scrub(&r.text) },
         Ok(r) if r.timed_out => fail(format!("{}\nThis took too long and was stopped.", scrub(&r.text))),
         Ok(r) => fail(scrub(&r.text)),
@@ -436,7 +508,10 @@ pub fn run_step_with(env: &Env, step: &str, name: &str, vars: &[(&str, String)])
             }
             let refs: Vec<&str> = args.iter().map(String::as_str).collect();
             let pinned = pinned_account(name);
-            run_node_as(env, &wrangler_js(env), &refs, Duration::from_secs(300), pinned.as_deref())
+            let mut out = run_node_as(env, &wrangler_js(env), &refs, Duration::from_secs(300), pinned.as_deref());
+            // Only this Worker's own address counts: anything else the tool printed is ignored.
+            out.url = out.url.filter(|u| name_from_address(u).as_deref() == Some(name));
+            out
         }
         _ => fail("Unknown step."),
     }
@@ -471,14 +546,20 @@ pub async fn worker_update_step(app: tauri::AppHandle, step: String, address: Op
                 crate::tunnel_config::TunnelConfig::Stable { worker_url, .. } => Some(worker_url.as_str()),
                 _ => None,
             };
-            return Ok(delete_verified(&env, &name, saved_url, confirmed == Some(true), cloudflare_subdomain));
+            return Ok(exclusive(|| delete_verified(&env, &name, saved_url, confirmed == Some(true), cloudflare_subdomain)));
         }
         // Far-away PCs (Labs): the Worker is told the public key that may open pairing boxes. Never a secret.
         let vars: Vec<(&str, String)> = crate::device_link::app::pair_owner_id().map(|id| ("PAIR_OWNER", id)).into_iter().collect();
-        Ok(run_step_with(&env, &step, &name, &vars))
+        Ok(exclusive(|| run_step_with(&env, &step, &name, &vars)))
     })
     .await
     .map_err(|e| e.to_string())?
+}
+
+/// "Cancel" in the guided setup: stops the tool the running step started (nothing else). True when a step was running.
+#[tauri::command]
+pub fn worker_update_cancel() -> bool {
+    request_cancel()
 }
 
 #[cfg(test)]
@@ -633,6 +714,113 @@ mod tests {
         let _ = std::fs::remove_dir_all(&work);
         let Some((env, work)) = fake_env("del-login", &whoami_script("console.error('You are not logged in');process.exit(1);")) else { return };
         assert!(delete_verified(&env, "pm-relay", Some(SAVED), true, me).output.contains("not signed in"));
+        let _ = std::fs::remove_dir_all(&work);
+    }
+
+    #[test]
+    fn only_an_exact_name_dot_you_dot_workers_dev_address_counts() {
+        for bad in [
+            "https://evil.com/x.workers.dev",
+            "https://evil.com/pm-relay.me.workers.dev",
+            "https://a.b.c.workers.dev",
+            "https://me.workers.dev",
+            "http://pm-relay.me.workers.dev",
+            "https://pm-relay.me.workers.dev.evil.com",
+            "https://evil.com?x=pm-relay.me.workers.dev",
+        ] {
+            assert_eq!(workers_dev_url(bad), None, "{bad}");
+        }
+        assert_eq!(workers_dev_url("Deployed to https://Pm-Relay.Me.workers.dev/ now"), Some("https://pm-relay.me.workers.dev".into()));
+        // Another Worker's address in the output is not this Worker's.
+        let text = "see https://other.me.workers.dev and https://pm-relay.me.workers.dev";
+        assert_eq!(workers_dev_url_for(text, Some("pm-relay")), Some("https://pm-relay.me.workers.dev".into()));
+        assert_eq!(workers_dev_url_for("https://other.me.workers.dev", Some("pm-relay")), None);
+    }
+
+    static BUSY_GUARD: std::sync::Mutex<()> = std::sync::Mutex::new(());
+
+    #[test]
+    fn a_second_step_is_refused_while_one_runs_and_cancel_stops_only_that_one() {
+        let _g = BUSY_GUARD.lock().unwrap_or_else(|e| e.into_inner());
+        let _p = PIN_GUARD.lock().unwrap_or_else(|e| e.into_inner());
+        let Some((env, work)) = fake_env("cancel", "setTimeout(()=>{}, 60000);") else { return };
+        std::fs::write(work.join("package.json"), "{}").unwrap();
+        let env = std::sync::Arc::new(env);
+        let e2 = env.clone();
+        let running = std::thread::spawn(move || exclusive(|| run_step(&e2, "login", "pm-relay")));
+        for _ in 0..100 {
+            if BUSY.load(Ordering::SeqCst) {
+                break;
+            }
+            std::thread::sleep(Duration::from_millis(50));
+        }
+        let second = exclusive(|| done("should not run"));
+        assert!(!second.ok && second.output.contains("Another setup is still running"), "{}", second.output);
+        std::thread::sleep(Duration::from_millis(300));
+        assert!(request_cancel());
+        let first = running.join().unwrap();
+        assert!(!first.ok, "{}", first.output);
+        assert!(!BUSY.load(Ordering::SeqCst) && !request_cancel());
+        let _ = std::fs::remove_dir_all(&work);
+    }
+
+    fn pid_alive(pid: u32) -> bool {
+        #[cfg(windows)]
+        {
+            let out = std::process::Command::new("tasklist").args(["/FI", &format!("PID eq {pid}"), "/NH"]).output().unwrap();
+            String::from_utf8_lossy(&out.stdout).contains(&pid.to_string())
+        }
+        #[cfg(not(windows))]
+        {
+            std::process::Command::new("kill").args(["-0", &pid.to_string()]).status().map(|s| s.success()).unwrap_or(false)
+        }
+    }
+
+    const GRANDCHILD: &str = "const c=require('child_process').spawn(process.execPath,['-e','setTimeout(()=>{},60000)'],{stdio:'inherit'});require('fs').writeFileSync('gc.pid',String(c.pid));setTimeout(()=>{},60000);";
+
+    fn grandchild_pid(work: &Path) -> u32 {
+        for _ in 0..100 {
+            if let Ok(t) = std::fs::read_to_string(work.join("gc.pid")) {
+                if let Ok(p) = t.trim().parse() {
+                    return p;
+                }
+            }
+            std::thread::sleep(Duration::from_millis(50));
+        }
+        panic!("the fake tool never started its helper");
+    }
+
+    #[test]
+    fn cancel_ends_the_tools_helpers_too() {
+        let _g = BUSY_GUARD.lock().unwrap_or_else(|e| e.into_inner());
+        let _p = PIN_GUARD.lock().unwrap_or_else(|e| e.into_inner());
+        let Some((env, work)) = fake_env("cancel-tree", GRANDCHILD) else { return };
+        std::fs::write(work.join("package.json"), "{}").unwrap();
+        let env = std::sync::Arc::new(env);
+        let e2 = env.clone();
+        let running = std::thread::spawn(move || exclusive(|| run_step(&e2, "login", "pm-relay")));
+        let gc = grandchild_pid(&work);
+        assert!(pid_alive(gc));
+        assert!(request_cancel());
+        let first = running.join().unwrap();
+        assert!(!first.ok);
+        std::thread::sleep(Duration::from_millis(500));
+        assert!(!pid_alive(gc), "the helper of the cancelled tool is still running");
+        let _ = std::fs::remove_dir_all(&work);
+    }
+
+    #[test]
+    fn the_time_limit_ends_the_tools_helpers_too() {
+        let _g = BUSY_GUARD.lock().unwrap_or_else(|e| e.into_inner());
+        let _p = PIN_GUARD.lock().unwrap_or_else(|e| e.into_inner());
+        let Some((env, work)) = fake_env("limit-tree", GRANDCHILD) else { return };
+        let started = Instant::now();
+        let raw = run_raw(&env, &wrangler_js(&env), &[], Duration::from_millis(1500), None).unwrap();
+        assert!(raw.timed_out && !raw.cancelled);
+        assert!(started.elapsed() < Duration::from_secs(20), "waited for the helper's pipe");
+        let gc = grandchild_pid(&work);
+        std::thread::sleep(Duration::from_millis(500));
+        assert!(!pid_alive(gc), "the helper of the timed-out tool is still running");
         let _ = std::fs::remove_dir_all(&work);
     }
 

@@ -126,56 +126,6 @@
     transform: rotate(360deg);
   }
 }
-.cockpit .ck-att-overlay {
-  position: fixed;
-  inset: 0;
-  z-index: 1000;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  padding: 16px;
-  background: rgba(0, 0, 0, 0.6);
-}
-.cockpit .ck-att-overlay-body {
-  display: flex;
-  flex-direction: column;
-  align-items: stretch;
-  gap: 10px;
-  max-width: 100%;
-  max-height: 100%;
-}
-.cockpit .ck-att-overlay-img {
-  display: block;
-  max-width: min(calc(90vw / var(--ui-scale, 1)), 1000px);
-  max-height: calc(80vh / var(--ui-scale, 1));
-  object-fit: contain;
-  border-radius: 12px;
-}
-.cockpit .ck-att-overlay-loading {
-  color: var(--label-2);
-  font-size: 13px;
-}
-.cockpit .ck-att-overlay-foot {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 12px;
-  color: var(--label-2);
-  font-size: 12px;
-}
-.cockpit .ck-att-overlay-name {
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-.cockpit .ck-att-overlay-close {
-  padding: 4px 10px;
-  border: 1px solid var(--sep);
-  border-radius: 999px;
-  color: var(--label);
-  background: var(--bg-raised);
-  cursor: pointer;
-}
 /* In the composer box: the chips sit on a line above the text and wrap inside the card. */
 .cockpit .ck-chat-composer-chips {
   flex: none;

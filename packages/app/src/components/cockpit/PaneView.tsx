@@ -1,5 +1,5 @@
 import { errorSentence } from '../../lib/sayError';
-import { useCallback, useContext, useEffect, useRef, useState, type KeyboardEvent as ReactKeyboardEvent } from 'react';
+import { lazy, Suspense, useCallback, useMemo, useContext, useEffect, useRef, useState, type KeyboardEvent as ReactKeyboardEvent } from 'react';
 import { PaneMoreMenu, type MoreAction } from './PaneMoreMenu';
 import { bellMenuActions } from './bell-menu';
 import { useBellLevel } from '../../lib/notify-store';
@@ -60,7 +60,11 @@ import { paneHeading } from './titles';
 import { helperOfLabel, isMinionPane, startedByLabel } from '../../lib/pane-helpers';
 import { askHandOver } from '../../lib/task-handover';
 import { isCompanionPaneId } from './companion/model';
-import { openMinionView } from '../../lib/task-view';
+import { openMinionView, openWorkflowPane, openWorkflowPaneOnce } from '../../lib/task-view';
+import { useWorkflowModel, workflowMark } from '../../lib/workflow-model';
+import { useNeedsYou } from '../../hooks/useNeedsYou';
+import { needsYouPaneIds } from '../../lib/attention';
+import { WorkflowCard } from '../crews/WorkflowCard';
 import { placeLabel, placeTooltip } from '../../lib/wsl-place';
 import { isProseStream, transcriptSpeaker } from '../../lib/transcript-labels';
 import { UntestedChip } from './UntestedChip';
@@ -86,6 +90,11 @@ import { MissionProgress } from './mission/MissionProgress';
 import { missionOfPane, useMissions } from '../../lib/missions';
 import { agentLabel, useAgentRegistry } from '../../lib/agentRegistry';
 import { SaveCrewSheet } from './crews/SaveCrewSheet';
+import { crewOf } from '../../lib/crew-members';
+import { useWorkflowsEnabled } from '../../lib/workflow-live';
+
+// The crew canvas (its Live tab) loads only when a workflow's chat opens it.
+const CrewCanvas = lazy(() => import('../crews/CrewCanvas').then((m) => ({ default: m.CrewCanvas })));
 import { SessionChatPanel, type ScreenAsk } from '../chat/SessionChatPanel';
 import { useChatJump } from '../../lib/chatJump';
 import { clearChatTabRequest, useChatTabRequest } from '../../lib/chatTab';
@@ -218,6 +227,26 @@ export function PaneView({
 }) {
   const t = useT();
   const { view: standbyView } = useStandbyHelpers();
+  // The front of a running workflow (Labs "Workflows"): its crew chip also opens the live view of the crew.
+  const workflowsOn = useWorkflowsEnabled();
+  // The chats that need the person (questions, permission prompts, stalls): the one set the chip, the card, the pane and the sidebar row count by.
+  const needsIds = needsYouPaneIds(useNeedsYou(c));
+  // Read fresh each render (the mark is written when the chat starts, which can be after this screen opened).
+  const liveSlug = workflowMark(paneId, workflowsOn)?.slug ?? null;
+  const [liveOpen, setLiveOpen] = useState(false);
+  // Its live view lives in this chat's details column (or, when that is hidden, in a card at the top of the chat).
+  const wf = useWorkflowModel(
+    paneId,
+    c.registry.paneList,
+    workflowsOn,
+    (p) => c.names.get(p.info.id) ?? p.info.agent_type,
+    needsIds,
+  );
+  const wfActive = !!wf && wf.helpers.length > 0;
+  // The first time an agent starts, the pane opens by itself (once; closing it keeps it closed).
+  useEffect(() => {
+    if (wfActive) openWorkflowPaneOnce(paneId);
+  }, [wfActive, paneId]);
   const pane = c.registry.panes.get(paneId);
   const [tabPicked, setTabRaw] = useState<Tab>(() => rememberedTabs.get(paneId) ?? 'terminal');
   // A chat session over ACP has no terminal behind it: its Chat view is the pane, so it never shows a Terminal view.
@@ -502,7 +531,7 @@ export function PaneView({
   const helperAsks = helperQuestionIds(c, paneId);
   // The helpers this pane's agent started: compact rows in its chat, in the turn they began in. A card waiting on the
   // person counts as "needs you" whatever the helper's status says.
-  const askingPanes = new Set(c.asked.questions.map((q) => q.pane_id).filter((id): id is string => !!id));
+  const askingPanes = needsIds;
   const startedHelpers = chatHelpers(c.registry.paneList, paneId, (p) => c.names.get(p.info.id) ?? p.info.agent_type, askingPanes);
   const crewList = crewMembers(c.registry.paneList, paneId, (p) => c.names.get(p.info.id) ?? p.info.agent_type, askingPanes);
   // A minion has no pane of its own on screen: its row opens the read-only view in the details column. Any other pane is selected.
@@ -812,7 +841,14 @@ export function PaneView({
                 screenAsk={screenAsk}
                 headerSlot={chatSlot ? { el: chatSlot, compact: fold >= 3 } : undefined}
                 helpers={startedHelpers}
-                crew={crewList.length > 0 ? <CrewChip members={crewList} now={c.now} onOpen={openStarted} onStop={(id) => c.interrupt(id)} /> : undefined}
+                crew={
+                  crewList.length > 0 ? (
+                    <>
+                      <CrewChip members={crewList} now={c.now} onOpen={openStarted} onStop={(id) => c.interrupt(id)} onOpenLive={liveSlug ? () => (rail.visible ? openWorkflowPane(paneId) : setLiveOpen(true)) : undefined} />
+                      {wf && wfActive && !rail.visible && <WorkflowCard model={wf} onOpenHelper={openStarted} onOpenBig={() => setLiveOpen(true)} />}
+                    </>
+                  ) : undefined
+                }
                 move={move}
                 reply={{
                   blockedReason: move.blockedReason ?? (inTerminal ? handedBlock() : composerBlock(pane, !chatAllowed, isAcp)),
@@ -948,11 +984,30 @@ export function PaneView({
             handTargets={handTargets}
             onHandMinion={(minion, toId) => askHandOver({ taskPane: minion.id, taskName: minion.title, fromId: paneId, fromName: name, toId, toName: handTargets.find((x) => x.id === toId)?.name ?? toId })}
             onSaveTeam={() => setSaveTeam(true)}
+            workflow={wfActive ? wf : null}
+            onOpenWorkflowHelper={openStarted}
+            onOpenWorkflowBig={() => setLiveOpen(true)}
             onClose={rail.close}
             onNotify={c.notify}
           />
         )}
       </div>
+
+      {liveOpen && liveSlug && (
+        <Suspense fallback={null}>
+          <CrewCanvas
+            slug={liveSlug}
+            workflows
+            startTab="live"
+            liveSource={{ frontId: paneId, panes: c.registry.paneList, asking: askingPanes }}
+            onClose={() => setLiveOpen(false)}
+            onOpenHelper={(_front, id) => {
+              setLiveOpen(false);
+              openStarted(id);
+            }}
+          />
+        </Suspense>
+      )}
 
       {saveTeam && (
         <SaveCrewSheet

@@ -12,10 +12,11 @@ export interface RailEntry {
 }
 
 /** The messages of a chat in order. Summary shows only the agent's final answers, so the rail lists only those too. */
-export function buildRailEntries(turns: readonly ChatTurn[], mode: ChatViewMode): RailEntry[] {
+/** `userText`: another text for a user message (a workflow's brief is one card, so the rail shows the person's own words). */
+export function buildRailEntries(turns: readonly ChatTurn[], mode: ChatViewMode, userText?: ReadonlyMap<string, string>): RailEntry[] {
   const out: RailEntry[] = [];
   for (const turn of turns) {
-    if (turn.user) out.push({ id: turn.user.id, turnId: turn.id, who: 'you', text: turn.user.text });
+    if (turn.user) out.push({ id: turn.user.id, turnId: turn.id, who: 'you', text: userText?.get(turn.user.id) ?? turn.user.text });
     for (const step of turn.steps) {
       if (step.kind !== 'text') continue;
       if (mode === 'summary' && !step.item.finalAnswer) continue;

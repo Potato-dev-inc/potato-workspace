@@ -25,6 +25,8 @@ import { useKeepPlace } from '../../hooks/useKeepPlace';
 import { desktopPictureSource } from '../../lib/chatMore';
 import type { EarlierState } from '../../hooks/useEarlier';
 import { HelperRow } from './HelperRow';
+import { WorkflowCard } from './WorkflowCard';
+import { readWorkflowStart, splitWorkflowMessage, type WorkflowSplit } from '../../lib/workflowCard';
 import { PaneHelperRows } from './PaneHelperRows';
 import { placeHelpers, type ChatHelper } from '../../lib/chat-helpers';
 import { NoticeLine } from './NoticeLine';
@@ -185,7 +187,7 @@ function TurnEndDivider({ turn, branch, endings }: { turn: ChatTurn; branch?: Tu
 export const turnRenders = { count: 0 };
 
 /** Everything here is stable for a turn that did not change (see `groupTurns` and `useStable`), so `memo` can skip it. */
-const TurnView = memo(function TurnView({ turn, fromScreen, markdown, mode, canBranch, branchAlways, onBranch, helpers, onOpenPane, endings, price, paneId, sentFrom }: { sentFrom?: string; paneId?: string; price?: TurnPrice; turn: ChatTurn; fromScreen: boolean; markdown: boolean; mode: ChatViewMode; canBranch: boolean; branchAlways: boolean; onBranch?: (userItemId: string) => void; helpers?: readonly ChatHelper[]; onOpenPane?: (paneId: string) => void; endings?: EndingActions }) {
+const TurnView = memo(function TurnView({ turn, fromScreen, markdown, mode, canBranch, branchAlways, onBranch, helpers, onOpenPane, endings, price, paneId, sentFrom, workflow }: { workflow?: WorkflowSplit | null; sentFrom?: string; paneId?: string; price?: TurnPrice; turn: ChatTurn; fromScreen: boolean; markdown: boolean; mode: ChatViewMode; canBranch: boolean; branchAlways: boolean; onBranch?: (userItemId: string) => void; helpers?: readonly ChatHelper[]; onOpenPane?: (paneId: string) => void; endings?: EndingActions }) {
   turnRenders.count += 1;
   const branch = useMemo<TurnBranch | undefined>(
     () => (canBranch && onBranch && isBranchable(turn) ? { onBranch: () => onBranch(turn.user.id), always: branchAlways } : undefined),
@@ -203,9 +205,10 @@ const TurnView = memo(function TurnView({ turn, fromScreen, markdown, mode, canB
       {turn.user && (
         <div className="flex flex-col items-end gap-1.5" data-rail-id={turn.user.id}>
           {turn.user.attachments && turn.user.attachments.length > 0 && <AttachmentChips attachments={turn.user.attachments} className="ck-chat-user-files" />}
-          {turn.user.text.trim() !== '' && (
+          {workflow && <WorkflowCard split={workflow} />}
+          {(workflow ? workflow.request : turn.user.text).trim() !== '' && (
             <div className="max-w-[85%] whitespace-pre-wrap break-words rounded bg-pm-raised px-2 py-1 text-pm-text ck-chat-bubble">
-              {turn.user.text}
+              {workflow ? workflow.request : turn.user.text}
             </div>
           )}
           {sentFrom && (
@@ -281,6 +284,12 @@ export function SessionChatView({ state, reason, waitingFor, ready, source, turn
   const showBranch = !!canBranch && !!onBranch && !readOnly;
   const newestBranchable = useMemo(() => (showBranch ? lastBranchableId(turns) : null), [showBranch, turns]);
   const placedHelpers = useStable(useMemo(() => placeHelpers(turns, helpers ?? []), [turns, helpers]));
+  // The first message of a chat the app started from a workflow is shown as one card (see lib/workflowCard.ts).
+  const firstUser = useMemo(() => turns.find((x) => x.user)?.user ?? null, [turns]);
+  const workflowCard = useMemo(
+    () => (firstUser && paneId ? splitWorkflowMessage(firstUser.text, readWorkflowStart(paneId)) : null),
+    [firstUser?.id, firstUser?.text, paneId],
+  );
   // The newest callbacks, behind functions that stay the same, so a turn that did not change is not redrawn for them.
   const callbacks = useRef({ onBranch, onOpenPane });
   callbacks.current = { onBranch, onOpenPane };
@@ -293,7 +302,7 @@ export function SessionChatView({ state, reason, waitingFor, ready, source, turn
   const [away, setAway] = useState(false);
   const prices = useStable(useMemo(() => turnPrices(turns), [turns]));
   // The message rail beside the scroll bar: one dash per message. Its own list; nothing here reaches a TurnView.
-  const railEntries = useMemo(() => buildRailEntries(turns, mode), [turns, mode]);
+  const railEntries = useMemo(() => buildRailEntries(turns, mode, workflowCard && firstUser ? new Map([[firstUser.id, workflowCard.request || workflowCard.name]]) : undefined), [turns, mode, workflowCard, firstUser?.id]);
 
   // Find in this chat (Ctrl+F): the box, the marks and the count. Esc goes back to the message box.
   const find = useChatFind(scrollRef, () => rootRef.current?.querySelector<HTMLTextAreaElement>('textarea.ck-chat-composer-field')?.focus());
@@ -444,6 +453,7 @@ export function SessionChatView({ state, reason, waitingFor, ready, source, turn
             <TurnView
               paneId={paneId ?? undefined}
               sentFrom={sentFrom.get(turn.id)}
+              workflow={workflowCard && turn.user && turn.user.id === firstUser?.id ? workflowCard : undefined}
               price={prices.get(turn.id)}
               turn={turn}
               fromScreen={fromScreen}

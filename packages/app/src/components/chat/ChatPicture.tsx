@@ -1,12 +1,12 @@
 // A picture the agent named in its answer (`![chart](out/chart.png)`). The picture is asked of the PC, which only reads a file
 // inside the chat's project folder and sends it back as a data URL (a web address is never loaded, an svg never runs). The page
 // offers the PC through `PictureSourceContext`; with none (an old chat with no pane behind it) only the words are shown.
-// A click opens a large view that closes with Esc, a click, or the Close button.
+// A click opens the large view (ImageLightbox); the pictures of the same answer are its Previous / Next.
 import { createContext, useContext, useEffect, useRef, useState } from 'react';
-import { createPortal } from 'react-dom';
 import { useT } from '../../i18n';
 import type { LoadedPicture, PictureSource } from '../../lib/chatMore';
 import { errorSentence } from '../../lib/sayError';
+import { ImageLightbox, type LightboxImage } from '../common/ImageLightbox';
 import '../../styles/chat-picture.css';
 
 export const PictureSourceContext = createContext<PictureSource | null>(null);
@@ -53,7 +53,8 @@ export function ChatPicture({ alt, path }: { alt: string; path: string }) {
   const t = useT();
   const source = useContext(PictureSourceContext);
   const [shown, setShown] = useState<Shown>({ state: 'loading' });
-  const [big, setBig] = useState(false);
+  const [big, setBig] = useState<{ images: LightboxImage[]; index: number } | null>(null);
+  const button = useRef<HTMLButtonElement>(null);
 
   useEffect(() => {
     if (!source) return;
@@ -80,36 +81,24 @@ export function ChatPicture({ alt, path }: { alt: string; path: string }) {
   const label = alt || shown.picture.name;
   return (
     <>
-      <button type="button" className="ck-chat-pic" data-testid="chat-picture" aria-label={t('chat.picture.enlarge', { name: label })} onClick={() => setBig(true)}>
+      <button ref={button} type="button" className="ck-chat-pic" data-testid="chat-picture" aria-label={t('chat.picture.enlarge', { name: label })} onClick={() => setBig(gather(button.current, shown.picture, label))}>
         <img src={shown.picture.dataUrl} alt={label} draggable={false} />
       </button>
-      {big && <Enlarged picture={shown.picture} label={label} onClose={() => setBig(false)} />}
+      {big && <ImageLightbox images={big.images} index={big.index} onIndex={(index) => setBig({ images: big.images, index })} onClose={() => setBig(null)} testId="chat-picture-big" />}
     </>
   );
 }
 
-/** The large view: over everything, closes on Esc, on a click anywhere or on Close. */
-function Enlarged({ picture, label, onClose }: { picture: LoadedPicture; label: string; onClose: () => void }) {
-  const t = useT();
-  const closeRef = useRef<HTMLButtonElement>(null);
-  useEffect(() => {
-    closeRef.current?.focus();
-    const onKey = (event: KeyboardEvent) => {
-      if (event.key === 'Escape') {
-        event.stopPropagation();
-        onClose();
-      }
-    };
-    window.addEventListener('keydown', onKey, true);
-    return () => window.removeEventListener('keydown', onKey, true);
-  }, [onClose]);
-  return createPortal(
-    <div className="ck-chat-pic-big" role="dialog" aria-modal="true" aria-label={label} data-testid="chat-picture-big" onClick={onClose}>
-      <img src={picture.dataUrl} alt={label} draggable={false} />
-      <button ref={closeRef} type="button" className="ck-chat-pic-close" onClick={onClose}>
-        {t('chat.picture.close')}
-      </button>
-    </div>,
-    document.body,
-  );
+/** The pictures of the same answer (the ones drawn inside the same `.ck-chat-md`), in order, with the clicked one's place. */
+function gather(button: HTMLButtonElement | null, picture: LoadedPicture, label: string): { images: LightboxImage[]; index: number } {
+  const own: LightboxImage = { key: '0', name: label, src: picture.dataUrl };
+  const group = button?.closest('.ck-chat-md');
+  if (!button || !group) return { images: [own], index: 0 };
+  const buttons = Array.from(group.querySelectorAll<HTMLButtonElement>('[data-testid="chat-picture"]'));
+  const images = buttons.flatMap((b, i) => {
+    const img = b.querySelector('img');
+    return img?.getAttribute('src') ? [{ key: String(i), name: img.getAttribute('alt') || label, src: img.getAttribute('src') }] : [];
+  });
+  const index = buttons.filter((b) => b.querySelector('img')?.getAttribute('src')).indexOf(button);
+  return index >= 0 ? { images, index } : { images: [own], index: 0 };
 }

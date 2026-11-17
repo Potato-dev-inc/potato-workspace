@@ -357,12 +357,14 @@ export function NewAgentPage({ agents, panes, needs, selectedCwd = null, project
     try {
       // A workflow starts its front with the brief first, then what the person asked.
       let first = prompt.trim();
+      let workflow: { slug: string; name: string; front: string; brief: string } | undefined;
       if (wf) {
         if (!folder?.path || !api.workflowPlan) throw new Error(t('newAgent.wf.planFailed'));
         const plan = await api.workflowPlan(wf.slug, folder.path, first).catch((e: unknown) => {
           throw new Error(errorSentence(e, t('newAgent.wf.planFailed')));
         });
         first = plan.first_message;
+        workflow = { slug: wf.slug, name: plan.name, front: plan.front_name, brief: plan.brief };
       }
       const result = await onStart({
         agentId: choice.agentId,
@@ -371,6 +373,7 @@ export function NewAgentPage({ agents, panes, needs, selectedCwd = null, project
         isolated,
         runAs,
         prompt: first,
+        ...(workflow ? { workflow } : {}),
         ...(showModel && model ? { model } : {}),
       });
       // Whole-horde mode: the helpers start right after the front, under its chat.

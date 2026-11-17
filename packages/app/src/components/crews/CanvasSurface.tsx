@@ -5,8 +5,23 @@ import { useEffect, useLayoutEffect, useRef, useState, type KeyboardEvent, type 
 import { useT } from '../../i18n';
 import type { Crew } from '../../lib/crews-api';
 import { Menu } from '../common/Floating';
+import { formatElapsed } from '../cockpit/model';
+import { liveWord, type LiveDot, type RoleLive } from '../../lib/workflow-live';
 import type { ModelNamer } from './modelNames';
 import { BOX_H, BOX_W, clampZoom, edges, extent, fitZoom, keyOf, layout, problemsOf, rightsKeys, type Edge, type Spot } from './model';
+
+/** The live view of a running workflow laid over the boxes (the Live tab): what each box shows, and the dots that travel the arrows. */
+export interface LiveOverlay {
+  roles: ReadonlyMap<string, RoleLive>;
+  /** The front agent is working: its box glows softly. */
+  frontWorking: boolean;
+  dots: ReadonlyArray<LiveDot>;
+  /** Boxes whose arrow is lit for a moment (reduced motion). */
+  pulse: ReadonlySet<string>;
+  now: number;
+  /** A box was clicked (or Enter on it): the helper in it opens. */
+  onOpen: (roleKey: string) => void;
+}
 
 const STEP = 16;
 const DRAG_FROM = 4;
@@ -29,6 +44,21 @@ function curve(a: Spot, b: Spot): string {
   return `M ${x1} ${y1} C ${mid} ${y1}, ${mid} ${y2}, ${x2} ${y2}`;
 }
 
+/** One state word (and how long) at the foot of a box in the live view. Nothing is drawn for a box that has not started. */
+function LiveLine({ state, took, count }: { state: 'working' | 'done' | 'needs-you' | 'failed' | null; took: number | null; count: number }) {
+  const t = useT();
+  if (!state) return null;
+  return (
+    <span className="crewc-live-line" data-testid="live-line">
+      <span className="crewc-live-state" data-state={state}>
+        {liveWord(state, t)}
+      </span>
+      {took !== null && state !== 'failed' ? <span className="crewc-live-time">{formatElapsed(took)}</span> : null}
+      {count > 1 ? <span className="crewc-live-time">×{count}</span> : null}
+    </span>
+  );
+}
+
 export function CanvasSurface({
   crew,
   selected,
@@ -44,6 +74,7 @@ export function CanvasSurface({
   changed,
   touched,
   onAddRole,
+  live,
 }: {
   crew: Crew;
   selected: number | null;
@@ -65,6 +96,8 @@ export function CanvasSurface({
   touched?: string[];
   /** Adds a role under the lead (the canvas's right-click menu). Absent: the item is off (read-only, full, or no agent). */
   onAddRole?: () => void;
+  /** Live view: state words and timers on the boxes, dots on the arrows, nothing can be moved or selected. */
+  live?: LiveOverlay;
 }) {
   const t = useT();
   const spots = layout(crew);
@@ -125,7 +158,7 @@ export function CanvasSurface({
   const lines: Edge[] = edges(crew);
 
   const down = (index: number, e: PointerEvent<HTMLDivElement>) => {
-    if (e.button !== 0) return;
+    if (e.button !== 0 || live) return;
     start.current = { x: e.clientX, y: e.clientY, moved: false };
     e.currentTarget.setPointerCapture?.(e.pointerId);
     onSelect(index);
@@ -148,12 +181,13 @@ export function CanvasSurface({
   const key = (index: number, e: KeyboardEvent<HTMLDivElement>) => {
     if (e.key === 'Enter' || e.key === ' ') {
       e.preventDefault();
-      onSelect(index);
+      if (live) live.onOpen(keyOf(crew.roles[index]));
+      else onSelect(index);
       return;
     }
     const delta: Record<string, [number, number]> = { ArrowLeft: [-STEP, 0], ArrowRight: [STEP, 0], ArrowUp: [0, -STEP], ArrowDown: [0, STEP] };
     const d = delta[e.key];
-    if (!d || readOnly) return;
+    if (!d || readOnly || live) return;
     e.preventDefault();
     const now = at(keyOf(crew.roles[index]));
     onMove(index, { x: Math.max(0, now.x + d[0]), y: Math.max(0, now.y + d[1]) });
@@ -187,7 +221,7 @@ export function CanvasSurface({
           <div
             className="crewc-surface"
             role="group"
-            aria-label={t('crewcanvas.surface')}
+            aria-label={live ? t('crewcanvas.live.aria') : t('crewcanvas.surface')}
             data-zoom={zoom}
             style={{ width: size.width, height: size.height, transform: `scale(${zoom})`, transformOrigin: '0 0' }}
           >
@@ -204,7 +238,7 @@ export function CanvasSurface({
                 <path
                   key={`${l.from}>${l.to}`}
                   d={curve(at(l.from), at(l.to))}
-                  className={`crewc-line is-${l.kind}${hops?.includes(`${l.from}>${l.to}`) || hops?.includes(`${l.to}>${l.from}`) ? ' is-lit' : ''}${changed?.includes(`${l.from}>${l.to}`) ? ' is-changed' : ''}`}
+                  className={`crewc-line is-${l.kind}${hops?.includes(`${l.from}>${l.to}`) || hops?.includes(`${l.to}>${l.from}`) ? ' is-lit' : ''}${changed?.includes(`${l.from}>${l.to}`) ? ' is-changed' : ''}${live?.pulse.has(l.to) ? ' is-pulse' : ''}`}
                   data-edge={l.kind}
                   markerEnd={changed?.includes(`${l.from}>${l.to}`) ? 'url(#crewc-arrow-changed)' : l.kind === 'team' ? undefined : 'url(#crewc-arrow)'}
                 />
@@ -215,7 +249,8 @@ export function CanvasSurface({
               const spot = at(k);
               const own = problemsOf(problems, role);
               const step = path.indexOf(k);
-              const classes = ['crewc-box', selected === index ? 'is-selected' : '', step >= 0 ? 'is-on-path' : '', now === k ? 'is-now' : '', touched?.includes(k) ? 'is-touched' : '', own.length ? 'has-problem' : '', drag?.index === index ? 'is-dragging' : '']
+              const rl = live?.roles.get(k);
+              const classes = ['crewc-box', live ? 'is-live' : '', live && role.front && live.frontWorking ? 'is-working' : '', rl ? `has-${rl.state}` : '', selected === index ? 'is-selected' : '', step >= 0 ? 'is-on-path' : '', now === k ? 'is-now' : '', touched?.includes(k) ? 'is-touched' : '', own.length ? 'has-problem' : '', drag?.index === index ? 'is-dragging' : '']
                 .filter(Boolean)
                 .join(' ');
               const model = modelName(role.agent_type, role.model);
@@ -225,12 +260,14 @@ export function CanvasSurface({
                   key={k}
                   role="button"
                   tabIndex={0}
-                  aria-pressed={selected === index}
+                  aria-pressed={live ? undefined : selected === index}
+                  aria-label={live && rl ? t('crewcanvas.live.open', { title: role.name }) : undefined}
                   data-testid="crew-box"
                   data-role={k}
                   className={classes}
                   style={{ left: spot.x, top: spot.y, width: BOX_W, minHeight: BOX_H }}
-                  onClick={() => onSelect(index)}
+                  data-live-state={live ? (rl?.state ?? (role.front && live.frontWorking ? 'working' : 'idle')) : undefined}
+                  onClick={() => (live ? (rl ? live.onOpen(k) : undefined) : onSelect(index))}
                   onPointerDown={(e) => down(index, e)}
                   onPointerMove={(e) => move(index, e)}
                   onPointerUp={() => up(index)}
@@ -246,12 +283,18 @@ export function CanvasSurface({
                   <span className="crewc-box-agent">{model ? `${agentName(role.agent_type)} · ${model}` : agentName(role.agent_type)}</span>
                   {!role.front && role.when_to_use ? <span className="crewc-box-when">{role.when_to_use}</span> : null}
                   <span className="crewc-box-rights">{rights.map((r) => t(`crewcanvas.right.${r}` as never)).join(' · ')}</span>
+                  {live ? <LiveLine state={rl?.state ?? (role.front && live.frontWorking ? 'working' : null)} took={rl ? (rl.state === 'working' || rl.state === 'needs-you' ? live.now - rl.startedAt : rl.endedAt !== undefined ? rl.endedAt - rl.startedAt : null) : null} count={rl?.count ?? 0} /> : null}
                   <span className="crewc-box-foot">
                     {(role.standbys ?? 0) > 0 ? <span>{t('crewcanvas.box.ready', { count: role.standbys ?? 0 })}</span> : null}
                     {own.length ? <span className="crewc-bad">{t('crewcanvas.box.problem')}</span> : null}
                   </span>
                 </div>
               );
+            })}
+            {live?.dots.map((d) => {
+              const line = lines.find((l) => l.to === d.roleKey && l.kind === 'team') ?? lines.find((l) => l.to === d.roleKey);
+              if (!line) return null;
+              return <span key={d.key} className="crewc-dot" data-testid="live-dot" data-dir={d.dir} data-role={d.roleKey} style={{ offsetPath: `path("${curve(at(line.from), at(line.to))}")` }} aria-hidden="true" />;
             })}
           </div>
         </div>

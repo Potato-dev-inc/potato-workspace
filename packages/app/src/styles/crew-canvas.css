@@ -628,3 +628,186 @@
   font-size: 12px;
   color: var(--label-3);
 }
+
+/* Workflows: the Live tab. Calm: a soft glow on the front while it works, one dot per start and per report, a slow pulse on
+   "Working". Only "Needs you" and "Failed" carry colour. Colour tokens only; no side stripes. */
+.crewc-box.is-live {
+  cursor: default;
+}
+.crewc-box.is-live .crewc-box-when,
+.crewc-box.is-live .crewc-box-rights {
+  display: none;
+}
+.crewc-box.is-live[data-live-state='idle'] {
+  opacity: 0.7;
+}
+.crewc-box.is-live:not([data-live-state='idle']) {
+  cursor: pointer;
+}
+.crewc-box.is-working {
+  box-shadow: 0 0 0 2px var(--accent-line), 0 0 18px 2px var(--accent-soft);
+}
+.crewc-box.has-needs-you {
+  border-color: var(--accent);
+}
+.crewc-box.has-failed {
+  border-color: var(--danger);
+}
+.crewc-live-line {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  min-width: 0;
+  font-size: 12px;
+}
+.crewc-live-state {
+  flex: 0 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+  font-weight: 500;
+  color: var(--label-2);
+}
+.crewc-live-state[data-state='needs-you'] {
+  color: var(--accent);
+}
+.crewc-live-state[data-state='failed'] {
+  color: var(--danger);
+}
+.crewc-live-time {
+  flex: 0 0 auto;
+  font-family: var(--font-mono);
+  font-size: 11px;
+  color: var(--label-3);
+}
+.crewc-dot {
+  position: absolute;
+  left: 0;
+  top: 0;
+  z-index: 1;
+  width: 10px;
+  height: 10px;
+  margin: -5px 0 0 -5px;
+  border-radius: 50%;
+  background: var(--accent);
+  offset-rotate: 0deg;
+  pointer-events: none;
+}
+.crewc-line.is-pulse {
+  stroke: var(--accent);
+  stroke-width: 2.5;
+}
+.crewc-live-side {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.crewc-live-summary {
+  margin: 0;
+  font-weight: 500;
+  overflow-wrap: anywhere;
+}
+.crewc-live-head {
+  margin: 8px 0 4px;
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--label-2);
+}
+.crewc-live-other {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.crewc-live-other .crewc-link {
+  max-width: 100%;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+  text-align: start;
+}
+.crewc-live-summary:empty {
+  display: none;
+}
+.crewc-logstrip {
+  flex: 0 0 auto;
+  padding: 8px 16px;
+  border-top: 1px solid var(--sep);
+  background: var(--bg-raised);
+}
+.crewc-loglist {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  font-size: 12px;
+}
+.crewc-loglist > li {
+  display: flex;
+  gap: 10px;
+  min-width: 0;
+}
+.crewc-loglist > li[data-kind='needs-you'] .crewc-logtext {
+  color: var(--accent);
+}
+.crewc-loglist > li[data-kind='failed'] .crewc-logtext {
+  color: var(--danger);
+}
+.crewc-logtime {
+  flex: 0 0 auto;
+  font-family: var(--font-mono);
+  color: var(--label-3);
+}
+.crewc-logtext {
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+@media (prefers-reduced-motion: no-preference) {
+  .crewc-box.is-working {
+    animation: crewc-glow 3.4s ease-in-out infinite;
+  }
+  .crewc-live-state[data-state='working'] {
+    animation: crewc-slow 3.4s ease-in-out infinite;
+  }
+  .crewc-dot[data-dir='down'] {
+    animation: crewc-travel 1.2s ease-in-out both;
+  }
+  .crewc-dot[data-dir='up'] {
+    animation: crewc-travel 1.2s ease-in-out both reverse;
+  }
+  .crewc-line {
+    transition: stroke 0.3s ease;
+  }
+  @keyframes crewc-travel {
+    from {
+      offset-distance: 0%;
+      opacity: 0.2;
+    }
+    15%,
+    85% {
+      opacity: 1;
+    }
+    to {
+      offset-distance: 100%;
+      opacity: 0.2;
+    }
+  }
+  @keyframes crewc-glow {
+    50% {
+      box-shadow: 0 0 0 2px var(--accent-line), 0 0 6px 0 var(--accent-soft);
+    }
+  }
+  @keyframes crewc-slow {
+    50% {
+      opacity: 0.55;
+    }
+  }
+}

@@ -99,10 +99,12 @@ describe('Connect > Your relay', () => {
     expect(document.querySelectorAll('[data-testid="connect-relay"]')).toHaveLength(1);
   });
 
-  it('no relay yet: says to set it up once (a quick address is not a relay)', async () => {
+  it('no relay yet: a prominent card with one button (a quick address is not a relay)', async () => {
     await mount(api(quick, ''));
     expect(q('[data-testid="connect-relay"]')!.getAttribute('data-state')).toBe('none');
-    expect(text('[data-testid="connect-relay-none"]')).toContain('Set it up once');
+    expect(text('[data-testid="relay-card"]')).toContain('Set it up once');
+    expect(text('[data-testid="relay-set-up"]')).toBe('Set up my relay');
+    expect(text('[data-testid="relay-card"]')).toContain('Free. About 2 minutes. You only do it once.');
     expect(q('[data-testid="connect-relay-host"]')).toBeNull();
   });
 

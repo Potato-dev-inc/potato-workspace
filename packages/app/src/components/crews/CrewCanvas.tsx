@@ -8,6 +8,9 @@
 //   - Crew on the phone: a crew card on the phone (view and control only; editing stays here).
 //   - Templates and sharing: built (CrewGallery and ImportSheet on CrewsPage; "Share" below writes the crew as one file).
 import { useEffect, useMemo, useRef, useState } from 'react';
+import { isSettingsEntry } from '../../lib/settings-entry';
+import { liveWord, eventText, frontPaneOf, liveHelpers, roleStates, useLiveFeed, useLivePanes, useNow, workflowStatus, type LivePane } from '../../lib/workflow-live';
+import { requestOpenHelper } from '../../lib/openHelper';
 import { useT } from '../../i18n';
 import { Menu } from '../common/Floating';
 import { DEFAULT_AGENT, crewErrorText, crewsApi, type Crew, type CrewAgents, type CrewOpened, type CrewProblem, type CrewsApi } from '../../lib/crews-api';
@@ -21,13 +24,14 @@ import { Follow, NO_TRACE, type Trace } from './Follow';
 import { TalkToCrew, type Shown } from './TalkToCrew';
 import { useModelNamer } from './modelNames';
 import { WorkflowPanel } from './WorkflowPanel';
+import { LiveStrip } from './LiveStrip';
 import { MAX_ROLES, addRole, afterAddInWorkflow, isCalled, isWorkflow, keyOf, moveRole, removeRole, type Spot } from './model';
 import '../../styles/crew-canvas.css';
 
 const CHECK_DELAY_MS = 350;
 const json = (c: Crew, rules: string) => JSON.stringify([c, rules]);
 
-type Tab = 'role' | 'try' | 'follow' | 'talk';
+type Tab = 'role' | 'try' | 'follow' | 'talk' | 'live';
 
 export function CrewCanvas({
   slug,
@@ -39,6 +43,9 @@ export function CrewCanvas({
   focusRole,
   talkApi,
   workflows = false,
+  startTab,
+  onOpenHelper,
+  liveSource,
 }: {
   slug: string;
   api?: CrewsApi;
@@ -53,6 +60,12 @@ export function CrewCanvas({
   talkApi?: CrewTalkApi;
   /** Labs "Workflows" is on: the lead may be marked the Front of a workflow. */
   workflows?: boolean;
+  /** Open on the Live tab (the chat's "Open live view"). It shows only when a chat was started as this crew's front. */
+  startTab?: 'live';
+  /** A helper box was clicked in the Live tab. Absent: the app opens it (spin-off chat, or the read-only view of a minion). */
+  onOpenHelper?: (frontPaneId: string, helperId: string) => void;
+  /** The chat that opens this view gives its own pane id (the front), the cockpit's pane list and the chats with a question waiting. */
+  liveSource?: { frontId: string; panes: ReadonlyArray<LivePane>; asking: ReadonlySet<string> };
 }) {
   const t = useT();
   const [opened, setOpened] = useState<CrewOpened | null>(null);
@@ -63,7 +76,7 @@ export function CrewCanvas({
   const [baseline, setBaseline] = useState('');
   const [problems, setProblems] = useState<CrewProblem[]>([]);
   const [selected, setSelected] = useState<number | null>(null);
-  const [tab, setTab] = useState<Tab>('role');
+  const [tabPicked, setTab] = useState<Tab>(startTab ?? 'role');
   const [path, setPath] = useState<string[]>([]);
   const [trace, setTrace] = useState<Trace>(NO_TRACE);
   const [talkShown, setTalkShown] = useState<Shown | null>(null);
@@ -98,7 +111,6 @@ export function CrewCanvas({
   }, [api, slug, focusRole]);
 
   const readOnly = opened?.kind === 'template';
-  const showTalk = tab === 'talk';
   const dirty = !!crew && json(crew, rules) !== baseline;
 
   // The crew is checked again a moment after the person stops changing it (the model and the hand-offs included).
@@ -123,6 +135,31 @@ export function CrewCanvas({
   }, [agents, t]);
 
   const modelName = useModelNamer(crew?.roles.map((r) => r.agent_type) ?? []);
+
+  // The live view (Labs "Workflows"): the chat that was started as this crew's front, and the helpers it started.
+  const wfOn = workflows && !!crew && isWorkflow(crew);
+  // The separate Settings window cannot open a chat in the cockpit window: no Live tab there. Inside the cockpit the chat that
+  // opened this view hands over its own pane list, its questions and its own id, so the counts match the crew chip.
+  const standalone = !liveSource && isSettingsEntry(window.location.search);
+  const own = useLivePanes(wfOn && !liveSource && !standalone);
+  const panes: ReadonlyArray<LivePane> = liveSource?.panes ?? own.panes;
+  const asking = liveSource?.asking ?? own.asking;
+  const frontPane: LivePane | null = useMemo(
+    () => (!crew || !wfOn || standalone ? null : liveSource ? (panes.find((p) => p.info.id === liveSource.frontId) ?? null) : frontPaneOf(crew, slug, panes)),
+    [crew, wfOn, standalone, liveSource, panes, slug],
+  );
+  const liveOn = !!frontPane;
+  const tab: Tab = tabPicked === 'live' && !liveOn ? 'role' : tabPicked;
+  const showTalk = tab === 'talk';
+  const frontId = frontPane?.info.id ?? null;
+  const helpers = useMemo(
+    () => (crew && frontId ? liveHelpers(crew, panes, frontId, (p) => p.info.title?.trim() || agentName(p.info.agent_type), asking) : []),
+    [crew, panes, frontId, agentName, asking],
+  );
+  const feed = useLiveFeed(helpers, liveOn);
+  const clock = useNow(liveOn && tab === 'live');
+  const liveRoles = useMemo(() => roleStates(helpers, feed.endedAt), [helpers, feed.endedAt]);
+  const openHelper = (id: string) => (frontId ? (onOpenHelper ?? requestOpenHelper)(frontId, id) : undefined);
 
   if (failed) {
     return (
@@ -218,7 +255,7 @@ export function CrewCanvas({
             type="button"
             ref={addRef}
             className="crewc-btn"
-            disabled={readOnly || full || !first}
+            disabled={readOnly || full || !first || tab === 'live'}
             title={full ? t('crewcanvas.full', { count: MAX_ROLES }) : !first ? t('crewcanvas.noAgent') : undefined}
             aria-haspopup="menu"
             aria-expanded={menu}
@@ -236,18 +273,18 @@ export function CrewCanvas({
             </Menu>
           ) : null}
           {readOnly ? (
-            <button type="button" className="crewc-btn crewc-btn--primary" disabled={saving || !crew.name.trim()} onClick={() => void save()}>
+            <button type="button" className="crewc-btn crewc-btn--primary" disabled={saving || !crew.name.trim() || tab === 'live'} onClick={() => void save()}>
               {saving ? t('crewcanvas.saving') : t('crewcanvas.copy')}
             </button>
           ) : (
-            <button type="button" className="crewc-btn crewc-btn--primary" disabled={saving || !dirty || blocked} onClick={() => void save()}>
+            <button type="button" className="crewc-btn crewc-btn--primary" disabled={saving || !dirty || blocked || tab === 'live'} onClick={() => void save()}>
               {saving ? t('crewcanvas.saving') : t('crewcanvas.save')}
             </button>
           )}
           <button type="button" className="crewc-btn" disabled={sharing} title={t('crewcanvas.share.hint')} onClick={() => void share()}>
             {t('crewcanvas.share')}
           </button>
-          <button type="button" className="crewc-btn" disabled={!!applyWhy} title={applyWhy ?? undefined} onClick={() => setApplying(true)}>
+          <button type="button" className="crewc-btn" disabled={!!applyWhy || tab === 'live'} title={applyWhy ?? undefined} onClick={() => setApplying(true)}>
             {t('crewcanvas.apply')}
           </button>
           <button type="button" className="crewc-btn crewc-btn--quiet" onClick={onClose}>
@@ -286,19 +323,61 @@ export function CrewCanvas({
           path={trace.path.length > 0 ? trace.path : path}
           now={trace.now}
           hops={trace.hops}
-          readOnly={readOnly || showTalk}
+          readOnly={readOnly || showTalk || tab === 'live'}
+          live={
+            tab === 'live' && frontPane
+              ? {
+                  roles: liveRoles,
+                  frontWorking: frontPane.status === 'running',
+                  dots: feed.dots,
+                  pulse: feed.pulse,
+                  now: clock,
+                  onOpen: (roleKey) => {
+                    const id = liveRoles.get(roleKey)?.helperId;
+                    if (id) openHelper(id);
+                  },
+                }
+              : undefined
+          }
           changed={showTalk && talkShown ? talkShown.changed : undefined}
           touched={showTalk && talkShown ? talkShown.touched : undefined}
           onAddRole={readOnly || showTalk || full || !first ? undefined : () => add(keyOf(crew.roles.find((r) => !r.parent) ?? crew.roles[0]))}
         />
         <aside className="crewc-side" aria-label={t('crewcanvas.tabs')}>
           <div className="crewc-tabs" role="tablist">
-            {(['role', 'try', 'follow', 'talk'] as const).map((id) => (
+            {(liveOn ? (['live', 'role', 'try', 'follow', 'talk'] as const) : (['role', 'try', 'follow', 'talk'] as const)).map((id) => (
               <button key={id} type="button" role="tab" aria-selected={tab === id} className={tab === id ? 'is-on' : ''} onClick={() => setTab(id)}>
                 {t(`crewcanvas.tab.${id}` as never)}
               </button>
             ))}
           </div>
+          {tab === 'live' ? (
+            <div className="crewc-live-side" data-testid="live-side">
+              <p className="crewc-hint">{t('crewcanvas.live.note')}</p>
+              <p className="crewc-live-summary" data-testid="live-summary">
+                {workflowStatus(helpers, t) ?? ''}
+              </p>
+              {helpers.some((h) => !h.roleKey) ? (
+                <div data-testid="live-other">
+                  <h3 className="crewc-live-head">{t('crewcanvas.live.other')}</h3>
+                  <ul className="crewc-live-other">
+                    {helpers
+                      .filter((h) => !h.roleKey)
+                      .map((h) => (
+                        <li key={h.id}>
+                          <button type="button" className="crewc-link" aria-label={t('crewcanvas.live.open', { title: h.title })} onClick={() => openHelper(h.id)}>
+                            <span className="crewc-live-state" data-state={h.state}>
+                              {liveWord(h.state, t)}
+                            </span>{' '}
+                            {h.title}
+                          </button>
+                        </li>
+                      ))}
+                  </ul>
+                </div>
+              ) : null}
+            </div>
+          ) : null}
           {tab === 'role' && isWorkflow(crew) ? <WorkflowPanel crew={crew} disabled={readOnly} onChange={edit} /> : null}
           {tab === 'role' ? (
             selected !== null && crew.roles[selected] ? (
@@ -339,6 +418,8 @@ export function CrewCanvas({
           </div>
         </aside>
       </div>
+
+      {tab === 'live' ? <LiveStrip log={feed.log.map((e) => ({ key: e.key, at: e.at, text: eventText(e, t), kind: e.kind }))} /> : null}
 
       {applying ? <ApplySheet crew={crew} api={api} ship={ship} defaultFolder={defaultFolder} onClose={() => setApplying(false)} /> : null}
     </div>

@@ -45,6 +45,8 @@ import { DockSplitter } from './DockSplitter';
 import { TaskHeader } from './TaskHeader';
 import { TaskSideView } from './TaskSideView';
 import { TerminalPane } from './TerminalPane';
+import { WorkflowLive } from '../../crews/WorkflowLive';
+import type { WorkflowModel } from '../../../lib/workflow-model';
 
 export interface TaskColumnProps {
   paneId: string;
@@ -60,6 +62,12 @@ export interface TaskColumnProps {
   onStopJob: (owner: string, pid: number, startedAtMs: number, terminalId?: string) => Promise<void>;
   /** Where a terminal's output is read (tests give their own). */
   jobsApi?: JobsApi;
+  /** This chat is the front of a workflow (Labs "Workflows"): its live view is the top pane. */
+  workflow?: WorkflowModel | null;
+  /** A box of the live view was clicked: that agent opens. */
+  onOpenWorkflowHelper?: (helperId: string) => void;
+  /** "Open the big view" (the crew canvas's Live tab). */
+  onOpenWorkflowBig?: () => void;
 }
 
 const Glyph = ({ d }: { d: string }) => (
@@ -68,18 +76,19 @@ const Glyph = ({ d }: { d: string }) => (
   </svg>
 );
 const GLYPH: Record<DockSlot, string> = {
+  workflow: 'M8 3v5M4 12.5V8h8v4.5',
   view: 'M3 4.5h10M3 8h10M3 11.5h6',
   terminal: 'M3 4.5 7 8l-4 3.5M8.5 12H13',
   browser: 'M8 2.5a5.5 5.5 0 1 0 0 11 5.5 5.5 0 0 0 0-11ZM2.5 8h11M8 2.5c1.6 1.6 2.4 3.4 2.4 5.5S9.6 11.9 8 13.5C6.4 11.9 5.6 10.1 5.6 8S6.4 4.1 8 2.5Z',
 };
 
-export function TaskColumn({ paneId, agentName, agentType, rows, owners, usage, onOpenPane, onStopHelper, onStopJob, jobsApi }: TaskColumnProps) {
+export function TaskColumn({ paneId, agentName, agentType, rows, owners, usage, onOpenPane, onStopHelper, onStopJob, jobsApi, workflow = null, onOpenWorkflowHelper, onOpenWorkflowBig }: TaskColumnProps) {
   const t = useT();
   const state = useTaskView(paneId);
   const { dock, split } = usePanelWidths();
   const browserOn = useDockBrowserEnabled();
   // One ref per slot, so a splitter can measure the two panes beside it.
-  const refs = useMemo<Record<DockSlot, RefObject<HTMLDivElement>>>(() => ({ view: createRef<HTMLDivElement>(), terminal: createRef<HTMLDivElement>(), browser: createRef<HTMLDivElement>() }), []);
+  const refs = useMemo<Record<DockSlot, RefObject<HTMLDivElement>>>(() => ({ view: createRef<HTMLDivElement>(), workflow: createRef<HTMLDivElement>(), terminal: createRef<HTMLDivElement>(), browser: createRef<HTMLDivElement>() }), []);
   if (!state) return null;
   const { panes, full, collapsed, folded } = state;
 
@@ -87,6 +96,7 @@ export function TaskColumn({ paneId, agentName, agentType, rows, owners, usage, 
   const finished = rows.filter((r) => r.status !== 'running' && r.status !== 'waiting_input');
   const onFull = () => setTaskFull(paneId, !full);
   const slotName = (pane: DockPane): string => {
+    if (pane.kind === 'workflow') return workflow?.name ? t('wfdock.title', { name: workflow.name }) : t('wfdock.titleNoName');
     if (pane.kind === 'page') return t('task.pageTitle');
     if (pane.kind === 'terminal') return pane.name;
     if (pane.kind === 'browser') return t('dock.browser');
@@ -119,7 +129,10 @@ export function TaskColumn({ paneId, agentName, agentType, rows, owners, usage, 
     };
     let header: ReactNode;
     let body: ReactNode = null;
-    if (pane.kind === 'page') {
+    if (pane.kind === 'workflow') {
+      header = <TaskHeader title={slotName(pane)} logo={<span className="tk-glyph"><Glyph d={GLYPH.workflow} /></span>} {...common} />;
+      body = workflow ? <WorkflowLive model={workflow} onOpenHelper={(id) => onOpenWorkflowHelper?.(id)} onOpenBig={onOpenWorkflowBig} /> : <p className="tk-empty">{t('task.gone')}</p>;
+    } else if (pane.kind === 'page') {
       header = (
         <TaskHeader
           title={t('task.pageTitle')}

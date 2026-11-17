@@ -117,6 +117,24 @@
 .cockpit .ck-sb-wrap:focus-within .ck-sb-state {
   visibility: hidden;
 }
+/* The orange "standby" tag and a minion's tag sit where the hover buttons (X, "...") appear: while they show, the tag steps aside. */
+.cockpit .ck-sb-tag,
+.cockpit .ck-taskrow .tdr-tag {
+  transition: opacity var(--dur-fast, 120ms) var(--ease, ease);
+}
+.cockpit .ck-rowwrap:hover .ck-sb-tag,
+.cockpit .ck-rowwrap:focus-within .ck-sb-tag,
+.cockpit .ck-rowwrap:hover .ck-taskrow .tdr-tag,
+.cockpit .ck-rowwrap:focus-within .ck-taskrow .tdr-tag {
+  opacity: 0;
+  pointer-events: none;
+}
+@media (prefers-reduced-motion: reduce) {
+  .cockpit .ck-sb-tag,
+  .cockpit .ck-taskrow .tdr-tag {
+    transition: none;
+  }
+}
 .cockpit .ck-sb-x:hover {
   color: var(--label);
 }

@@ -55,6 +55,11 @@ import { descendants, groupHelperTree, isMinionPane, readFoldedParents, writeFol
 import { markStandbyOpen, openNewStandby, tauriStandbyHelpersApi, useStandbyHelpers, type StandbyHelpersApi } from '../../lib/standbyHelpers';
 import { placeHelpers, type StandbyRow } from './standby-rows';
 import { SidebarStandbyRow, type StandbyRowActions } from './SidebarStandbyRow';
+import { SidebarWorkflowRow } from './SidebarWorkflowRow';
+import { helpersOfFront, workflowMark } from '../../lib/workflow-model';
+import { useWorkflowsEnabled } from '../../lib/workflow-live';
+import { useCrewMarks } from '../../lib/crew-members';
+import { openWorkflowPane } from '../../lib/task-view';
 import { useSidebarTasks } from './useSidebarTasks';
 import type { JobsApi } from '../../lib/pane-jobs';
 import { folderKey } from './history-model';
@@ -216,6 +221,9 @@ export function Sidebar({
   // A companion's pane has its own companion row above; it is not listed again as a plain pane.
   // Standby helpers: each sits under its home agent. A chat the person opened on one is that helper's row, not an agent.
   const { view: standbyView, apply: applyStandby } = useStandbyHelpers(standbyApi);
+  // Labs "Workflows": under the front agent of a workflow, one quiet row with how many of its agents work or need you.
+  const workflowsOn = useWorkflowsEnabled();
+  useCrewMarks();
   const [showHelperTree] = useHelpersInSidebar();
   // Opening a standby makes its chat before the list of helpers says so: until it does, a chat that just appeared is not an agent.
   const [openingFrom, setOpeningFrom] = useState<ReadonlySet<string> | null>(null);
@@ -649,16 +657,39 @@ export function Sidebar({
       </div>
     );
   };
+  /** The row under a workflow's front agent, while the front has started agents (it stays as "done" until the front closes). */
+  const workflowRowFor = (id: string): JSX.Element | null => {
+    const mark = workflowsOn ? workflowMark(id, true) : null;
+    if (!mark) return null;
+    const helpers = helpersOfFront(null, list, id, (p) => c.names.get(p.info.id) ?? p.info.agent_type, questionPanes);
+    if (helpers.length === 0) return null;
+    return (
+      <SidebarWorkflowRow
+        key={`wf-${id}`}
+        frontId={id}
+        name={mark.name ?? null}
+        helpers={helpers}
+        active={c.selectedId === id}
+        onOpen={(frontId) => {
+          if (openTaskId) onOpenTask?.(null);
+          c.select(frontId);
+          openWorkflowPane(frontId);
+        }}
+      />
+    );
+  };
   // A row, and under it its helpers: indented behind a thin guide line, folded by the "N helpers" chip.
   // `parent` is the row this one is nested under. A spin-off under its agent shows "↳"; whatever else is nested stays plain.
   const node = (n: HelperNode<Pane>, parent?: Pane): JSX.Element => {
     const id = n.pane.info.id;
     const standbyRows = showHelperTree ? (placement.byAgent.get(id) ?? []) : [];
     const taskRows = tasks.rowsFor(id);
+    const wfRow = workflowRowFor(id);
     const mark = parent && n.pane.info.started_as === 'spin_off' ? parent : undefined;
     // A spin-off is the person's own chat: it nests whatever the helpers switch says. Other helpers follow the switch.
     const kids = showHelperTree ? n.helpers : n.helpers.filter((h) => h.pane.info.started_as === 'spin_off');
-    if (kids.length === 0 && standbyRows.length === 0 && taskRows.length === 0) {
+    const hasGroup = kids.length > 0 || standbyRows.length > 0 || taskRows.length > 0;
+    if (!hasGroup && !wfRow) {
       // The helpers bar above the chat is where the other helpers live: the row only counts them (unless the person wants the tree).
       return row(n.pane, n.awayFrom, showHelperTree ? 0 : descendants(n).length, mark);
     }
@@ -666,6 +697,8 @@ export function Sidebar({
     return (
       <div key={id} className="ck-node">
         {row(n.pane, n.awayFrom, showHelperTree ? 0 : descendants(n).length - kids.length, mark)}
+        {wfRow}
+        {hasGroup && (
         <div className="ck-helpers" role="group" aria-label={t('sidebar.helpersOf', { name: paneTitle(n.pane) })}>
           <button
             type="button"
@@ -681,6 +714,7 @@ export function Sidebar({
           {open && standbyRows.map(standbyRowView)}
           {open && taskRows}
         </div>
+        )}
       </div>
     );
   };

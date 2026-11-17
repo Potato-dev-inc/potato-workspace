@@ -15,6 +15,8 @@ import { tauri } from '../../lib/tauri';
 import type { TunnelStatus } from '../../lib/tauri-types';
 import { problemText } from '../settings/tunnel-model';
 import type { TunnelApi } from '../settings/TunnelSection';
+import type { UpdateApi } from '../../lib/workerUpdate';
+import { RelaySetupSheet } from './RelaySetup';
 import { StableOffer } from './StableOffer';
 import { useTunnelStatus } from './useTunnelStatus';
 
@@ -38,6 +40,8 @@ export interface SimplePhoneProps {
   ready: boolean;
   /** The Advanced pairing panel is open: it keeps the one pending code, so this view makes none and hides its own. */
   paused?: boolean;
+  /** The relay setup's step commands (tests give fakes). */
+  updateApi?: UpdateApi;
 }
 
 /** True while this window is visible and not blurred (codes are made and renewed only then). */
@@ -59,7 +63,7 @@ function useLooking(): [boolean, (v: boolean) => void] {
   return [on, setOn];
 }
 
-export function SimplePhone({ tunnel, phones, publicPwaUrl, devServerPort, ready, paused = false }: SimplePhoneProps) {
+export function SimplePhone({ tunnel, phones, publicPwaUrl, devServerPort, ready, paused = false, updateApi }: SimplePhoneProps) {
   const t = useT();
   const [looking, setLooking] = useLooking();
   const canvasRef = useRef<HTMLCanvasElement>(null);
@@ -75,6 +79,7 @@ export function SimplePhone({ tunnel, phones, publicPwaUrl, devServerPort, ready
   const [tries, setTries] = useState(0);
   const [fixing, setFixing] = useState(false);
   const [fixErr, setFixErr] = useState<string | null>(null);
+  const [setup, setSetup] = useState(false);
 
   useEffect(() => watchTunnelDevInfo(setDevInfo), []);
 
@@ -285,7 +290,8 @@ export function SimplePhone({ tunnel, phones, publicPwaUrl, devServerPort, ready
           </details>
         </div>
       )}
-      {showOffer && <StableOffer tunnel={tunnel} status={status ?? null} onStatus={setStatus} onGone={() => setGone(true)} />}
+      {showOffer && <StableOffer onSet={() => setSetup(true)} onGone={() => setGone(true)} />}
+      {setup && <RelaySetupSheet api={tunnel} updateApi={updateApi} onStatus={setStatus} onClose={() => setSetup(false)} />}
     </div>
   );
 }

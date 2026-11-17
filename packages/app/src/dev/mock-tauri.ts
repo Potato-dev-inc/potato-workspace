@@ -234,6 +234,8 @@ export function installTauriMock(scenario: HarnessScenario): void {
           return { agents: [{ id: 'claude', label: 'Claude' }], default: 'claude' };
         case 'crews_check':
           return [];
+        case 'crews_get':
+          return WORKFLOW_CREW;
         case 'crews_open':
           return { slug: 'haiku-router', kind: 'saved', crew: WORKFLOW_CREW, routing_text: '', problems: [] };
         case 'agents_list':
@@ -549,6 +551,13 @@ export function installTauriMock(scenario: HarnessScenario): void {
           return { available: false, reason: 'No session file in the preview.', items: [], source: null, waitingFor: null };
         case 'session_chat_close':
           return null;
+        // A picture attached to a message (image-viewer-preview): an svg whose shape follows the file name.
+        case 'attachment_preview': {
+          const path = String(a.path ?? '');
+          const [w, h] = path.includes('wide') ? [1600, 600] : path.includes('tall') ? [500, 1500] : [900, 560];
+          const hue = path.includes('two-b') ? '#2a8fd9' : '#d9772a';
+          return 'data:image/svg+xml;base64,' + btoa(`<svg xmlns="http://www.w3.org/2000/svg" width="${w}" height="${h}" viewBox="0 0 ${w} ${h}"><rect width="${w}" height="${h}" fill="#f4f1ea"/><rect x="6" y="6" width="${w - 12}" height="${h - 12}" fill="none" stroke="${hue}" stroke-width="8"/><circle cx="${w / 2}" cy="${h / 2}" r="${Math.min(w, h) / 4}" fill="${hue}"/><text x="24" y="48" font-family="sans-serif" font-size="32" fill="#333">${w} x ${h}</text><text x="24" y="${h - 24}" font-family="sans-serif" font-size="32" fill="#333">bottom edge</text></svg>`);
+        }
         // A picture the agent named (chat-more-preview): a small bar chart drawn as a data URL.
         case 'chat_picture':
           return { name: 'sales.png', mime: 'image/svg+xml', size: 900, dataUrl: 'data:image/svg+xml;base64,' + btoa('<svg xmlns="http://www.w3.org/2000/svg" width="420" height="220" viewBox="0 0 420 220"><rect width="420" height="220" fill="#f4f1ea"/><g fill="#d9772a"><rect x="40" y="110" width="50" height="90"/><rect x="120" y="80" width="50" height="120"/><rect x="200" y="30" width="50" height="170"/><rect x="280" y="90" width="50" height="110"/></g><g fill="#444" font-family="sans-serif" font-size="12"><text x="52" y="214">W1</text><text x="132" y="214">W2</text><text x="212" y="214">W3</text><text x="292" y="214">W4</text></g></svg>') };

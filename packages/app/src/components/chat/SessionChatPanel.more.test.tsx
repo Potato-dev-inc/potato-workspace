@@ -76,7 +76,7 @@ describe('pictures in the desktop chat', () => {
     await act(async () => host.querySelector<HTMLButtonElement>('[data-testid="chat-picture"]')!.click());
     expect(document.querySelector('[data-testid="chat-picture-big"] img')!.getAttribute('src')).toBe(DOT);
     act(() => {
-      window.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
+      document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
     });
     expect(document.querySelector('[data-testid="chat-picture-big"]')).toBeNull();
   });

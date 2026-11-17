@@ -29,6 +29,7 @@ import { tauriJobsApi, type JobsApi } from '../../../lib/pane-jobs';
 import { usePaneConnectors } from './usePaneConnectors';
 import { usePaneUsage } from './usePaneUsage';
 import { usePaneBranch } from './usePaneBranch';
+import type { WorkflowModel } from '../../../lib/workflow-model';
 
 export type { HelperRow };
 
@@ -75,6 +76,10 @@ export interface SessionRailProps {
   onClose?: () => void;
   onNotify?: (text: string) => void;
   jobsApi?: JobsApi;
+  /** This chat is the front of a workflow (Labs "Workflows"): the details column can show its live view. */
+  workflow?: WorkflowModel | null;
+  onOpenWorkflowHelper?: (helperId: string) => void;
+  onOpenWorkflowBig?: () => void;
 }
 
 export function SessionRail({
@@ -105,6 +110,9 @@ export function SessionRail({
   onClose,
   onNotify,
   jobsApi = tauriJobsApi,
+  workflow = null,
+  onOpenWorkflowHelper,
+  onOpenWorkflowBig,
 }: SessionRailProps) {
   const t = useT();
   const { railPx } = useLayout();
@@ -197,7 +205,7 @@ export function SessionRail({
         />
         <FilesCard paneId={paneId} cwd={cwd} canMention={readsChat} refreshKey={status} />
       </aside>
-      <TaskColumn paneId={paneId} agentName={agentName} agentType={agentType} rows={rows} owners={commandOwners} usage={usage} onOpenPane={onOpenPane} onStopHelper={onStopHelper} onStopJob={stopOwnJob} jobsApi={jobsApi} />
+      <TaskColumn paneId={paneId} agentName={agentName} agentType={agentType} rows={rows} owners={commandOwners} usage={usage} onOpenPane={onOpenPane} onStopHelper={onStopHelper} onStopJob={stopOwnJob} jobsApi={jobsApi} workflow={workflow} onOpenWorkflowHelper={onOpenWorkflowHelper} onOpenWorkflowBig={onOpenWorkflowBig} />
     </>
   );
 }

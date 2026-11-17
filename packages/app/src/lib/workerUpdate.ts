@@ -32,6 +32,8 @@ export interface UpdateApi {
   step: (id: Exclude<UpdateStepId, 'check'>, address: string | null, confirmed?: boolean) => Promise<StepAnswer>;
   /** Asks the Worker what it can do (plain GETs). */
   check: (address: string) => Promise<WorkerHealth | null>;
+  /** Stops the tool the running step started (only that one). Absent in tests that do not need it. */
+  cancel?: () => Promise<unknown> | void;
   /** The pause before a failed step runs again. Absent: 1.5 seconds. Tests give 0. */
   pauseMs?: number;
 }
@@ -39,6 +41,7 @@ export interface UpdateApi {
 export const tauriUpdateApi: UpdateApi = {
   step: (id, address, confirmed) => invoke<StepAnswer>('worker_update_step', { step: id, address, confirmed: confirmed === true }),
   check: workerCheck,
+  cancel: () => invoke<boolean>('worker_update_cancel'),
 };
 
 export const MAX_TRIES = 3;
@@ -72,6 +75,8 @@ export async function runWorkerUpdate(opts: {
   isCancelled?: () => boolean;
   /** Delete the saved Worker first (it must be the Worker `address` names). */
   fresh?: boolean;
+  /** A failed step this says is pointless to try again (a cancelled sign-in, no workers.dev name yet) stops after the first run. */
+  noRetry?: (id: UpdateStepId, output: string) => boolean;
 }): Promise<UpdateRun> {
   const api = opts.api ?? tauriUpdateApi;
   const pause = opts.pauseMs ?? api.pauseMs ?? 1500;
@@ -101,6 +106,7 @@ export async function runWorkerUpdate(opts: {
         passed = false;
         step.output = errorSentence(e);
       }
+      if (!passed && opts.noRetry?.(step.id, step.output)) break;
       if (!passed && attempt < MAX_TRIES && pause > 0) await wait(pause);
     }
     step.status = passed ? 'done' : 'failed';

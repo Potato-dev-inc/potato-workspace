@@ -150,6 +150,9 @@ describe('New agent page: Workflow dropdown', () => {
     expect(request).toMatchObject({ agentId: 'beta', model: 'haiku', folder: '/work/app' });
     expect(request.prompt).toMatch(/^You are the front of the workflow/);
     expect(request.prompt).toMatch(/The person's request:\nfix login$/);
+    // The card marker rides along; the text the agent gets is not changed by it.
+    expect(request.workflow).toEqual({ slug: 'haiku-router', front: 'Front', name: 'Haiku router', brief: 'You are the front of the workflow "Haiku router".\n' });
+    expect(request.prompt).toBe('You are the front of the workflow "Haiku router".\nThe person\'s request:\nfix login');
     expect(helpers).not.toHaveBeenCalled();
   });
 

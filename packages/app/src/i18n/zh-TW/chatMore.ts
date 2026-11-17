@@ -2,11 +2,15 @@
 import type { EnglishKey } from '../en';
 
 export const chatMore: Partial<Record<EnglishKey, string>> = {
+  'imageViewer.close': '關閉',
+  'imageViewer.prev': '上一張圖片',
+  'imageViewer.next': '下一張圖片',
+  'imageViewer.count': '第 {n} 張，共 {total} 張',
+  'imageViewer.loading': '正在載入圖片…',
   'chat.picture.alt': '圖片',
   'chat.picture.loading': '正在載入圖片…',
   'chat.picture.refused': '沒有顯示圖片。{reason}',
   'chat.picture.enlarge': '放大 {name}',
-  'chat.picture.close': '關閉',
   'chat.earlier.show': '顯示更早的訊息',
   'chat.earlier.loading': '正在載入更早的訊息…',
   'chat.earlier.failed': '無法載入更早的訊息。',

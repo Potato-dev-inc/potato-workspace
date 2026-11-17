@@ -7,7 +7,9 @@ import { configChips, tauriAcpChatApi, type AcpChatApi } from '../../../lib/acpC
 import { sendPaneMessage } from '../../../lib/paneOutbox';
 import { markChat } from '../../../lib/chatTiming';
 import { t } from '../../../i18n';
+import { recordWorkflowStart } from '../../../lib/workflowCard';
 import type { StartRequest } from './model';
+import { rememberCrewStart } from '../../../lib/crew-members';
 
 export interface StartDeps {
   /** The cockpit's `newAgent`: opens the pane and the starting view; resolves to the pane id, or null if it failed. */
@@ -86,6 +88,12 @@ export const realStartDeps = (
  */
 export async function runStart(req: StartRequest, deps: StartDeps): Promise<string | StartBlock | null> {
   let paneId: string | null = null;
+  const mark = (id: string) => {
+    if (!req.workflow) return;
+    // The card ("Using workflow", the brief) and the front mark (the live view), both with the plan's name.
+    recordWorkflowStart(id, { name: req.workflow.name, brief: req.workflow.brief });
+    rememberCrewStart(req.workflow.slug, [{ role: req.workflow.front, pane_id: id }], req.workflow.front, req.workflow.name);
+  };
   const model = req.model?.trim() || undefined;
   try {
     if (req.runAs === 'chat') {
@@ -97,6 +105,8 @@ export async function runStart(req: StartRequest, deps: StartDeps): Promise<stri
       markChat('start:begin');
       paneId = await (req.isolated ? deps.startChat(req.agentId, req.folder, req.accountId, true) : req.accountId === undefined ? deps.startChat(req.agentId, req.folder) : deps.startChat(req.agentId, req.folder, req.accountId));
       markChat('start:pane');
+      // Both marks are written before the chat is selected, so its first draw already knows it is a workflow's front.
+      mark(paneId);
       deps.select(paneId);
       // The model goes in before the first message: ACP changes settings between turns.
       if (model && deps.setChatModel) {
@@ -115,6 +125,8 @@ export async function runStart(req: StartRequest, deps: StartDeps): Promise<stri
     return null;
   }
   if (!paneId) return null; // the starting view shows why
+  // The terminal path has no earlier moment: the marks are written here (the chat path wrote them before selecting).
+  if (req.runAs !== 'chat') mark(paneId);
   try {
     await deps.send(paneId, req.prompt);
     markChat('start:sent');

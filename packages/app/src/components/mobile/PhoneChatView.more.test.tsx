@@ -67,7 +67,9 @@ describe('pictures in the phone chat', () => {
     expect(img.getAttribute('alt')).toBe('sales chart');
     await act(async () => host.querySelector<HTMLButtonElement>('[data-testid="chat-picture"]')!.click());
     expect(document.querySelector('[data-testid="chat-picture-big"] img')!.getAttribute('src')).toBe(DOT);
-    await act(async () => document.querySelector<HTMLElement>('[data-testid="chat-picture-big"]')!.click());
+    await act(async () => {
+      document.querySelector<HTMLElement>('[data-testid="chat-picture-big"]')!.dispatchEvent(new MouseEvent('mousedown', { bubbles: true }));
+    });
     expect(document.querySelector('[data-testid="chat-picture-big"]')).toBeNull();
   });
 

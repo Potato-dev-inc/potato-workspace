@@ -111,7 +111,7 @@ export function StartCrewSheet({
     setError(null);
     try {
       const started = await api.start(chosenCrew.slug, folder, chosen);
-      rememberCrewStart(chosenCrew.slug, started.started);
+      rememberCrewStart(chosenCrew.slug, started.started, roles?.find((r) => r.front)?.name, chosenCrew.name);
       setOutcome(started);
     } catch (err) {
       setError(crewErrorText(err));

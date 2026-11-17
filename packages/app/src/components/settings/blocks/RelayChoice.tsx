@@ -10,6 +10,7 @@ import { verdictFor, workerCheck, type WorkerHealth, type WorkerVerdict } from '
 import type { UpdateApi } from '../../../lib/workerUpdate';
 import { defaultTunnelApi } from '../../PairingAddress';
 import { StableLinkSheet } from '../../StableLinkSheet';
+import { RelaySetupSheet } from '../../connect/RelaySetup';
 import type { TunnelApi } from '../TunnelSection';
 import { WorkerUpdateButton } from '../WorkerUpdateButton';
 import { Btn } from '../settings-ui';
@@ -41,6 +42,8 @@ export function RelayChoice({
   const [verdict, setVerdict] = useState<WorkerVerdict | null>(null);
   const [again, setAgain] = useState(0);
   const [sheet, setSheet] = useState<{ status: TunnelStatus | null } | null>(null);
+  // The one-button setup (recommended). The old step-by-step sheet stays one quiet press away.
+  const [auto, setAuto] = useState(false);
   // The guided setup saves a Worker before it is finished (the secret is shown once in its last step). The card only
   // flips to "Use my relay" when the sheet is closed, so the sheet is never unmounted in the middle of the setup.
   const [made, setMade] = useState<string | null>(null);
@@ -65,6 +68,19 @@ export function RelayChoice({
       .then((status) => setSheet({ status }));
   };
 
+  const autoEl = auto && (
+    <RelaySetupSheet
+      api={tunnelApi}
+      updateApi={updateApi}
+      onClose={(made) => {
+        setAuto(false);
+        if (made) {
+          setAgain((n) => n + 1);
+          onSaved(made);
+        }
+      }}
+    />
+  );
   const sheetEl = sheet && (
     <StableLinkSheet
       api={tunnelApi}
@@ -86,26 +102,27 @@ export function RelayChoice({
     const ready = verdict === 'ok' || verdict === 'unknown';
     return (
       <>
-      <div className="tp-way tp-way-main" data-testid="relay-use">
-        <div>
-          <strong>{t('teamPage.useMyRelay', { host: hostOf(address) })}</strong> <span className="tp-tag">{t('teamPage.recommended')}</span>
-          <p className="tp-sub">{verdict === null ? t('teamPage.relayChecking') : verdict === 'unreachable' ? t('teamPage.relayDown') : t('teamPage.useMyRelayHelp')}</p>
-          {verdict === 'update' && (
-            <div data-testid="worker-update" className="stable-update">
-              <strong>{t('worker.update')}</strong>
-              <p>{t('worker.updateWhy', { url: address })}</p>
-              <WorkerUpdateButton address={address} label="wu.update" api={updateApi} onDone={() => setAgain((n) => n + 1)} />
-            </div>
-          )}
+        <div className="tp-way tp-way-main" data-testid="relay-use">
+          <div>
+            <strong>{t('teamPage.useMyRelay', { host: hostOf(address) })}</strong> <span className="tp-tag">{t('teamPage.recommended')}</span>
+            <p className="tp-sub">
+              {verdict === null ? t('teamPage.relayChecking') : verdict === 'unreachable' ? t('teamPage.relayDown') : t('teamPage.useMyRelayHelp')}
+            </p>
+            {verdict === 'update' && (
+              <div data-testid="worker-update" className="stable-update">
+                <strong>{t('worker.update')}</strong>
+                <p>{t('worker.updateWhy', { url: address })}</p>
+                <WorkerUpdateButton address={address} label="wu.update" api={updateApi} onDone={() => setAgain((n) => n + 1)} />
+              </div>
+            )}
+          </div>
+          {verdict === 'unreachable' && <Btn onClick={() => setAgain((n) => n + 1)}>{t('teamPage.relayRetry')}</Btn>}
+          <Btn primary disabled={disabled || !ready} onClick={() => onUse(address)}>
+            {t('teamPage.createTeam')}
+          </Btn>
         </div>
-        {verdict === 'unreachable' && (
-          <Btn onClick={() => setAgain((n) => n + 1)}>{t('teamPage.relayRetry')}</Btn>
-        )}
-        <Btn primary disabled={disabled || !ready} onClick={() => onUse(address)}>
-          {t('teamPage.createTeam')}
-        </Btn>
-      </div>
-      {sheetEl}
+        {sheetEl}
+        {autoEl}
       </>
     );
   }
@@ -114,10 +131,15 @@ export function RelayChoice({
       <div>
         <strong>{t('teamPage.setUpRelay')}</strong> <span className="tp-tag">{t('teamPage.recommended')}</span>
         <p className="tp-sub">{t('teamPage.setUpRelayHelp')}</p>
+        <p className="tp-sub">{t('relaySetup.sub')}</p>
+        <button type="button" className="rs-quiet" data-testid="relay-manual" onClick={openSetup}>
+          {t('relaySetup.manual')}
+        </button>
       </div>
-      <Btn primary onClick={openSetup}>
-        {t('teamPage.setUpRelay')}
+      <Btn primary data-testid="relay-set-up" onClick={() => setAuto(true)}>
+        {t('relaySetup.set')}
       </Btn>
+      {autoEl}
       {sheetEl}
     </div>
   );

@@ -167,6 +167,11 @@ export interface StartRequest {
   prompt: string;
   /** The model to start on; absent: the agent's own default. */
   model?: string;
+  /**
+   * Started from a workflow: the chat folds the brief (the start of `prompt`) into a "Using workflow" card, and this chat is that
+   * workflow's front (slug and front role), so its live view shows in the chat. The name is the plan's, for both.
+   */
+  workflow?: { slug: string; name: string; front: string; brief: string };
 }
 
 /** Why Send is off right now, or null when the person can send. */

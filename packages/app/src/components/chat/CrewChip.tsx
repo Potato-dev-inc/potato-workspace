@@ -48,7 +48,7 @@ function Row({ m, now, onOpen, onStop }: { m: CrewMember; now: number; onOpen: (
   );
 }
 
-export function CrewChip({ members, now, onOpen, onStop, defaultOpen = false }: { /** The list starts open (the evidence pages). */ defaultOpen?: boolean; members: ReadonlyArray<CrewMember>; now: number; onOpen: (id: string) => void; onStop?: (id: string) => Promise<void> | void }) {
+export function CrewChip({ members, now, onOpen, onStop, onOpenLive, defaultOpen = false }: { /** The list starts open (the evidence pages). */ defaultOpen?: boolean; /** This chat is the front of a running workflow: the list ends with "Open live view" (and a lone helper opens in the list, not at once). */ onOpenLive?: () => void; members: ReadonlyArray<CrewMember>; now: number; onOpen: (id: string) => void; onStop?: (id: string) => Promise<void> | void }) {
   const t = useT();
   const anchor = useRef<HTMLButtonElement>(null);
   const [open, setOpen] = useState(defaultOpen);
@@ -62,6 +62,7 @@ export function CrewChip({ members, now, onOpen, onStop, defaultOpen = false }: 
     });
   const view = crewChipView(members, t);
   if (!view) return null;
+  const only = onOpenLive ? null : view.only;
   const dot = view.tone === 'needs-you' ? 'waiting_input' : view.tone === 'working' ? 'running' : null;
   return (
     <div className="ck-crew-bar" data-testid="crew-bar">
@@ -71,15 +72,15 @@ export function CrewChip({ members, now, onOpen, onStop, defaultOpen = false }: 
         className="ck-crew-chip"
         data-testid="crew-chip"
         data-tone={view.tone}
-        aria-haspopup={view.only ? undefined : 'dialog'}
-        aria-expanded={view.only ? undefined : open}
+        aria-haspopup={only ? undefined : 'dialog'}
+        aria-expanded={only ? undefined : open}
         title={view.text}
-        onClick={() => (view.only ? onOpen(view.only.id) : setOpen((v) => !v))}
+        onClick={() => (only ? onOpen(only.id) : setOpen((v) => !v))}
       >
         {dot && <DotSpinner status={dot} size={3} />}
         <span className="ck-crew-text">{view.text}</span>
       </button>
-      {open && !view.only && (
+      {open && !only && (
         <Popover anchorRef={anchor} align="start" label={t('crew.aria')} testId="crew-panel" className="ck-crew-panel" minWidth={260} maxHeight={420} onClose={() => setOpen(false)}>
           {crewGroups(members).map((g) => {
             const { rows, folded } = visibleRows(g, expanded.has(g.kind));
@@ -113,6 +114,19 @@ export function CrewChip({ members, now, onOpen, onStop, defaultOpen = false }: 
               </section>
             );
           })}
+          {onOpenLive && (
+            <button
+              type="button"
+              className="ck-crew-fold ck-crew-live"
+              data-testid="crew-open-live"
+              onClick={() => {
+                setOpen(false);
+                onOpenLive();
+              }}
+            >
+              {t('crewcanvas.live.openView')}
+            </button>
+          )}
         </Popover>
       )}
     </div>

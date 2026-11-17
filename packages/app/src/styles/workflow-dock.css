@@ -1,0 +1,249 @@
+/* The live view of a workflow in a narrow place (the details column, the card at the top of a chat) and the sidebar row.
+   Colour tokens only. No coloured edge stripes. Every label shrinks with an ellipsis; boxes wrap at any width and text size. */
+.cockpit .wfl {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  min-width: 0;
+  padding: 10px 12px 12px;
+  font-size: var(--fs-meta, 12px);
+  color: var(--label);
+}
+.cockpit .wfl-summary {
+  margin: 0;
+  font-weight: 500;
+  overflow-wrap: anywhere;
+}
+.cockpit .wfl-front,
+.cockpit .wfl-box {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 2px;
+  min-width: 0;
+  padding: 7px 10px;
+  border: 1px solid var(--sep);
+  border-radius: 8px;
+  background: var(--bg-raised, var(--fill));
+  color: var(--label);
+  text-align: left;
+  font: inherit;
+}
+.cockpit .wfl-front {
+  align-self: stretch;
+}
+.cockpit .wfl-front.is-working {
+  border-color: var(--accent-line, var(--accent));
+}
+.cockpit .wfl-name {
+  max-width: 100%;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+  font-weight: 500;
+}
+.cockpit .wfl-flow {
+  position: relative;
+  align-self: center;
+  width: 2px;
+  height: 22px;
+  flex: none;
+}
+.cockpit .wfl-line {
+  position: absolute;
+  inset: 0;
+  border-radius: 1px;
+  background: var(--sep-strong, var(--sep));
+}
+.cockpit .wfl-line.is-pulse {
+  background: var(--accent);
+}
+.cockpit .wfl-dot {
+  position: absolute;
+  left: 50%;
+  top: 0;
+  width: 8px;
+  height: 8px;
+  margin-left: -4px;
+  border-radius: 50%;
+  background: var(--accent);
+}
+.cockpit .wfl-boxes {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.cockpit .wfl-cell {
+  flex: 1 1 8.5em;
+  min-width: 0;
+  display: flex;
+}
+.cockpit .wfl-box {
+  flex: 1;
+  cursor: pointer;
+}
+.cockpit .wfl-box:disabled {
+  cursor: default;
+  opacity: 0.7;
+}
+.cockpit .wfl-box:not(:disabled):hover {
+  background: var(--fill-hover);
+}
+.cockpit .wfl-box.has-needs-you {
+  border-color: var(--accent);
+}
+.cockpit .wfl-box.has-failed {
+  border-color: var(--danger);
+}
+.cockpit .wfl-empty {
+  margin: 0;
+}
+.cockpit .wfl .crewc-logstrip {
+  padding: 8px 0 0;
+  border-top: 1px solid var(--sep);
+  background: transparent;
+}
+.cockpit .wfl-big {
+  align-self: flex-start;
+  padding: 3px 8px;
+  border: 0;
+  border-radius: 6px;
+  background: var(--fill);
+  color: var(--label-2);
+  font: inherit;
+  cursor: pointer;
+}
+.cockpit .wfl-big:hover {
+  background: var(--fill-hover);
+  color: var(--label);
+}
+@media (prefers-reduced-motion: no-preference) {
+  .cockpit .wfl-dot[data-dir='down'] {
+    animation: wfl-down 1.2s ease-in-out both;
+  }
+  .cockpit .wfl-dot[data-dir='up'] {
+    animation: wfl-down 1.2s ease-in-out both reverse;
+  }
+  @keyframes wfl-down {
+    from {
+      top: 0;
+      opacity: 0.2;
+    }
+    15%,
+    85% {
+      opacity: 1;
+    }
+    to {
+      top: calc(100% - 8px);
+      opacity: 0.2;
+    }
+  }
+}
+
+/* The card at the top of a chat (when the details column is hidden). */
+.cockpit .wfl-card {
+  margin: 4px 8px 0;
+  border: 1px solid var(--sep);
+  border-radius: 8px;
+  background: var(--bg-raised, var(--fill));
+  min-width: 0;
+}
+.cockpit .wfl-card-head {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  width: 100%;
+  min-width: 0;
+  min-height: 28px;
+  padding: 3px 10px;
+  border: 0;
+  background: transparent;
+  color: var(--label-2);
+  font: inherit;
+  font-size: 11.5px;
+  text-align: left;
+  cursor: pointer;
+}
+.cockpit .wfl-card-head:hover {
+  color: var(--label);
+}
+.cockpit .wfl-card-text {
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+.cockpit .wfl-chev {
+  flex: none;
+  width: 12px;
+  height: 12px;
+  transition: transform var(--dur-fast, 0.12s) var(--ease, ease);
+}
+.cockpit .wfl-card.is-open .wfl-chev {
+  transform: rotate(180deg);
+}
+@media (prefers-reduced-motion: reduce) {
+  .cockpit .wfl-chev {
+    transition: none;
+  }
+}
+
+/* The sidebar row under the front agent: same look as the standby rows (a quiet row, a small state mark), no edge stripe. */
+.cockpit .ck-wf-row.ck-row {
+  flex-wrap: wrap;
+  height: auto;
+  min-height: 28px;
+  padding-top: 3px;
+  padding-bottom: 3px;
+  row-gap: 0;
+  overflow: hidden;
+}
+.cockpit .ck-wf-row .ck-row-main {
+  flex: 1 1 5em;
+  min-width: 4em;
+  overflow: hidden;
+}
+/* Two lines: the name (shrinks with an ellipsis), and under it the counts, which are never cut. */
+.cockpit .ck-rowwrap .ck-row.ck-wf-row .ck-row-main {
+  display: block;
+}
+.cockpit .ck-wf-row .ck-wf-name {
+  display: block;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+.cockpit .ck-wf-row .ck-wf-counts {
+  display: block;
+  font-size: 11px;
+  color: var(--label-2);
+  flex: none;
+  white-space: normal;
+  overflow-wrap: anywhere;
+}
+.cockpit .ck-wf-dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  box-sizing: border-box;
+  background: var(--live);
+}
+.cockpit .ck-wf-row[data-tone='needs-you'] .ck-wf-dot {
+  background: var(--accent);
+}
+.cockpit .ck-wf-row[data-tone='failed'] .ck-wf-dot {
+  background: var(--danger);
+}
+.cockpit .ck-wf-row[data-tone='done'] .ck-wf-dot {
+  background: transparent;
+  border: 1.5px solid var(--label-3, var(--label-2));
+}
+@media (prefers-reduced-motion: no-preference) {
+  .cockpit .ck-wf-row[data-tone='working'] .ck-wf-dot {
+    animation: ck-sb-pulse 1.6s ease-in-out infinite;
+  }
+}

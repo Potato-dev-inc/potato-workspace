@@ -498,6 +498,7 @@ pub fn run() {
             team::commands::team_invite_accept,
             team::commands::worker_check,
             team::worker_update::worker_update_step,
+            team::worker_update::worker_update_cancel,
             team::commands::team_leave,
             team::commands::team_join_approve,
             team::commands::team_join_decline,

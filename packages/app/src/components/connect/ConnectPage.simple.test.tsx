@@ -405,12 +405,12 @@ describe('the one extra offer', () => {
     expect(q('[data-testid="connect-offer"]')).toBeNull();
   });
 
-  it('Set it up opens the existing guided sheet', async () => {
+  it('Set it up opens the one-button relay setup', async () => {
     window.localStorage.setItem('pm.connect.firstScanWorked', '1');
     await mount(makeApi(fakeTunnel(quick()).api), 'team');
     await click(q('[data-testid="connect-offer-set"]'));
     await settle(6);
-    expect(q('[data-testid="stable-sheet"]')).not.toBeNull();
+    expect(q('[data-testid="relay-sheet"]')).not.toBeNull();
   });
 
   it('Team: no offer before the first scan worked; after it, only the first time Team opens', async () => {

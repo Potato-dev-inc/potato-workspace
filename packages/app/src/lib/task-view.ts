@@ -1,5 +1,6 @@
 // The dock: the details column beside a chat's right panel. It is a stack of panes, top to bottom:
 //   view     the Background tasks page, or one minion's read-only view
+//   workflow the live view of a workflow (Labs "Workflows"), when the chat is a workflow's front; it sits on top
 //   terminal one command's output
 //   browser  the agent browser (a placeholder until the docked browser lands)
 // Opening another view replaces the top one and keeps the rest. Also kept here: whether the column fills the window beside
@@ -24,12 +25,12 @@ export interface TerminalRef {
   finished?: { state: 'done' | 'failed' | 'stopped'; endedAtMs: number };
 }
 
-export type DockPane = TaskView | ({ kind: 'terminal' } & TerminalRef) | { kind: 'browser' };
-export type DockSlot = 'view' | 'terminal' | 'browser';
+export type DockPane = TaskView | ({ kind: 'terminal' } & TerminalRef) | { kind: 'browser' } | { kind: 'workflow' };
+export type DockSlot = 'workflow' | 'view' | 'terminal' | 'browser';
 /** The stacking order, top to bottom. */
-export const DOCK_SLOTS: readonly DockSlot[] = ['view', 'terminal', 'browser'];
+export const DOCK_SLOTS: readonly DockSlot[] = ['workflow', 'view', 'terminal', 'browser'];
 
-export const slotOf = (pane: DockPane): DockSlot => (pane.kind === 'terminal' ? 'terminal' : pane.kind === 'browser' ? 'browser' : 'view');
+export const slotOf = (pane: DockPane): DockSlot => (pane.kind === 'terminal' ? 'terminal' : pane.kind === 'browser' ? 'browser' : pane.kind === 'workflow' ? 'workflow' : 'view');
 
 export interface TaskViewState {
   /** The open panes in stacking order, at most one per slot. Never empty. */
@@ -80,6 +81,21 @@ function put(paneId: string, pane: DockPane, opts: { expand: boolean } = { expan
 /** Opens one minion's read-only view in the column. */
 export function openMinionView(paneId: string, minionId: string): void {
   put(paneId, { kind: 'minion', id: minionId });
+}
+
+/** Opens the workflow's live view at the top of the column (the chat is the front of a workflow). */
+export function openWorkflowPane(paneId: string, opts?: { expand?: boolean }): void {
+  put(paneId, { kind: 'workflow' }, { expand: opts?.expand ?? true });
+}
+
+/** The chats whose workflow pane opened by itself already (once per chat for this run: closing it keeps it closed). */
+const autoOpened = new Set<string>();
+/** Opens the workflow pane the first time it is asked for a chat; later calls change nothing. Returns whether it opened. */
+export function openWorkflowPaneOnce(paneId: string): boolean {
+  if (autoOpened.has(paneId)) return false;
+  autoOpened.add(paneId);
+  openWorkflowPane(paneId);
+  return true;
 }
 
 /** Opens the full Background tasks page in the column. */
@@ -157,5 +173,6 @@ export function useClearedTasks(paneId: string): ReadonlySet<string> {
 export function resetTaskViews(): void {
   byPane.clear();
   cleared.clear();
+  autoOpened.clear();
   emit();
 }

@@ -58,11 +58,11 @@ describe('AttachmentChips', () => {
     act(() => root.render(<AttachmentChips attachments={[IMAGE]} />));
     (host.querySelector('button[aria-label="Open shot.png"]') as HTMLButtonElement).click();
     await flush();
-    expect(host.querySelector('[data-testid="attachment-preview"]')).not.toBeNull();
+    expect(document.querySelector('[data-testid="attachment-preview"]')).not.toBeNull();
     act(() => {
-      window.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape' }));
+      document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
     });
-    expect(host.querySelector('[data-testid="attachment-preview"]')).toBeNull();
+    expect(document.querySelector('[data-testid="attachment-preview"]')).toBeNull();
   });
 
   it('shows nothing for an empty list', () => {

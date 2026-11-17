@@ -1,3 +1,4 @@
+// @vitest-environment jsdom
 import { describe, expect, it, vi } from 'vitest';
 import type { StartRequest } from './model';
 import { chipChoiceFor, isStartBlock, runStart, setChatModelOn, type StartDeps } from './start';
@@ -31,6 +32,18 @@ describe('runStart', () => {
     expect(d.select).toHaveBeenCalledWith('chat-1');
     expect(d.send).toHaveBeenCalledWith('chat-1', 'fix it');
     expect(d.newAgent).not.toHaveBeenCalled();
+  });
+
+  it('records a workflow start before the message goes in, and sends the prompt as it is', async () => {
+    const d = deps();
+    const seen: (string | null)[] = [];
+    d.send = vi.fn(async () => {
+      seen.push(localStorage.getItem('pm.workflowStarts'));
+    });
+    const prompt = "BRIEF\nThe person's request:\nhi";
+    await runStart(req({ runAs: 'chat', prompt, workflow: { slug: 'w', name: 'W', front: 'Front', brief: 'BRIEF' } }), d);
+    expect(d.send).toHaveBeenCalledWith('chat-1', prompt);
+    expect(seen[0]).toContain('chat-1');
   });
 
   it('a chat with "Work on a copy" on asks for a separate copy; without it the call is as before', async () => {

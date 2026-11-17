@@ -172,6 +172,10 @@
   }
 }
 
+.cn-relay-wrap {
+  display: grid;
+  gap: 6px;
+}
 .cn-relay {
   display: flex;
   flex-wrap: wrap;

@@ -1,10 +1,14 @@
 // English messages: pictures in the chat, "Show earlier messages", and the sign-in card without a terminal.
 export const chatMore = {
+  'imageViewer.close': 'Close',
+  'imageViewer.prev': 'Previous picture',
+  'imageViewer.next': 'Next picture',
+  'imageViewer.count': '{n} of {total}',
+  'imageViewer.loading': 'Loading picture…',
   'chat.picture.alt': 'Picture',
   'chat.picture.loading': 'Loading picture…',
   'chat.picture.refused': 'Picture not shown. {reason}',
   'chat.picture.enlarge': 'Enlarge {name}',
-  'chat.picture.close': 'Close',
   'chat.earlier.show': 'Show earlier messages',
   'chat.earlier.loading': 'Loading earlier messages…',
   'chat.earlier.failed': 'Could not load earlier messages.',

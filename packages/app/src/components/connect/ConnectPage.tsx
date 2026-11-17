@@ -31,6 +31,7 @@ import { TeamHost } from '../team-page/TeamHost';
 import { defaultTunnelApi } from '../PairingAddress';
 import { Advanced } from './Advanced';
 import { SimplePhone } from './SimplePhone';
+import { RelaySetupSheet } from './RelaySetup';
 import { StableOffer } from './StableOffer';
 import { useTunnelStatus } from './useTunnelStatus';
 import { YourRelay } from './YourRelay';
@@ -40,6 +41,7 @@ import '../../styles/settings-rows.css';
 import '../../styles/connect.css';
 
 import type { TunnelApi } from '../settings/TunnelSection';
+import type { UpdateApi } from '../../lib/workerUpdate';
 
 const TunnelSection = lazy(() => import('../settings/TunnelSection').then((m) => ({ default: m.TunnelSection })));
 
@@ -54,6 +56,8 @@ export interface ConnectApi {
   team: TeamApi;
   /** The phone address screen's commands. Tests pass a fake; the app uses the real ones. */
   tunnel?: TunnelApi;
+  /** The one-button relay setup's step commands. Tests pass fakes; the app uses the real ones. */
+  updateApi?: UpdateApi;
 }
 
 const DEFAULT_API: ConnectApi = {
@@ -251,9 +255,10 @@ function PhoneTab({ api, env }: { api: ConnectApi; env: SettingsEnv | null }) {
         devServerPort={env?.settings.dev_server_port}
         ready={env !== null}
         paused={pairing}
+        updateApi={api.updateApi}
       />
       <Advanced testId="connect-advanced" lines={['tunnel', 'named', 'custom', 'relay', 'token', 'restart']}>
-        <YourRelay tunnel={api.tunnel ?? defaultTunnelApi} team={api.team} />
+        <YourRelay tunnel={api.tunnel ?? defaultTunnelApi} team={api.team} updateApi={api.updateApi} />
       <Status tab="phone" on={count > 0} line={phones === null ? '…' : count > 0 ? t('connect.phone.count', { count }) : t('connect.phone.none')} />
       <div className="cn-actions">
         <Main tab="phone" expanded={pairing} onClick={() => setPairing((v) => !v)}>
@@ -355,6 +360,7 @@ function TeamTab({ api, team, lend, paneNames, displayName }: { api: ConnectApi;
   // Team opened for the first time (after a phone has worked): one quiet offer to keep the same link.
   const [pain] = useState(() => teamFirstOpenPain() && !offerSnoozed());
   const [gone, setGone] = useState(false);
+  const [setup, setSetup] = useState(false);
   useEffect(() => {
     if (pain) markTeamOfferSeen();
   }, [pain]);
@@ -362,10 +368,11 @@ function TeamTab({ api, team, lend, paneNames, displayName }: { api: ConnectApi;
   return (
     <>
       <Status tab="team" on={Boolean(state?.active)} line={line} />
-      {pain && !gone && !hasFixed && tunnelStatus !== undefined && <StableOffer tunnel={tunnel} status={tunnelStatus} onStatus={setTunnelStatus} onGone={() => setGone(true)} />}
+      {pain && !gone && !hasFixed && tunnelStatus !== undefined && <StableOffer onSet={() => setSetup(true)} onGone={() => setGone(true)} />}
+      {setup && <RelaySetupSheet api={tunnel} updateApi={api.updateApi} onStatus={setTunnelStatus} onClose={() => setSetup(false)} />}
       <TeamHost api={api.team} lendClient={api.lend} team={team} lend={lend} paneNames={paneNames} displayName={displayName} />
       <Advanced testId="connect-team-advanced" lines={['relay', 'token']}>
-        <YourRelay tunnel={tunnel} team={api.team} />
+        <YourRelay tunnel={tunnel} team={api.team} updateApi={api.updateApi} />
       </Advanced>
     </>
   );

@@ -32,36 +32,6 @@
 .ck-chat-pic-note.is-refused {
   font-style: italic;
 }
-.ck-chat-pic-big {
-  position: fixed;
-  inset: 0;
-  z-index: 1000;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  padding: 24px;
-  background: rgba(0, 0, 0, 0.82);
-  cursor: zoom-out;
-}
-.ck-chat-pic-big img {
-  max-width: 100%;
-  max-height: 100%;
-  object-fit: contain;
-  background: rgba(255, 255, 255, 0.06);
-}
-.ck-chat-pic-close {
-  position: absolute;
-  top: 12px;
-  right: 12px;
-  padding: 6px 12px;
-  border: 1px solid rgba(255, 255, 255, 0.35);
-  border-radius: 8px;
-  background: rgba(0, 0, 0, 0.5);
-  color: white;
-  font: 13px system-ui, sans-serif;
-  cursor: pointer;
-}
-
 /* "Show earlier messages": one quiet row at the top of a long chat. */
 .ck-earlier {
   display: flex;

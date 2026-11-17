@@ -1,0 +1,119 @@
+/* The large view of a picture (ImageLightbox). Drawn into the app's top layer, so it covers the whole window. The backdrop
+   is the only place a raw colour is allowed (black at a set strength; there is no token for it). */
+.ck-lightbox {
+  position: fixed;
+  inset: 0;
+  z-index: 1100;
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  padding: max(16px, env(safe-area-inset-top)) max(16px, env(safe-area-inset-right)) max(16px, env(safe-area-inset-bottom)) max(16px, env(safe-area-inset-left));
+  outline: none;
+  background: rgba(0, 0, 0, 0.85);
+  /* Everything on the black backdrop is light in both themes. */
+  --lb-fg: rgba(255, 255, 255, 0.92);
+  --lb-fg-2: rgba(255, 255, 255, 0.68);
+  --lb-fill: rgba(255, 255, 255, 0.12);
+  --lb-line: rgba(255, 255, 255, 0.22);
+  color: var(--lb-fg);
+  animation: ck-lightbox-in 140ms ease-out;
+}
+.ck-lightbox-stage {
+  position: relative;
+  flex: 1 1 auto;
+  min-height: 0;
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 40px 56px;
+}
+.ck-lightbox-img {
+  display: block;
+  max-width: 100%;
+  max-height: 100%;
+  width: auto;
+  height: auto;
+  object-fit: contain;
+  border-radius: 14px;
+  background: var(--bg-raised, transparent);
+  box-shadow: 0 8px 40px rgba(0, 0, 0, 0.45);
+}
+.ck-lightbox-loading {
+  color: var(--lb-fg-2);
+  font-size: 13px;
+}
+.ck-lightbox-name {
+  position: absolute;
+  top: 22px;
+  left: 24px;
+  right: 80px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 13px;
+  color: var(--lb-fg-2);
+  pointer-events: none;
+}
+.ck-lightbox-close,
+.ck-lightbox-step {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 36px;
+  height: 36px;
+  padding: 0;
+  border: 1px solid var(--lb-line);
+  border-radius: 999px;
+  background: var(--lb-fill);
+  color: var(--lb-fg);
+  cursor: pointer;
+}
+.ck-lightbox-close:focus-visible,
+.ck-lightbox-step:focus-visible {
+  outline: 2px solid var(--lb-fg);
+  outline-offset: 2px;
+}
+.ck-lightbox-close {
+  position: absolute;
+  top: max(16px, env(safe-area-inset-top));
+  right: max(16px, env(safe-area-inset-right));
+  z-index: 1;
+}
+.ck-lightbox-nav {
+  flex: none;
+  align-self: center;
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  padding: 0 0 4px;
+}
+.ck-lightbox-count {
+  min-width: 56px;
+  text-align: center;
+  font-size: 13px;
+  color: var(--lb-fg-2);
+}
+@media (pointer: coarse) {
+  .ck-lightbox-close,
+  .ck-lightbox-step {
+    width: 44px;
+    height: 44px;
+  }
+  .ck-lightbox-stage {
+    padding: 56px 12px 8px;
+  }
+}
+@keyframes ck-lightbox-in {
+  from {
+    opacity: 0;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .ck-lightbox {
+    animation: none;
+  }
+}
+:root[data-motion='less'] .ck-lightbox {
+  animation: none;
+}

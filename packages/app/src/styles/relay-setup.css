@@ -1,0 +1,136 @@
+/* "Set up my relay": the prominent card and the guided sheet. Colour tokens only, no edge stripes. */
+.rs-card {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 8px;
+  max-width: 460px;
+  padding: 14px 16px;
+  background: var(--fill);
+  border: 1px solid var(--sep);
+  border-radius: 12px;
+  font-size: 13px;
+  color: var(--label-2);
+}
+.rs-card-lead,
+.rs-card-sub,
+.rs-sub,
+.rs-help {
+  margin: 0;
+  color: var(--label-3);
+}
+.rs-card-lead {
+  color: var(--label-2);
+}
+.rs-big {
+  height: auto;
+  min-height: 38px;
+  padding: 8px 20px;
+  font-size: 14px;
+  font-weight: 600;
+  white-space: normal;
+  text-align: center;
+}
+.rs-title {
+  margin: 0;
+  font-size: 15px;
+  font-weight: 600;
+}
+.rs-sheet .ss-steps {
+  margin: 12px 0;
+}
+.rs-ready {
+  margin: 0 0 8px;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 10px;
+  align-items: baseline;
+}
+.rs-link {
+  padding: 0;
+  border: 0;
+  background: none;
+  color: var(--label-2);
+  font: inherit;
+  font-size: 12px;
+  text-decoration: underline;
+  cursor: pointer;
+}
+.rs-key,
+.rs-details {
+  display: grid;
+  gap: 6px;
+  margin-top: 8px;
+}
+.rs-pre {
+  margin: 0;
+  max-height: 180px;
+  overflow: auto;
+  padding: 8px;
+  border-radius: 8px;
+  background: var(--fill);
+  color: var(--label-2);
+  font-size: 11px;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+.rs-fail {
+  margin-top: 8px;
+}
+.rs-foot {
+  display: flex;
+  justify-content: flex-end;
+  margin-top: 12px;
+}
+.rs-quiet {
+  padding: 0;
+  border: 0;
+  background: none;
+  color: var(--label-3);
+  font: inherit;
+  font-size: 12px;
+  text-decoration: underline;
+  cursor: pointer;
+}
+
+/* The cockpit resets plain buttons with a stronger selector, so the shared step buttons are restated here. */
+.rs-sheet .ss-btn,
+.rs-card .ss-btn {
+  height: 28px;
+  padding: 0 12px;
+  border: 1px solid var(--sep);
+  border-radius: 7px;
+  background: var(--fill);
+  color: var(--label);
+  font: inherit;
+  font-size: 12px;
+  cursor: pointer;
+}
+.rs-sheet .ss-btn:hover:not(:disabled),
+.rs-card .ss-btn:hover:not(:disabled) {
+  background: var(--fill-hover);
+}
+.rs-sheet .ss-btn--primary,
+.rs-card .ss-btn--primary {
+  border-color: transparent;
+  background: var(--accent);
+  color: var(--accent-fg);
+}
+.rs-sheet .ss-btn--primary:hover:not(:disabled),
+.rs-card .ss-btn--primary:hover:not(:disabled) {
+  background: var(--accent);
+  opacity: 0.9;
+}
+.rs-card .ss-btn.rs-big {
+  height: auto;
+  min-height: 38px;
+  padding: 8px 20px;
+  font-size: 14px;
+}
+.rs-sheet .rs-link,
+.rs-sheet .rs-quiet {
+  height: auto;
+  padding: 0;
+  border: 0;
+  background: none;
+}

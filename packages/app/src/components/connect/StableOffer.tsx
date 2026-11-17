@@ -1,20 +1,16 @@
-// One quiet card: keep the same link every time. "Set it up" opens the guided setup sheet that already exists;
+// One quiet card: keep the same link every time. "Set it up" starts the one-button relay setup (the screen that holds this
+// card owns the sheet, so it is not closed when the saved setting flips and this card goes away);
 // "Not now" hides the card for about two weeks. No stripe, no alarm: a raised fill like the other Connect notes.
-import { useState } from 'react';
 import { useT } from '../../i18n';
 import { snoozeOffer } from '../../lib/connect-offer';
-import type { TunnelStatus } from '../../lib/tauri-types';
-import { StableLinkSheet } from '../StableLinkSheet';
-import type { TunnelApi } from '../settings/TunnelSection';
 
-export function StableOffer({ tunnel, status, onStatus, onGone }: { tunnel: TunnelApi; status: TunnelStatus | null; onStatus: (s: TunnelStatus) => void; onGone: () => void }) {
+export function StableOffer({ onSet, onGone }: { onSet: () => void; onGone: () => void }) {
   const t = useT();
-  const [open, setOpen] = useState(false);
   return (
     <div className="cn-offer" data-testid="connect-offer" role="group" aria-label={t('connect.offer.aria')}>
       <p className="cn-offer-text">{t('connect.offer.text')}</p>
       <div className="cn-offer-actions">
-        <button type="button" className="ck-btn" data-testid="connect-offer-set" onClick={() => setOpen(true)}>
+        <button type="button" className="ck-btn" data-testid="connect-offer-set" onClick={onSet}>
           {t('connect.offer.set')}
         </button>
         <button
@@ -29,7 +25,6 @@ export function StableOffer({ tunnel, status, onStatus, onGone }: { tunnel: Tunn
           {t('connect.offer.later')}
         </button>
       </div>
-      {open && <StableLinkSheet api={tunnel} initial={status} onStatus={onStatus} onClose={() => setOpen(false)} />}
     </div>
   );
 }

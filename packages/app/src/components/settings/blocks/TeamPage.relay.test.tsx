@@ -143,8 +143,8 @@ describe('Start a team with one relay', () => {
     expect(buttons()).not.toContain('Create team relay');
     await click(buttonByText(host, 'Set up my relay'));
     await settle(5);
-    // The same guided sheet as the phone's "Keep one address".
-    expect(document.querySelector('[data-testid="stable-sheet"]')).not.toBeNull();
+    // The same one-button setup as the phone's.
+    expect(document.querySelector('[data-testid="relay-sheet"]')).not.toBeNull();
     expect(tunnel.saved).toEqual([]);
     await click(otherWays());
     expect(buttons()).toContain('Create team relay');
@@ -153,7 +153,7 @@ describe('Start a team with one relay', () => {
   it('no relay yet: once the guided setup saves a Worker, the card turns into "Use my relay"', async () => {
     const tunnel = fakeTunnel(null);
     await openStart({ relay: null, tunnel });
-    await click(buttonByText(host, 'Set up my relay'));
+    await click(buttonByText(host, 'Do it step by step'));
     await settle(5);
     const sheet = document.querySelector('[data-testid="stable-sheet"]')!;
     await typeInto(sheet.querySelector<HTMLInputElement>('input')!, WORKER);
@@ -172,7 +172,7 @@ describe('Start a team with one relay', () => {
   it('the guided sheet stays open (secret step and all) after it saves the Worker; the card flips only when it is closed', async () => {
     const tunnel = fakeTunnel(null);
     await openStart({ relay: null, tunnel });
-    await click(buttonByText(host, 'Set up my relay'));
+    await click(buttonByText(host, 'Do it step by step'));
     await settle(5);
     const sheet = () => document.querySelector('[data-testid="stable-sheet"]');
     await typeInto(sheet()!.querySelector<HTMLInputElement>('input')!, WORKER);

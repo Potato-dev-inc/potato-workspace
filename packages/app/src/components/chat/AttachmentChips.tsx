@@ -1,8 +1,9 @@
 // The files attached to a message, as chips: images as thumbnails, other files as small cards with a file icon, the
 // extension and the size. The composer shows them inside its box (with an x to remove) and the transcript shows them
-// read-only above the person's message. Clicking an image opens a larger preview; Escape closes it.
+// read-only above the person's message. Clicking an image opens the large view (ImageLightbox) over the whole window.
 import { useEffect, useState } from 'react';
 import { previewAttachment, type ChatAttachment } from '../../lib/attachFiles';
+import { ImageLightbox, type LightboxImage } from '../common/ImageLightbox';
 import '../../styles/cockpit-chat-attachments.css';
 
 export interface AttachmentChipsProps {
@@ -119,43 +120,26 @@ function Chip({ attachment, onRemove, onOpen }: { attachment: ChatAttachment; on
   );
 }
 
-/** The larger view of an image chip. Escape and the backdrop close it. */
-function ImagePreview({ attachment, onClose }: { attachment: ChatAttachment; onClose: () => void }) {
-  const src = usePreview(attachment);
-  useEffect(() => {
-    const onKey = (event: KeyboardEvent) => {
-      if (event.key === 'Escape') {
-        event.stopPropagation();
-        onClose();
-      }
-    };
-    window.addEventListener('keydown', onKey, true);
-    return () => window.removeEventListener('keydown', onKey, true);
-  }, [onClose]);
-  return (
-    <div className="ck-att-overlay" role="dialog" aria-modal="true" aria-label={attachment.name} data-testid="attachment-preview" onClick={onClose}>
-      <div className="ck-att-overlay-body" onClick={(event) => event.stopPropagation()}>
-        {src ? <img src={src} alt={attachment.name} className="ck-att-overlay-img" /> : <span className="ck-att-overlay-loading">Loading preview</span>}
-        <div className="ck-att-overlay-foot">
-          <span className="ck-att-overlay-name">{attachment.name}</span>
-          <button type="button" className="ck-att-overlay-close" onClick={onClose}>
-            Close
-          </button>
-        </div>
-      </div>
-    </div>
-  );
+/** The larger view of an image chip, with Previous / Next when the message has several images. */
+function ImagePreview({ images, start, onClose }: { images: readonly ChatAttachment[]; start: number; onClose: () => void }) {
+  const [index, setIndex] = useState(start);
+  const current = images[Math.min(index, images.length - 1)];
+  const src = usePreview(current);
+  const list: LightboxImage[] = images.map((a) => ({ key: a.path, name: a.name, src: a === current ? src : null }));
+  return <ImageLightbox images={list} index={index} onIndex={setIndex} onClose={onClose} testId="attachment-preview" />;
 }
 
 export function AttachmentChips({ attachments, preparing = 0, onRemove, className }: AttachmentChipsProps) {
-  const [open, setOpen] = useState<ChatAttachment | null>(null);
+  const [open, setOpen] = useState<string | null>(null);
+  const images = attachments.filter((a) => a.kind === 'image');
+  const start = open === null ? -1 : images.findIndex((a) => a.path === open);
   if (attachments.length === 0 && preparing <= 0) return null;
   const rowClass = className ? `ck-att-row ${className}` : 'ck-att-row';
   return (
     <>
       <div className={rowClass} data-testid="attachment-chips">
         {attachments.map((attachment) => (
-          <Chip key={attachment.path} attachment={attachment} onRemove={onRemove} onOpen={setOpen} />
+          <Chip key={attachment.path} attachment={attachment} onRemove={onRemove} onOpen={(a) => setOpen(a.path)} />
         ))}
         {preparing > 0 && (
           <div className="ck-att-chip ck-att-chip--loading" role="status" aria-label="Preparing files" data-testid="attachment-preparing">
@@ -164,7 +148,7 @@ export function AttachmentChips({ attachments, preparing = 0, onRemove, classNam
           </div>
         )}
       </div>
-      {open && <ImagePreview attachment={open} onClose={() => setOpen(null)} />}
+      {start >= 0 && <ImagePreview images={images} start={start} onClose={() => setOpen(null)} />}
     </>
   );
 }

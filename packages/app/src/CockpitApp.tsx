@@ -2,7 +2,8 @@
 import { useNudgeOnAction } from './lib/desktop-nudge';
 import { useFollowFocusedProject } from './hooks/useFollowFocusedProject';
 import { startDockBrowserBridge } from './lib/dock-browser';
-import { openBrowserPane } from './lib/task-view';
+import { openBrowserPane, openMinionView } from './lib/task-view';
+import { OPEN_HELPER_EVENT } from './lib/openHelper';
 import { useEffect, useMemo, useRef, useState, type CSSProperties } from 'react';
 import { AgentDoctor } from './components/cockpit/AgentDoctor';
 import { markSpawned } from './lib/agent-health';
@@ -104,7 +105,7 @@ import { cockpitApi } from './lib/cockpit-api';
 import { useTabWindowRestore } from './lib/tab-windows';
 
 import { CompanionPage } from './components/cockpit/companion/CompanionPage';
-import { isListedAgentPane } from './lib/pane-helpers';
+import { isListedAgentPane, isMinionPane } from './lib/pane-helpers';
 import { COMPANION_PANE_PREFIX, defaultCompanion, isCompanionPaneId } from './components/cockpit/companion/model';
 import { CompanionSetupSheet } from './components/cockpit/companion/CompanionSetupSheet';
 import { NewAgentHost } from './components/cockpit/newagent/NewAgentHost';
@@ -423,6 +424,26 @@ export default function CockpitApp() {
   };
   // "Handoff from here": the sidebar's row menu and the pane's "Hand off" button share one (it opens the new agent through nav).
   const handoff = useHandoff(nav);
+  // The crew canvas's Live tab opens a helper like the crew chip does: a minion as the read-only view in its parent's chat, any other as a chat.
+  const navRef = useRef(nav);
+  navRef.current = nav;
+  const panesRef = useRef(c.registry.paneList);
+  panesRef.current = c.registry.paneList;
+  useEffect(() => {
+    const open = (e: Event) => {
+      // Only an id the cockpit lists is acted on, and the parent is the pane's own recorded one (never the event's).
+      const d = (e as CustomEvent<{ id?: string }>).detail;
+      const pane = typeof d?.id === 'string' ? panesRef.current.find((p) => p.info.id === d.id) : undefined;
+      if (!pane) return;
+      const parent = pane.info.parent_pane_id;
+      if (isMinionPane(pane.info) && parent && panesRef.current.some((p) => p.info.id === parent)) {
+        openMinionView(parent, pane.info.id);
+        navRef.current.select(parent);
+      } else if (!isMinionPane(pane.info)) navRef.current.select(pane.info.id);
+    };
+    window.addEventListener(OPEN_HELPER_EVENT, open);
+    return () => window.removeEventListener(OPEN_HELPER_EVENT, open);
+  }, []);
   // Ctrl+\: split with the pane above (or below) the selected one; again closes it.
   const toggleSplit = () => {
     if (split !== null) {
