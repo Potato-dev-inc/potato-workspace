@@ -98,6 +98,27 @@
   border-radius: 10px;
   user-select: all;
 }
+/* Check mode: three big number buttons, one per row-wide slot. */
+.dev-picks {
+  display: grid;
+  gap: 8px;
+  margin: 12px 0;
+}
+.dev-pick {
+  font-family: var(--font-mono, ui-monospace, monospace);
+  font-size: 26px;
+  letter-spacing: 0.12em;
+  padding: 14px 12px;
+  color: var(--label);
+  background: var(--fill, rgba(255, 255, 255, 0.06));
+  border: 0;
+  border-radius: 10px;
+  cursor: pointer;
+}
+.dev-pick:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
 .dev-field {
   display: flex;
   flex-direction: column;

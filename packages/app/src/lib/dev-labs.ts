@@ -13,6 +13,7 @@ export const DEV_LABS_KEYS = [
   'spaces_enabled',
   'lend_enabled',
   'devices_enabled',
+  'far_pcs_enabled',
   'account_enabled',
   'desktop_pet_enabled',
   'agent_browser_enabled',

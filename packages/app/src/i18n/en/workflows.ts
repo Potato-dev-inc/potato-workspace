@@ -31,11 +31,13 @@ export const workflows = {
 
   'newAgent.wf.label': 'Workflow',
   'newAgent.wf.empty': 'No workflows yet. Make one on the Crews page.',
+  'newAgent.wf.needFixing': 'Some crews need fixing on the Crews page.',
   'newAgent.wf.none': 'No workflow',
   'newAgent.wf.chip': 'Workflow: {name}',
   'newAgent.wf.summary': 'Front: {front}. Others: {others}.',
   'newAgent.wf.noHelpers': 'none',
   'newAgent.wf.helper': '{name} ({when}, {kind})',
+  'newAgent.wf.helperNoWhen': '{name} ({kind})',
   'newAgent.wf.kind.minion': 'minion',
   'newAgent.wf.kind.spin_off': 'spin-off',
   'newAgent.wf.edit': 'Edit workflow',

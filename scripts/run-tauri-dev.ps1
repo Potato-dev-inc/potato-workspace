@@ -19,13 +19,13 @@ $t = Start-Process -FilePath "cmd.exe" `
   -WindowStyle Hidden
 
 Write-Host "  parent pid = $($t.Id)"
-Write-Host "[2/4] waiting for vite to start on :1420 (max 90s)…"
+Write-Host "[2/4] waiting for vite to start on :1442 (max 90s)…"
 
 $ok = $false
 for ($i = 0; $i -lt 90; $i++) {
   Start-Sleep -Seconds 1
   try {
-    $res = Invoke-WebRequest -Uri "http://127.0.0.1:1420/" -UseBasicParsing -TimeoutSec 2
+    $res = Invoke-WebRequest -Uri "http://127.0.0.1:1442/" -UseBasicParsing -TimeoutSec 2
     if ($res.StatusCode -eq 200) {
       Write-Host "  vite responding after ${i}s — status $($res.StatusCode)"
       $ok = $true
@@ -58,7 +58,7 @@ Write-Host "[4/4] tail of tauri log:"
 if (Test-Path $logTauri) { Get-Content $logTauri -Tail 25 }
 Write-Host ""
 Write-Host "TAURI DEV IS UP" -ForegroundColor Green
-Write-Host "  vite:      http://127.0.0.1:1420"
+Write-Host "  vite:      http://127.0.0.1:1442"
 Write-Host "  binary:    pid $($bin.Id)"
 Write-Host "  parent:    pid $($t.Id)"
 Write-Host "  log files: $logVite, $logTauri"

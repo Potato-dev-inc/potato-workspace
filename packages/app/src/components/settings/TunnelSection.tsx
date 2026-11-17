@@ -47,6 +47,43 @@ const LINK_POLL_LIMIT = 40;
 const buttonClass =
   'rounded-lg border border-pm-border px-3 py-1.5 text-xs hover:bg-pm-border/40 disabled:opacity-50';
 
+/** Where to point an own domain or named tunnel: the port this running app really serves (never a guess), with a copy button. */
+function LocalAddress({ status }: { status: TunnelStatus | null }) {
+  const t = useT();
+  const [copied, setCopied] = useState(false);
+  const port = status?.local_port ?? null;
+  if (!status) return null;
+  if (port == null) {
+    return (
+      <p className="mt-1 text-xs text-pm-muted" data-testid="tunnel-local-missing">
+        {t('tunnel.localNotRunning')}
+      </p>
+    );
+  }
+  const url = `http://127.0.0.1:${port}`;
+  return (
+    <div className="mt-2" data-testid="tunnel-local">
+      <div className="flex flex-wrap items-center gap-2 text-xs">
+        <span>{t('tunnel.localAddress', { url: '' })}</span>
+        <code className="font-mono" data-testid="tunnel-local-url">{url}</code>
+        <button
+          type="button"
+          className={buttonClass}
+          data-testid="tunnel-local-copy"
+          onClick={() => {
+            void navigator.clipboard?.writeText(url).then(() => setCopied(true), () => undefined);
+          }}
+        >
+          {copied ? t('tunnel.localCopied') : t('tunnel.localCopy')}
+        </button>
+      </div>
+      {status.port_problem === 'moved' && (
+        <p className="mt-1 text-xs text-pm-muted" data-testid="tunnel-local-moved">{t('tunnel.localMoved')}</p>
+      )}
+    </div>
+  );
+}
+
 export function TunnelSection({ api = defaultApi, openTunnelOn = false }: { api?: TunnelApi; /** The Labs switch `opentunnel_stable_link`. */ openTunnelOn?: boolean }) {
   const t = useT();
   const [status, setStatus] = useState<TunnelStatus | null>(null);
@@ -154,7 +191,7 @@ export function TunnelSection({ api = defaultApi, openTunnelOn = false }: { api?
   // Forget the saved link on this computer only; nothing on Cloudflare is touched.
   const startFresh = () =>
     void run('save', async () => {
-      const next = await api.save({ mode: 'quick' });
+      const next = await api.save({ mode: 'forget_worker' });
       setStatus(next);
       setDraft({ ...draftFromConfig(next.config), mode: 'stable', workerUrl: '', secret: '' });
       setPasted('');
@@ -218,6 +255,7 @@ export function TunnelSection({ api = defaultApi, openTunnelOn = false }: { api?
               <p className="mt-1 text-xs text-pm-muted">
                 {t('tunnel.namedHelp')}
               </p>
+              <LocalAddress status={status} />
             </div>
           </>
         )}
@@ -235,6 +273,7 @@ export function TunnelSection({ api = defaultApi, openTunnelOn = false }: { api?
             <p className="mt-1 text-xs text-pm-muted">
               {t('tunnel.customHelp')}
             </p>
+            <LocalAddress status={status} />
           </div>
         )}
 

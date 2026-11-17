@@ -85,6 +85,7 @@ export const settingsPhone: Partial<Record<EnglishKey, string>> = {
   'stable.linkedOk': '已連結 ✓',
   'stable.notLinked': '還沒連結',
   'stable.notYet': '請在步驟 3 貼上你的位址。',
+  'stable.freshHelp': '這個連結在 Cloudflare 上已經有另一組密鑰，所以連不上。重新開始會建立新的連結和新的密鑰。',
   'stable.close': '關閉',
   'stable.useRelay': '使用 {url}（你團隊的連結）',
   'stable.relayNote': '同一個連結可以同時負責團隊連結和手機固定連結。',

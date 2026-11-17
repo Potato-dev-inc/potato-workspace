@@ -27,7 +27,8 @@ import { addressKey } from "./gate";
 import { readBody, refuse, json } from "./http";
 import { scopedKey } from "./room";
 import { authenticate, C, checkRegistration, isTeamId } from "./proto";
-import { FEATURES, WORKER_NAME } from "./features";
+import { FEATURES, PAIR_FEATURE, WORKER_NAME } from "./features";
+import { isHash, isRid, isToken, MAX_CT_CHARS } from "./pair";
 import { codeKey, isCode, joinPage } from "./invites";
 import { bearer, sha256Hex } from "./stablecrypto";
 import { offlineResponse } from "./offline";
@@ -44,6 +45,7 @@ export { Room, RoomIndex } from "./room";
 export { Team } from "./team";
 export { StableLink } from "./stable";
 export { InviteBox } from "./invites";
+export { PairBox, PairIndex } from "./pair";
 
 interface Spec {
   route: string;
@@ -294,6 +296,114 @@ async function joinRoute(request: Request, env: Env, url: URL): Promise<Response
   return noStore(joinPage(isCode(code) ? code : "", url.host, peek, env.DOWNLOAD_URL));
 }
 
+
+// ------------------------------------------------------------------------------- far-away pairing (/v1/pair)
+
+/** The feature is on only when the owner key is set. Off: every pair route is the same 404 as any unknown path. */
+const pairOn = (env: Env): boolean => typeof env.PAIR_OWNER === "string" && env.PAIR_OWNER.length > 0;
+
+const PAIR_POLLS_PER_MINUTE = 600;
+const PAIR_CREATES_PER_HOUR = 30;
+const PAIR_CREATE_BODY = 1024;
+const PAIR_MSG_BODY = MAX_CT_CHARS + 512;
+const PAIR_INDEX_NAME = "open";
+
+const pairAnswer = (status: number, body: unknown): Response => noStore(status === 204 ? new Response(null, { status, headers: { "content-encoding": "identity" } }) : json(body, status));
+
+/**
+ * `POST /v1/pair` (the owner opens a box), `POST /v1/pair/{rid}/claim`, `POST|GET /v1/pair/{rid}/msg`,
+ * `DELETE /v1/pair/{rid}`. The box's object decides who may do what; this door checks the owner's signature,
+ * the shapes and the per-address counts.
+ */
+async function pairRoute(request: Request, env: Env, url: URL, parts: string[]): Promise<Response> {
+  if (!pairOn(env)) return noStore(refuse(404, "not found"));
+  const address = addressKeyOf(request.headers.get("cf-connecting-ip"));
+  if (parts.length === 2) {
+    if (request.method !== "POST") return noStore(refuse(405, "method not allowed"));
+    return pairCreate(request, env, url, address);
+  }
+  const rid = parts[2] ?? "";
+  if (!isRid(rid)) return noStore(refuse(404, "not found"));
+  const sub = parts.length === 4 ? parts[3] : parts.length === 3 ? "" : undefined;
+  const route = sub === "" && request.method === "DELETE" ? "delete" : sub === "claim" && request.method === "POST" ? "claim" : sub === "msg" && request.method === "POST" ? "post" : sub === "msg" && request.method === "GET" ? "poll" : undefined;
+  if (route === undefined) return noStore(refuse(sub === undefined ? 404 : 405, sub === undefined ? "not found" : "method not allowed"));
+  // Every call is counted per address, so a stranger cannot make the Worker work for nothing.
+  const gate = env.GATE.get(env.GATE.idFromName(await scopedKey("pair-poll", address)));
+  if (!(await gate.hit(MINUTE_MS, PAIR_POLLS_PER_MINUTE))) return noStore(refuse(429, "slow down"));
+  const read = route === "post" ? await readBody(request, PAIR_MSG_BODY) : NO_BODY;
+  if (read instanceof Response) return noStore(read);
+  const header = (name: string): string | undefined => {
+    const value = request.headers.get(name) ?? undefined;
+    return value !== undefined && isToken(value) ? value : undefined;
+  };
+  const who = { pair: header("x-pm-pair"), host: header("x-pm-host"), claim: header("x-pm-claim") };
+  const box = env.PAIRS.get(env.PAIRS.idFromName(rid));
+  if (route === "claim") {
+    const out = await box.claim(who);
+    return pairAnswer(out.status, out.body);
+  }
+  if (route === "delete") {
+    const out = await box.remove(who);
+    if (out.status === 204) await releasePair(env, rid);
+    return pairAnswer(out.status, out.body);
+  }
+  if (route === "poll") {
+    const forDir = url.searchParams.get("for") ?? "";
+    const after = Number(url.searchParams.get("after") ?? "0");
+    const out = await box.poll(who, forDir, after);
+    return pairAnswer(out.status, out.body);
+  }
+  let message: { from?: unknown; n?: unknown; ct?: unknown };
+  try {
+    message = JSON.parse(new TextDecoder().decode(read)) as typeof message;
+  } catch {
+    return noStore(refuse(400, "bad message"));
+  }
+  const out = await box.post(who, String(message.from), Number(message.n), String(message.ct));
+  return pairAnswer(out.status, out.body);
+}
+
+/** The owner opens a box: a signed request (key = PAIR_OWNER), a per-address count, a slot among the open boxes, then the box. */
+async function pairCreate(request: Request, env: Env, url: URL, address: string): Promise<Response> {
+  const read = await readBody(request, PAIR_CREATE_BODY);
+  if (read instanceof Response) return noStore(read);
+  const header = request.headers.get(C.authHeader);
+  if (!header) return noStore(refuse(401, "signed request required"));
+  const verdict = authenticate(header, request.method, url.pathname + url.search, read, Date.now());
+  if (!verdict.ok) return noStore(refuse(verdict.status, verdict.error));
+  if (verdict.device !== env.PAIR_OWNER) return noStore(refuse(403, "not the owner of this relay"));
+  const gate = env.GATE.get(env.GATE.idFromName(await scopedKey("pair-create", address)));
+  if (!(await gate.hit(HOUR_MS, PAIR_CREATES_PER_HOUR))) return noStore(refuse(429, "slow down"));
+  let b: { rid?: unknown; pair_hash?: unknown; host_hash?: unknown; ttl_ms?: unknown };
+  try {
+    b = JSON.parse(new TextDecoder().decode(read)) as typeof b;
+  } catch {
+    return noStore(refuse(400, "bad request"));
+  }
+  if (typeof b.rid !== "string" || !isRid(b.rid) || typeof b.pair_hash !== "string" || !isHash(b.pair_hash) || typeof b.host_hash !== "string" || !isHash(b.host_hash)) {
+    return noStore(refuse(400, "bad request"));
+  }
+  // A life is a number of milliseconds between 1 and ten minutes (a short one is lifted to the minimum by the box).
+  const ttl = b.ttl_ms === undefined ? 600_000 : b.ttl_ms;
+  if (typeof ttl !== "number" || !Number.isFinite(ttl) || ttl <= 0 || ttl > 600_000) return noStore(refuse(400, "bad request"));
+  const max = Number(env.LIMIT_PAIR_MAX_OPEN ?? "") || 50;
+  const index = env.PAIR_INDEX.get(env.PAIR_INDEX.idFromName(PAIR_INDEX_NAME));
+  const slot = await index.reserve(b.rid, Date.now() + Math.min(ttl, 600_000) + 60_000, max, Date.now());
+  if (slot === "busy") return noStore(refuse(503, "the relay is busy, try again shortly"));
+  if (slot === "exists") return noStore(refuse(409, "exists"));
+  const out = await env.PAIRS.get(env.PAIRS.idFromName(b.rid)).create(b.rid, b.pair_hash, b.host_hash, ttl);
+  if (out.status !== 201) await releasePair(env, b.rid);
+  return pairAnswer(out.status, out.body);
+}
+
+async function releasePair(env: Env, rid: string): Promise<void> {
+  try {
+    await env.PAIR_INDEX.get(env.PAIR_INDEX.idFromName(PAIR_INDEX_NAME)).release(rid);
+  } catch {
+    // the index prunes expired rows by itself
+  }
+}
+
 // ------------------------------------------------------------------------------- stable phone link
 
 const LINK_PREFIX = "link/";
@@ -304,7 +414,7 @@ function stableJson(status: number, body: unknown): Response {
 }
 
 /** What the Worker can do. The app reads `features` before it sends anything (a secret goes only where it is listed). */
-const healthBody = () => ({ ok: true, protocol: C.protocol, worker: WORKER_NAME, features: FEATURES });
+const healthBody = (env: Env) => ({ ok: true, protocol: C.protocol, worker: WORKER_NAME, features: pairOn(env) ? [...FEATURES, PAIR_FEATURE] : FEATURES });
 
 /** The one stable-link object: one Worker serves one PC. */
 const linkOf = (env: Env) => env.LINK.get(env.LINK.idFromName("link"));
@@ -322,7 +432,7 @@ async function readOrigin(request: Request): Promise<unknown> {
 /** `/_pm/health`, `/_pm/link/health`, `/_pm/link/register`, `/_pm/link/reset`. The link secret only ever arrives here. */
 async function pmRoute(request: Request, env: Env, path: string): Promise<Response> {
   if (path === "health") {
-    return request.method === "GET" ? noStore(json(healthBody())) : stableJson(405, { error: "method_not_allowed" });
+    return request.method === "GET" ? noStore(json(healthBody(env))) : stableJson(405, { error: "method_not_allowed" });
   }
   if (!path.startsWith(LINK_PREFIX)) return stableJson(404, { error: "not_found" });
   const name = path.slice(LINK_PREFIX.length);
@@ -397,9 +507,10 @@ export default {
     }
     const parts = url.pathname.slice(at + 1).split("/");
     if (parts.length === 2 && parts[1] === "health") {
-      return request.method === "GET" ? noStore(json(healthBody())) : refuse(405, "method not allowed");
+      return request.method === "GET" ? noStore(json(healthBody(env))) : refuse(405, "method not allowed");
     }
     if (parts[1] === "invites") return inviteRoute(request, env, parts);
+    if (parts[1] === "pair") return pairRoute(request, env, url, parts);
     if (parts[1] === "rooms") return roomRoute(request, env, url, parts);
     const spec = match(request.method, parts, env.TEST_HOOKS === "1");
     if (spec === undefined) return refuse(404, "not found");

@@ -34,6 +34,8 @@ import { ConfirmSheet, Switch } from "../controls";
 import { Btn, FieldInput, Note } from "../settings-ui";
 import { SETTINGS_WINDOW } from "../../../lib/sheet-host";
 import { ExternalLink, RelaySheet } from "./RelaySheet";
+import { RelayChoice } from "./RelayChoice";
+import type { TunnelApi } from "../TunnelSection";
 import { useTeamPings } from "./useTeamPings";
 
 const errText = (err: unknown): string =>
@@ -221,7 +223,7 @@ export function TeamPage({
   displayName?: string;
   onSaved?: () => void;
   /** Worker addresses: the one saved for the phone link, and a way to ask a Worker what it can do (tests give their own). */
-  workers?: { savedLink?: () => Promise<string | null>; check?: (address: string) => Promise<WorkerHealth | null>; update?: UpdateApi };
+  workers?: { savedLink?: () => Promise<string | null>; check?: (address: string) => Promise<WorkerHealth | null>; update?: UpdateApi; tunnel?: TunnelApi };
 }) {
   const t = useT();
   const [view, setView] = useState<TeamConfigView | null>(null);
@@ -354,6 +356,7 @@ export function TeamPage({
             savedLink={workers?.savedLink}
             checkWorker={workers?.check}
             updateApi={workers?.update}
+            tunnelApi={workers?.tunnel}
             busy={busy}
             guess={guess}
             onBack={() => setMode("choose")}
@@ -801,12 +804,15 @@ export function StartForm({
   savedLink = savedLinkWorker,
   checkWorker,
   updateApi,
+  tunnelApi,
 }: {
   api: TeamApi;
   busy: boolean;
   guess: string;
   onBack: () => void;
   onCreate: (input: TeamCreateInput) => Promise<boolean>;
+  /** Tests give their own; the default is the phone address commands. */
+  tunnelApi?: TunnelApi;
   savedLink?: () => Promise<string | null>;
   checkWorker?: (address: string) => Promise<WorkerHealth | null>;
   updateApi?: UpdateApi;
@@ -873,20 +879,15 @@ export function StartForm({
         />
       </label>
 
-      <div className="tp-way tp-way-main">
-        <div>
-          <strong>{t("teamPage.createRelay")}</strong>{" "}
-          <span className="tp-tag">{t("teamPage.recommended")}</span>
-          <p className="tp-sub">{t("teamPage.relayHelp")}</p>
-        </div>
-        <Btn
-          primary
-          disabled={busy || !named}
-          onClick={() => setDeploying(true)}
-        >
-          {t("teamPage.createRelay")}
-        </Btn>
-      </div>
+      <RelayChoice
+        address={linkWorker}
+        disabled={busy || !named}
+        onUse={(address) => create({ relay: address })}
+        onSaved={setLinkWorker}
+        check={checkWorker}
+        updateApi={updateApi}
+        tunnelApi={tunnelApi}
+      />
 
       <button
         type="button"
@@ -899,6 +900,15 @@ export function StartForm({
       </button>
       {others && (
         <div className="tp-others">
+          <div className="tp-way" data-testid="relay-token-way">
+            <div>
+              <strong>{t("teamPage.createRelayToken")}</strong>
+              <p className="tp-sub">{t("teamPage.relayHelp")}</p>
+            </div>
+            <Btn disabled={busy || !named} onClick={() => setDeploying(true)}>
+              {t("teamPage.createRelay")}
+            </Btn>
+          </div>
           <div
             className="tp-seg"
             role="group"

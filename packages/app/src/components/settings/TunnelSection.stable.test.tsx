@@ -198,7 +198,7 @@ describe('TunnelSection: stable link', () => {
     expect(api.save).not.toHaveBeenCalled(); // only a question so far
     expect(host.querySelector('[data-testid="recover-fresh-confirm"]')?.textContent).toContain('Forget the saved link on this computer?');
     await act(async () => host.querySelector<HTMLButtonElement>('[data-testid="recover-fresh-yes"]')!.click());
-    expect(api.save).toHaveBeenCalledWith({ mode: 'quick' });
+    expect(api.save).toHaveBeenCalledWith({ mode: 'forget_worker' });
     await flush();
     expect(host.querySelector('[data-testid="secret-recovery"]')).toBeNull();
     expect((host.querySelector('input[aria-label="Link address"]') as HTMLInputElement).value).toBe('');

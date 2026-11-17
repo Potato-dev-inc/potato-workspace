@@ -28,6 +28,13 @@ import type { ConfirmOptions, RowDef, SettingsEnv } from '../settings/model';
 import { RowShell } from '../settings/SectionView';
 import { phoneRowsOriginal } from '../settings/sections/PhoneSection';
 import { TeamHost } from '../team-page/TeamHost';
+import { defaultTunnelApi } from '../PairingAddress';
+import { Advanced } from './Advanced';
+import { SimplePhone } from './SimplePhone';
+import { StableOffer } from './StableOffer';
+import { useTunnelStatus } from './useTunnelStatus';
+import { YourRelay } from './YourRelay';
+import { markTeamOfferSeen, offerSnoozed, teamFirstOpenPain } from '../../lib/connect-offer';
 import '../../styles/settings.css';
 import '../../styles/settings-rows.css';
 import '../../styles/connect.css';
@@ -226,14 +233,27 @@ function PhoneTab({ api, env }: { api: ConnectApi; env: SettingsEnv | null }) {
         .catch(() => alive && setPhones([]));
     load();
     window.addEventListener(DEVICES_CHANGED_EVENT, load);
+    // A phone that scans the code shows up by itself.
+    const timer = window.setInterval(load, 3000);
     return () => {
       alive = false;
+      window.clearInterval(timer);
       window.removeEventListener(DEVICES_CHANGED_EVENT, load);
     };
   }, [api]);
   const count = phones?.length ?? 0;
   return (
     <>
+      <SimplePhone
+        tunnel={api.tunnel ?? defaultTunnelApi}
+        phones={phones === null ? null : count}
+        publicPwaUrl={env?.settings.public_pwa_url ?? ''}
+        devServerPort={env?.settings.dev_server_port}
+        ready={env !== null}
+        paused={pairing}
+      />
+      <Advanced testId="connect-advanced" lines={['tunnel', 'named', 'custom', 'relay', 'token', 'restart']}>
+        <YourRelay tunnel={api.tunnel ?? defaultTunnelApi} team={api.team} />
       <Status tab="phone" on={count > 0} line={phones === null ? '…' : count > 0 ? t('connect.phone.count', { count }) : t('connect.phone.none')} />
       <div className="cn-actions">
         <Main tab="phone" expanded={pairing} onClick={() => setPairing((v) => !v)}>
@@ -282,6 +302,7 @@ function PhoneTab({ api, env }: { api: ConnectApi; env: SettingsEnv | null }) {
           </Embed>
         </details>
       )}
+      </Advanced>
     </>
   );
 }
@@ -329,10 +350,23 @@ function TeamTab({ api, team, lend, paneNames, displayName }: { api: ConnectApi;
   const { state } = team ?? own;
   const others = state?.members.length ?? 0;
   const line = !state ? '…' : !state.active ? t('connect.team.none') : others > 0 ? t('connect.team.on', { count: others }) : t('connect.team.alone');
+  const tunnel = api.tunnel ?? defaultTunnelApi;
+  const [tunnelStatus, setTunnelStatus] = useTunnelStatus(tunnel, 5000);
+  // Team opened for the first time (after a phone has worked): one quiet offer to keep the same link.
+  const [pain] = useState(() => teamFirstOpenPain() && !offerSnoozed());
+  const [gone, setGone] = useState(false);
+  useEffect(() => {
+    if (pain) markTeamOfferSeen();
+  }, [pain]);
+  const hasFixed = tunnelStatus?.mode === 'stable' && Boolean(tunnelStatus.stable);
   return (
     <>
       <Status tab="team" on={Boolean(state?.active)} line={line} />
+      {pain && !gone && !hasFixed && tunnelStatus !== undefined && <StableOffer tunnel={tunnel} status={tunnelStatus} onStatus={setTunnelStatus} onGone={() => setGone(true)} />}
       <TeamHost api={api.team} lendClient={api.lend} team={team} lend={lend} paneNames={paneNames} displayName={displayName} />
+      <Advanced testId="connect-team-advanced" lines={['relay', 'token']}>
+        <YourRelay tunnel={tunnel} team={api.team} />
+      </Advanced>
     </>
   );
 }

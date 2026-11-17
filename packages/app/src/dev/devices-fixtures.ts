@@ -361,6 +361,28 @@ export class DevicesFake implements DevicesApi {
     w?.(allow);
     return this.view;
   };
+  /** The numbers the person picked in check mode (in order). */
+  pickCalls: string[] = [];
+  /** Check mode: the other PC's name, fingerprint and three numbers; `right` is the one both screens show. */
+  simulateIncomingCheck(name: string, right: string): void {
+    const choices = ['012345', '678901', '234567'];
+    this.view = { ...this.view, hosting: null, pending: { id: 9, role: 'host', name, code: '', expires_at: Date.now() + 120_000, mode: 'check', fingerprint: 'A1B2 C3D4', choices } };
+    this.waiting = (allow) => {
+      this.view = { ...this.view, pending: null };
+      if (allow) this.addDevice(name);
+      this.emit();
+    };
+    this.checkRight = right;
+    this.emit();
+  }
+  private checkRight = '';
+  pairPick = async (_id: number, pick: string) => {
+    this.pickCalls.push(pick);
+    const w = this.waiting;
+    this.waiting = null;
+    w?.(pick === this.checkRight);
+    return this.view;
+  };
   rename = async (node: string, name: string) => {
     this.setDevice(node, { name });
     return this.view;
@@ -469,6 +491,8 @@ export function createDevicesMock(s: DevicesScenario | undefined): (cmd: string,
         return v(fake.join(String(a.address), String(a.code)));
       case 'devices_pair_answer':
         return v(fake.pairAnswer(Number(a.id), a.allow === true));
+      case 'devices_pair_pick':
+        return v(fake.pairPick(Number(a.id), String(a.pick)));
       case 'devices_rename':
         return v(fake.rename(String(a.node), String(a.name)));
       case 'devices_set_permission':

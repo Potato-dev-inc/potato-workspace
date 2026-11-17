@@ -26,6 +26,15 @@
 //! `PairManager::answer`, which the desktop window's command calls: agents, MCP and the phone have no route to it
 //! (`guard_tests.rs`).
 //!
+//! **Far away through the Worker** (Labs `far_pcs_enabled`, see `far.rs`): a link made by a PC that has a Worker carries
+//! `w` (the Worker host) and `s` (a 128-bit seed). The joiner tries the Worker first, then the direct or public route.
+//! The same frames travel as sealed messages in a box. The encrypted link does not prove who is on the other end there,
+//! so each side also signs the exchange with its NODE key, and the peer is accepted only after that verifies. The two
+//! screens never show the typed code (a stolen link knows it): they show the peer's name, a short fingerprint of its
+//! device key and three numbers, one of which is on both screens; the person picks it. Links made with the seed
+//! (`"v":2`) also mix it into the proof key, which lifts the direct route from 40 to 128 bits; a joiner that sends a
+//! code-only proof is still accepted on the direct route, never on the Worker route.
+//!
 //! **Weak spot, on purpose said out loud:** if the joiner picks a "nearby" computer, the node id it dials was
 //! announced on the LAN and is not yet authenticated. A fake host could then collect the joiner's proof and try
 //! codes offline (the stretch makes each try costly). The host person's sheet and the code shown on both sheets
@@ -49,9 +58,10 @@ use tokio::sync::oneshot;
 
 use super::alpn;
 use super::capability::{self, Capability, CapabilityHandler, RelayPolicy};
+use super::far::{self, Creds, FarEnd, FarHost, LinkKeys, PairRelay, RelayErr, SEED_LEN};
 use super::discovery::{Announcement, Discovery};
 use super::endpoint::{BiStream, Link, NodeId, P2pError, PeerAddr};
-use super::identity::{DeviceIdentity, NodeBinding};
+use super::identity::{verify_node, DeviceIdentity, NodeBinding};
 use super::trust::{clean_name, TrustList};
 use super::P2p;
 use crate::keys::KeyStore;
@@ -144,6 +154,16 @@ pub enum PairError {
     Save(String),
     #[error("No such question.")]
     NoSuchQuestion,
+    #[error("Could not reach your relay.")]
+    RelayDown,
+    #[error("Update the other PC to the newest version, then try again.")]
+    UpdateOther,
+    #[error("This link was already used. If that wasn't you, press No on the other PC.")]
+    LinkUsed,
+    #[error("That was not the matching number. Pairing stopped.")]
+    WrongNumber,
+    #[error("Pick the number that is on both screens.")]
+    PickRequired,
     #[error("{0}")]
     Other(String),
 }
@@ -171,6 +191,9 @@ pub fn normalize_code(raw: &str) -> Option<String> {
 }
 
 pub fn display_code(code: &str) -> String {
+    if code.len() < 8 || !code.is_char_boundary(4) {
+        return String::new();
+    }
     format!("{}-{}", &code[..4], &code[4..])
 }
 
@@ -215,16 +238,37 @@ pub fn parse_ticket(raw: &str) -> Option<PeerAddr> {
     Some(PeerAddr { id, direct, relay: None })
 }
 
+/// What a pairing link says.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ParsedLink {
+    pub peer: PeerAddr,
+    pub code: String,
+    /// The seed of a link made with one (`"v":2`): the proof key mixes it in, and the Worker box is derived from it.
+    pub seed: Option<[u8; SEED_LEN]>,
+    /// The Worker host the host opened a box on.
+    pub worker: Option<String>,
+}
+
 /// A pairing link (far away): the device id, where to reach it (addresses and relay) and the one-time code, in one
-/// piece of text to paste. It gives no rights by itself: both people still confirm, on their own screen.
-pub fn make_link(node: &NodeId, code: &str, addrs: &[SocketAddr], relay: Option<&str>) -> String {
+/// piece of text to paste. With a `seed` (Labs far_pcs_enabled) it is a version 2 link, and with a `worker` it also
+/// names the Worker box to meet in. It gives no rights by itself: both people still confirm, on their own screen.
+pub fn make_link(node: &NodeId, code: &str, addrs: &[SocketAddr], relay: Option<&str>, seed: Option<&[u8; SEED_LEN]>, worker: Option<&str>) -> String {
     use base64::Engine as _;
-    let body = json!({ "n": node.to_hex(), "c": code, "a": addrs.iter().map(|a| a.to_string()).collect::<Vec<_>>(), "r": relay });
+    let mut body = json!({ "n": node.to_hex(), "c": code, "a": addrs.iter().map(|a| a.to_string()).collect::<Vec<_>>(), "r": relay });
+    if let Some(seed) = seed {
+        body["v"] = json!(2);
+        body["s"] = json!(far::hex(seed));
+        if let Some(w) = worker {
+            body["w"] = json!(w);
+        }
+    }
     format!("{LINK_PREFIX}{}", base64::engine::general_purpose::URL_SAFE_NO_PAD.encode(body.to_string()))
 }
 
-/// The device to dial and the code, from a pairing link. `None` when the text is not one.
-pub fn parse_link(raw: &str) -> Option<(PeerAddr, String)> {
+/// The device to dial, the code, and the seed and Worker when the link has them. `None` when the text is not a link.
+/// A link from another person is not trusted: a version 2 link with a broken seed, or a Worker host that is not a
+/// plain public name, is refused whole.
+pub fn parse_link(raw: &str) -> Option<ParsedLink> {
     use base64::Engine as _;
     let rest: String = raw.trim().strip_prefix(LINK_PREFIX)?.chars().filter(|c| !c.is_whitespace()).collect();
     if rest.len() > 4096 {
@@ -236,7 +280,16 @@ pub fn parse_link(raw: &str) -> Option<(PeerAddr, String)> {
     let code = normalize_code(v.get("c")?.as_str()?)?;
     let direct: Vec<SocketAddr> = v.get("a").and_then(Value::as_array).map(|a| a.iter().filter_map(|x| x.as_str().and_then(|t| SocketAddr::from_str(t).ok())).take(HELLO_ADDRS_MAX).collect()).unwrap_or_default();
     let relay = v.get("r").and_then(Value::as_str).filter(|r| !r.is_empty() && r.len() <= 256).map(str::to_string);
-    Some((PeerAddr { id, direct, relay }, code))
+    let seed = match v.get("v").and_then(Value::as_u64) {
+        None | Some(1) => None,
+        Some(2) => Some(unhex::<SEED_LEN>(v.get("s")?.as_str()?)?),
+        Some(_) => return None,
+    };
+    let worker = match v.get("w") {
+        None | Some(Value::Null) => None,
+        Some(w) => Some(far::link_worker_host(w.as_str()?)?),
+    };
+    Some(ParsedLink { peer: PeerAddr { id, direct, relay }, code, seed, worker: worker.filter(|_| seed.is_some()) })
 }
 
 fn mac(key: &[u8; 32], parts: &[&[u8]]) -> [u8; 32] {
@@ -373,6 +426,56 @@ struct HostCode {
     node: NodeId,
     /// A pairing link (far away) rather than a code read off the screen.
     link: Option<String>,
+    /// The seed of a version 2 link (mixed into the proof key).
+    seed: Option<[u8; SEED_LEN]>,
+}
+
+/// What a confirm sheet shows besides the name: the key's fingerprint and three numbers to pick from.
+#[derive(Clone)]
+struct CheckAsk {
+    number: u32,
+    choices: [u32; 3],
+    fingerprint: String,
+}
+
+/// What is shown to make sure both people look at the same exchange.
+enum Shown {
+    /// The typed code (a code read off the screen: the person at the host read it aloud).
+    Code(String),
+    /// A link: the code is in the link, so a stolen link knows it. Numbers from the exchange are shown instead.
+    Check(CheckAsk),
+}
+
+impl Shown {
+    fn check(transcript: &[u8], sig_joiner: &[u8], sig_host: &[u8], device_pub: &[u8; 32]) -> Self {
+        let number = far::check_number(transcript, sig_joiner, sig_host);
+        Shown::Check(CheckAsk { number, choices: far::choices(number), fingerprint: far::fingerprint(device_pub) })
+    }
+}
+
+/// What the person did on the sheet.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum Reply {
+    Yes,
+    No,
+    /// Picked a number that is not the matching one.
+    Wrong,
+}
+
+/// What the Worker route needs while an exchange runs.
+struct FarCtx {
+    rid: [u8; 32],
+}
+
+/// What a link tells the joiner to use besides the device to dial.
+#[derive(Default)]
+struct JoinExtra {
+    seed: Option<[u8; SEED_LEN]>,
+    worker: Option<String>,
+}
+
+fn meta_of(h: &Hello) -> Vec<u8> {
+    json!([h.name, h.addrs.iter().map(|a| a.to_string()).collect::<Vec<_>>(), h.relay]).to_string().into_bytes()
 }
 
 struct PendingAsk {
@@ -380,8 +483,9 @@ struct PendingAsk {
     role: Role,
     name: String,
     code: String,
+    check: Option<CheckAsk>,
     expires_at: u64,
-    tx: Option<oneshot::Sender<bool>>,
+    tx: Option<oneshot::Sender<Reply>>,
 }
 
 #[derive(Default)]
@@ -394,6 +498,8 @@ struct State {
     joining: Option<String>,
     message: Option<String>,
     next_id: u64,
+    /// Stops the Worker side of a shown link that nobody has joined yet.
+    far_cancel: Option<Arc<tokio::sync::Notify>>,
 }
 
 /// Called with the new view whenever anything the sheets show changes.
@@ -408,6 +514,13 @@ pub struct PairManager {
     name: String,
     state: Mutex<State>,
     notifier: Mutex<Option<PairNotifier>>,
+    /// The Worker (Labs far_pcs_enabled): set by the app. None = no far-away route, links are made as before.
+    far_relay: Mutex<Option<Arc<dyn PairRelay>>>,
+    /// How often a box is polled, milliseconds (tests make it short).
+    far_poll_ms: std::sync::atomic::AtomicU64,
+    /// Tests only: 1 = this PC sends a changed node signature, 2 = it sends none.
+    #[cfg(test)]
+    tamper_sig: std::sync::atomic::AtomicU8,
 }
 
 /// Resets `busy` however a session ends.
@@ -452,6 +565,10 @@ impl PairManager {
             name: clean_name(name),
             state: Mutex::new(State::default()),
             notifier: Mutex::new(None),
+            far_relay: Mutex::new(None),
+            far_poll_ms: std::sync::atomic::AtomicU64::new(1500),
+            #[cfg(test)]
+            tamper_sig: std::sync::atomic::AtomicU8::new(0),
         });
         m.p2p.registry().register(Capability::new(capability::PAIR, alpn::PAIR, RelayPolicy::Never, Arc::new(HostHandler(m.clone(), false))))?;
         m.p2p.registry().register(Capability::new(capability::PAIR_LINK, alpn::PAIR_LINK, RelayPolicy::Allowed, Arc::new(HostHandler(m.clone(), true))))?;
@@ -464,6 +581,43 @@ impl PairManager {
 
     pub fn trust(&self) -> &Arc<TrustList> {
         &self.trust
+    }
+
+    /// Gives the manager the Worker it may meet far-away PCs through. Nothing is used until Labs `far_pcs_enabled` is on.
+    pub fn set_far_relay(&self, relay: Arc<dyn PairRelay>) {
+        *self.far_relay.lock().unwrap_or_else(|p| p.into_inner()) = Some(relay);
+    }
+
+    #[cfg(test)]
+    pub(crate) fn set_tamper_sig(&self, mode: u8) {
+        self.tamper_sig.store(mode, Ordering::SeqCst);
+    }
+
+    /// The node-signature frame. (Tests can make it wrong or missing.)
+    fn nsig_frame(&self, sig: [u8; 64]) -> Value {
+        #[cfg(test)]
+        match self.tamper_sig.load(Ordering::SeqCst) {
+            1 => {
+                let mut bad = sig;
+                bad[0] ^= 1;
+                return json!({ "t": "nsig", "sig": hex(&bad) });
+            }
+            2 => return json!({ "t": "nsig" }),
+            _ => {}
+        }
+        json!({ "t": "nsig", "sig": hex(&sig) })
+    }
+
+    pub fn set_far_poll(&self, every: Duration) {
+        self.far_poll_ms.store(every.as_millis().max(1) as u64, Ordering::SeqCst);
+    }
+
+    fn far_relay(&self) -> Option<Arc<dyn PairRelay>> {
+        self.far_relay.lock().unwrap_or_else(|p| p.into_inner()).clone().filter(|_| self.p2p.far_pcs_on())
+    }
+
+    fn far_poll(&self) -> Duration {
+        Duration::from_millis(self.far_poll_ms.load(Ordering::SeqCst))
     }
 
     fn with<R>(&self, f: impl FnOnce(&mut State) -> R) -> R {
@@ -526,14 +680,25 @@ impl PairManager {
         let (host, pending, joining, message, lock) = self.with(|s| {
             let host = s.host.as_ref().filter(|h| h.expires_at > now).map(|h| (h.code.clone(), h.expires_at, h.node, h.link.clone()));
             let pending = s.pending.as_ref().map(|p| {
-                json!({ "id": p.id, "role": if p.role == Role::Host { "host" } else { "joiner" }, "name": p.name, "code": display_code(&p.code), "expires_at": p.expires_at })
+                let mut v = json!({ "id": p.id, "role": if p.role == Role::Host { "host" } else { "joiner" }, "name": p.name, "code": display_code(&p.code), "expires_at": p.expires_at, "mode": "code" });
+                if let Some(c) = &p.check {
+                    // The true number is not in the view: the sheet shows three, and the person picks the one on both screens.
+                    v["mode"] = json!("check");
+                    v["code"] = json!("");
+                    v["fingerprint"] = json!(c.fingerprint);
+                    v["choices"] = json!(c.choices.iter().map(|n| format!("{n:06}")).collect::<Vec<_>>());
+                }
+                v
             });
             let lock = (s.limiter.locked_until > now).then_some(s.limiter.locked_until);
             (host, pending, s.joining.clone(), s.message.clone(), lock)
         });
         let hosting = host.map(|(code, expires_at, node, link)| match link {
             // A pairing link carries the code inside it: the page shows the link, not a code to read out.
-            Some(link) => json!({ "kind": "link", "code": "", "ticket": "", "link": link, "expires_at": expires_at }),
+            Some(link) => {
+                let worker = parse_link(&link).map(|p| p.worker.is_some()).unwrap_or(false);
+                json!({ "kind": "link", "code": "", "ticket": "", "link": link, "expires_at": expires_at, "worker": worker })
+            }
             None => json!({ "kind": "code", "code": display_code(&code), "ticket": make_ticket(&node, &self.p2p.local_addrs()), "link": Value::Null, "expires_at": expires_at }),
         });
         json!({
@@ -591,7 +756,7 @@ impl PairManager {
         let code = new_code();
         let node = transport.id();
         self.with(|s| {
-            s.host = Some(HostCode { code, expires_at: now + CODE_TTL_MS, node, link: None });
+            s.host = Some(HostCode { code, expires_at: now + CODE_TTL_MS, node, link: None, seed: None });
             s.message = None;
         });
         self.trust.set_link_pairing_open(false);
@@ -603,6 +768,10 @@ impl PairManager {
 
     /// Makes a pairing link for a device that is far away: single use, 10 minutes, and the other device may reach this
     /// one through a relay. It is not announced on the network. Both people still confirm on their own screen.
+    ///
+    /// With Labs `far_pcs_enabled` the link also carries a seed and, when this PC's own Worker accepts a box, the
+    /// Worker's host: the other PC then meets this one there first (see `far.rs`). If the Worker cannot be used the link
+    /// is still made, and says so on the sheet.
     pub async fn start_hosting_link(self: &Arc<Self>) -> Result<Value, PairError> {
         if let Some(until) = self.locked_until() {
             return Err(PairError::Locked(until));
@@ -613,19 +782,87 @@ impl PairManager {
         let now = self.clock.now_ms();
         let code = new_code();
         let node = transport.id();
-        let link = make_link(&node, &code, &self.p2p.local_addrs(), relay.as_deref());
+        let mut seed = None;
+        let mut box_host: Option<FarHost> = None;
+        let mut note: Option<&str> = None;
+        if self.p2p.far_pcs_on() {
+            let fresh = far::new_seed();
+            seed = Some(fresh);
+            if let Some(worker) = self.far_relay() {
+                if let Some(host) = worker.my_host() {
+                    let keys = LinkKeys::derive(&fresh);
+                    let host_token = far::new_token();
+                    match worker.create(&host, &keys.rid_hex(), &far::sha_hex(&keys.pair_token_b64()), &far::sha_hex(&host_token), LINK_TTL_MS).await {
+                        Ok(()) => box_host = Some(FarHost { relay: worker, host, keys, host_token, seed: fresh }),
+                        Err(e) => note = Some(relay_note(&e)),
+                    }
+                } else {
+                    note = Some("Set up your relay in Connect first. This link works on the direct and public route only.");
+                }
+            }
+        }
+        let link = make_link(&node, &code, &self.p2p.local_addrs(), relay.as_deref(), seed.as_ref(), box_host.as_ref().map(|b| b.host.as_str()));
+        let cancel = box_host.as_ref().map(|_| Arc::new(tokio::sync::Notify::new()));
         self.with(|s| {
-            s.host = Some(HostCode { code, expires_at: now + LINK_TTL_MS, node, link: Some(link) });
+            s.host = Some(HostCode { code, expires_at: now + LINK_TTL_MS, node, link: Some(link), seed });
             s.message = None;
+            if let Some(old) = s.far_cancel.take() {
+                old.notify_one();
+            }
+            s.far_cancel = cancel.clone();
         });
         self.trust.set_pairing_open(false);
         self.trust.set_link_pairing_open(true);
-        self.changed();
+        if let (Some(b), Some(cancel)) = (box_host, cancel) {
+            tokio::spawn(self.clone().run_far_host(b, cancel));
+        }
+        match note {
+            Some(text) => self.say(text),
+            None => self.changed(),
+        }
         Ok(self.view())
     }
 
-    /// Withdraws the code (or link) and closes pairing.
+    /// The Worker side of a shown link: waits for the first message, runs the same exchange on it, then closes the box.
+    async fn run_far_host(self: Arc<Self>, far: FarHost, cancel: Arc<tokio::sync::Notify>) {
+        let poll = self.far_poll();
+        let end = FarEnd {
+            relay: far.relay.clone(),
+            host: far.host.clone(),
+            keys: far.keys.clone(),
+            creds: far.creds(),
+            is_host: true,
+            poll_every: poll,
+            lifetime: Duration::from_millis(LINK_TTL_MS),
+        };
+        let rid = far.keys.rid;
+        let (stream, _guard, first) = end.stream();
+        tokio::select! {
+            _ = cancel.notified() => {}
+            got = tokio::time::timeout(Duration::from_millis(LINK_TTL_MS), first) => {
+                if matches!(got, Ok(Ok(()))) {
+                    if let Err(e) = self.clone().host_session(None, stream, true, Some(&FarCtx { rid })).await {
+                        self.say(&e.to_string());
+                    }
+                    // The last frame (an answer, or a refusal) must reach the other side before the box goes.
+                    tokio::time::sleep(poll * 2 + Duration::from_millis(200)).await;
+                }
+            }
+        }
+        far.close().await;
+    }
+
+    /// Withdraws the code (or link) and closes pairing. A Worker box nobody has joined yet is closed too.
     pub fn cancel_hosting(&self) {
+        if let Some(n) = self.with(|s| s.far_cancel.take()) {
+            n.notify_one();
+        }
+        self.close_code();
+    }
+
+    /// Closes pairing without touching a Worker exchange that is running (a good proof closes the code, and the answers
+    /// still have to travel).
+    fn close_code(&self) {
         let node = self.with(|s| s.host.take().map(|h| h.node));
         self.trust.set_pairing_open(false);
         self.trust.set_link_pairing_open(false);
@@ -636,7 +873,13 @@ impl PairManager {
     }
 
     async fn serve_host(self: Arc<Self>, peer: NodeId, link: &Arc<dyn Link>, via_link: bool) -> Result<(), PairError> {
-        let mut stream = link.accept_bi().await.map_err(|_| PairError::Dropped)?;
+        let stream = link.accept_bi().await.map_err(|_| PairError::Dropped)?;
+        self.host_session(Some(peer), stream, via_link, None).await
+    }
+
+    /// The host's side of one exchange on a stream. `peer` is the node the encrypted link proved (the direct and public
+    /// routes); `None` on the Worker route, where `far` is set and the peer is proven by its signature instead.
+    async fn host_session(self: Arc<Self>, peer: Option<NodeId>, mut stream: BiStream, via_link: bool, far: Option<&FarCtx>) -> Result<(), PairError> {
         let refuse = |why: &'static str| json!({ "t": "refused", "why": why });
 
         // Gate: locked, no code, expired, busy.
@@ -668,7 +911,7 @@ impl PairManager {
         let Some(joiner) = parse_hello(&first, "hello") else {
             return send_frame(&mut stream, &refuse("binding")).await;
         };
-        if !joiner.binding.verify() || joiner.binding.node_id != peer {
+        if !joiner.binding.verify() || peer.map(|p| joiner.binding.node_id != p).unwrap_or(false) {
             return send_frame(&mut stream, &refuse("binding")).await;
         }
         let identity = self.identity()?;
@@ -682,23 +925,67 @@ impl PairManager {
         let proof = recv_frame(&mut stream, STEP_TIMEOUT).await?;
         let given = proof.get("mac").and_then(Value::as_str).and_then(unhex::<32>);
         let now = self.clock.now_ms();
-        let code = self.with(|s| s.host.as_ref().filter(|h| h.expires_at > now).map(|h| h.code.clone()));
-        let Some(code) = code else {
+        let code = self.with(|s| s.host.as_ref().filter(|h| h.expires_at > now).map(|h| (h.code.clone(), h.seed)));
+        let Some((code, seed)) = code else {
             return send_frame(&mut stream, &refuse("expired")).await;
         };
-        let key = derive_key(&code, &identity.id());
-        let good = proof.get("t").and_then(Value::as_str) == Some("proof")
-            && given.map(|g| mac_ok(&key, &[b"join", &transcript], &g)).unwrap_or(false);
-        if !good {
+        // The host's OWN link decides how it is proven and what the sheet shows, never what the joiner sends. A link
+        // made with a seed is proven with the seed mixed in, and nothing else is accepted for it: a code-only proof
+        // (an older app, or someone who stole the link and left the seed out to get the old sheet) is refused. A link
+        // without a seed (switch off) is proven by the code alone, as it always was.
+        let is_proof = proof.get("t").and_then(Value::as_str) == Some("proof");
+        let key = match (seed, given, is_proof) {
+            (Some(seed), Some(g), true) => {
+                let k2 = far::proof_key_v2(&code, &seed, &identity.id().0);
+                if mac_ok(&k2, &[b"join", &transcript], &g) {
+                    Some(k2)
+                } else {
+                    // A code-only proof that would have been right is an old app: it is told to update (not a wrong code
+                    // as such, but it counts the same: it is also what a stripped stolen link looks like).
+                    let k1 = derive_key(&code, &identity.id());
+                    if mac_ok(&k1, &[b"join", &transcript], &g) {
+                        self.strike(true);
+                        return send_frame(&mut stream, &refuse("update")).await;
+                    }
+                    None
+                }
+            }
+            (None, Some(g), true) => {
+                let k1 = derive_key(&code, &identity.id());
+                mac_ok(&k1, &[b"join", &transcript], &g).then_some(k1)
+            }
+            _ => None,
+        };
+        let Some(key) = key else {
             self.strike(true);
             return send_frame(&mut stream, &refuse("wrong")).await;
-        }
-        self.cancel_hosting();
+        };
+        let v2 = seed.is_some();
+        self.close_code();
         let accept = mac(&key, &[b"host", &transcript]);
         send_frame(&mut stream, &json!({ "t": "accept", "mac": hex(&accept) })).await?;
 
+        // The Worker route: nothing proved the node yet. Each side signs this exact exchange with its node key; the
+        // peer counts only after its signature verifies (and before anything is shown or remembered).
+        let mut sigs: (Vec<u8>, Vec<u8>) = (Vec::new(), Vec::new());
+        if let Some(ctx) = far {
+            let frame = recv_frame(&mut stream, STEP_TIMEOUT).await?;
+            let theirs = frame.get("sig").and_then(Value::as_str).and_then(unhex::<64>);
+            let message = far::node_sig_message(&ctx.rid, b'j', &transcript, &meta_of(&joiner));
+            let proven = frame.get("t").and_then(Value::as_str) == Some("nsig") && theirs.map(|g| verify_node(&joiner.binding.node_id, &message, &g)).unwrap_or(false);
+            let Some(theirs) = theirs.filter(|_| proven) else {
+                let _ = send_frame(&mut stream, &refuse("binding")).await;
+                return Err(PairError::BadIdentity);
+            };
+            let mine = identity.sign_node(&far::node_sig_message(&ctx.rid, b'h', &transcript, &meta_of(&me)));
+            send_frame(&mut stream, &self.nsig_frame(mine)).await?;
+            sigs = (theirs.to_vec(), mine.to_vec());
+        }
+        // A link's code is in the link, so a stolen link knows it: links show numbers from the exchange instead.
+        let shown = if via_link && v2 { Shown::check(&transcript, &sigs.0, &sigs.1, &joiner.binding.device_pub) } else { Shown::Code(code.clone()) };
+
         // 5: both people decide.
-        let outcome = self.confirm_and_finish(Role::Host, &mut stream, &key, &transcript, &joiner, &code).await;
+        let outcome = self.confirm_and_finish(Role::Host, &mut stream, &key, &transcript, &joiner, shown).await;
         if let Err(e) = &outcome {
             self.say(&e.to_string());
         }
@@ -722,11 +1009,12 @@ impl PairManager {
         } else {
             parse_ticket(target).ok_or(PairError::BadTicket)?
         };
-        self.join_peer(peer, code, false).await
+        self.join_peer(peer, code, false, JoinExtra::default()).await
     }
 
     /// Joins with a pairing link (far away): the link names the device, so there is no "nearby" announcement to trust, and
-    /// a relay may carry the exchange.
+    /// a relay may carry the exchange. A link with a Worker is tried through the Worker first (when Labs
+    /// `far_pcs_enabled` is on and a Worker is set), then the direct or public route.
     pub async fn join_link(self: &Arc<Self>, text: &str) -> Result<String, PairError> {
         if !self.p2p.labs_for(capability::PAIR_LINK) {
             return Err(PairError::Off);
@@ -734,11 +1022,11 @@ impl PairManager {
         if let Some(until) = self.locked_until() {
             return Err(PairError::Locked(until));
         }
-        let (peer, code) = parse_link(text).ok_or(PairError::BadLink)?;
-        self.join_peer(peer, code, true).await
+        let link = parse_link(text).ok_or(PairError::BadLink)?;
+        self.join_peer(link.peer, link.code, true, JoinExtra { seed: link.seed, worker: link.worker }).await
     }
 
-    async fn join_peer(self: &Arc<Self>, peer: PeerAddr, code: String, via_link: bool) -> Result<String, PairError> {
+    async fn join_peer(self: &Arc<Self>, peer: PeerAddr, code: String, via_link: bool, extra: JoinExtra) -> Result<String, PairError> {
         let claimed = self.with(|s| {
             if s.busy {
                 false
@@ -754,7 +1042,7 @@ impl PairManager {
         }
         let _busy = BusyGuard(self.clone());
         self.changed();
-        let result = self.run_join(&peer, &code, via_link).await;
+        let result = self.run_join(&peer, &code, via_link, &extra).await;
         if result.is_ok() {
             self.p2p.addrs().remember(peer.id, &peer.direct);
         }
@@ -766,20 +1054,58 @@ impl PairManager {
         result
     }
 
-    async fn run_join(self: &Arc<Self>, peer: &PeerAddr, code: &str, via_link: bool) -> Result<String, PairError> {
+    async fn run_join(self: &Arc<Self>, peer: &PeerAddr, code: &str, via_link: bool, extra: &JoinExtra) -> Result<String, PairError> {
+        if let (Some(host), Some(seed), Some(relay)) = (extra.worker.as_ref(), extra.seed, self.far_relay()) {
+            match self.run_join_worker(relay, host, peer, code, seed).await {
+                // The Worker could not be used (down, no such feature, full, or no such box): the direct and public
+                // route still can. A box somebody else took, or an exchange that began, is final.
+                Err(PairError::RelayDown) => {}
+                other => return other,
+            }
+        }
         let link = self.p2p.dial(peer, if via_link { capability::PAIR_LINK } else { capability::PAIR }).await?;
-        let result = self.run_join_on(&link, peer, code).await;
+        let result = self.run_join_on(&link, peer, code, extra.seed).await;
         tokio::time::sleep(Duration::from_millis(20)).await;
         link.close(0, "done");
         result
     }
 
-    async fn run_join_on(self: &Arc<Self>, link: &Arc<dyn Link>, peer: &PeerAddr, code: &str) -> Result<String, PairError> {
+    async fn run_join_worker(self: &Arc<Self>, relay: Arc<dyn PairRelay>, host: &str, peer: &PeerAddr, code: &str, seed: [u8; SEED_LEN]) -> Result<String, PairError> {
+        let keys = LinkKeys::derive(&seed);
+        let token = keys.pair_token_b64();
+        let claim = relay.claim(host, &keys.rid_hex(), &token).await.map_err(|e| match e {
+            RelayErr::Claimed => PairError::LinkUsed,
+            _ => PairError::RelayDown,
+        })?;
+        let rid = keys.rid;
+        let end = FarEnd {
+            relay,
+            host: host.to_string(),
+            keys,
+            creds: Creds { pair: Some(token), host: None, claim: Some(claim) },
+            is_host: false,
+            poll_every: self.far_poll(),
+            lifetime: Duration::from_millis(LINK_TTL_MS),
+        };
+        let (stream, _guard, _first) = end.stream();
+        let result = self.join_stream(stream, peer, code, Some(seed), Some(&FarCtx { rid }), true).await;
+        // The last frame must reach the host before the stream goes.
+        tokio::time::sleep(self.far_poll() + Duration::from_millis(100)).await;
+        result
+    }
+
+    async fn run_join_on(self: &Arc<Self>, link: &Arc<dyn Link>, peer: &PeerAddr, code: &str, seed: Option<[u8; SEED_LEN]>) -> Result<String, PairError> {
         if link.peer() != peer.id {
             return Err(PairError::BadIdentity);
         }
+        let stream = link.open_bi().await.map_err(|_| PairError::Unreachable)?;
+        self.join_stream(stream, peer, code, seed, None, seed.is_some()).await
+    }
+
+    /// The joiner's side of one exchange on a stream. `far` is set on the Worker route (the peer is then proven by a node
+    /// signature). `links_numbers`: this exchange came from a version 2 link, so numbers are shown instead of the code.
+    async fn join_stream(self: &Arc<Self>, mut stream: BiStream, peer: &PeerAddr, code: &str, seed: Option<[u8; SEED_LEN]>, far: Option<&FarCtx>, links_numbers: bool) -> Result<String, PairError> {
         let identity = self.identity()?;
-        let mut stream = link.open_bi().await.map_err(|_| PairError::Unreachable)?;
         let mut nonce = [0u8; 16];
         rand::thread_rng().fill(&mut nonce);
         let me = Hello { nonce, binding: identity.binding(), name: self.name.clone(), addrs: self.p2p.local_addrs(), relay: self.p2p.home_relay() };
@@ -794,7 +1120,10 @@ impl PairManager {
             return Err(PairError::BadIdentity);
         }
         let transcript = transcript(&me, &host);
-        let key = derive_key(code, &peer.id);
+        let key = match seed {
+            Some(seed) => far::proof_key_v2(code, &seed, &peer.id.0),
+            None => derive_key(code, &peer.id),
+        };
         let proof = mac(&key, &[b"join", &transcript]);
         send_frame(&mut stream, &json!({ "t": "proof", "mac": hex(&proof) })).await?;
 
@@ -806,9 +1135,26 @@ impl PairManager {
         if answer.get("t").and_then(Value::as_str) != Some("accept") || !given.map(|g| mac_ok(&key, &[b"host", &transcript], &g)).unwrap_or(false) {
             return Err(PairError::BadIdentity);
         }
+        let mut sigs: (Vec<u8>, Vec<u8>) = (Vec::new(), Vec::new());
+        if let Some(ctx) = far {
+            let mine = identity.sign_node(&far::node_sig_message(&ctx.rid, b'j', &transcript, &meta_of(&me)));
+            send_frame(&mut stream, &self.nsig_frame(mine)).await?;
+            let frame = recv_frame(&mut stream, STEP_TIMEOUT).await?;
+            if frame.get("t").and_then(Value::as_str) == Some("refused") {
+                return Err(self.refusal(&frame));
+            }
+            let theirs = frame.get("sig").and_then(Value::as_str).and_then(unhex::<64>);
+            let message = far::node_sig_message(&ctx.rid, b'h', &transcript, &meta_of(&host));
+            let proven = frame.get("t").and_then(Value::as_str) == Some("nsig") && theirs.map(|g| verify_node(&peer.id, &message, &g)).unwrap_or(false);
+            let Some(theirs) = theirs.filter(|_| proven) else {
+                return Err(PairError::BadIdentity);
+            };
+            sigs = (mine.to_vec(), theirs.to_vec());
+        }
         self.with(|s| s.joining = Some(format!("Waiting for {} to confirm…", host.name)));
         self.changed();
-        self.confirm_and_finish(Role::Joiner, &mut stream, &key, &transcript, &host, code).await?;
+        let shown = if links_numbers && seed.is_some() { Shown::check(&transcript, &sigs.0, &sigs.1, &host.binding.device_pub) } else { Shown::Code(code.to_string()) };
+        self.confirm_and_finish(Role::Joiner, &mut stream, &key, &transcript, &host, shown).await?;
         Ok(host.name)
     }
 
@@ -818,6 +1164,7 @@ impl PairManager {
                 self.strike(true);
                 PairError::WrongCode
             }
+            Some("update") => PairError::UpdateOther,
             Some("locked") | Some("expired") | Some("busy") => PairError::Refused,
             _ => PairError::BadIdentity,
         }
@@ -832,17 +1179,18 @@ impl PairManager {
         key: &[u8; 32],
         transcript: &[u8],
         other: &Hello,
-        code: &str,
+        shown: Shown,
     ) -> Result<(), PairError> {
         let mine: &[u8] = if role == Role::Host { b"h" } else { b"j" };
         let theirs: &[u8] = if role == Role::Host { b"j" } else { b"h" };
-        let yes = self.ask(role, &other.name, code).await;
+        let reply = self.ask(role, &other.name, shown).await;
+        let yes = reply == Reply::Yes;
         let tag = |who: &[u8], yes: bool| mac(key, &[b"decision", who, &[yes as u8], transcript]);
         // Best effort: the other side may already have said no and gone. Its answer is still read below.
         let _sent = send_frame(stream, &json!({ "t": "decision", "yes": yes, "mac": hex(&tag(mine, yes)) })).await;
         if !yes {
             self.strike(false);
-            return Err(PairError::YouDeclined);
+            return Err(if reply == Reply::Wrong { PairError::WrongNumber } else { PairError::YouDeclined });
         }
         let frame = recv_frame(stream, CONFIRM_TIMEOUT).await?;
         let their_yes = frame.get("yes").and_then(Value::as_bool).ok_or(PairError::Dropped)?;
@@ -868,9 +1216,13 @@ impl PairManager {
     }
 
     /// Puts the question on this computer's screen and waits for the person.
-    async fn ask(self: &Arc<Self>, role: Role, name: &str, code: &str) -> bool {
+    async fn ask(self: &Arc<Self>, role: Role, name: &str, shown: Shown) -> Reply {
         let (tx, rx) = oneshot::channel();
         let now = self.clock.now_ms();
+        let (code, check) = match shown {
+            Shown::Code(c) => (c, None),
+            Shown::Check(c) => (String::new(), Some(c)),
+        };
         self.with(|s| {
             s.next_id += 1;
             let id = s.next_id;
@@ -879,7 +1231,8 @@ impl PairManager {
                 id,
                 role,
                 name: name.to_string(),
-                code: code.to_string(),
+                code,
+                check,
                 expires_at: now + CONFIRM_TIMEOUT.as_millis() as u64,
                 tx: Some(tx),
             });
@@ -895,18 +1248,42 @@ impl PairManager {
             }
         }
         let _clear = ClearOnDrop(self.clone());
-        let answer = tokio::time::timeout(CONFIRM_TIMEOUT, rx).await;
-        matches!(answer, Ok(Ok(true)))
+        tokio::time::timeout(CONFIRM_TIMEOUT, rx).await.ok().and_then(Result::ok).unwrap_or(Reply::No)
     }
 
-    /// The person's answer to the sheet. The only way a question is answered; the desktop window's command is the
-    /// only caller (see `guard_tests.rs`).
+    /// The person's answer to a sheet that shows a code. The only way such a question is answered; the desktop window's
+    /// command is the only caller (see `guard_tests.rs`). A sheet that shows numbers is answered by `answer_pick`: a
+    /// plain Yes is refused there, so pressing a button cannot skip the check.
     pub fn answer(&self, id: u64, allow: bool) -> Result<(), PairError> {
         let tx = self.with(|s| match s.pending.as_mut() {
-            Some(p) if p.id == id => p.tx.take(),
+            Some(p) if p.id == id => {
+                if allow && p.check.is_some() {
+                    Err(PairError::PickRequired)
+                } else {
+                    Ok(p.tx.take())
+                }
+            }
+            _ => Ok(None),
+        })?;
+        tx.ok_or(PairError::NoSuchQuestion)?.send(if allow { Reply::Yes } else { Reply::No }).map_err(|_| PairError::NoSuchQuestion)
+    }
+
+    /// The person's pick on a sheet that shows numbers ("123456"): the matching one is Yes, any other is a No that is
+    /// counted like one.
+    pub fn answer_pick(&self, id: u64, pick: &str) -> Result<(), PairError> {
+        let tx = self.with(|s| match s.pending.as_mut() {
+            Some(p) if p.id == id => p.check.as_ref().map(|c| (p.tx.take(), c.number)),
             _ => None,
         });
-        tx.ok_or(PairError::NoSuchQuestion)?.send(allow).map_err(|_| PairError::NoSuchQuestion)
+        let (tx, number) = tx.ok_or(PairError::NoSuchQuestion)?;
+        let right = pick.trim().parse::<u32>().map(|n| n == number).unwrap_or(false) && pick.trim().len() == 6;
+        tx.ok_or(PairError::NoSuchQuestion)?.send(if right { Reply::Yes } else { Reply::Wrong }).map_err(|_| PairError::NoSuchQuestion)
+    }
+
+    /// The true check number of the sheet that is open now (tests only: the view never carries it).
+    #[cfg(test)]
+    pub(crate) fn pending_number(&self) -> Option<u32> {
+        self.with(|s| s.pending.as_ref().and_then(|p| p.check.as_ref().map(|c| c.number)))
     }
 
     /// Removes a paired computer. The person confirms in the UI first.
@@ -933,4 +1310,14 @@ impl PairManager {
 /// Capability ids the page may switch, for the command layer.
 pub fn permissionable() -> BTreeSet<&'static str> {
     capability::PERMISSIONABLE.iter().copied().collect()
+}
+
+/// A plain sentence for the sheet when a link could not use the Worker (the link still works on the other routes).
+fn relay_note(e: &RelayErr) -> &'static str {
+    match e {
+        RelayErr::NoFeature => "Your relay needs an update for far-away PCs. This link works on the direct and public route only.",
+        RelayErr::Down => "Could not reach your relay. This link works on the direct and public route only.",
+        RelayErr::Full => "Your relay is busy. This link works on the direct and public route only.",
+        _ => "Your relay did not accept the link. It works on the direct and public route only.",
+    }
 }

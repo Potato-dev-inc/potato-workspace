@@ -633,6 +633,17 @@ export function installTauriMock(scenario: HarnessScenario): void {
           return { accepted: true, question: (scenario.questions ?? []).find((q) => q.id === a.id) };
         case 'get_tunnel_status':
         case 'set_tunnel_config': {
+          if (scenario.tunnel === 'quick-error') {
+            return {
+              mode: 'quick',
+              public_url: null,
+              state: 'error',
+              error: 'cloudflared stopped: no quick address was given (exit 1).',
+              problem: 'too_soon',
+              retry_in_secs: 240,
+              config: { mode: 'quick', hostname: null, url: null, has_token: false },
+            };
+          }
           if (scenario.tunnel === 'quick') {
             return {
               mode: 'quick',
@@ -720,7 +731,7 @@ export function installTauriMock(scenario: HarnessScenario): void {
         }
         case 'get_mobile_tunnel_info':
         {
-          const shown = scenario.tunnel === 'quick' ? 'https://quiet-lake-1234.trycloudflare.com' : scenario.tunnel ? 'https://potato-stable-link.example.workers.dev' : 'https://pm.example.com';
+          const shown = scenario.tunnel === 'quick' || scenario.tunnel === 'quick-error' ? 'https://quiet-lake-1234.trycloudflare.com' : scenario.tunnel ? 'https://potato-stable-link.example.workers.dev' : 'https://pm.example.com';
           return { localUrl: 'http://127.0.0.1:1420', pwaUrl: 'http://127.0.0.1:1420', tunnelUrl: shown, bridgeProxyUrl: `${shown}/bridge`, updatedAt: 0 };
         }
         case 'pane_set_title':

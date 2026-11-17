@@ -69,6 +69,7 @@ export const ROW_META: Record<string, Meta> = {
   'spaces-labs': { keys: ['spaces_enabled'] },
   'lend-labs': { keys: ['lend_enabled'] },
   'devices-labs': { keys: ['devices_enabled'] },
+  'far-pcs-labs': { keys: ['far_pcs_enabled'] },
   'account-labs': { keys: ['account_enabled'] },
   'desktop-potato-labs': { keys: ['desktop_pet_enabled'] },
   'agent-browser-labs': { keys: ['agent_browser_enabled'] },

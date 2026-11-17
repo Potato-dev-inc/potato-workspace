@@ -5,4 +5,6 @@
  */
 export const WORKER_NAME = "potato-worker/1";
 export const FEATURES = ["team", "rooms", "stable-link", "invites"] as const;
-export type Feature = (typeof FEATURES)[number];
+/** Far-away pairing is listed only when the owner key is set (see `PAIR_OWNER`): without it the routes answer 404. */
+export const PAIR_FEATURE = "pair";
+export type Feature = (typeof FEATURES)[number] | typeof PAIR_FEATURE;

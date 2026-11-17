@@ -207,7 +207,7 @@ export interface HarnessScenario {
     after?: 'running' | 'done_ok' | 'cancelled' | 'restart';
   };
   /** Settings > Phone > Public address: `stable` answers with a linked Stable link, `stable-failed` with a refused secret. */
-  tunnel?: 'quick' | 'stable' | 'stable-failed';
+  tunnel?: 'quick' | 'quick-error' | 'stable' | 'stable-failed';
   /** Runs once after the first paint (and after the panes loaded); click things, press keys. */
   after?: (api: HarnessDom) => void | Promise<void>;
 }

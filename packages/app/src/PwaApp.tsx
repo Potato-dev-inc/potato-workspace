@@ -1073,6 +1073,7 @@ export default function PwaApp() {
           setSearchOpen(true);
         }}
         onOverview={() => selectTab(ALL_TAB)}
+        footExtra={deskApi ? <PhoneDeskSwitch api={deskApi} canControl={canControl} refreshKey={resyncKey} /> : undefined}
         onSettings={() => {
           setDrawer(false);
           setSheet('menu');
@@ -1080,7 +1081,6 @@ export default function PwaApp() {
       >
         {nightApi && <NightSummary api={nightApi} canControl={canControl} refreshKey={resyncKey} />}
         {reviewApi && <ReviewSummary api={reviewApi} refreshKey={resyncKey} />}
-        {deskApi && <PhoneDeskSwitch api={deskApi} canControl={canControl} refreshKey={resyncKey} />}
       </PhoneDrawer>
       {searchOpen && bridge && (
         <PhoneSearch

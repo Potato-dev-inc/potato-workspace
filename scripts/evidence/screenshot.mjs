@@ -67,8 +67,10 @@ function windowSizeFor(name) {
   return '1440,900';
 }
 
+// PM_EVIDENCE_THEME=light|dark renders every scenario in that theme (the harness reads &theme=).
+const themeQuery = ['light', 'dark', 'dim'].includes(process.env.PM_EVIDENCE_THEME ?? '') ? `&theme=${process.env.PM_EVIDENCE_THEME}` : '';
 const NARROW_PX = 500;
-const isNarrow = (name) => Number(windowSizeFor(name).split(',')[0]) < NARROW_PX;
+const isNarrow = (name) => process.env.PM_EVIDENCE_CDP === '1' || Number(windowSizeFor(name).split(',')[0]) < NARROW_PX;
 
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
@@ -161,7 +163,11 @@ const liveProfiles = new Set();
 
 function cleanupProfile(profile) {
   killProfile(profile);
-  rmSync(profile, { recursive: true, force: true, maxRetries: 5, retryDelay: 300 });
+  try {
+    rmSync(profile, { recursive: true, force: true, maxRetries: 8, retryDelay: 500 });
+  } catch {
+    /* Edge still releasing its files: the temp folder is removed by the OS later */
+  }
   liveProfiles.delete(profile);
 }
 
@@ -213,10 +219,10 @@ const shoot = async (name, png) => {
         '--hide-scrollbars',
         '--force-dark-mode',
         `--window-size=${windowSizeFor(name)}`,
-        '--virtual-time-budget=15000',
+        `--virtual-time-budget=${process.env.PM_EVIDENCE_BUDGET ?? 15000}`,
         `--user-data-dir=${profile}`,
         `--screenshot=${png}`,
-        `${base}/?harness=${encodeURIComponent(name)}`,
+        `${base}/?harness=${encodeURIComponent(name)}${themeQuery}`,
       ];
       // msedge.exe hands off to a detached browser process and returns at once; the png is written
       // later, so poll for it (stable size), then kill that profile's processes.
@@ -288,7 +294,7 @@ async function shootNarrow(name, png) {
       });
     await send('Page.enable');
     await send('Emulation.setDeviceMetricsOverride', { width: w, height: h, deviceScaleFactor: 1, mobile: false });
-    await send('Page.navigate', { url: `${base}/?harness=${encodeURIComponent(name)}` });
+    await send('Page.navigate', { url: `${base}/?harness=${encodeURIComponent(name)}${themeQuery}` });
     let ready = false;
     for (let i = 0; i < 120 && !ready; i++) {
       await sleep(500);

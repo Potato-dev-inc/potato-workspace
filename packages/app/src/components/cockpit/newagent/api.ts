@@ -44,6 +44,8 @@ export interface WorkflowChoice {
 export interface NewAgentApi {
   /** Labs "Workflows": the saved workflows; null while the switch is off. Absent on an older build. */
   workflows?: () => Promise<WorkflowChoice[] | null>;
+  /** How many crews the list leaves out because they need fixing. Absent on an older build. */
+  workflowsHidden?: () => Promise<number>;
   /** The plan of one workflow in a folder: who the front is and the brief it gets first. */
   workflowPlan?: (slug: string, folder: string, request: string) => Promise<WorkflowPlanView>;
   /** Whole-horde mode: start the helpers under the front's pane. Resolves to a plain sentence when some did not start. */
@@ -91,6 +93,14 @@ export const tauriNewAgentApi: NewAgentApi = {
       return await invoke<WorkflowChoice[] | null>('workflows_list');
     } catch {
       return null; // an older build without the command
+    }
+  },
+  workflowsHidden: async () => {
+    if (!inTauri()) return 0;
+    try {
+      return await invoke<number>('workflows_hidden_count');
+    } catch {
+      return 0;
     }
   },
   workflowPlan: (slug, folder, request) => invoke<WorkflowPlanView>('workflows_plan', { slug, folder, request }),

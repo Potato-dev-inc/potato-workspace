@@ -99,6 +99,7 @@ export function StableLinkSheet({
     run(() => api.save(toInput({ ...draftFromConfig(status?.config), mode: 'stable', workerUrl: worker })));
   const showSecret = () => run(() => api.save({ mode: 'stable', worker_url: stored ?? worker, secret_action: 'show' }));
   const linked = link === 'linked';
+  const mismatch = status?.mode === 'stable' && status.stable?.secret_mismatch === true;
   const reason = status?.mode === 'stable' ? (status.stable?.error ?? statusLine(status).text) : t('stable.notYet');
 
   return (
@@ -171,6 +172,18 @@ export function StableLinkSheet({
           </li>
         </ol>
 
+        {mismatch && stored && workersDevAddress(stored) && (
+          <div className="stable-fresh" data-testid="stable-fresh">
+            <p>{t('stable.freshHelp')}</p>
+            <WorkerUpdateButton
+              fresh
+              address={workersDevAddress(stored)}
+              label="wu.fresh"
+              api={updateApi}
+              onDone={() => void run(() => api.save({ mode: 'stable', worker_url: stored, secret_action: 'regenerate', confirm_strand: true }))}
+            />
+          </div>
+        )}
         <p className="stable-status" data-testid="stable-status" data-linked={linked ? 'true' : undefined} aria-live="polite">
           {linked ? t('stable.linkedOk') : t('stable.notLinked')}{' '}
           <span className="text-pm-muted">{linked ? (status?.stable?.worker_url ?? '') : reason}</span>

@@ -75,6 +75,7 @@ export const settingsGeneral: Partial<Record<EnglishKey, string>> = {
   'labsPage.line.spaces-labs': '和朋友在小群組裡聊天，電腦對電腦。',
   'labsPage.line.lend-labs': '把你的 AI 助理登入借給另一台電腦，或借用別人的。',
   'labsPage.line.devices-labs': '配對另一台電腦，在它上面執行對話或終端機。',
+  'labsPage.line.far-pcs-labs': '把另一個網路上的電腦透過你的中繼配對（需要先開啟「裝置」）。',
   'labsPage.line.desktop-potato-labs': '桌面上的小 Potato，AI 助理需要你時會揮手。',
   'labsPage.line.agent-browser-labs': 'AI 助理可以打開並點擊它所建立的 App 頁面。',
   'labsPage.line.companion-vault-labs': '夥伴會寫日記和手札，也會顯示它的心情。',

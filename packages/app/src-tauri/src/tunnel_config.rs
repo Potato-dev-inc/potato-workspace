@@ -101,6 +101,8 @@ pub enum TunnelConfigInput {
     },
     /// A fixed address from OpenTunnel. Needs the Labs switch (checked where it is applied).
     OpenTunnel,
+    /// "Forget this Worker": switch to the automatic address AND drop the remembered Worker address and secret.
+    ForgetWorker,
 }
 
 /// What a `stable` save does with the shared secret.
@@ -167,7 +169,7 @@ fn check_chosen_secret(raw: &str) -> Result<String, String> {
 /// Validate UI input into a stored config. `current` supplies the stored token when the UI omits it.
 pub fn config_from_input(input: TunnelConfigInput, current: &TunnelConfig) -> Result<TunnelConfig, String> {
     match input {
-        TunnelConfigInput::Quick => Ok(TunnelConfig::Quick),
+        TunnelConfigInput::Quick | TunnelConfigInput::ForgetWorker => Ok(TunnelConfig::Quick),
         TunnelConfigInput::Custom { url } => Ok(TunnelConfig::Custom { url: normalize_custom_url(&url)? }),
         TunnelConfigInput::OpenTunnel => Ok(TunnelConfig::OpenTunnel),
         TunnelConfigInput::Stable { worker_url, secret, secret_action, .. } => {
@@ -249,6 +251,38 @@ pub fn load(path: &Path) -> TunnelConfig {
         .ok()
         .and_then(|text| serde_json::from_str::<TunnelConfig>(&text).ok())
         .unwrap_or_default()
+}
+
+/// The last Worker address and secret, kept beside the setting while another mode is active, so switching away from
+/// "stable" (to automatic, your own address, ...) and back does not lose the secret the Worker already knows.
+/// Private file (same as the setting); the secret is never logged. Only "Forget this Worker" or a new secret changes it.
+pub fn memory_file(tunnel_file: &Path) -> std::path::PathBuf {
+    tunnel_file.with_file_name("potato-workspace.stable-memory.json")
+}
+
+/// Remember `config` when it is a stable one (anything else leaves the memory alone).
+pub fn remember_stable(memory: &Path, config: &TunnelConfig) {
+    if matches!(config, TunnelConfig::Stable { .. }) {
+        let _ = save(memory, config);
+    }
+}
+
+pub fn forget_stable(memory: &Path) {
+    let _ = fs::remove_file(memory);
+}
+
+/// The settings to build the next one from: while the current mode is not stable, a remembered Worker whose address
+/// is the one being saved supplies its secret. Another address never gets the remembered secret.
+pub fn basis_with_memory(input: &TunnelConfigInput, current: &TunnelConfig, memory: &Path) -> TunnelConfig {
+    if matches!(current, TunnelConfig::Stable { .. }) {
+        return current.clone();
+    }
+    let TunnelConfigInput::Stable { worker_url, .. } = input else { return current.clone() };
+    let remembered = load(memory);
+    match (&remembered, normalize_custom_url(worker_url)) {
+        (TunnelConfig::Stable { worker_url: kept, .. }, Ok(wanted)) if *kept == wanted => remembered,
+        _ => current.clone(),
+    }
 }
 
 pub fn save(path: &Path, config: &TunnelConfig) -> Result<(), String> {
@@ -499,6 +533,54 @@ mod tests {
         let fresh = config_from_input(stable_input("pm.me.workers.dev", None, SecretAction::Regenerate), &first).unwrap();
         assert_ne!(fresh.stable_secret(), first.stable_secret());
         assert_ne!(generate_secret(), generate_secret());
+    }
+
+    /// Running the guided setup again saves the same (or a re-printed) Worker address with "keep": the saved secret
+    /// the Worker already knows must survive, so a re-run never strands the link.
+    #[test]
+    fn running_setup_again_keeps_the_secret_the_worker_already_has() {
+        let first = config_from_input(stable_input("https://pm.me.workers.dev/", None, SecretAction::Keep), &TunnelConfig::Quick).unwrap();
+        for again in ["https://pm.me.workers.dev", "pm.me.workers.dev/", "https://pm.me.workers.dev/"] {
+            let next = config_from_input(stable_input(again, None, SecretAction::Keep), &first).unwrap();
+            assert_eq!(next.stable_secret(), first.stable_secret(), "{again}");
+        }
+    }
+
+    #[test]
+    fn switching_away_from_stable_and_back_keeps_the_worker_secret_until_forgotten() {
+        let dir = std::env::temp_dir().join(format!("pm-tc-mem-{}", std::process::id()));
+        let _ = fs::remove_dir_all(&dir);
+        fs::create_dir_all(&dir).unwrap();
+        let file = dir.join("potato-workspace.tunnel.json");
+        let mem = memory_file(&file);
+        let stable = config_from_input(stable_input("https://pm.me.workers.dev", None, SecretAction::Keep), &TunnelConfig::Quick).unwrap();
+        save(&file, &stable).unwrap();
+        remember_stable(&mem, &stable);
+        // stable -> custom: the setting file no longer has the Worker, the memory does.
+        let custom = config_from_input(TunnelConfigInput::Custom { url: "https://pm.example.com".into() }, &stable).unwrap();
+        save(&file, &custom).unwrap();
+        remember_stable(&mem, &custom);
+        assert_eq!(load(&file), custom);
+        // custom -> stable (same Worker): the same secret comes back.
+        let input = stable_input("pm.me.workers.dev/", None, SecretAction::Keep);
+        let basis = basis_with_memory(&input, &custom, &mem);
+        let back = config_from_input(input, &basis).unwrap();
+        assert_eq!(back.stable_secret(), stable.stable_secret());
+        // Another Worker never gets that secret.
+        let other = stable_input("https://other.me.workers.dev", None, SecretAction::Keep);
+        let other_cfg = config_from_input(other.clone(), &basis_with_memory(&other, &custom, &mem)).unwrap();
+        assert_ne!(other_cfg.stable_secret(), stable.stable_secret());
+        // Start fresh (a new secret) replaces it; "Forget this Worker" clears it.
+        let fresh = stable_input("https://pm.me.workers.dev", None, SecretAction::Regenerate);
+        let fresh_cfg = config_from_input(fresh.clone(), &basis_with_memory(&fresh, &custom, &mem)).unwrap();
+        assert_ne!(fresh_cfg.stable_secret(), stable.stable_secret());
+        remember_stable(&mem, &fresh_cfg);
+        assert_eq!(load(&mem), fresh_cfg);
+        forget_stable(&mem);
+        let again = stable_input("https://pm.me.workers.dev", None, SecretAction::Keep);
+        assert_eq!(basis_with_memory(&again, &custom, &mem), custom);
+        assert!(matches!(config_from_input(TunnelConfigInput::ForgetWorker, &stable).unwrap(), TunnelConfig::Quick));
+        let _ = fs::remove_dir_all(dir);
     }
 
     #[test]

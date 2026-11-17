@@ -101,7 +101,8 @@ describe('Connect page: fixed phone address (OpenTunnel)', () => {
     const t = fakeTunnel(QUICK);
     await open(connectApi({ opentunnel_stable_link: false }, t.api));
     // The Public address card loads lazily: wait for its select instead of counting on a fixed number of settles.
-    for (let i = 0; i < 100 && options().length === 0; i++) await act(async () => { await new Promise((r) => setTimeout(r, 20)); });
+    // (real time: the lazy chunk is a dynamic import, which a microtask flush does not wait for)
+    for (let i = 0; i < 100 && options().length === 0; i++) await act(async () => void (await new Promise((r) => setTimeout(r, 25))));
     expect(options()).toEqual(['quick', 'named', 'custom', 'stable']);
     expect(document.body.textContent).not.toContain('OpenTunnel');
   });
@@ -149,6 +150,7 @@ describe('Connect page: fixed phone address (OpenTunnel)', () => {
     const t = fakeTunnel(FIXED);
     await open(connectApi({ opentunnel_stable_link: true }, t.api));
     expect(document.querySelectorAll('input[type="password"]')).toHaveLength(0);
-    expect(document.body.textContent).not.toMatch(/token/i);
+    // The address card itself has no token field for this mode (the Advanced glossary explains the word, so it is left out).
+    expect(q('[data-testid="connect-tunnel"]')!.textContent).not.toMatch(/token/i);
   });
 });

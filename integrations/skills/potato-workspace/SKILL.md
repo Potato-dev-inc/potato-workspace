@@ -73,6 +73,7 @@ Fields marked "Advanced:" in the tool schema are rarely needed:
 
 ## Ask the human
 
+- `show_artifact({title, content | path, kind?, id?})` to show the person a page you made (a report, chart, diagram, mockup, small interactive tool) as a card in your chat that opens beside it. `kind` is `html`, `markdown`, `svg` or `mermaid`. Use it for something to look at, not for a plain answer. Call it again with the same `id` to publish the next version. An agent with no tools can write the file into `<project>/.potato/artifacts/` instead. Pages run in a locked frame: no access to the app or the person's files, and no network except cdnjs, jsDelivr and unpkg for script libraries.
 - `ask_user(question, choices?)` when only the person can decide. It shows in the Potato Workspace Inbox and on a paired phone, and blocks until answered. Do not ask what you can find out yourself.
 - If a run ends `needs_input`, it carries a `prompt`. One `waiting_input` reading is not proof that the agent is blocked: call `wait_agents` with `confirm_prompt_ms: 3000` and check that the same `prompt_id` is still open. Then show it to the user with `ask_user`, and pass their choice to `answer_prompt(handle, prompt_id, choice)`. Never choose approvals for them.
 - `prompt.open_ms` says how long the prompt has been open. `last_prompt.reason` (`answered_by_person`, `answered_by_agent`, `cancelled`, `turn_ended`, `session_ended`) says why an earlier prompt went away.

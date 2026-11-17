@@ -13,6 +13,25 @@ const POLL_MS = 20_000;
 /** The phone shows fewer team rows than the desktop. */
 export const PHONE_ACTIVITY_MAX = 3;
 
+const MIN_KEY = 'pm.phone.doneToday.min';
+const HIDE_KEY = 'pm.phone.doneToday.hiddenDay';
+
+function readFlag(key: string): string | null {
+  try {
+    return localStorage.getItem(key);
+  } catch {
+    return null;
+  }
+}
+function writeFlag(key: string, value: string | null) {
+  try {
+    if (value === null) localStorage.removeItem(key);
+    else localStorage.setItem(key, value);
+  } catch {
+    // Private mode or blocked storage: the choice lasts until the page closes.
+  }
+}
+
 const num = (n: number) => n.toLocaleString('en-US');
 
 export function PhoneInboxHome({
@@ -34,6 +53,9 @@ export function PhoneInboxHome({
   const [team, setTeam] = useState<TeamCardsReply | null>(null);
   const [now, setNow] = useState(() => Date.now());
   const [all, setAll] = useState(false);
+  const [minimized, setMinimized] = useState(() => readFlag(MIN_KEY) === '1');
+  // "Hide for today": remembers the day it was hidden; it comes back tomorrow.
+  const [hiddenDay, setHiddenDay] = useState(() => readFlag(HIDE_KEY));
   const alive = useRef(true);
 
   const load = useCallback(async () => {
@@ -71,17 +93,41 @@ export function PhoneInboxHome({
   const rows = done ?? [];
   const shown = all ? rows : rows.slice(0, DONE_SHOWN);
   const events = team?.enabled ? activityRows(team.cards, [], null).slice(0, PHONE_ACTIVITY_MAX) : [];
-  if (done === null && events.length === 0) return null;
+  const hidden = hiddenDay === String(startOfDay(now));
+  const showDone = done !== null && !hidden;
+  if (!showDone && events.length === 0) return null;
+  const toggleMin = () => {
+    const next = !minimized;
+    setMinimized(next);
+    writeFlag(MIN_KEY, next ? '1' : null);
+  };
+  const hideToday = () => {
+    const day = String(startOfDay(Date.now()));
+    setHiddenDay(day);
+    writeFlag(HIDE_KEY, day);
+  };
 
   return (
     <div className="ph-ibx" data-testid="phone-inbox-home">
-      {done !== null && (
-        <section aria-label={t('inbox.doneToday')} data-testid="phone-done-today">
-          <h2 className={`${inDrawer ? 'ph-dsec' : 'ph-sec'} ph-ibx-lab`}>
-            <span>{t('inbox.doneToday')}</span>
-            {rows.length > 0 && <span className="ph-ibx-n">· {rows.length}</span>}
-          </h2>
-          {rows.length === 0 ? (
+      {showDone && (
+        <section aria-label={t('inbox.doneToday')} data-testid="phone-done-today" data-min={minimized || undefined}>
+          <div className="ph-ibx-head">
+            <h2 className={`${inDrawer ? 'ph-dsec' : 'ph-sec'} ph-ibx-lab`}>
+              <button type="button" className="ph-ibx-fold" aria-expanded={!minimized} aria-label={t(minimized ? 'inbox.phoneExpand' : 'inbox.phoneMinimize')} data-testid="phone-done-fold" onClick={toggleMin}>
+                <svg className="ph-ibx-chev" viewBox="0 0 24 24" aria-hidden="true">
+                  <path d="m9 6 6 6-6 6" />
+                </svg>
+                <span>{t('inbox.doneToday')}</span>
+                {rows.length > 0 && <span className="ph-ibx-n">· {rows.length}</span>}
+              </button>
+            </h2>
+            <button type="button" className="ph-ibx-x" aria-label={t('inbox.phoneHideToday')} data-testid="phone-done-hide" onClick={hideToday}>
+              <svg viewBox="0 0 24 24" aria-hidden="true">
+                <path d="m6 6 12 12M18 6 6 18" />
+              </svg>
+            </button>
+          </div>
+          {minimized ? null : rows.length === 0 ? (
             <p className="ph-ibx-none">{t('inbox.doneNone')}</p>
           ) : (
             <ul className="ph-ibx-list">
@@ -114,7 +160,7 @@ export function PhoneInboxHome({
               })}
             </ul>
           )}
-          {rows.length > DONE_SHOWN && (
+          {!minimized && rows.length > DONE_SHOWN && (
             <button type="button" className="ph-ibx-more" onClick={() => setAll((v) => !v)}>
               {all ? t('inbox.doneShowFewer') : t('inbox.doneShowAll', { n: rows.length })}
             </button>

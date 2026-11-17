@@ -73,6 +73,7 @@ export const settingsGeneral = {
   "labsPage.line.spaces-labs": "Chat with friends in small groups, PC to PC.",
   "labsPage.line.lend-labs": "Lend your agent sign-in to another PC, or borrow one.",
   "labsPage.line.devices-labs": "Pair another PC and run a chat or a terminal on it.",
+  "labsPage.line.far-pcs-labs": "Pair a PC on another network through your relay (needs Devices on).",
   "labsPage.line.desktop-potato-labs": "A small Potato on your desktop waves when an agent needs you.",
   "labsPage.line.agent-browser-labs": "Agents can open and click the pages of the app they build.",
   "labsPage.line.companion-vault-labs": "Companions keep a journal and a diary, and show how they feel.",

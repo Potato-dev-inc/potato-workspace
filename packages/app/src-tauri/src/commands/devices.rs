@@ -59,6 +59,13 @@ pub async fn devices_pair_answer(webview: tauri::Webview, id: u64, allow: bool) 
     dl::app_service()?.pair_answer(id, allow)
 }
 
+/// The person's pick of the matching number on the "wants to pair" sheet. Only this window can send it.
+#[tauri::command(rename_all = "snake_case")]
+pub async fn devices_pair_pick(webview: tauri::Webview, id: u64, pick: String) -> Result<Value, String> {
+    guard(&webview)?;
+    dl::app_service()?.pair_pick(id, &pick)
+}
+
 #[tauri::command(rename_all = "snake_case")]
 pub async fn devices_rename(webview: tauri::Webview, node: String, name: String) -> Result<Value, String> {
     guard(&webview)?;

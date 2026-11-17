@@ -1,0 +1,363 @@
+# Puppet Master feature list
+
+User-facing features as they exist on branch `refactor/tui-profiles` (verified against the code by grep/read on
+2026-10-12; "unverified" marks anything not confirmed in code or a live run). Status: **stable** (tested, used),
+**experimental** (works, flagged in UI/receipts), **gap** (known limitation). Orientation map: [`REPO_MAP.md`](REPO_MAP.md).
+What to test: [`TEST-PLAN.md`](TEST-PLAN.md). Format spec: [`specs/agent-definitions/`](specs/agent-definitions/).
+
+Paths are relative to `packages/app/src-tauri/src` (Rust) or `packages/app/src` (UI) unless they start with `docs/`, `scripts/`, `packages/`.
+
+## 0. Panes-first product model (PF1-PF3, decided 2026-10-12; spec `specs/panes-first/SPEC.md`)
+
+- **A normal start opens the primary window, focused and in the taskbar, like any app** (since 2026-10-30; `lib.rs` setup calls `cockpit::open_primary_window`, the same thing a tray click does: always the cockpit, whichever UI mode is active). `tauri.conf.json` still has `windows = []` because Rust builds every window. Three starts stay window-free, decided by `cockpit::startup_window` (unit-tested): a **sign-in start** (`--background`, tray only), a standalone **`--worker`** host (its own single-terminal window, nothing else) and a **headless start** (`--no-window` argument or `PUPPET_MASTER_NO_WINDOW=1`, for scripts and tests). Closing the window keeps the app in the tray and the panes running; quitting is still the tray's Quit. Everything else the user sees is the **tray icon**, the **Settings window** (Individual mode) and **one OS window per pane**.
+- **Tray icon** (`tray.rs`): menu entries `New pane` (submenu of registered agents; headless-only ones disabled and marked), `Panes` (open panes), `Settings...`, `Quit`. **Left-click opens the cockpit.** The menu model is unit-tested; clicking the real tray by hand is unverified.
+- **Settings** (Orchestration: inline in the cockpit, `components/cockpit/SettingsView.tsx`; Individual: the Settings window, `app_windows.rs`, UI `SettingsApp.tsx` via `?settings=1&tab=`): the existing Settings tabs, opening on **Agents**. In Individual mode Settings is reached from the tray or the `open_settings` command; it is not the startup window. A **second launch of the app opens the cockpit** (single-instance callback). `--new-pane <agent>` on the command line opens a pane of that agent.
+- **Visible first**: `run_agent` / `delegate_work` / `spawn_agent` default to `headless=false`; each run opens its own pane window. **Headless fallback** when the agent has no visible mode (`no_visible_mode`, e.g. Kiro) or the pane fails to launch / take the prompt (`visible_failed`); recorded as `receipt.fallback = {from:"visible", to:"headless", reason}`.
+- **Pane windows are created from Rust** (`app_windows.rs`, `pane_windows.rs`), unfocused when an agent opens them. Placement is anchor + cascade. Anchor priority: `PM_WINDOW_ANCHOR` env (dev; set from gitignored `packages/app/src-tauri/pm-dev.local.json` by `scripts/with-cargo-path.mjs`) > `settings.json` `pane_window_position` > primary monitor. Each new pane is offset from the previous one and wraps.
+- **Closing a pane window kills that pane** (no reattach to a grid).
+- **Removed from the user's path (code kept, unreachable):** main window, terminal grid, Overview/Home dashboard, in-app orchestrator sidebar, the New-session spawn menu, the `App.tsx` `pane://detach` listener. The `placement` argument is still accepted by the tools for compatibility and **ignored** (always a window).
+
+## 1. Desktop app and workspace
+
+Rows marked **obsolete** describe the legacy main-window UI: still in the tree, no longer reachable.
+
+| Feature | Where | Status |
+|---|---|---|
+| **"Used" strip** at the bottom of the sidebar: plan usage per signed-in agent and account (percent of the fullest window + time to reset, Limited, Sign-in expired, Unknown with the reason), hover for every window/plan/sign-in, click opens the agent's usage page, refresh button; Settings > General > "Show usage bar" | `usage/`, `tui/*/usage.toml`, `components/cockpit/UsageStrip.tsx`; research `docs/plans/usage-bar.md` | Codex numbers verified from local rollouts; Claude shows sign-in + screen-seen limits only (numbers need a decision); Cursor sign-in via `agent status`; not checked in the running app |
+| Tauri 2 tray app hosting real PTY panes (portable-pty + vt100), one window per pane | `pty/`, UI `TerminalApp.tsx`, `TerminalPane.tsx`; `tray.rs`, `app_windows.rs` | stable |
+| Terminal grid in a main window | UI `components/TerminalGrid.tsx`, `App.tsx` | **obsolete** (unreachable since PF3) |
+| Loopback HTTP bridge (default 127.0.0.1:17321, scans upward) shared by GUI and MCP | `bridge/` | stable |
+| Bridge port file; removed on exit only if it still names our port | `bridge/port_file.rs` | stable |
+| Single-instance guard: a second launch opens the cockpit (and handles `--new-pane <agent>`) and exits | `lib.rs` (`tauri_plugin_single_instance`) | stable (live-proven PF2/PF3) |
+| Settings: six sections (General, Agents, Orchestrator & Models, Keys, Bridge & MCP, Phone) plus a read-only "Coming later" page; every control autosaves through `settings_patch`; row search. See `docs/features/settings-redesign.md` | `components/SettingsPanel.tsx`, `components/settings/sections/*Section.tsx` | stable |
+| Pane exit is detected by an exit watcher as well as ConPTY EOF, so a dead pane closes at once | `pty/registry/spawn.rs` (exit watcher) | stable |
+| Pane windows: one per pane, created from Rust (no main webview needed), unfocused for agent runs, anchor + cascade placement, close when the pane exits; closing the window kills the pane; backend sweeps stragglers | `pane_windows.rs`, `app_windows.rs`, UI `lib/detached-close.ts`, `TerminalApp.tsx` | stable |
+| Pop-out opened through the main window's `pane://detach` listener | UI `lib/detached-pane-window.ts`, `App.tsx` | **obsolete** (replaced by Rust-created windows) |
+| Tray icon + menu (New pane / Panes / Settings... / Quit), left-click opens the cockpit | `tray.rs` | stable (menu model tested; real tray clicking not human-verified) |
+| Standalone Settings window on the Agents tab | `app_windows.rs`, UI `SettingsApp.tsx`, `lib/settings-entry.ts` | stable |
+| Window anchor for pane windows: `PM_WINDOW_ANCHOR` > `settings.json` `pane_window_position` > primary monitor, then cascade | `app_windows.rs`, `settings_store.rs`, `scripts/with-cargo-path.mjs` | stable |
+| Dev windows (Settings, panes) open on the secondary (left) monitor via the anchor in gitignored `packages/app/src-tauri/pm-dev.local.json` -> `PM_WINDOW_ANCHOR` (`tauri.dev.local.json` is the legacy main-window override) | `scripts/with-cargo-path.mjs`, `app_windows.rs` | stable (machine-specific coordinates) |
+| Mobile PWA: agent tabs ("All" overview with status, project, last output age and last screen lines; one tab per pane with the live terminal and input box; "+" opens any registered agent on the PC, menu closes the current one; no orchestrator control) | UI `PwaApp.tsx`, `components/mobile/`, `lib/mobile-agent-tabs.ts`; bridge `GET /agents/types` (sessionless read) | verified on an Android emulator through the Cloudflare tunnel and in headless Chrome as an iPhone |
+| Live output to remote phones: loopback uses SSE (`/events`); any remote host long-polls `GET /events/poll?cursor=&wait_ms=` (Cloudflare quick tunnels never pass SSE through); a missed stretch (`gap`) re-reads the pane list and replays the terminal | `bridge/event_log.rs`, `bridge/http.rs`, `lib/bridge-sse.ts` (`subscribeBridgeEventsViaPoll`) | verified through the tunnel (PC typing shows on the phone in about 1 s) |
+| Phone-sized panes: while a phone shows an agent's tab the pane is resized to the phone's grid and the agent redraws for it; the terminal resizes in place (keyboard and stream survive), sized from cell arithmetic; no local echo, so the phone shows exactly what the agent drew | `pty/viewer_size.rs`, bridge `POST /panes/{id}/viewport`, `hooks/usePaneViewportLease.ts`, `TerminalSession.measureFitGrid` | verified (emulator 56x56 -> 56x32 with the keyboard up, typing/erasing identical to the PC) |
+| Several phones on one pane share the smallest grid (per-viewer leases, tmux-style); a leaving or silent phone (15 s) hands the pane to the others, the last one restores the desktop size | `pty/viewer_size.rs` (`Leases`), viewer id in `usePaneViewportLease.ts` | verified against the bridge (56x56 + 48x21 -> 48x21, no flipping) |
+| Keyboard: the shell follows the visual viewport (tab strip stays, terminal gets shorter, input above the keyboard); Android uses `interactive-widget=resizes-content`; the input guard sees an Android keyboard close as the page getting shorter and a tap re-shows a hidden keyboard | `PwaApp.tsx` (`.pwa-shell--fit-visual`), `terminal/mobile-input-guard.ts` (`reserveKeyboardSpace: false`, `keyboardObscuredPx`) | verified on the emulator; iPhone only in emulation |
+| PC pop-out while a phone holds the pane: "Sized for your phone" notice instead of a mismatched grid; desktop and phone resizes notify the windows | `PaneInfo.viewer_held`, `components/TerminalViewport.tsx`, `bridge::notify_pane_resized` | verified on screen |
+| Legacy mobile PWA (orchestrator chat / Panes), kept as a backup at `?pwa=legacy` | `PwaLegacyApp.tsx`, `components/pwa/` | backup; waits for an orchestrator pane nothing starts since PF3 |
+| Mobile pairing/tunnel (cloudflared quick tunnel, new URL on every app start) | `MobilePairingPanel.tsx`; `mobile_pairing/`, `mobile_tunnel.rs`, `pwa_server.rs` | in use (paired Android phone and emulator); a paired phone may type into panes a `run_agent` manages |
+| Crews (team templates): "Save this team" in the session rail's Helpers card turns a pane and its helpers into a crew (agent per role, first task with the folder as `{folder}`, redacted; edited in a sheet), saved as `<app data>/crews/<slug>.toml`; "Start crew…" in the palette starts a crew in a folder, lead first, each helper under its parent's pane, stopping at the first failure; any registered agent, wizard-added ones included; trust and permission questions of started panes are never answered | `crews/`, `commands/crews.rs`; UI `components/cockpit/crews/`, `lib/crews-api.ts` | experimental |
+| Live Room: share the chat of 1 to 6 panes as a read-only link, end-to-end encrypted through a relay, secrets and folders hidden, stops by time, idle, Stop, panic or app quit; relays: the axum binary and the Cloudflare Worker | `live_room/`, `commands/live_room.rs`, `relay/viewer/`, `relay/worker/src/room.ts`; UI `components/cockpit/live/`, `lib/live-room.ts`; doc [`features/live-room.md`](features/live-room.md) | experimental (no live run on a relay yet) |
+| Home dashboard with an Agents overview card | UI `components/HomeDashboard.tsx`, `AgentsOverviewCard.tsx` | **obsolete** (Overview unreachable) |
+| Review Desk: one list of finished agent work (separate copies, Night Shift tasks, issue runs waiting for the push, turns in your folder), riskiest first, with Keep, Ask to fix and Throw away (10 s Undo). Nothing merges by itself. Doc [`features/review-desk.md`](features/review-desk.md) | `review_desk/`, `commands/review_desk.rs`; UI `components/cockpit/review/`, `lib/review-desk*.ts` | being built (engine and commands on the branch; window, sidebar count, phone route and phone card not wired yet) |
+
+## 1a. Point and Fix (preview, pick, send)
+
+Point and Fix lets you see your app inside Puppet Master, point at the part that is wrong, and say what should change. The message goes to the agent you choose. Where it lives: `point/` (Rust, see [`REPO_MAP.md`](REPO_MAP.md) 3.8), the Point box window (`components/point/`), and the preview windows (`preview-*`, no Tauri access for the page).
+
+**Status: built, only partly checked live.** The page side (the picker, the component and source file, the reload and find-again) was run headless against a real Vite + React sample app (2026-11-15, `docs/TEST-PLAN.md` section 2.8, "Headless page check"). The windows (preview, Point box, screenshot crop, a real agent turn) have not been run live yet, so rows below that need them stay **being built**.
+
+| Feature | Where | Status |
+|---|---|---|
+| Open a dev server that the pane printed (Preview chip, a job's port chip, or the palette) in its own window; only `localhost`, `127.0.0.1` and `[::1]`; never Puppet Master's own ports | `point/origin.rs`, `commands/point.rs` (`point_open_preview`), `pane_preview.rs`, `pane_jobs/` | being built |
+| Point (Alt+P): hover shows the element name, click picks it; selector, text, styles, component and source file when the dev build shows them (React, Svelte, Vue, Astro, data attributes) | `point/picker.js`, `point/pick.rs`, `point/source.rs` | being built |
+| Screenshot of the picked element, cropped natively; saved in `<project>/.puppet-master/shots/` (git-excluded, newest 50 kept) | `point/capture.rs`, `point/shot.rs` | being built; **Windows only** in v1 (macOS and Linux get the text facts with no picture) |
+| Point box: a cropped picture, "What should change?", up to 3 picks, Enter sends, Esc hides | `point/box_window.rs`, `components/point/PointBox*.tsx` | being built |
+| Send to any agent pane through the pane outbox (waits until the agent is free; refused when the outbox refuses); the image is passed as a file path | `point/message.rs`, `point/target.rs`, `pane_outbox/` | being built |
+| Send to a **chat** pane (ACP): the note, the element facts and the cropped screenshot go in as one message with the picture attached (the chat attachment path, so it shows as a thumbnail in the sent message and reaches an agent that takes images). A chat is listed by its task name and is the default when it started the dev server. | `commands/point.rs` (`outgoing`), `point/message.rs` (`Shots::Attached`), `point/target.rs` (`chat`), `attach/` | built; unit tests; not run with a real agent |
+| Check it again: after the chat agent's turn ends, the preview reloads and the Point box shows a before and after strip of the same element (click to enlarge, Check again, Close). Chat panes only. | `point/recheck.rs`, `point/recheck_live.rs`, `components/point/RecheckStrip.tsx` | built; the wait and the page script are tested; the window part is not run live |
+| Edit in Chat (text goes into that pane's Chat composer as a draft) and Copy (for protocol panes and panes an agent run controls) | `point/session.rs`, `lib/composerDraft.ts`, `ChatComposer.tsx` | being built |
+| Blocked links: any link or new window that leaves the local app is stopped, with a notice; **Open in browser** only on your click | `point/origin.rs` (`nav`), `point/window.rs` | being built |
+| Privacy: the page never gets Tauri access; form values and password text are never read; page text goes through redaction; the page's words are marked as data in the message | `point/picker.js`, `point/pick.rs`, `point/message.rs`, `capabilities/default.json` | being built (tests pin each rule) |
+| Not in v1: phone Point, image input per agent profile, source maps, preview inside the cockpit, macOS/Linux screenshots | spec section 3.9 | planned (v2) |
+
+## 1a2. Agent browser (Labs "Agent browser", P0 + P1; N5-23)
+
+Agents open, read and click the pages of the app they are building, in the same preview window as Point and Fix (Point is a button in it). Where it lives: `browser/` (Rust, see [`REPO_MAP.md`](REPO_MAP.md) 3.8), the tools `browser_open`, `browser_read`, `browser_click`, `browser_type`, `browser_console` (catalog `tool_registry/catalog/browser.rs`, bridge route `bridge/routes/browser_mcp.rs`; the same for every agent).
+
+**Status: built; P0 proof run live and headless, P1 tool flow run live headless. Not yet filmed with a real agent; not checked on a visible screen.**
+
+| Feature | Where | Status |
+|---|---|---|
+| In-process DevTools (`CallDevToolsProtocolMethod`): no debugging port is open (proved: the WebView2 processes carry no `--remote-debugging-port` and listen on no TCP port) | `browser/cdp.rs`, `tests/browser_live_e2e.rs` | proven live (hidden window) |
+| Read the page as a short list with ids (`e4 button "Save"`), or as text. Long pages are cut. Ids survive a re-read; a stale id is found again by role and name | `browser/tree.rs`, `browser/page.rs` | built |
+| Click is a real mouse click in the middle of the element; type is real typing. Never into a password, card or one-time code box (`SENSITIVE_FIELD`) | `browser/page.rs`, `browser/guard.rs` | built |
+| Console: errors, crashes and failed requests, and what is new since the last look | `browser/console.rs` | built |
+| Pages on this computer only (`localhost`, `127.0.0.1`, `[::1]`), never the app's own ports; anything a page says is wrapped as untrusted data | `browser/guard.rs` | built |
+| Orange bar "<agent> is using this page" with Take over, Stop and a step list; a click or key press by the person pauses the agent; Give back lets it go on | `browser/driver.rs`, `browser/bar.rs`, `browser/agent_bar.js` | built; the bar follows the system language (English, Traditional Chinese) |
+| One audit line per step (`browser.step`: who, what, site; never typed text) | `browser/live.rs`, `audit/mod.rs` | built |
+| Labs switch Settings > Early features > Agent browser (`agent_browser_enabled`; a development build reads it as on) | `settings_store.rs`, `GeneralSection.tsx` | built |
+| Not yet: outside sites, sign-ins, per-project browsers, screenshots, a tab inside the right panel, phone watching | AI-BROWSER-1114 P2/P3 | planned |
+
+## 1a3. Mark up pages (Labs "Mark up pages", `markup_bar_enabled`; design `design-1117/MARKUP-BAR.md`)
+
+Draw and point on a page an agent made, then send it back to the chat that made it. One floating bar, bottom-centre of the page area (artifact pane, the artifact's own window, the agent browser window): Select (the Point picker), Pen, Shape (rectangle, arrow, ellipse), Text note, Colour, Undo, Clear, Send to chat, Close. Keys: V P R A O T, Ctrl+Z, Ctrl+Enter, Esc steps back, Ctrl+Shift+M opens and closes. Send makes ONE picture (page plus numbered marks, bar hidden) and one message with a numbered line per mark (selector, and the agent browser's `Ref: eN` when the agent has read the page). Nothing is sent by drawing; Send needs a click or Enter in the send row. Marks hold scrolling and a pane resize clears them (v1). The Select outline is one box that moves with a short spring (off with Less motion).
+
+| Part | Code | Status |
+|---|---|---|
+| Pure model: marks, undo, Esc ladder, key map, message lines | `lib/markup/model.ts`, `markup-spec.json` (shared with the injected bar) | built |
+| Bar, layer, send row over the page; Mark up button; Point is the Select tool (`PICK_SCRIPT` reports `rect`, answers "what is at x,y", holds scroll) | `components/markup/`, `ArtifactTab.tsx`, `ArtifactBody.tsx`, `SandboxFrame.tsx`, `lib/artifact-point.ts`, `styles/markup.css` | built |
+| Picture + send (chat agent: attachment; terminal agent: file name in the text) | `markup/{shot,store}.rs`, `commands/markup.rs` (`markup_capture`, `markup_send`) | built, not run live |
+| Open in menu: beside the chat / its own window / agent browser; the page is served at an app-only address (custom scheme `potato-artifact`, no socket, per-tab in-memory token, GET only, sandbox CSP) | `components/artifacts/OpenInMenu.tsx`, `artifacts/serve.rs`, `commands/artifacts_view.rs`, `browser/guard.rs` (the one allowance), `browser/chrome*.{rs,js}` (chip, Back to side pane) | built, not run live |
+| `browser_open { artifact }` for an agent's own page | `browser/live.rs`, `tool_registry/catalog/browser.rs` (rebuild the MCP exe) | built |
+| Same bar in the agent browser window (closed shadow root, top document only, pauses the agent, blanks password/card/code boxes in the picture, `To:` list when no chat owns the page) | `markup/{bar.rs,bar.js,live.rs}`, `point/message_marks.rs`, `point/window.rs` | built, not run live |
+| Not yet: marks that move with the page, the Point box window is still used for Point preview windows of dev servers | | open |
+
+## 1b. Text your agents (Telegram) and Clip It
+
+Limits and how to test: the feature pages.
+
+| Feature | Where | Status |
+|---|---|---|
+| Text your agents (Telegram): pair one private chat, see what needs you, answer low-risk questions, send text to agents. Off by default. Telegram's servers can read the message text. | `channels/`, `commands/channels.rs`, `bridge/routes/channels.rs` ([`features/telegram.md`](features/telegram.md)) | **early**: the engine and the commands are in; the Settings block and the phone row are not on any screen yet; not run live with a real bot |
+| Tag Your Agent: tag the bot in an approved Telegram group and your own agent answers in the thread (read-only, capped, off by default). | `channels/engine/group.rs`, `channels/setup_tag.rs`, `components/settings/blocks/TelegramTagBot.tsx` ([`features/tag-your-agent.md`](features/tag-your-agent.md)) | **early**: phase 1, tested with a fake bot; not run live |
+| Clip It: a 20 to 28 second video of one finished turn, made on the PC. Secrets and folder paths are hidden before drawing. You preview it, then save it to a file you pick. Nothing is uploaded. | `clip/`, `commands/clip.rs`, `lib/clip*.ts`, `components/chat/ClipSheet.tsx` ([`features/clip-it.md`](features/clip-it.md)) | **experimental**: unit tests and fakes only; no live run yet |
+
+## 1c. Search across chats and old chats (Bring All My Chats)
+
+Full page: [`features/bring-all-my-chats.md`](features/bring-all-my-chats.md).
+
+| Feature | Where | Status |
+|---|---|---|
+| Ctrl+Shift+F search across chats that were open while the app ran (FTS5, redacted, newest 50 000 items) | `chat_index/`, `commands/session_chat.rs` (`chat_search`), `components/cockpit/Palette.tsx` | stable |
+| "Bring my chats": pick an agent, see its 10 newest chats (title, folder, date, messages), tick some or bring a time range (7 days, 30 days, 3 months, all, custom), progress, Why? fold, never twice; reached from the palette, Settings (General and Agents), the empty chat list and the New agent page | `chat_index/import/` (`browse.rs`), `commands/chat_import.rs`, `components/history/BringChatsPanel.tsx` | experimental (checked on this PC's real Claude, Codex and OpenCode stores; no live app run) |
+| Claude Code old chats (`~/.claude/projects`, `CLAUDE_CONFIG_DIR`); sidechains skipped | `tui/claude/history.rs`, `session_chat/history/file.rs` | experimental |
+| Codex old chats (`~/.codex/sessions`, `CODEX_HOME`; plain file preferred over `.zst`) | `tui/codex/history.rs` | experimental |
+| OpenCode old chats from its SQLite database (read-only; parent sessions only) | `tui/opencode/history.rs` | experimental; table names from the installed OpenCode 1.19.0 binary, not a live database |
+| TOML agents bring old chats with `[session_chat.history]` (off by default until switched on) | `session_chat/declared/history*.rs`, `packages/app/src-tauri/src/tui/declarative/DEFINITION-FORMAT.md` 6.1 | experimental |
+| Old chat hits in search carry the "Old chat" tag; choosing one opens a read-only view at the message | `components/cockpit/ChatHits.tsx`, `components/history/ImportedChatSheet.tsx` | experimental |
+| "Continue in a pane" for an old chat: starts the agent with its own resume option (Claude, Codex, OpenCode, TOML agents that declare one); nothing is typed | `session_chat/history/open.rs` (`resume_plan`), `components/history/ImportHost.tsx` | experimental |
+| Remove imported chats (Settings > General and the panel); "Clear search index" removes them too | `commands/chat_import.rs` (`chat_import_clear`), `components/settings/blocks/BringChatsSettings.tsx` | stable |
+| Old chats are never in the companion's recall, MCP, team or bridge answers (companion uses `search_in`) | `chat_index/store.rs` (`search_in`), guard tests in `session_chat/history/guard.rs` | stable |
+| Phone search (`GET /chats/search`) never shows old chats (`search_live`, `Reach::LiveOnly`) | `bridge/routes/chats.rs`, `chat_index/store.rs` | done |
+| First-start card "Bring your chats here" (Inbox, once) | `components/cockpit/ImportChatsCard.tsx` | done |
+
+## 1d. Scores on your code
+
+Limits and how to test: the feature page.
+
+| Feature | Where | Status |
+|---|---|---|
+| Scores on your code: which agent works best in one project, from this PC's own history. Plain counts per agent and account (turns, ended OK, checks green, merged, undone, per merged change, asked you). Small samples show `-` or "early"; no ranking, no overall score. Undone stays empty until Undo writes the undo log. | `scores/`, `commands/scores.rs`, `components/cockpit/AgentScores.tsx`, `lib/agent-scores.ts` ([`features/agent-scores.md`](features/agent-scores.md)) | **experimental**: unit tests only; no live run yet |
+| Pick for me: the first row of the "+" menu suggests one agent for this project, from your own Scores (last 90 days), and says why in one plain sentence. Says "too early" and uses your usual agent when there is little history. Nothing starts until you press Start; nothing you type is read or sent; nothing is stored. | `scores/pick/`, `commands/scores.rs` (`pick_agent`), `components/cockpit/NewAgentMenu.tsx`, `lib/pick-for-me.ts` ([`features/pick-for-me.md`](features/pick-for-me.md)) | **experimental**: unit tests only; no live run yet; desktop app only |
+
+## 1e. Night Shift (Preview)
+
+Full page: [`features/night-shift.md`](features/night-shift.md). Off by default (Settings > General > Labs > Night Shift).
+
+| Feature | Where | Status |
+|---|---|---|
+| Tonight sheet: up to 10 tasks (project, words, agent, the project's declared tests, turns, minutes), the plans to use (one login per company), a stop time, start now or at a time, 1 or 2 at once, keep the computer awake (asked once) | `components/cockpit/night/` (`TonightSheet`, `TestsPopover`, `PlansPicker`), `commands/night.rs` + `commands/night/start.rs` | experimental |
+| The runner: each task is a mission in its own separate copy (or one turn when no tests are declared); one task per plan and per project; no new try in the last 25 minutes; a usage limit waits 3 minutes, then the task goes once to a plan of another company or waits for the reset; a stop time cuts running tasks off and keeps their copies | `night_shift/` (`runner`, `plan`, `io_live`, `checks`) | experimental: runs end to end with fake agents (`tests/fake_tui_night.rs`); no live night with real agents yet |
+| Never answers a trust, permission or sign-in screen and never merges: a gate ends the try as `Needs a look`, the pane stays open; Keep and Throw away are desktop commands only | `night_shift/` (no write path into a pane), `night_shift/review.rs` | experimental (flight-log test: no `gate_answer`) |
+| Sidebar chip: running, waiting, scheduled, needs you, finished; Stop | `components/cockpit/night/NightChip.tsx` | experimental |
+| Morning page: summary line, groups (ready, needs a look, didn't run), per-task detail, Keep (merge into the project's branch), Throw away, Keep all that pass, history of 14 nights, save as a redacted page | `components/cockpit/night/MorningPage.tsx`, `night_shift/review.rs`, `night_shift/page.rs` | experimental |
+| Quiet night and one morning push with counts only (never task text, names or paths); skipped when the Morning page was opened first | `night_shift/quiet.rs`, `push/night.rs` | experimental |
+| Phone card: the redacted summary and one row per task from `GET /night`; Stop (needs `control`, asks once more) through `POST /night/stop`; no Keep or Throw away | `bridge/routes/night.rs`, `components/mobile/NightSummary.tsx` | experimental |
+
+## 1f. Labs (off by default; Settings > Labs)
+
+| Feature | Where | Status |
+|---|---|---|
+| Assign an issue: a GitHub label from you or someone on your list starts an agent in a separate copy, after you say yes. The agent cannot push. Puppet Master opens a draft PR (`gh`, your own sign-in) and never merges. Held runs and risky changes always ask. ([`features/assign-an-issue.md`](features/assign-an-issue.md)) | `issue_intake/`, `commands/issue_intake.rs`, `pty/env_guard.rs`, `worktrees/harden.rs`, `components/settings/blocks/AssignIssueSettings.tsx`, `components/cockpit/IssueCard.tsx` | **experimental**: unit tests with a fake GitHub and a fake world; no run against real GitHub yet |
+| Red to Green: when CI fails on a pull request Puppet Master opened from its own copy, the same agent can fix it after you say yes. The agent works in the copy and cannot push. Every push is asked; CI and git-settings changes hold it. Puppet Master uses your `gh` sign-in and never merges or re-runs CI. ([`features/red-to-green.md`](features/red-to-green.md)) | `ci_fix/`, `commands/ci_fix.rs`, `worktrees/service.rs` (`pr_push_fix`, the `on_pr_opened` hook), `worktrees/harden.rs`, `questions/`, `components/settings/blocks/CiFixSettings.tsx`, `components/cockpit/CiFixCard.tsx`, `components/cockpit/PrBlock.tsx` | **Labs, experimental, not live-checked yet**: wired into the app (the watcher starts in `lib.rs`, the six `ci_fix_*` commands are registered, the PR block has "Fix with <agent>" and "Watch CI"). Nothing is watched until the Labs switch is on. Tests use a fake GitHub, fake git, a bare remote and a fake agent only; no real GitHub or real agent run is recorded |
+
+## 1g. Agent Store ("More agents", Windows only)
+
+Full page: [`features/agent-store.md`](features/agent-store.md). Entry points: "+" menu > More agents, Set up agents > Browse more agents, Settings > Agents > Browse more agents, palette > Open Agent Store. Not run live yet.
+
+| Feature | Where | Status |
+|---|---|---|
+| Grid of 19 catalog agents: vendor, license, sign-in, tier chip (Tested or Basic support), search, five filter chips, one main button per card that opens the detail sheet | `components/store/` (`StoreHost`, `AgentStore`, `AgentStoreCard`, `AgentDetail`), `lib/agent-store-model.ts`, `styles/agent-store.css`, `CockpitApp.tsx` (`view === 'store'`) | experimental |
+| Catalog as data: one folder per agent under `catalog/agents/`, embedded in the app; catalog check (11 rules) as a cargo test; generator `scripts/gen-store-catalog.mjs` | `packages/app/src-tauri/catalog/`, `agent_store/catalog.rs`, `agent_store/check.rs`, `agent_store/embedded.rs` | experimental |
+| Install: vendor command shown first, confirmed, run in a visible PowerShell window; winget, npm, uv, then the vendor script last with a trust tick; then PATH refresh, health check, record, Add | `agent_install/` (`plan_for` store fallback), `components/store/useInstallChain.ts`, `components/cockpit/InstallSheet.tsx` | experimental |
+| Add to Puppet Master: writes the shipped definition, approves it as a Store approval ("Added from the Agent Store"); refuses a missing program, an unconfirmed short name, an existing file | `agent_store/add.rs`, `tui/declarative/service.rs` (`approve_as_store`) | experimental |
+| Sign in: Open starts the agent in its own pane; the Store never types into a pane or reads a credential | `components/store/AgentDetail.tsx` | experimental |
+| Check it works: the wizard's real run as a report, with a cost sentence and a Start button; keeps numbers and version only; approves nothing | `lib/agentStoreCheck.ts`, `components/store/StoreCheck.tsx`, `lib/agentWizardAuto.ts` (`dryRun`) | experimental |
+| Remove from Puppet Master (the Store's own file only; recoverable from Settings > Agents) and Uninstall the program (only for a program the Store installed, through winget, npm or uv) | `agent_store/add.rs` (`remove_in`), `agent_store/uninstall.rs`, `agent_install/plan.rs` (`plan_uninstall`) | experimental |
+| Store record `<app data>/agent-store.json`: ids, install method and package, versions, dates, counts only | `agent_store/record.rs` | experimental |
+| Desktop only: nine Tauri commands; no bridge route, no MCP tool (grep test) | `commands/agent_store.rs` | experimental |
+| Publisher check for npm and PyPI names (network, maintainer, before a release) | `scripts/store-verify-publishers.mjs` | experimental |
+| Known gap: built-in cards (Claude Code, Codex, Cursor Agent, OpenCode) show the vendor name as the title; the four also show the Tested chip with `windows_tested = false` | `agent_store/catalog.rs` (`label`), `catalog/agents/{claude,codex,cursor_agent,opencode}/entry.toml` | gap |
+| Not in the catalog: Amp, Grok CLI, Codebuff (vendor facts not confirmed), Antigravity CLI (no confirmed install source) | `catalog/agents/` | gap |
+
+## 1h. Focus Time (Preview; UI word "Focus")
+
+Full page: [`features/focus-time.md`](features/focus-time.md). Press Focus for 25, 45 or 90 minutes (45 by default) and
+agents keep working. Pings that can wait are held; cards that block an agent still show, and reach the phone and Telegram
+without a buzz. One summary at the end. A person starts it; no agent can.
+
+| Feature | Where | Status |
+|---|---|---|
+| Focus note at the top of the Inbox: chips, `Focus · 31 min left`, `+15 min`, `End Focus` | `components/cockpit/FocusNote.tsx`, mounted in `Inbox.tsx` | experimental (live check not run) |
+| Sidebar pill while on (`Focus 31m`, menu with `+15 min` and `End Focus`); palette rows; tray `Focus` submenu and tooltip | `FocusPill.tsx`, `palette-focus.ts`, `tray.rs` | experimental |
+| Three tiers: Hold (run ends, companion replies, the Night Shift push), Quiet (blocking cards: trust, questions, limits, medium and low approvals; phone and Telegram without a buzz), Through (stuck runs, budget, high-risk approval, consent, tamper, answers) | `attention/focus/policy.rs` | experimental |
+| One reminder after 20 minutes for a quiet card still open (counts only; only while the quiet switch is on) | `attention/focus/nudge.rs`, `scan.rs` | experimental |
+| End summary: one desktop card `While you focused`, one phone push `Focus is over` (counts only), one Telegram note; an empty session shows nothing | `attention/focus/summary.rs`, `turn_summary/`, `push/focus.rs`, `channels/notify.rs` | experimental |
+| Phone bar at the top of the All view: start, `End`, the end summary with `Got it`; the phone reads counts only | `components/mobile/FocusBar.tsx`, `bridge/routes/focus.rs` (`GET /focus`, `POST /focus/start|extend|end`) | experimental |
+| Settings > General > Focus Time: default length and the quiet switch | `components/settings/blocks/FocusSettings.tsx`, `commands/focus.rs` | experimental |
+| Restart: resumes inside the window; the summary waits after the end; a damaged state file means Focus off | `attention/focus/live.rs`, `store.rs` | experimental |
+
+## 1i. Linux Inside (run agents in Linux, WSL 2, Phase 1)
+
+Full page: [`features/linux-inside.md`](features/linux-inside.md). Settings > Agents > Run agents in Linux (WSL). File map: `REPO_MAP.md` section 3.15. Not run live yet; end-to-end test (WSL-17) in progress on `feat/wsl-e2e`.
+
+| Feature | Where | Status |
+|---|---|---|
+| Per-agent `Runs on` setting (Windows default, or a WSL 2 distro); saved in `<app data>/wsl.json`; changed only in the desktop window | `wsl/settings.rs`, `commands/wsl.rs`, `components/settings/sections/LinuxRows.tsx` | experimental |
+| Distro list (`wsl --list --verbose`, cached 30 s, never starts a distro); Check boots one distro and reads its facts (git, interop, programs), cached 10 min | `wsl/probe.rs`, `wsl/parse.rs` | experimental |
+| Linux pane for Claude Code, Codex and OpenCode TUI: `wsl.exe --exec` with a fixed launcher, the folder on a Windows drive mapped to `/mnt/<d>/...`, pane chip `Linux · <distro>` | `wsl/launch.rs`, `wsl/place.rs`, `pty/registry/linux.rs`, `components/cockpit/PaneView.tsx` | experimental |
+| Only the pane id and the login PATH cross into Linux; Windows-path values and saved logins refused | `wsl/launch.rs` (`crossing`), `wsl/place.rs` | experimental |
+| Chat reads the Linux agent's session files from the Linux home; reads stop when the pane ends | `wsl/chat.rs`, `commands/session_chat.rs` | experimental |
+| Close and Keep going stop only the processes that carry this pane's id, same Linux user | `wsl/stop.rs`, `wsl/live.rs`, `pty/registry/mod.rs` | experimental |
+| A one-task run in Linux runs visible instead, with a `linux` fallback record; explicit one-task refused | `agent_runs/headless/entry.rs`, `agent_runs/headless/fallback.rs` | experimental |
+| Refused in v1: folders inside the distro, separate copies, saved logins, env guards, Hook Lane, companions, standby, WSL 1 | `wsl/place.rs` (`decide`, `resolve`), `standby/host.rs` | gap |
+| Not built yet: per-pane switch, phone chip, doctor row, old chats from Linux, PM's MCP tools for Linux agents, `run_agent` place input | Planned for Phases 2 and 3 (see the feature page) | gap |
+
+## 1j. What broke it ("What broke the tests?")
+
+Limits, guards and error codes: the feature page.
+
+| Feature | Where | Status |
+|---|---|---|
+| Today: one line for the whole day across chats and projects (a lane per project, a mark per finished turn), scrub it, see what a turn changed and what going back would change, **Go back to here** for one project (also for a closed chat; safety point first, Undo in the toast and on the line). Keeps 300 points per chat for 24 h. Phone: the same as a strip, a list by hour and a hold-to-confirm go back | `timeline/` (`journal.rs`, `http.rs`), `checkpoints/day.rs`, `checkpoints/engine.rs` (`restore_at`, `kept_count`), `commands/timeline.rs`, `bridge/routes/timeline.rs`, `components/timeline/`, `components/mobile/PhoneToday.tsx`, `lib/timeline.ts` ([`features/time-machine.md`](features/time-machine.md)) | **experimental** (Labs switch `timeline_day_enabled`): unit, screen and real-git tests pass; not run in the running app |
+| What broke it: find the first agent turn after which your declared test command fails (halving the save points, runs in a separate copy), name the turn and agent, undo only that turn (all or nothing, safety save point first), Check it again, Keep looking, Stop. Shows in Scores as "Broke the tests N times" (counts culprits, including ones later undone) | `checkpoints/bisect/` (`live.rs`, `job.rs`, `revert.rs`), `commands/what_broke_it.rs`, `scores/gather.rs`, `components/cockpit/WhatBrokeIt*.tsx`, `components/cockpit/History.tsx`, `Palette.tsx`, `CockpitApp.tsx`, `lib/what-broke-it.ts`, `tests/what_broke_it_e2e.rs` ([`features/what-broke-it.md`](features/what-broke-it.md)) | **experimental, not live-checked yet**: the `wb_*` commands, the History button, the palette row and the sheet mount are wired; unit tests and a six-scenario end-to-end test (Windows, `dev-fake-tui`) exist; nothing has been run in the running app |
+
+## 1k. Branch from here
+
+Full page: [`features/branch-from-here.md`](features/branch-from-here.md). Entry points: the Branch button on a finished chat turn, and Branch from here on a History row. Unit tests only; the fake-agent e2e and the live check are not on this branch.
+
+| Feature | Where | Status |
+|---|---|---|
+| Separate copy of the files at a save point (before or after a turn, or a History save point), with one start commit; the chat's own folder and pane are not changed | `branch_from/` (`live.rs`, `copy.rs`, `point.rs`), `checkpoints/export.rs` | experimental |
+| Fenced brief of the chat up to the save point (6 KiB, cleaned, tool output and diffs never read); shown with "Show what the agent gets" | `branch_from/brief.rs`, `branch_from/store.rs` (`briefs/`, private) | experimental |
+| Pick any installed agent (the same agent first); rows show why they cannot be picked (not installed, not runnable, out of usage) | `branch_from/offers.rs`, `components/cockpit/BranchSheet.tsx` | experimental |
+| New run with trust and shell off, no push, fresh context; a trust or login screen parks it, PM answers nothing | `branch_from/live_app.rs` (`to_run_request`) | experimental |
+| Keep warning above Merge: merging does not bring in the original chat's later work | `lib/branch-from.ts` (`branchKeepWarning`), `components/cockpit/Changes.tsx` | experimental |
+| Banners: "Branched from ..." on the new pane, "Branches: ..." on the old one | `components/chat/BranchBanner.tsx` | experimental |
+| Limits: one branch in flight per pane, 5 open copies per pane, 200 records kept | `branch_from/live.rs`, `branch_from/model.rs` | experimental |
+| Desktop only: four Tauri commands; no bridge route, no MCP tool, no phone path | `commands/branch_from.rs` | experimental |
+| Known limit: Changes (and Merge) diff against the commit before the start commit, so the save point's files are listed too | `worktrees/mod.rs` (`base_commit`) | gap |
+| Known limit: the save-point write adds unreferenced objects to the source's shadow store (spec said reads only) | `checkpoints/export.rs` | gap |
+| Not in v1: plain-folder copies, old chats, retry after a failed start, MCP / phone branches, diff of only the new agent's work | [`features/branch-from-here.md`](features/branch-from-here.md) ("Not done yet") | gap |
+
+## 1l. Collision Alert (experimental, not live-checked yet)
+
+Full page: [`features/collision-alert.md`](features/collision-alert.md). Status: the engine, the watch thread, the four Tauri commands, the 8 source-scan guard tests and the fake-agent end-to-end test (8 scenarios) are all in. No live run with real agents yet.
+
+| Feature | Where | Status |
+|---|---|---|
+| Collision Alert: tells you early when two agents change the same file in separate copies, or work in one folder. A card in the Inbox, a row above the two chats, a switch in Settings > Agents. Never pauses, stops, types into or merges anything. Desktop only: the phone does not draw its Ready-lane item | `collision/`, `components/cockpit/CollisionSection.tsx`, `components/chat/CollisionBanner.tsx`, `components/settings/blocks/CollisionSettings.tsx`, `lib/collision.ts` ([`features/collision-alert.md`](features/collision-alert.md)) | **experimental**: the commands are registered and the window and switch use them; not live-checked yet. Alerts can come late on a very busy PC (cost backoff). Desktop only |
+
+## 2. Orchestrator sidebar and coordination
+
+The in-app orchestrator sidebar and Coordination panel UI are **obsolete** (main window removed); the backend (operations, tasks, locks, standby) is unchanged and used through MCP.
+
+| Feature | Where | Status |
+|---|---|---|
+| Orchestrator backend selection (API vs CLI), OpenCode key profiles a/b | UI `OrchestratorTab.tsx`, `OrchestratorBackendSelect.tsx`; `opencode/` | stable (see `ROUTING.md`) |
+| Coordination panel: tasks, locks, pane roles, digests, session context | UI `components/CoordinationPanel.tsx`; `session_context.rs`, `bridge/routes/tasks.rs`, `locks.rs` | stable |
+| Operations hub: revisioned, restart-surviving run snapshots under `<project>/.puppet-master/operations/` | `operations.rs`, `operations/` | stable |
+| **Preload** (Settings > Agents > Keep agents ready; replaces the Performance/standby UI): master switch + per-provider checklist (Claude Code, Cursor Agent, Kilo; others listed greyed until they declare a standby mode), keep 0-2 warm each in the default project folder (the "project folder" setting), idle timeout in minutes; each warm worker is the CLI at its input box in a hidden pane **plus a pre-built hidden pane window** (`warm=1`), so tray "New pane" / a visible run only shows it (tray marks warm agents "(ready)"); a replacement warms after every claim; old `standby-pool.json` visible toggles migrate into it | `standby/` (`config.rs` PreloadConfig, `pool.rs`, `host.rs`), `app_windows.rs` (`open_warm_pane_window`), `tray.rs`, `components/settings/blocks/PreloadSettings.tsx` | experimental (off by default) |
+| Standby pool (the engine under Preload; also opt-in warm headless Claude stdin stream by hand-edited `backends[..].headless`); bridge-owned, polling policy via `read/update_orchestrator_state` bridge-owned, polling policy via `read/update_orchestrator_state` | `standby/` (`pool.rs`, `config.rs`, `host.rs`), `bridge/routes/standby.rs` | experimental (off by default; Cursor headless cannot be pre-launched) |
+| **Standby helpers** (helpers you make yourself): hover an agent in the sidebar, press + (or its row menu), Agent + Model + Enter. The helper waits Ready under that agent, uses no tokens, and the next matching `run_agent` takes it. Optional role name; with none it is named "<Agent> · <model>". Row states Ready / Working / With you / Starting / Resting / Can't start; row menu Open, Rename, Model, After a task, Move under, Remove (Undo); a finished helper offers Keep on standby. A standby is a seat: a matching `run_agent` from the agent it sits under (same agent type whatever the lane wording, no model named or the seat's model) runs IN the standby, in its own chat; no new helper is started, the row never moves, and after the task it is Ready again with clean memory (its finished chat stays open as a normal helper with no standby tag; the standby is never closed or replaced). Open one and send a message to use it yourself; while your turn runs no agent takes it, and your turn is never stopped. A helper's result always comes back through the tools (the `run_agent` result, or its handle with `wait_agents`), never as a typed prompt. When a helper stops on a permission question the wait ends early with the prompt (title, options, prompt_id) and the agent that started it may answer with `answer_prompt` (setting "Let the agent that started a helper answer its questions", on: allow once and any no; always-allow, delete, push and outside-project asks stay with the person). Row menu: Remove from <agent> (it keeps running as a warm agent on the quiet "N warm" line at the bottom; Make standby for… puts it back) and Close (stops it). A starting row says the stage (Starting program, Connecting, Opening session, Setting model). Adding a standby starts it at once. Every seat decision is one line in `standby-seat.log`. Settings > Agents keeps the list and limits | `standby/helpers.rs`, `acp/warm/helpers.rs`, `commands/standby_helpers.rs`, `components/cockpit/{standby-rows.ts,SidebarStandbyRow.tsx,AddHelperPopover.tsx}`, `components/chat/TakeoverBanner.tsx`, `lib/standbyHelpers.ts` | works |
+
+## 3. MCP server and tools
+
+The stdio shim `puppet-master-mcp` (`bin/puppet-master-mcp.rs`, `mcp_shim/`) advertises the catalog in `tool_registry/catalog/` and
+maps each tool to a bridge route; `catalog_version` is pinned (`72-ffde8e7c2c763567`, 72 tools; the four Team tools are advanced-tier). `set_mode` limits a connection to agent, shell or both.
+Port discovery: the shim reads the port file and, if that port is dead, probes 17321-17330.
+
+**Helper tools ready inside every agent pane (`pane_mcp/`, `tui/pane_mcp.rs`, `tui/<agent>/`; setting `pane_mcp_enabled`, Settings > Agents, on by default)** - a Claude Code, OpenCode or Codex pane (and a TOML agent with `[pane_mcp]`) is launched with Puppet Master's own MCP server for that launch only, so "use Puppet Master helpers" works with no setup. Per launch: Claude `--mcp-config <app data>/pane-mcp/<pane>.mcp.json` + `--append-system-prompt` note, OpenCode `OPENCODE_CONFIG_CONTENT` (config + a note file in `instructions`), Codex three `-c mcp_servers.puppet-master.*` overrides (no note: `developer_instructions` would replace the person's). The entry names this app's bridge port file and the pane id (`PUPPET_MASTER_PANE_ID`), so a helper nests under the pane; the person's own config files are never written and their own servers and `OPENCODE_CONFIG_CONTENT` stay. Not added: Linux (WSL) panes, builds with no bundled MCP server, Cursor Agent (only config files, no per-launch way). Stable; the three launch flags were checked live (Claude 2.1.314, OpenCode 1.19.0, Codex 0.162.1) - a full pane run through the real app is unverified.
+
+**Agent mode (`catalog/agents.rs`)**
+- `run_agent` - start or adopt a worker with a task, returns a handle; options `headless`, `read_only`, `keep_pane`, `checks`, `locks`, `model`, `context_policy`, and **`placement` = `auto|grid|window`**: runs are visible by default (`headless=false`) and the pane opens in its own pop-out window (`placement` default `window`); `grid`/`auto` are accepted but **ignored** since PF3 (always a pop-out window); `placement` is ignored when headless. `headless=true` is the explicit opt-out and the automatic backup: a run falls back to headless once, recorded as `fallback: {from: "visible", to: "headless", reason}` on the view and the receipt, when the agent has no visible mode (`no_visible_mode`, e.g. Kiro) or the pane fails to launch / take the prompt before the turn starts (`visible_failed`; the failed pane is closed, the same operation re-queued headless). `placement` is also on `delegate_work` and `spawn_agent`.
+- `quick_ask` - one-shot read-only headless question, answer plus receipt.
+- `wait_agents` - wait on handles (completed/failed/cancelled/needs_input). `send_message` - steer the current turn. `followup_task` - next turn on the same worker/conversation. `send_agent` - compat wrapper for followup_task.
+- `answer_prompt` - answer a blocking approval prompt (handle or pane_id). `interrupt_agent` / `cancel_agent` - stop the turn, keep the handle. `close_agent` - end the session.
+- `list_agents` / `list_workers` - adoptable workers and live UI panes. `inspect_agent`, `agent_transcript` - status/context and typed transcript.
+- `take_over` / `release` - temporary manual pane control. `shell_exec` - run a command in the project dir.
+- `session_identity`, `attach_agents`, `release_lease`, `transfer_agent` - coordinator identity, reconnect, lease and ownership.
+- `set_mode` - pick the catalog (agent/shell/both).
+
+**Delegation and operations (`catalog/operations.rs`)**: `delegate_task` (validate + render prompt), `delegate_work` (async operation), `get_operation`, `wait_for_operation`, `cancel_operation`.
+
+**Panes (`catalog/panes.rs`)**: `list_panes`, `bridge_health` (also env probe + schema drift), `list_agent_contexts`, `read_agent_context`, `inspect_agent_model`, `switch_agent_model` (opencode_native), `spawn_agent` (empty pane), `read_terminal_buffer`, `write_terminal_input`, `press_key`, `kill_pane_process`.
+
+**Waits (`catalog/waits.rs`)**: `wait_for_panes`, `wait_for_model`, `wait_for_task`, `wait_for_worker`, `read_recent_events`.
+
+**Tasks and locks (`catalog/tasks.rs`)**: `create_task`, `claim_task`, `report_task_status`, `complete_task`, `list_tasks`, `acquire_resource_lock`, `release_resource_lock`.
+
+**Context (`catalog/context.rs`)**: `read_librarian_prompt`, `read_project_ir_status`, `build_context_pack`, `read_session_context`, `update_session_context`, `set_pane_role`, `read_pane_digest`, `update_pane_digest`.
+
+**OpenCode (`catalog/opencode_reply.rs`, `opencode_status.rs`)**: `reply_opencode_permission`, `reply_opencode_question`, `read_opencode_key_status`, `rotate_opencode_key`, `read_opencode_worker_status`, `read_opencode_messages`.
+
+**Orchestrator state (`catalog/orchestrator.rs`)**: `read_orchestrator_state`, `update_orchestrator_state` (standby polling).
+
+`agent_type` in every tool accepts any registered id (pattern `^[a-z][a-z0-9_]{1,31}$`); an unregistered id gives HTTP 400 `UNKNOWN_AGENT_TYPE` with `context.valid`.
+Status: stable. The `puppet-master watch` CLI (`packages/cli`) blocks a shell on a background run.
+
+## 4. Agents
+
+### 4.1 Built-in code profiles (nine)
+`tui/registry.rs` seeds them; each implements `TuiProfile` (`tui/profile.rs`): `claude`, `codex`, `opencode`, `opencode_native`, `cursor_agent`, `cursor` (IDE), `cmd`, `powershell`, `bash`. Per-agent code in `tui/{claude,codex,opencode,cursor,shell}/`; generic fallback `tui/generic.rs`; rules every profile must pass in `tui/conformance.rs`. Status: stable. Generic code never matches agent id strings (see `tui/README.md`).
+
+### 4.2 Declarative TOML agents (`tui/declarative/`)
+
+| Feature | Where | Status |
+|---|---|---|
+| Definition schema + validator (path-carrying errors, interpreter denylist, prompt-key check, `[mcp_host]` check) | `schema.rs`, `validate.rs` | stable |
+| Argv/stdin templating: the task is always one argv element (injection-proof) | `template.rs` | stable; env set/unset and stdin-task definitions are not wired (LaunchSpec has no env/stdin channel) = gap |
+| Binary resolution (PATH scan excluding cwd, npm shim to native exe, pinned binary) | `resolve.rs` | stable |
+| Selectors + output parsers (JSON lines, result extraction) | `select.rs`, `output.rs` | stable; `extract_model` parity with code profiles is a gap |
+| `[tui]` screen engine for visible runs (state tables, delivery, `[tui.layout]` sidebar crop) | `screen.rs` | experimental (visible results are screen-inferred and flagged) |
+| `DeclarativeProfile`: one `TuiProfile` per definition (strings interned via `Box::leak`) | `profile.rs` | stable (small leak per edit) |
+| Loader, source precedence (project > extra > user > bundled), `sha256:` fingerprints | `loader.rs`, `sources.rs`, `fingerprint.rs` | stable |
+| Approvals store (fingerprint + pinned binary + argv snapshot); states `needs_approval` / `approval_stale` / `active` | `approvals.rs`, `service.rs` | stable |
+| Spawn gate: re-checks fingerprint, approval, binary before every run | `registry::admit`, `TuiProfile::spawn_gate` | stable |
+| Fixture checks (`*.expect.toml`) | `check.rs`, `tests/expect.rs` | stable |
+| Hot-reload watcher (notify, 150 ms debounce, keeps the previous registry if an active file turns invalid, SSE + Tauri `agent_definitions_changed`) | `watch.rs` | stable (gap: an invalid active file skips the whole refresh, retried) |
+| Zero-config generic agents (`kind = "generic"`, experimental flag) | `loader.rs` `write_generic`, Tauri `agents_add_generic` | experimental |
+| Export/import one definition (stored zip; imports land UNAPPROVED; no network) | `loader::{export,import}_definition`, Tauri `agents_export_definition` / `agents_import_definition` | stable |
+| Recorder: Rec button in a pane header records a session and generates a redacted draft in `<agents dir>/drafts/` (drafts are never loaded or approved) | `agent_definitions_recorder/` (`mod.rs`, `snapshots.rs`, `draft.rs`, `redact.rs`), Tauri `recorder_*` in `commands/agents.rs`, UI `TerminalPane.tsx` | experimental (no bridge route; chrome candidates noisy) |
+| `[mcp_host]` writer (JSON/TOML/YAML key set, `.bak`, home/project paths only, idempotent, approved-only) | `mcp_install/declarative.rs` | library-only, no route/UI = gap |
+| Screen-read agents (visible, no native protocol): the id of a card is the question's (a spinner or counter under it does not change it); a run's reply is what follows THIS turn's task echo minus chrome / `[tui.thinking]` / tool rows; `resolved_model` from the screen, an earlier look or the scrollback; a menu no `[[tui.prompt]]` describes becomes an `unknown_question` card ("recognised by shape", options as shown, picked by `answer_prompt`) | `pane_prompt/` (`mod.rs`, `generic_menu.rs`), `agent_runs/completion.rs`, `agent_runs/headless/supervise.rs`, `tui/declarative/screen.rs` | stable |
+| Agent Wizard, screen-read extras: clean-reply, model and resize checks in the visible test; the capture measures `reprints_on_resize` and writes the flag; two permission captures (`tui_permission` file, `tui_permission_command` command, the latter checked in a second test pane) | `tui/declarative/wizard/` (`visible/capture.rs`, `visible/livetest.rs`, `features.rs`), SPEC 11.17 | stable |
+| Bundled definitions | `loader.rs` (`bundled` is empty) | none shipped; `packages/app/src-tauri/tests/agent-definitions/kilo.toml` is the proof copy installed into the user dir |
+
+**Kilo** (`kilo.toml`, kilo CLI 7.x, headless + visible) is the proof agent. **Kiro** (`kiro.toml`, kiro-cli stream-json, headless, needs `kiro-cli login`) is committed as `packages/app/src-tauri/tests/agent-definitions/kiro.toml` (install by importing it in Settings > Agents). Proven live on 2026-10-11/12: imported, reviewed and approved in the UI (customer demo video), and headless runs returned verified answers from the in-app orchestrator and from Codex as an external MCP client.
+
+### 4.3 Settings > Agents (tray > Settings window; `components/settings/blocks/AgentDefinitions.tsx`, `lib/agentDefinitions.ts`)
+Definition rows with state (needs approval / active / approval stale / invalid) and an **experimental badge**; Review & approve dialog (rendered argv, binary, warnings, diff vs approved); Revoke; **Remove** (only for agents in your own agents folder: a confirm sheet, then the file, its `<id>/` fixtures folder, `<id>.wizard.json` and the approval move to `<agents dir>/.removed/<id>-<timestamp>/`, nothing is deleted; the registry reloads at once; an Undo toast and a "Recently removed" list with Restore put it back, refusing if the file name is taken again, and the approval only returns for a byte-identical file; project and extra-folder agents show "This agent comes from <folder>" instead; `POST /agents/definitions/remove|restore`, `GET /agents/definitions/removed`, `removal.rs`); **Check with fixtures** (Kilo: 9 fixtures); Add as generic agent; Import / Export; Rec drafts list; Sources list with per-path consent switches (project folders, extra directories) and a consent banner; toasts including the no-restart "registry updated" notice. Live reload without restart via `lib/agentRegistry.ts` (`onAgentDefinitionsChanged`). Status: stable except as noted.
+
+### 4.4 Spawn menu and Overview
+The tray **New pane** submenu is built from the registry (`tray.rs`; headless-only agents disabled and marked). The legacy New-session spawn menu and the Overview Agents card (`AgentsOverviewCard.tsx`) are **obsolete** (unreachable). Status: tray stable.
+
+## 5. Run engine (`agent_runs/`)
+
+| Feature | Where | Status |
+|---|---|---|
+| Visible-first runs (`headless=false` default, pop-out window per pane) with automatic headless fallback (`fallback` in view + receipt) | `agent_runs/headless/entry.rs`, `agent_runs/headless/fallback.rs`, `operations::convert_to_headless_fallback`, `pane_windows::decide_placement` (always a window since PF3) | stable |
+| Receipts: `agent_definition` {id, fingerprint, binary}, `read_only` (enforced/...), `experimental`, authoritative vs inferred result | `agent_runs/`, `RunReceipt` | stable |
+| `read_only=true` per profile capability (`READ_ONLY_UNSUPPORTED` otherwise) | `tui` `features()` | stable |
+| `followup_task` / resume on the same provider session (`continuity: resume`) | `agent_runs/runtime/followup.rs` | stable |
+| `answer_prompt` for approval prompts in visible panes | `bridge/routes`, `pane_prompt/` | stable |
+| Package check on install approvals: the package names an install command names, look-alike names flagged offline (raises the card to High), registry facts (age, downloads, install scripts) on the desktop card. Facts only: never answers or blocks. Never auto-approves a look-alike or link install under `allowed_commands` | `prompt_risk/packages/`, `package_check/`, `components/cockpit/PackageFacts.tsx`, `agent_runs/approval_policy.rs` | experimental: the desktop lookup command is not registered on this branch (PC-13); look-alike lists hand-compiled; see `docs/features/package-check.md` (known limits) |
+| `keep_pane` (default false: a run-created pane closes after the run; `PANE_CLOSED_AFTER_RUN`) | `agent_runs/` | stable |
+| In-flight runs keep the profile they started under; editing a definition mid-run does not lose the result | `agent_runs` + `registry` (T36b) | stable |
+| Refusals `AGENT_DEF_*` (e.g. `AGENT_DEF_APPROVAL_STALE`), `UNKNOWN_AGENT_TYPE`, `AGENT_REPORTED_ERROR`, `OUTPUT_UNPARSEABLE` | `registry::admit`, `headless/finish.rs`, `tui::require_registered` | stable |
+| Visible prompt delivery waits up to 20 s for a slow TUI to draw; blank screens do not burn typing attempts | `pane_prompt/` | stable |
+| Idempotency keys, stable handles per key, acceptance `checks`, resource `locks` | `operations/`, `persist` | stable |
+
+## 6. Security
+- Definition mutations (approve, revoke, remove, restore, consent, import, reload, add generic) are local-app-only: loopback, no `X-PM-Proxied`/bearer/forwarding headers; an MCP session gets 403 `AUTHORIZATION_DENIED`; tunnel/proxy gets 401/403 (`bridge/routes/definitions.rs`, `mcp_sessions/authorize.rs`).
+- Per-path consent for project and extra directories (off by default; consent is not approval): `sources.rs`, `agent-definitions.json`.
+- Interpreter denylist (python, cmd, etc. rejected as the binary): `validate.rs`. Argv templating cannot be injected: `template.rs`.
+- Approval pins fingerprint and binary; changing either stales the approval.
+
+## 7. Scripts
+`scripts/pm-regression.mjs` (+`scripts/pm-regression/`: live regression + bench, 28 scenario runs), `scripts/pm-regression/readonly-check.mjs` (read-only enforcement parity), `scripts/check-window-monitor.ps1` (fails if any Puppet Master window is on the primary monitor), `scripts/perf-latency.mjs` / `perf-summarize.mjs` / `perf-frames.mjs` / `perf-compare.mjs` (latency baseline, `docs/perf/`), `scripts/with-cargo-path.mjs` (cargo on PATH for `tauri dev`; reads `pm-dev.local.json` into `PM_WINDOW_ANCHOR`), `scripts/build-rust-mcp.mjs`, `scripts/test-mcp-operations.mjs`, `scripts/test-mcp-package.mjs`.
+
+## 8. Known gaps (summary)
+
+Old chats (section 1c): the first-start card is not on this branch yet.
+Tray icon/menu clicking not verified by a human (model unit-tested, tray creation logged); `visible_failed` fallback proven by unit tests only, not live; pm-regression `cursor_agent timeout` can fail `WORKER_STOP_FAILED` (known flaky headless process-tree kill). Older: Env/stdin in declarative launches; `[mcp_host]` has no route; SPEC Q6 cost/concurrency note and Q7 second proof agent unscheduled; T29 skipped; `extract_model` parity; recorder has no bridge route; visible declarative results are inferred; remote/tunnel behaviour only tested with headers on loopback.

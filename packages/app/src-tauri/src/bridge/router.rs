@@ -13,6 +13,14 @@ use super::routes::{self, Ctx};
 use crate::mobile_pairing;
 use crate::pty::PaneRegistry;
 
+/// Where this app's phone server answers, for the hints on the bridge's own pages (never a guessed port).
+fn phone_server_hint() -> String {
+    match crate::pwa_server::bound_pwa_port() {
+        Some(port) => format!("http://127.0.0.1:{port}"),
+        None => "the phone server, which is not running".to_string(),
+    }
+}
+
 #[derive(Debug, Serialize)]
 struct Health {
     ok: bool,
@@ -102,7 +110,7 @@ pub(super) fn route_authorized(
             200,
             json!({
                 "service": "potato-workspace-bridge",
-                "hint": "This is the API bridge, not the mobile UI. Tunnel the Vite app (port 1420 or 4173) and use /bridge on that origin.",
+                "hint": format!("This is the API bridge, not the mobile UI. Point your address at the phone server ({}) and use /bridge on that origin.", phone_server_hint()),
                 "health": "/health",
             }),
         ));
@@ -250,7 +258,7 @@ pub(super) fn route_authorized(
             404,
             json!({
                 "error": "not found",
-                "hint": "Unknown bridge route. Mobile UI is served by Vite on port 1420/4173; API lives under /health, /events, /panes.",
+                "hint": format!("Unknown bridge route. The mobile UI is served at {}; the API lives under /health, /events, /panes.", phone_server_hint()),
             }),
         ))
     })

@@ -84,6 +84,8 @@ export interface HostingView {
   address: string;
   link?: string;
   expires_at: number;
+  /** The link goes through this person's own relay first (so "This link meets through your relay first." shows). */
+  worker?: boolean;
 }
 
 export type ActivityKind = 'connected' | 'started' | 'typed' | 'messaged' | 'answered' | 'stopped' | 'changed' | 'refused' | 'copied' | 'sent';
@@ -98,12 +100,21 @@ export interface ActivityEntry {
   kind: ActivityKind;
 }
 
+/** `code`: both screens show the same code and both press Allow. `check`: pick the number both screens show (no Allow). */
+export type PairMode = 'code' | 'check';
+
 export interface PendingPair {
   id: number;
   role: 'host' | 'joiner';
   name: string;
   code: string;
   expires_at: number;
+  /** Absent from an older build, which only sends `code`. */
+  mode?: PairMode;
+  /** Check mode: the other PC's key fingerprint, as text (e.g. "A1B2 C3D4"). */
+  fingerprint?: string;
+  /** Check mode: three 6-digit numbers; one of them is shown on both screens. */
+  choices?: string[];
 }
 
 export interface DevicesView {
@@ -189,6 +200,8 @@ export interface DevicesApi {
   cancelCode: () => Promise<DevicesView>;
   join: (address: string, code: string) => Promise<DevicesView>;
   pairAnswer: (id: number, allow: boolean) => Promise<DevicesView>;
+  /** Check mode: the person picked this 6-digit number (no space). */
+  pairPick: (id: number, pick: string) => Promise<DevicesView>;
   rename: (node: string, name: string) => Promise<DevicesView>;
   setPermission: (node: string, on: boolean, level?: DeviceLevel) => Promise<DevicesView>;
   remove: (node: string) => Promise<DevicesView>;
@@ -249,6 +262,7 @@ export const devicesApi: DevicesApi = {
   cancelCode: () => call('devices_cancel_code'),
   join: (address, code) => call('devices_join', { address, code }),
   pairAnswer: (id, allow) => call('devices_pair_answer', { id, allow }),
+  pairPick: (id, pick) => call('devices_pair_pick', { id, pick }),
   rename: (node, name) => call('devices_rename', { node, name }),
   setPermission: (node, on, level) => call('devices_set_permission', { node, capability: 'agents/remote', on, ...(on && level ? { level } : {}) }),
   remove: (node) => call('devices_remove', { node }),

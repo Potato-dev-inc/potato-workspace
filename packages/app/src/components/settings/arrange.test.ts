@@ -100,7 +100,7 @@ describe('Advanced > Early features (Labs)', () => {
     expect(labsRows().filter((r) => LABS_SWITCH_KEYS[r.id])).toEqual([]);
     expect(collectLabs(BASE_SECTIONS).map((r) => r.id)).toEqual([
       'ask-bar', 'simple-mode', 'live-updates', 'opencode-automation', 'missions', 'assign-issue', 'night-shift',
-      'red-to-green', 'spaces-labs', 'lend-labs', 'devices-labs', 'account-labs', 'desktop-potato-labs', 'agent-browser-labs', 'companion-vault-labs', 'discord-bot-labs', 'timeline-labs', 'project-guide-labs', 'markup-bar-labs', 'dock-browser-labs', 'smaller-updates-labs', 'opentunnel-labs', 'crews-labs', 'workflows-labs', 'workflow-reply-labs',
+      'red-to-green', 'spaces-labs', 'lend-labs', 'devices-labs', 'far-pcs-labs', 'account-labs', 'desktop-potato-labs', 'agent-browser-labs', 'companion-vault-labs', 'discord-bot-labs', 'timeline-labs', 'project-guide-labs', 'markup-bar-labs', 'dock-browser-labs', 'smaller-updates-labs', 'opentunnel-labs', 'crews-labs', 'workflows-labs', 'workflow-reply-labs',
     ]);
     // They were defined in different files: Agents, Keys, Phone, General, Models.
     const homes = new Set(BASE_SECTIONS.filter((s) => s.rows.some((r) => r.labs)).map((s) => s.id));
@@ -133,7 +133,7 @@ describe('Advanced > Early features (Labs)', () => {
     const arranged = arrangeSections(base);
     expect(arranged.find((s) => s.id === 'labs')!.rows.filter((r) => r.group === LABS_GROUP).map((r) => r.id)).toEqual([LABS_INDEX_ID, 'ask-bar', 'live-updates', 'opencode-automation', 'assign-issue', 'red-to-green', 'workflow-reply-labs', 'later-feature']);
     const labs = collectLabs(base).map((r) => r.id);
-    expect(labs.slice(-19)).toEqual(['red-to-green', 'spaces-labs', 'lend-labs', 'devices-labs', 'account-labs', 'desktop-potato-labs', 'agent-browser-labs', 'companion-vault-labs', 'discord-bot-labs', 'timeline-labs', 'project-guide-labs', 'markup-bar-labs', 'dock-browser-labs', 'smaller-updates-labs', 'opentunnel-labs', 'crews-labs', 'workflows-labs', 'workflow-reply-labs', 'later-feature']);
+    expect(labs.slice(-20)).toEqual(['red-to-green', 'spaces-labs', 'lend-labs', 'devices-labs', 'far-pcs-labs', 'account-labs', 'desktop-potato-labs', 'agent-browser-labs', 'companion-vault-labs', 'discord-bot-labs', 'timeline-labs', 'project-guide-labs', 'markup-bar-labs', 'dock-browser-labs', 'smaller-updates-labs', 'opentunnel-labs', 'crews-labs', 'workflows-labs', 'workflow-reply-labs', 'later-feature']);
     expect(arranged.find((s) => s.id === 'look')!.rows.some((r) => r.id === 'later-feature')).toBe(false);
   });
 

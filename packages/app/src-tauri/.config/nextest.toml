@@ -27,3 +27,24 @@ path = "junit.xml"
 [[profile.default.overrides]]
 filter = "test(=missions::an_agent_that_makes_no_progress_ends_in_the_stuck_card)"
 priority = 100
+
+# Local profile (`node scripts/dev/flakes.mjs`, or `cargo nextest run --profile local --lib`).
+# A test that fails and then passes on a retry is a FLAKE: the run stays green, and flakes.mjs writes the
+# test's name to the flake ledger (the path in FLAKES_LOG by default) so it gets fixed, not forgotten.
+[profile.local]
+retries = 2
+fail-fast = false
+# 30 s is slow, 4 periods (2 minutes) is a hang and the test is killed.
+slow-timeout = { period = "30s", terminate-after = 4 }
+failure-output = "immediate-final"
+final-status-level = "flaky"
+
+[profile.local.junit]
+path = "junit.xml"
+# Passing retries are kept in the report, so the script can tell "passed on retry" from "passed first time".
+store-success-output = false
+
+# The no-progress test ends on two 120 s round timeouts by design (see above): allow it five minutes.
+[[profile.local.overrides]]
+filter = "test(=missions::an_agent_that_makes_no_progress_ends_in_the_stuck_card)"
+slow-timeout = { period = "120s", terminate-after = 4 }

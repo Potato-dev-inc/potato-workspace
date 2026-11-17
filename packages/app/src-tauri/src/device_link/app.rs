@@ -17,6 +17,7 @@ use super::web::{self, WebCall, WebGrant};
 use super::{Deps, DeviceLink, Options, OFF};
 use crate::keys::KeyStore;
 use crate::p2p::discovery::NoDiscovery;
+use super::far_http::HttpPairRelay;
 use crate::p2p::iroh_net::IrohFactory;
 use crate::p2p::pairing::SystemClock;
 use crate::p2p::trust::TrustStorage;
@@ -94,6 +95,32 @@ impl HostBridge for AppBridge {
 pub fn web_address() -> Option<String> {
     let url = crate::mobile_tunnel::tunnel_status().public_url?;
     Some(format!("{}/bridge", url.trim_end_matches('/'))).filter(|u| web::address_ok(u))
+}
+
+/// The key that may open far-away pairing boxes on this person's own Worker (its own key in the credential store).
+pub fn pair_owner_key() -> Option<ed25519_dalek::SigningKey> {
+    KeyStore::app_scoped("far-pairing").pair_owner().ok()
+}
+
+/// Its public half: what a deployed Worker is told as `PAIR_OWNER`. Made on first use, only while the Labs switch is on.
+pub fn pair_owner_id() -> Option<String> {
+    far_pcs_on().then(|| pair_owner_key().map(|k| pm_relay_protocol::key_id(&k))).flatten()
+}
+
+/// Labs `far_pcs_enabled`, from the last settings the app applied.
+pub fn far_pcs_on() -> bool {
+    LAST_SETTINGS.lock().ok().and_then(|l| l.as_ref().and_then(|v| v.get("far_pcs_enabled").and_then(Value::as_bool))).unwrap_or(false)
+}
+
+/// This person's own Worker (the one saved for the phone's fixed address), as a plain host name. None: none set up.
+pub fn my_worker_host() -> Option<String> {
+    match crate::tunnel_config::load(&crate::tunnel_config::tunnel_file()) {
+        crate::tunnel_config::TunnelConfig::Stable { worker_url, .. } => {
+            let host = worker_url.trim().trim_start_matches("https://").trim_end_matches('/').to_string();
+            crate::p2p::far::clean_worker_host(&host, false).filter(|h| h.ends_with(".workers.dev"))
+        }
+        _ => None,
+    }
 }
 
 /// What only the person at this PC can fix, for a device that asks "who are you": agents whose saved sign-ins are all
@@ -299,6 +326,10 @@ pub fn app_service() -> Result<Arc<DeviceLink>, String> {
         project_folders: Arc::new(project_folders),
         downloads: Arc::new(downloads_dir),
         deny_paths: vec![crate::app_paths::app_data_dir()],
+        far_relay: Some(Arc::new(HttpPairRelay::new(
+            Arc::new(pair_owner_key),
+            Arc::new(my_worker_host),
+        ))),
     };
     let deps = Deps {
         keys: KeyStore::app_scoped("devices"),

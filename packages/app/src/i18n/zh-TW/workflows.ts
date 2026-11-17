@@ -32,11 +32,13 @@ export const workflows: Partial<Record<EnglishKey, string>> = {
 
   'newAgent.wf.label': '工作流程',
   'newAgent.wf.empty': '還沒有工作流程。到「小隊」頁面建立一個。',
+  'newAgent.wf.needFixing': '有些小隊需要到「小隊」頁面修正。',
   'newAgent.wf.none': '不用工作流程',
   'newAgent.wf.chip': '工作流程：{name}',
   'newAgent.wf.summary': '前台：{front}。其他：{others}。',
   'newAgent.wf.noHelpers': '沒有',
   'newAgent.wf.helper': '{name}（{when}，{kind}）',
+  'newAgent.wf.helperNoWhen': '{name}（{kind}）',
   'newAgent.wf.kind.minion': '小代理',
   'newAgent.wf.kind.spin_off': '分支對話',
   'newAgent.wf.edit': '編輯工作流程',

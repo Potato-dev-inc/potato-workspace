@@ -97,12 +97,41 @@ pub fn bridge_port_range_for(profile: Option<&str>) -> (u16, u16) {
     }
 }
 
-/// The phone (PWA) server port: the fixed 1423 for the default profile, a free one (0) otherwise.
-/// The other product uses 1422, so both can run at once.
+/// Ports a non-default profile's phone server may use. Chosen to clear everything else on a developer's computer:
+/// the default app's 1423, the other product's 1422 and Potato Bot's 1420, the dev server's 1442, the bridge ranges
+/// (17xxx) and the WebView2 debugging port (9333).
+pub const PROFILE_PWA_PORT_RANGE: (u16, u16) = (1450, 1499);
+
+/// The phone (PWA) server port this profile asks for first: the fixed 1423 for the default profile; for any other
+/// profile a port in [`PROFILE_PWA_PORT_RANGE`] worked out from its name, so it is the same on every start (an own
+/// domain or named tunnel pointed at it keeps working). The other product uses 1422, so both can run at once.
 pub fn pwa_port_for(profile: Option<&str>) -> u16 {
     match profile {
         None => 1423,
-        Some(_) => 0,
+        Some(name) => {
+            let (lo, hi) = PROFILE_PWA_PORT_RANGE;
+            // FNV-1a: tiny and fixed forever (std's hasher may change between Rust versions).
+            let mut hash: u32 = 0x811c_9dc5;
+            for byte in name.bytes() {
+                hash ^= u32::from(byte);
+                hash = hash.wrapping_mul(0x0100_0193);
+            }
+            lo + (hash % u32::from(hi - lo + 1)) as u16
+        }
+    }
+}
+
+/// Every port to try, best first: the default profile has only its own; another profile starts at its own port and
+/// then walks the rest of its range, so two profiles whose names land on the same port still both start.
+pub fn pwa_port_candidates(profile: Option<&str>) -> Vec<u16> {
+    let first = pwa_port_for(profile);
+    match profile {
+        None => vec![first],
+        Some(_) => {
+            let (lo, hi) = PROFILE_PWA_PORT_RANGE;
+            let len = hi - lo + 1;
+            (0..len).map(|i| lo + (first - lo + i) % len).collect()
+        }
     }
 }
 
@@ -450,7 +479,43 @@ mod tests {
         assert_eq!(app_data_dir_for(maya.as_deref()).parent(), app_data_dir_for(None).parent());
         let (lo, hi) = bridge_port_range_for(maya.as_deref());
         assert!(lo > 17430 && hi <= 17499, "outside the MCP shim's fallback probe range");
-        assert_eq!(pwa_port_for(maya.as_deref()), 0, "a free port, never the default app's 1423");
+        let port = pwa_port_for(maya.as_deref());
+        assert!(port != 0 && port != 1423, "a fixed port of its own, never the default app's 1423");
+    }
+
+    #[test]
+    fn a_profile_phone_port_is_stable_in_range_and_clear_of_known_ports() {
+        let (lo, hi) = PROFILE_PWA_PORT_RANGE;
+        let names = ["dev", "founder-dev", "maya", "leo-2", "e2e", "a", "b", "c", "test-profile-0123456789"];
+        let ports: Vec<u16> = names.iter().map(|n| pwa_port_for(Some(n))).collect();
+        for (name, port) in names.iter().zip(&ports) {
+            assert!((lo..=hi).contains(port), "{name}: {port}");
+            assert_eq!(pwa_port_for(Some(name)), *port, "{name} gets the same port every time");
+            for taken in [1420_u16, 1422, 1423, 1442, 9333] {
+                assert_ne!(*port, taken, "{name} must not use {taken}");
+            }
+            let (blo, bhi) = bridge_port_range_for(Some(name));
+            assert!(*port < blo || *port > bhi);
+        }
+        let mut distinct = ports.clone();
+        distinct.sort_unstable();
+        distinct.dedup();
+        assert!(distinct.len() >= 6, "different names mostly get different ports: {ports:?}");
+        assert_ne!(pwa_port_for(Some("maya")), pwa_port_for(Some("leo-2")));
+    }
+
+    #[test]
+    fn the_phone_port_candidates_start_at_the_profile_port_and_stay_in_range() {
+        assert_eq!(pwa_port_candidates(None), vec![1423]);
+        let list = pwa_port_candidates(Some("founder-dev"));
+        let (lo, hi) = PROFILE_PWA_PORT_RANGE;
+        assert_eq!(list[0], pwa_port_for(Some("founder-dev")));
+        assert_eq!(list.len(), usize::from(hi - lo + 1));
+        assert!(list.iter().all(|p| (lo..=hi).contains(p)));
+        let mut sorted = list.clone();
+        sorted.sort_unstable();
+        sorted.dedup();
+        assert_eq!(sorted.len(), list.len(), "no port twice");
     }
 
     #[test]

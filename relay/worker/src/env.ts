@@ -1,6 +1,7 @@
 import type { IpGate } from "./gate";
 import type { Room, RoomIndex } from "./room";
 import type { InviteBox } from "./invites";
+import type { PairBox, PairIndex } from "./pair";
 import type { StableLink } from "./stable";
 import type { Team } from "./team";
 
@@ -15,6 +16,13 @@ export interface Env {
   LINK: DurableObjectNamespace<StableLink>;
   /** Invite links: one object per one-time code. */
   INVITES: DurableObjectNamespace<InviteBox>;
+  /** Far-away pairing: one object per pairing link, and one for the open boxes (the cap). */
+  PAIRS: DurableObjectNamespace<PairBox>;
+  PAIR_INDEX: DurableObjectNamespace<PairIndex>;
+  /** Far-away pairing. Optional. The owner key (base64url Ed25519 public key): only its holder may open a box. Unset = the feature is off. */
+  PAIR_OWNER?: string;
+  /** Optional. Open pairing boxes at once. Default 50. */
+  LIMIT_PAIR_MAX_OPEN?: string;
   /** Stable link. Optional. SHA-256 (hex) of the secret: when set, only that secret may register. */
   SETUP_SECRET_SHA256?: string;
   /** Stable link. Optional. Register/reset attempts per address per hour. Default 30. */

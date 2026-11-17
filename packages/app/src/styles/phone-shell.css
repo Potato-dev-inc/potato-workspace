@@ -1062,3 +1062,77 @@
 .ph .ph-desk-btn:disabled {
   opacity: 0.5;
 }
+
+/* "Leave my desk" as a button in the drawer's bottom bar; its panel opens just above the bar. Tokens only. */
+.ph .ph-dfoot {
+  position: relative;
+  flex-wrap: wrap;
+}
+.ph .ph-deskwrap {
+  flex: none;
+  max-width: 100%;
+}
+.ph .ph-deskbtn {
+  display: flex;
+  width: 44px;
+  min-height: 44px;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  padding: 0;
+  border: 0;
+  border-radius: 999px;
+  background: var(--fill-active, var(--sh-surface));
+  color: var(--label);
+  font: 500 calc(var(--sh-fs) - 2px)/1.2 var(--font-ui);
+  text-align: left;
+}
+.ph .ph-deskbtn[data-away] {
+  background: var(--primary-bg);
+  color: var(--primary-fg);
+}
+.ph .ph-deskbtn svg {
+  width: 18px;
+  height: 18px;
+  flex: none;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.6;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+.ph .ph-dfoot .ph-desk {
+  position: absolute;
+  right: 8px;
+  bottom: 100%;
+  left: 8px;
+  z-index: 3;
+  margin: 0 0 6px;
+  max-height: 70vh;
+  overflow-y: auto;
+  background: var(--sh-surface, var(--bg-raised));
+}
+
+/* The desk button is icon-only (its words are for screen readers and the tooltip); the bar stays on one row at any text size. */
+.ph .ph-deskbtn-txt {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+}
+.ph .ph-dfoot {
+  flex-wrap: nowrap;
+}
+.ph .ph-dleft .ph-dusage,
+.ph .ph-dleft .ph-dpc {
+  min-width: 0;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+.ph .ph-dleft .ph-dusage > span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+}

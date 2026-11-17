@@ -195,7 +195,7 @@ fn the_core_knows_no_agent_or_capability_behaviour() {
 /// manager, the trust list and their commands have no route from agents, MCP, the phone or the CLI.
 #[test]
 fn pairing_and_its_sheet_have_no_route_from_agents_mcp_or_the_phone() {
-    let pattern = Regex::new(r"PairManager|pairing_commands|pair_answer|pair_join|pair_host_start|trust_set_permission|trust_remove|TrustList|p2p::pairing|p2p::trust").unwrap();
+    let pattern = Regex::new(r"PairManager|pairing_commands|pair_answer|pair_pick|pair_join|pair_host_start|trust_set_permission|trust_remove|TrustList|p2p::pairing|p2p::trust").unwrap();
     let src = tauri_src();
     let pkgs = packages();
     let roots = [

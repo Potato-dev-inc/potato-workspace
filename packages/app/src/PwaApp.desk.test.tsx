@@ -114,13 +114,20 @@ async function openDrawer() {
   });
 }
 const card = () => host.querySelector('[data-testid="phone-desk"]');
+const foot = () => host.querySelector<HTMLButtonElement>('[data-testid="phone-desk-foot"]');
+/** The button in the bottom bar opens the panel. */
+const openPanel = async () => act(async () => foot()!.click());
 const click = async (selector: string) => act(async () => (host.querySelector(selector) as HTMLElement).click());
 
 describe('PwaApp: Leaving my desk', () => {
   it("the drawer has the card; it switches the PC on for the chosen length and I'm back ends it", async () => {
     await openDrawer();
+    // The button sits in the bottom bar with the PC state and Settings, not as a card at the top.
+    expect(foot()!.closest('.ph-dfoot')).not.toBeNull();
+    expect(host.querySelector('.ph-dscroll [data-testid="phone-desk"]')).toBeNull();
+    expect(card()).toBeNull();
+    await openPanel();
     expect(card()).not.toBeNull();
-    await click('[data-testid="phone-desk-open"]');
     const radios = [...card()!.querySelectorAll<HTMLInputElement>('input[type="radio"]')];
     expect(radios.map((r) => r.parentElement!.textContent)).toEqual(["Until I'm back", '1 hour', '4 hours', 'Tonight, until 6 am']);
     await act(async () => radios[1].click());
@@ -132,37 +139,40 @@ describe('PwaApp: Leaving my desk', () => {
     expect(card()!.textContent).toContain('Agents the PC keeps to itself stay locked');
     await click('[data-testid="phone-desk-back"]');
     expect(sent.at(-1)).toEqual({ method: 'POST', path: '/desk-away/back', body: {} });
-    expect(card()!.textContent).not.toContain('You are away');
-    expect(host.querySelector('[data-testid="phone-desk-open"]')).not.toBeNull();
+    expect(card()).toBeNull(); // done: the panel closes
+    expect(foot()!.textContent).toBe('Leave my desk');
   });
 
   it('shows the state the PC set (set on the PC: no note about locked agents), and picks up its end', async () => {
     pc = { away: true, length: 'until_back', until_ms: null, by: 'pc', lock_screen: false, phones: 1 };
     await openDrawer();
+    expect(foot()!.textContent).toBe('Leaving my desk');
+    await openPanel();
     expect(card()!.textContent).toContain('You are away');
     expect(card()!.textContent).not.toContain('keeps to itself');
     pc = { away: false, lock_screen: false, phones: 1 };
     await act(async () => {
       await vi.advanceTimersByTimeAsync(16_000);
     });
-    expect(card()!.textContent).not.toContain('You are away');
+    expect(foot()!.textContent).toBe('Leave my desk');
   });
 
   it('a phone that may only watch sees the state and has no button to change it', async () => {
     h.caps = ['watch'];
     await openDrawer();
-    expect(card()).toBeNull();
+    expect(foot()).toBeNull();
     pc = { away: true, length: 'until_back', until_ms: null, by: 'pc', lock_screen: false, phones: 1 };
     await act(async () => {
       await vi.advanceTimersByTimeAsync(16_000);
     });
+    await openPanel();
     expect(card()!.textContent).toContain('You are away');
     expect(host.querySelector('[data-testid="phone-desk-back"]')).toBeNull();
   });
 
   it('tells the person when the PC could not be reached', async () => {
     await openDrawer();
-    await click('[data-testid="phone-desk-open"]');
+    await openPanel();
     (fetch as unknown as ReturnType<typeof vi.fn>).mockImplementationOnce(async () => ({ ok: false, status: 502, json: async () => ({}) }));
     await click('[data-testid="phone-desk-go"]');
     expect(card()!.textContent).toContain('Could not reach the PC');
@@ -172,6 +182,8 @@ describe('PwaApp: Leaving my desk', () => {
     useChinese();
     try {
       await openDrawer();
+      expect(visibleEnglish(foot()!)).toEqual([]);
+      await openPanel();
       expect(card()!.textContent).toContain('我要離開座位');
       expect(visibleEnglish(card()!)).toEqual([]);
     } finally {

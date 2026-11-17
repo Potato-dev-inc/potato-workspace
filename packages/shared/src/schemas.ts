@@ -83,6 +83,8 @@ export const SettingsSchema = z.object({
   lend_enabled: z.boolean().optional(),
   /** Devices (Settings > General > Labs): pair two Workspaces and run a chat or terminal on the other one. Off unless chosen. Rust: device_link. */
   devices_enabled: z.boolean().optional(),
+  /** Far-away PCs (Settings > General > Labs): pair a PC that is not on your network through your own relay. Off unless chosen. Rust: settings_store. */
+  far_pcs_enabled: z.boolean().optional(),
   /** Potato account (Settings > General > Labs): sign in once and see your devices on each other. Off unless chosen. Rust: account. */
   account_enabled: z.boolean().optional(),
   /** Desktop Potato (Settings > General > Labs): a small pet window on the desktop. Off unless chosen. Rust: pet. */

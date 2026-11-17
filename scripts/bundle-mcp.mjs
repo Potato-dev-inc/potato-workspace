@@ -9,6 +9,7 @@ import { chmodSync, copyFileSync, existsSync, mkdirSync } from 'node:fs';
 import { dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import esbuild from 'esbuild';
+import { cliBundleOptions } from './cli-bundle-options.mjs';
 
 const root = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 const outfile = resolve(root, 'packages/app/src-tauri/resources/mcp-stdio.bundle.cjs');
@@ -61,16 +62,7 @@ mkdirSync(dirname(outfile), { recursive: true });
 // Standalone watcher for `watch_command`: an absolute-path script works from any directory,
 // unlike `npx potato-workspace`. ESM because the CLI uses import.meta.
 try {
-  await esbuild.build({
-    entryPoints: [resolve(root, 'packages/cli/src/index.ts')],
-    bundle: true,
-    platform: 'node',
-    target: 'node22',
-    format: 'esm',
-    banner: { js: "import { createRequire as __cr } from 'node:module'; const require = __cr(import.meta.url);" },
-    outfile: resolve(root, 'packages/app/src-tauri/resources/puppet-master-cli.bundle.mjs'),
-    logLevel: 'info',
-  });
+  await esbuild.build(cliBundleOptions(root, resolve(root, 'packages/app/src-tauri/resources/puppet-master-cli.bundle.mjs')));
 } catch (err) {
   console.error('[bundle-mcp] CLI bundle failed — watch_command falls back to npx', err);
 }

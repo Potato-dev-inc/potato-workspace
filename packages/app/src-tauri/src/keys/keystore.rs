@@ -98,6 +98,12 @@ impl KeyStore {
         self.backend.delete(&self.name("p2p-node"))
     }
 
+    /// The key that opens far-away pairing boxes on this person's own Worker (its public half is the Worker's
+    /// `PAIR_OWNER`). Its own key: never the node key, the device key, the phone secret or a team key.
+    pub fn pair_owner(&self) -> Result<SigningKey, String> {
+        self.get_or_make("pair-owner", || new_signing_key().to_bytes()).map(|b| SigningKey::from_bytes(&b))
+    }
+
     pub fn p2p_node(&self) -> Result<SigningKey, String> {
         self.get_or_make("p2p-node", || new_signing_key().to_bytes()).map(|b| SigningKey::from_bytes(&b))
     }

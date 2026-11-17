@@ -282,7 +282,7 @@ export function workflowSummary(
     plan.helpers.length === 0
       ? t('newAgent.wf.noHelpers')
       : plan.helpers
-          .map((h) => t('newAgent.wf.helper', { name: who(h.agent_type, h.model), when: h.when_to_use, kind: t(h.kind === 'spin_off' ? 'newAgent.wf.kind.spin_off' : 'newAgent.wf.kind.minion') }))
+          .map((h) => t(h.when_to_use.trim() ? 'newAgent.wf.helper' : 'newAgent.wf.helperNoWhen', { name: who(h.agent_type, h.model), when: h.when_to_use, kind: t(h.kind === 'spin_off' ? 'newAgent.wf.kind.spin_off' : 'newAgent.wf.kind.minion') }))
           .join(', ');
   return t('newAgent.wf.summary', { front: who(plan.front_agent, plan.front_model), others });
 }

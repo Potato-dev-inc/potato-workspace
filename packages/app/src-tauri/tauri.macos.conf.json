@@ -6,8 +6,9 @@
     "resources": {
       "resources/mcp-stdio.bundle.cjs": "mcp-stdio.bundle.cjs",
       "resources/puppet-master-cli.bundle.mjs": "puppet-master-cli.bundle.mjs",
-      "resources/bin/*": "bin/",
+      "resources/bin/cloudflared*": "bin/",
       "resources/pwa-dist/": "pwa-dist/",
+      "resources/relay-worker/": "relay-worker/",
       "resources/adapters/": "adapters/",
       "resources/definitions/*.toml": "definitions/",
       "resources/node/": "node/",

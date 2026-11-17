@@ -126,6 +126,11 @@ pub struct TunnelStatus {
     /// With a `problem`: seconds until cloudflared may be started again (absent when it may start now).
     #[serde(skip_serializing_if = "Option::is_none")]
     pub retry_in_secs: Option<u64>,
+    /// The port the phone server really listens on (what an own domain or a named tunnel must point at), or none when it is not running.
+    pub local_port: Option<u16>,
+    /// `moved` (the usual port was busy, another program has it) | `not_running` (the phone server could not start). Absent when all is well.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub port_problem: Option<&'static str>,
 }
 
 /// Result of "Test connection".
@@ -379,6 +384,8 @@ pub fn tunnel_status() -> TunnelStatus {
             .problem
             .and_then(|_| guard.backoff.check(std::time::Instant::now()).err())
             .map(|wait| wait.as_secs().max(1)),
+        local_port: pwa_server::bound_pwa_port(),
+        port_problem: pwa_server::pwa_port_problem(),
     }
 }
 
@@ -447,8 +454,11 @@ pub fn apply_tunnel_config(
     if matches!(input, TunnelConfigInput::OpenTunnel) && !opentunnel_switch_on(app) {
         return Err("Turn on \"Fixed phone address\" in Early features first.".into());
     }
-    let next = tunnel_config::config_from_input(input.clone(), &current)?;
-    let reveal = secret_to_reveal(&input, &current, &next);
+    let memory = tunnel_config::memory_file(&path);
+    // Coming back to the same Worker from another mode: its remembered secret, not a new one that would not match.
+    let basis = tunnel_config::basis_with_memory(&input, &current, &memory);
+    let next = tunnel_config::config_from_input(input.clone(), &basis)?;
+    let reveal = secret_to_reveal(&input, &basis, &next);
     // A new secret replaces the old one: ask the Worker to forget the old one first.
     if let Err(why) = retire_old_secret(&input, &current, &next, stable_link::reset) {
         // "Make a new secret" would strand the link: change nothing and say so.
@@ -458,6 +468,11 @@ pub fn apply_tunnel_config(
         return Ok(status);
     }
     tunnel_config::save(&path, &next)?;
+    if matches!(input, TunnelConfigInput::ForgetWorker) {
+        tunnel_config::forget_stable(&memory);
+    } else {
+        tunnel_config::remember_stable(&memory, &next);
+    }
     // "Show secret" changes nothing: do not drop the tunnel (and its address) just to read a secret.
     let only_showing = matches!(&input, TunnelConfigInput::Stable { secret_action: tunnel_config::SecretAction::Show, secret: None, .. }) && next == current;
     let restarted = if only_showing { Ok(tunnel_status()) } else { restart_mobile_tunnel(app) };
@@ -933,6 +948,19 @@ fn cloudflared_bin(resource_dir: Option<&Path>, exe_dir: Option<&Path>, from_env
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn the_status_names_the_phone_port_or_says_it_is_not_running() {
+        // The phone server is not started in a unit test: no port, and the reason is given.
+        let status = tunnel_status();
+        assert_eq!(status.local_port, pwa_server::bound_pwa_port());
+        assert_eq!(status.port_problem, pwa_server::pwa_port_problem());
+        if status.local_port.is_none() {
+            assert_eq!(status.port_problem, Some("not_running"));
+        }
+        let json = serde_json::to_value(&status).unwrap();
+        assert!(json.get("local_port").is_some(), "the field is always sent: {json}");
+    }
 
     #[test]
     fn a_stable_worker_is_offered_to_phones_only_once_linked() {

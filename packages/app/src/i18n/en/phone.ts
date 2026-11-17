@@ -39,7 +39,7 @@ export const phone = {
   'phone.conv.stopped': 'Stopped',
   'phone.conv.failed': 'Failed',
   'phone.conv.noWatch': 'This phone cannot read chats.',
-  'phone.conv.noSend': 'This phone cannot send messages.',
+  'phone.conv.noSend': "This phone cannot send messages. On your PC, open Connect > Paired phones and turn on 'Use the terminal'.",
   'phone.conv.gone': 'This agent is not running any more.',
   'phone.conv.unreachable': 'Could not reach your PC. Trying again…',
   'phone.fold.steps_one': '{count} step',

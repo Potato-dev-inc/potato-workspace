@@ -39,6 +39,35 @@ pub fn front_of(crew: &Crew) -> Option<&Role> {
     crew.roles.iter().find(|r| r.front)
 }
 
+/// A crew read as a workflow (derived when read, never saved): a crew with no marked Front uses its lead (the one role
+/// that reports to nobody) as the Front, and, with no start mode saved, starts the whole crew at once as the Crews
+/// page does (`horde`). Only a flat crew qualifies: every other role reports straight to the lead and no role hands
+/// work on (`hands_to`), because a deeper crew would lose its chain in the brief. Any other crew, and a crew that
+/// already has a Front, comes back as it is.
+pub fn with_default_front(crew: &Crew) -> Crew {
+    let mut out = crew.clone();
+    if out.roles.iter().any(|r| r.front) || out.roles.iter().any(|r| !r.hands_to.is_empty()) {
+        return out;
+    }
+    let is_root = |r: &Role| r.parent.as_deref().map_or(true, |p| p.trim().is_empty());
+    if out.roles.iter().filter(|r| is_root(r)).count() != 1 {
+        return out;
+    }
+    let Some(lead) = out.roles.iter().find(|r| is_root(r)).cloned() else { return out };
+    if !out.roles.iter().all(|r| is_root(r) || lead.is_called(r.parent.as_deref().unwrap_or(""))) {
+        return out;
+    }
+    for role in &mut out.roles {
+        if is_root(role) {
+            role.front = true;
+        }
+    }
+    if out.start_mode.is_none() {
+        out.start_mode = Some("horde".to_string());
+    }
+    out
+}
+
 pub fn is_workflow(crew: &Crew) -> bool {
     front_of(crew).is_some()
 }

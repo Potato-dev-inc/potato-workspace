@@ -9,10 +9,9 @@ const allRows = SECTIONS.flatMap((s) => s.rows.map((r) => ({ section: s.id, row:
 
 /** Every row id that existed before the move (115 of them, plus Add an agent and Your agents). */
 const PINNED_IDS = [
-  'workflow-reply-labs', 'workflows-labs',
   'account-labs', 'accounts', 'agent-browser-labs', 'companion-vault-labs', 'discord-bot-labs', 'agent-rules', 'less-motion', 'speak-results', 'strong-contrast', 'text-size', 'add-agent', 'agent-default-models', 'agent-lane', 'agent-list', 'agent-pack', 'ask-bar', 'assign-issue', 'away-minutes',
   'bridge-endpoint', 'bring-old-chats', 'budget-turns', 'project-budget', 'right-size', 'chat-addons', 'chat-search-index',
-  'checkpoints', 'close-helpers-with-agent', 'close-to-tray', 'collision', 'confirm-close', 'copy-offer', 'crews-labs', 'crews-page', 'definitions', 'desktop-potato-labs', 'devices-labs', 'diagnostic-file', 'dock-browser-labs',
+  'checkpoints', 'close-helpers-with-agent', 'close-to-tray', 'collision', 'confirm-close', 'copy-offer', 'crews-labs', 'crews-page', 'definitions', 'desktop-potato-labs', 'devices-labs', 'far-pcs-labs', 'diagnostic-file', 'dock-browser-labs',
   'discord-alerts', 'early-versions', 'handoff-mode', 'started-agents', 'helper-agents', 'helper-answers', 'helper-default-models', 'helper-tools', 'helpers-in-sidebar',
   'individual-window-layout', 'keep-awake', 'language', 'keep-going', 'keep-helpers-open', 'key-anthropic', 'key-openai', 'key-openrouter',
   'lend-labs', 'librarian-indexer', 'linux', 'live-updates', 'loop-guard', 'markup-bar-labs', 'mcp-install', 'mcp-status',
@@ -26,7 +25,7 @@ const PINNED_IDS = [
   'shortcut-show-list', 'shortcut-split', 'shortcut-split-close-side', 'shortcut-split-down', 'shortcut-split-focus-down', 'shortcut-split-focus-left', 'shortcut-split-focus-right', 'shortcut-split-focus-up', 'shortcut-split-swap', 'shortcut-stop-all',
   'shortcuts-reset-all', 'show-developer-settings', 'show-terminals', 'simple-mode', 'smaller-updates-labs', 'snippet-claude-desktop', 'snippet-codex', 'spaces-labs', 'standby-helpers',
   'start-at-sign-in', 'storage', 'theme', 'timeline-labs', 'toolbelt', 'uninstall', 'usage-bar', 'usage-login-reads',
-  'version', 'versions', 'welcome', 'whats-new', 'your-name',
+  'version', 'versions', 'welcome', 'whats-new', 'workflow-reply-labs', 'workflows-labs', 'your-name',
 ];
 
 /** Spec section 2, as [page, group, row ids]. Shortcut rows keep the groups lib/shortcuts.ts gives them. */

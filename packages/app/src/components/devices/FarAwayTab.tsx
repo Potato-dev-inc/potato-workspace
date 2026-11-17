@@ -12,10 +12,12 @@ export function FarAwayTab({ view, api, onJoined }: { view: DevicesView | null; 
   const [made, setMade] = useState<string | null>(null);
   const [pasted, setPasted] = useState('');
   const [busy, setBusy] = useState(false);
+  const [madeViaRelay, setMadeViaRelay] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const asked = useRef(false);
   const hosted = view?.hosting?.kind === 'link' ? (view.hosting.link ?? null) : null;
   const link = hosted ?? made;
+  const viaRelay = hosted ? view?.hosting?.worker === true : madeViaRelay;
   // A link that was made here is withdrawn when the sheet or the tab goes away.
   useEffect(
     () => () => {
@@ -28,7 +30,10 @@ export function FarAwayTab({ view, api, onJoined }: { view: DevicesView | null; 
     asked.current = true;
     api
       .makeLink()
-      .then((v) => setMade(v.hosting?.kind === 'link' ? (v.hosting.link ?? null) : null))
+      .then((v) => {
+        setMade(v.hosting?.kind === 'link' ? (v.hosting.link ?? null) : null);
+        setMadeViaRelay(v.hosting?.worker === true);
+      })
       .catch((e: unknown) => setError(errorSentence(e)));
   };
   const join = () => {
@@ -53,6 +58,11 @@ export function FarAwayTab({ view, api, onJoined }: { view: DevicesView | null; 
             {t('devices.makeLink')}
           </button>
         </div>
+      )}
+      {link && viaRelay && (
+        <p className="dev-note" data-testid="far-via-relay">
+          {t('devices.far.viaRelay')}
+        </p>
       )}
       <label className="dev-field">
         <span>{t('devices.pasteLink')}</span>

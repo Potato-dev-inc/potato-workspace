@@ -644,6 +644,22 @@ export const generalRows: RowDef[] = [
     ),
   },
   {
+    id: 'far-pcs-labs',
+    label: 'Far-away PCs through my relay',
+    hint: 'Pair a PC on another network through your relay (needs Devices on).',
+    keywords: 'far away remote pc computer relay pair another network internet labs early',
+    group: 'Labs',
+    labs: { name: 'Far-away PCs through my relay', about: 'Pair a PC on another network through your relay (needs Devices on).' },
+    render: (env) => (
+      <SettingToggle
+        label={t('settings.row.far-pcs-labs.label')}
+        description={t('settings.row.far-pcs-labs.hint')}
+        checked={env.settings.far_pcs_enabled ?? false}
+        onChange={(value) => void env.patch({ far_pcs_enabled: value })}
+      />
+    ),
+  },
+  {
     id: 'account-labs',
     label: 'Potato account',
     hint: 'Sign in once and your devices find each other. Adds a sign-in to Connect.',

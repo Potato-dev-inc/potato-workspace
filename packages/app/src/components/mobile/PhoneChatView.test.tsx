@@ -276,7 +276,8 @@ describe('PhoneChatView message box', () => {
     expect(box()).toBeNull();
     expect(host.querySelector('textarea')).toBeNull();
     expect(text()).toContain('This phone cannot send messages.');
-    expect(NO_SEND_NOTE).toBe('This phone cannot send messages.');
+    expect(text()).toContain("On your PC, open Connect > Paired phones and turn on 'Use the terminal'.");
+    expect(NO_SEND_NOTE).toBe("This phone cannot send messages. On your PC, open Connect > Paired phones and turn on 'Use the terminal'.");
     expect(listPaneMessages).not.toHaveBeenCalled();
   });
 

@@ -1,0 +1,23 @@
+{
+  "version": "1.2.1",
+  "notes": "- Smaller updates.",
+  "pub_date": "2026-01-01T00:00:00.000Z",
+  "platforms": {
+    "windows-x86_64": {
+      "signature": "dW50cnVzdGVkIGNvbW1lbnQ6IHNpZ25hdHVyZSBmcm9tIHRhdXJpIHNlY3JldCBrZXkKRlVMTA==",
+      "url": "https://github.com/Potato-dev-inc/potato-workspace/releases/download/v1.2.1/Potato-Workspace_1.2.1_x64_en-US.msi"
+    },
+    "windows-x86_64-app": {
+      "signature": "dW50cnVzdGVkIGNvbW1lbnQ6IHNpZ25hdHVyZSBmcm9tIHRhdXJpIHNlY3JldCBrZXkKQVBQ",
+      "url": "https://github.com/Potato-dev-inc/potato-workspace/releases/download/v1.2.1/Potato-Workspace_1.2.1_x64_app-only-update.msi"
+    }
+  },
+  "potato": {
+    "appOnly": {
+      "toolsVersion": 1,
+      "size": 1000,
+      "fullSize": 5000,
+      "minFrom": "1.2.0"
+    }
+  }
+}

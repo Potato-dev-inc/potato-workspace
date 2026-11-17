@@ -16,11 +16,12 @@
  * PM_SKIP_GIT=1 skips the step for a build that is not for release.
  */
 import { createHash } from 'node:crypto';
-import { cpSync, existsSync, mkdirSync, readdirSync, readFileSync, renameSync, rmSync, writeFileSync, copyFileSync } from 'node:fs';
+import { cpSync, existsSync, mkdirSync, readdirSync, readFileSync, renameSync, rmSync, statSync, writeFileSync, copyFileSync } from 'node:fs';
 import { homedir } from 'node:os';
 import { dirname, join } from 'node:path';
 import { spawnSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
+import { GIT_PRUNED } from './git-prune-list.mjs';
 
 export const GIT_TAG = 'v2.56.0.windows.4';
 export const GIT_VERSION = '2.56.0.4';
@@ -83,6 +84,17 @@ const dest = join(res, 'git');
 rmSync(dest, { recursive: true, force: true });
 mkdirSync(dest, { recursive: true });
 for (const entry of readdirSync(unpacked)) cpSync(join(unpacked, entry), join(dest, entry), { recursive: true });
+
+// Leave out what the app never runs (list and reasons in git-prune-list.mjs). The cache keeps the full tree.
+let prunedBytes = 0;
+for (const rel of GIT_PRUNED) {
+  const file = join(dest, rel);
+  if (existsSync(file)) {
+    prunedBytes += statSync(file).size;
+    rmSync(file, { force: true });
+  }
+}
+console.error(`[fetch-git] left out ${GIT_PRUNED.length} unused files (${(prunedBytes / 1048576).toFixed(1)} MB)`);
 
 // Licence: MinGit ships Git's COPYING / LICENSE text at its root.
 const licence = ['COPYING', 'LICENSE.txt', 'LICENSE'].map((n) => join(unpacked, n)).find((p) => existsSync(p));

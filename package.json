@@ -43,7 +43,10 @@
     "e2e:build": "npm run build --workspace=@potato-workspace/e2e --",
     "typecheck": "npm run typecheck --workspaces --if-present",
     "clean": "rimraf \"packages/*/dist\" \"packages/*/.turbo\" \"packages/app/src-tauri/target\"",
-    "check:warnings": "node scripts/check-warnings.mjs"
+    "check:warnings": "node scripts/check-warnings.mjs",
+    "check:lazy-chunks": "node scripts/check-lazy-chunks.mjs",
+    "check:quick": "node scripts/dev/check-quick.mjs",
+    "test:dev-scripts": "vitest run --config scripts/dev/vitest.config.mjs && node --test scripts/dev/slot.test.mjs scripts/dev/slot-prepare.test.mjs scripts/dev/disk-guard.test.mjs"
   },
   "devDependencies": {
     "@ngrok/ngrok": "^1.4.1",

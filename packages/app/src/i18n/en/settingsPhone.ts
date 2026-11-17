@@ -88,6 +88,7 @@ export const settingsPhone = {
   "stable.linkedOk": "Linked ✓",
   "stable.notLinked": "Not linked yet",
   "stable.notYet": "Paste your address in step 3.",
+  "stable.freshHelp": "This link has another secret on Cloudflare, so it cannot link. Starting fresh makes a new link with a new secret.",
   "stable.close": "Close",
   "stable.useRelay": "Use {url} (your team's link)",
   "stable.relayNote": "One link does both jobs: your team's link and your phone link.",

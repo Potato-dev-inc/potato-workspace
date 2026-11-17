@@ -1,7 +1,7 @@
 import { PANE_CODEX } from '../fixtures';
 import type { HarnessScenario } from '../types';
 
-// Leaving my desk on the phone: the card in the drawer, with the lengths open.
+// Leaving my desk on the phone: the button in the drawer's bottom bar, with its panel open.
 const s: HarnessScenario = {
   name: 'desk-away-phone-light',
   route: 'phone',
@@ -11,8 +11,8 @@ const s: HarnessScenario = {
   after: async (dom) => {
     await dom.waitFor('.ph-head-menu', 15000);
     await dom.click('.ph-head-menu');
-    await dom.waitFor('[data-testid="phone-desk-open"]', 15000);
-    await dom.click('[data-testid="phone-desk-open"]');
+    await dom.waitFor('[data-testid="phone-desk-foot"]', 15000);
+    await dom.click('[data-testid="phone-desk-foot"]');
     await dom.sleep(500);
     document.querySelector('[data-testid="phone-desk"]')?.scrollIntoView({ block: 'center' });
     await dom.sleep(300);

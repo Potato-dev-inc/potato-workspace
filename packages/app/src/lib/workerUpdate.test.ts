@@ -2,7 +2,7 @@ import { describe, expect, it, vi } from 'vitest';
 import type { AcpLaneView } from './acpChat';
 import { freshSteps, handoffTask, isUpToDate, MAX_TRIES, pickHandoffAgent, runWorkerUpdate, type StepAnswer, type UpdateApi, type UpdateStepId } from './workerUpdate';
 
-const LABELS: Record<UpdateStepId, string> = { prepare: 'Getting the link files ready', install: 'Installing the tool it needs', login: 'Signing in to Cloudflare', deploy: 'Turning your link on', check: 'Checking that it works' };
+const LABELS: Record<UpdateStepId, string> = { prepare: 'Getting the link files ready', install: 'Installing the tool it needs', login: 'Signing in to Cloudflare', delete: 'Removing the old link', deploy: 'Turning your link on', check: 'Checking that it works' };
 const GOOD = { reachable: true, features: ['team', 'rooms', 'stable-link', 'invites'], legacyLink: false };
 
 function api(answer: (id: string, call: number) => StepAnswer | Error, health = GOOD): UpdateApi & { calls: string[] } {
@@ -109,5 +109,19 @@ describe('the hand-off note', () => {
     expect(pickHandoffAgent(view, 'codex')).toEqual({ id: 'codex', label: 'CODEX' });
     expect(pickHandoffAgent(view, 'opencode')).toEqual({ id: 'claude', label: 'CLAUDE' });
     expect(pickHandoffAgent({ ...view, agents: [] }, 'codex')).toBeNull();
+  });
+});
+
+describe('fresh run', () => {
+  it('deletes the old Worker after sign-in and before the deploy', async () => {
+    const calls: string[] = [];
+    const run = await runWorkerUpdate({
+      address: 'https://pm-relay.me.workers.dev',
+      fresh: true,
+      pauseMs: 0,
+      api: { step: async (id) => (calls.push(id), { ok: true, output: '' }), check: async () => GOOD },
+    });
+    expect(run.ok).toBe(true);
+    expect(calls).toEqual(['prepare', 'install', 'login', 'delete', 'deploy']);
   });
 });

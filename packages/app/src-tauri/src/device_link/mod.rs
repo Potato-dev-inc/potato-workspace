@@ -22,6 +22,7 @@ pub mod activity;
 pub mod app;
 pub mod client;
 pub mod files;
+pub mod far_http;
 pub mod files_client;
 pub mod route;
 pub mod serve;
@@ -34,6 +35,8 @@ mod files_tests;
 mod local_net_tests;
 #[cfg(test)]
 mod tests;
+#[cfg(test)]
+mod tests_far;
 #[cfg(test)]
 mod tests_p2;
 
@@ -109,6 +112,8 @@ pub struct Options {
     pub downloads: Arc<dyn Fn() -> std::path::PathBuf + Send + Sync>,
     /// Places that are never shared, besides the sign-in folders in the home folder (this app's own data).
     pub deny_paths: Vec<std::path::PathBuf>,
+    /// The person's own Worker, for meeting far-away PCs (Labs far_pcs_enabled). None: no far-away route.
+    pub far_relay: Option<Arc<dyn crate::p2p::far::PairRelay>>,
 }
 
 impl Options {
@@ -129,6 +134,7 @@ impl Options {
             project_folders: Arc::new(Vec::new),
             downloads: Arc::new(|| std::env::temp_dir().join("pm-downloads")),
             deny_paths: Vec::new(),
+            far_relay: None,
         }
     }
 }
@@ -230,6 +236,9 @@ impl DeviceLink {
         let registry = Arc::new(Registry::new());
         let p2p = Arc::new(P2p::new(deps.keys.clone(), deps.factory, registry.clone(), trust.clone()).loopback_only(deps.loopback_only));
         let mgr = PairManager::new(p2p.clone(), trust.clone(), deps.keys, deps.clock, deps.discovery, &deps.name).map_err(|e| e.to_string())?;
+        if let Some(relay) = deps.options.far_relay.clone() {
+            mgr.set_far_relay(relay);
+        }
         let live = Arc::new(Live::default());
         let enabled = Arc::new(AtomicBool::new(false));
         let still = {
@@ -674,6 +683,13 @@ impl DeviceLink {
     pub fn pair_answer(&self, id: u64, allow: bool) -> Result<Value, String> {
         self.require_on()?;
         self.mgr.answer(id, allow).map_err(|e| e.to_string())?;
+        Ok(self.view())
+    }
+
+    /// The person's pick on a sheet that shows numbers. Only an app window may call this.
+    pub fn pair_pick(&self, id: u64, pick: &str) -> Result<Value, String> {
+        self.require_on()?;
+        self.mgr.answer_pick(id, pick).map_err(|e| e.to_string())?;
         Ok(self.view())
     }
 

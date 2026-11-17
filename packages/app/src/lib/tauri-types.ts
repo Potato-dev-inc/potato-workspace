@@ -246,6 +246,10 @@ export interface TunnelStatus {
   problem?: 'rate_limited' | 'slow_start' | 'too_soon' | null;
   /** With a problem: seconds until the tunnel may be started again. */
   retry_in_secs?: number | null;
+  /** The port the phone server really listens on (what an own domain must point at); null when it is not running. */
+  local_port?: number | null;
+  /** `moved`: the usual port was busy; `not_running`: the phone server could not start. */
+  port_problem?: 'moved' | 'not_running' | null;
 }
 
 export interface TunnelStableStatus {
@@ -262,6 +266,8 @@ export type TunnelConfigInput =
   | { mode: 'named'; hostname: string; token?: string | null }
   | { mode: 'custom'; url: string }
   | { mode: 'open_tunnel' }
+  /** Switch to the automatic address and drop the remembered Worker address and secret. */
+  | { mode: 'forget_worker' }
   | {
       mode: 'stable';
       worker_url: string;

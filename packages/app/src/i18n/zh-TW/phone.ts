@@ -40,7 +40,7 @@ export const phone: Partial<Record<EnglishKey, string>> = {
   'phone.conv.stopped': '已停止',
   'phone.conv.failed': '失敗',
   'phone.conv.noWatch': '這支手機不能查看對話。',
-  'phone.conv.noSend': '這支手機不能傳送訊息。',
+  'phone.conv.noSend': '這支手機不能傳送訊息。請在電腦上打開「連結」>「已配對的手機」，然後開啟「Use the terminal」。',
   'phone.conv.gone': '這個 AI 助理已經不在執行了。',
   'phone.conv.unreachable': '連不上你的電腦，正在重試…',
   'phone.fold.steps_other': '{count} 個步驟',

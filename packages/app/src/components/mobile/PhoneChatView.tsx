@@ -53,7 +53,7 @@ const MAX_KEPT = 4000;
 
 // The notes are read when they are shown, so they follow the phone's language.
 export const NO_WATCH_NOTE = 'This phone cannot read chats.';
-export const NO_SEND_NOTE = 'This phone cannot send messages.';
+export const NO_SEND_NOTE = "This phone cannot send messages. On your PC, open Connect > Paired phones and turn on 'Use the terminal'.";
 
 interface Status {
   state: SessionChatState;

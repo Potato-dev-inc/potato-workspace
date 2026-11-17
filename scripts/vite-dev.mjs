@@ -38,7 +38,7 @@ function resolvePortFile() {
   return join(root, profile ? `com.potatodev.workspace.profile-${profile}` : 'com.potatodev.workspace', 'potato-workspace.bridge.port');
 }
 const portFile = resolvePortFile();
-const VITE_PORT = 1420;
+const VITE_PORT = 1442;
 const VITE_URL = `http://127.0.0.1:${VITE_PORT}`;
 
 ensureWorkspaceBuilt(repoRoot);

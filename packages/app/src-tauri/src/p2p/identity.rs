@@ -42,6 +42,12 @@ impl NodeBinding {
     }
 }
 
+/// Whether `signature` is `node`'s signature over `message` (a node id is its Ed25519 public key).
+pub fn verify_node(node: &NodeId, message: &[u8], signature: &[u8; 64]) -> bool {
+    let Ok(vk) = VerifyingKey::from_bytes(&node.0) else { return false };
+    vk.verify(message, &Signature::from_bytes(signature)).is_ok()
+}
+
 #[derive(Clone)]
 pub struct DeviceIdentity {
     node_key: SigningKey,
@@ -68,6 +74,12 @@ impl DeviceIdentity {
     /// The signed node-to-device record, for pairing.
     pub fn binding(&self) -> NodeBinding {
         self.binding.clone()
+    }
+
+    /// Signs with the node key. Used where the encrypted link does not prove the node (far-away pairing through the
+    /// Worker): the signature says "this exact exchange was made by whoever holds this node's key".
+    pub fn sign_node(&self, message: &[u8]) -> [u8; 64] {
+        self.node_key.sign(message).to_bytes()
     }
 
     /// For a transport that needs the secret to build its endpoint. Not `pub`: only code in `p2p/` can ask.

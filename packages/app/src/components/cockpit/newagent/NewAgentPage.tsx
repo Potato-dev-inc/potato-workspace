@@ -191,6 +191,7 @@ export function NewAgentPage({ agents, panes, needs, selectedCwd = null, project
   const addons = useAcpAddons(addonApi);
   // Labs "Workflows": null while the switch is off (or on an older build).
   const [workflows, setWorkflows] = useState<WorkflowChoice[] | null>(null);
+  const [wfHidden, setWfHidden] = useState(0);
   const [wfSlug, setWfSlug] = useState<string | null>(null);
   const area = useRef<HTMLTextAreaElement>(null);
   const alive = useRef(true);
@@ -233,6 +234,7 @@ export function NewAgentPage({ agents, panes, needs, selectedCwd = null, project
     void ok(api.recent(), setRecent);
     void ok(api.defaultFolder(), setDefaultFolder);
     if (api.workflows) void ok(api.workflows(), setWorkflows);
+    if (api.workflowsHidden) void ok(api.workflowsHidden(), setWfHidden);
     let off: (() => void) | undefined;
     api
       .onHomeChanged((next) => live && setHome((h) => ({ ...h, ...next })))
@@ -578,7 +580,7 @@ export function NewAgentPage({ agents, panes, needs, selectedCwd = null, project
                       <span>{w.plan.name}</span>
                     </button>
                   ))}
-                  {workflows.length === 0 && <p className="ck-na-note">{t('newAgent.wf.empty')}</p>}
+                  {workflows.length === 0 && <p className="ck-na-note">{t(wfHidden > 0 ? 'newAgent.wf.needFixing' : 'newAgent.wf.empty')}</p>}
                 </Pop>
               )}
 

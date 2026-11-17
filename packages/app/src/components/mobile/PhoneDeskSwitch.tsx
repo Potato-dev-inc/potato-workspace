@@ -1,7 +1,8 @@
 // "Leaving my desk" on the phone: the same switch as the PC's status bar, over the bridge (`GET/POST /desk-away`, `POST /desk-away/back`).
 // Reading it needs `watch`; switching it on or off needs `control`. A switch flipped here turns push on and can lock the PC's screen
 // control, but it never raises what the PC kept to itself: the PC's own switch does that. The bridge's sign-in is unchanged.
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
+import { useDismissable } from '../../hooks/useDismissable';
 import { useLanguage, useT } from '../../i18n';
 import { DESK_LENGTHS, isAway, NOT_AWAY, type DeskAway, type DeskLength, type DeskPhoneApi } from '../../lib/desk-away';
 import { ngrokRequestHeaders } from '../../lib/bridge-ngrok';
@@ -40,6 +41,10 @@ export function PhoneDeskSwitch({ api, canControl, refreshKey = 0 }: { api: Desk
   const [length, setLength] = useState<DeskLength>('until_back');
   const [lock, setLock] = useState(false);
   const [open, setOpen] = useState(false);
+  // The panel above the bottom bar. Opening it goes straight to the choices when the person is not away yet.
+  const [panel, setPanel] = useState(false);
+  const wrap = useRef<HTMLDivElement>(null);
+  useDismissable(panel, { inside: [wrap], onDismiss: () => setPanel(false), ignore: ['blur', 'scroll', 'escape'] });
   const [busy, setBusy] = useState(false);
   const [failed, setFailed] = useState(false);
 
@@ -52,13 +57,14 @@ export function PhoneDeskSwitch({ api, canControl, refreshKey = 0 }: { api: Desk
     return () => window.clearInterval(timer);
   }, [read, refreshKey]);
 
-  const run = (action: () => Promise<DeskAway>) => {
+  const run = (action: () => Promise<DeskAway>, closePanel = false) => {
     setBusy(true);
     setFailed(false);
     action().then(
       (next) => {
         setState(next);
         setOpen(false);
+        if (closePanel) setPanel(false);
         setBusy(false);
       },
       () => {
@@ -75,7 +81,28 @@ export function PhoneDeskSwitch({ api, canControl, refreshKey = 0 }: { api: Desk
   const until = state.until_ms == null ? t('desk.untilBack') : t('desk.until', { time: new Date(state.until_ms).toLocaleTimeString(lang, { hour: 'numeric', minute: '2-digit' }) });
 
   return (
-    <section className="ph-desk" data-testid="phone-desk" data-away={away || undefined} aria-label={t('desk.phone.title')}>
+    <div className="ph-deskwrap" ref={wrap}>
+      <button
+        type="button"
+        className="ph-deskbtn"
+        data-testid="phone-desk-foot"
+        data-away={away || undefined}
+        aria-expanded={panel}
+        aria-haspopup="dialog"
+        title={t(away ? 'desk.phone.title' : 'desk.phone.start')}
+        onClick={() => {
+          if (!panel && !away) setOpen(true);
+          setPanel((v) => !v);
+        }}
+      >
+        <svg viewBox="0 0 24 24" aria-hidden="true">
+          <rect x="4" y="5" width="16" height="11" rx="2" />
+          <path d="M9 20h6M12 16v4" />
+        </svg>
+        <span className="ph-deskbtn-txt">{t(away ? 'desk.phone.title' : 'desk.phone.start')}</span>
+      </button>
+      {panel && (
+    <section className="ph-desk" role="dialog" data-testid="phone-desk" data-away={away || undefined} aria-label={t('desk.phone.title')}>
       <b>{t('desk.phone.title')}</b>
       {away ? (
         <>
@@ -83,7 +110,7 @@ export function PhoneDeskSwitch({ api, canControl, refreshKey = 0 }: { api: Desk
           <p className="ph-desk-sub">{[until, state.lock_screen ? t('desk.locked') : null].filter(Boolean).join(' · ')}</p>
           {state.by !== 'pc' && <p className="ph-desk-sub">{t('desk.phone.keeps')}</p>}
           {canControl && (
-            <button type="button" className="ph-desk-btn" onClick={() => run(() => api.back())} disabled={busy} data-testid="phone-desk-back">
+            <button type="button" className="ph-desk-btn" onClick={() => run(() => api.back(), true)} disabled={busy} data-testid="phone-desk-back">
               {t('desk.phone.back')}
             </button>
           )}
@@ -121,5 +148,7 @@ export function PhoneDeskSwitch({ api, canControl, refreshKey = 0 }: { api: Desk
         </p>
       )}
     </section>
+      )}
+    </div>
   );
 }

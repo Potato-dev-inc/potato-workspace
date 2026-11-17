@@ -46,7 +46,7 @@ pub(crate) fn spawn_args_for_run(operation: &crate::operations::OperationSnapsho
 }
 pub(crate) mod typing_refusals;
 mod watchdog;
-mod ws;
+pub(crate) mod ws;
 
 pub use delegation::{delegate_operation, publish_operation, stop_operation_worker_with_kill};
 pub use dispatch::dispatch_existing_operation;

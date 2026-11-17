@@ -18,6 +18,7 @@ pub const DEV_LABS_KEYS: &[&str] = &[
     "spaces_enabled",
     "lend_enabled",
     "devices_enabled",
+    "far_pcs_enabled",
     "account_enabled",
     "desktop_pet_enabled",
     "agent_browser_enabled",
@@ -101,6 +102,7 @@ const PATCHABLE_KEYS: &[&str] = &[
     "handoff_fixed_notes",
     "lend_enabled",
     "devices_enabled",
+    "far_pcs_enabled",
     "account_enabled",
     "desktop_pet_enabled",
     "agent_browser_enabled",
@@ -212,6 +214,8 @@ pub fn default_public_settings() -> Value {
         "workflow_reply_style": "translator",
         // Fixed phone address (Labs): an address from the third-party OpenTunnel relay. Off until chosen. Rust: mobile_tunnel/opentunnel.
         "opentunnel_stable_link": false,
+        // Far-away PCs (Labs): pair a PC that is not on your network through your own relay. Off until chosen. Rust: p2p.
+        "far_pcs_enabled": false,
         // The version whose small update failed; it takes the full package from then on. Written by the app, empty when none.
         "app_only_failed_for": "",
     })

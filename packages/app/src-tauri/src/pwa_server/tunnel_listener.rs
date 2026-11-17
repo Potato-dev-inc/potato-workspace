@@ -131,7 +131,7 @@ fn host_without_port(value: &str) -> String {
 }
 
 /// How many pairing tries one address gets per window before the listener answers 429 itself.
-const PAIR_TRIES: usize = 8;
+pub(crate) const PAIR_TRIES: usize = 8;
 const PAIR_WINDOW: Duration = Duration::from_secs(60);
 const PAIR_TRACKED: usize = 1024;
 
@@ -286,7 +286,7 @@ fn serve(
         }
     };
     if info.authority != allowed_host {
-        let _ = stream.write_all(b"HTTP/1.1 421 Misdirected Request\r\nContent-Length: 0\r\nConnection: close\r\n\r\n");
+        let _ = write!(stream, "HTTP/1.1 421 Misdirected Request\r\nContent-Length: 0\r\n{}Connection: close\r\n\r\n", super::SECURITY_HEADERS);
         return;
     }
     let ctx = RemoteCtx::new(info.authority, info.peer, throttle);
@@ -539,6 +539,17 @@ mod tests {
         assert!(last.starts_with("HTTP/1.1 429"), "{last}");
         let other = exchange(tl.port(), &v2_header([198, 51, 100, 78], HOST_A), &pair);
         assert!(other.starts_with("HTTP/1.1 200"), "{other}");
+    }
+
+    #[test]
+    fn the_dev_info_is_never_served_through_the_listener_and_replies_carry_the_security_headers() {
+        let (tl, _) = rig("devinfo", HOST_A);
+        // The test supplier would panic if it were asked: a 404 means it was not.
+        let reply = exchange(tl.port(), &v2_header([203, 0, 113, 9], HOST_A), &get("/__puppet_master_dev__.json", HOST_A, ""));
+        assert!(reply.starts_with("HTTP/1.1 404"), "{reply}");
+        assert!(reply.contains("X-Frame-Options: DENY") && reply.contains("frame-ancestors 'none'"), "{reply}");
+        let wrong_host = exchange(tl.port(), &v2_header([203, 0, 113, 9], HOST_A), &get("/", "other.example.com", ""));
+        assert!(wrong_host.starts_with("HTTP/1.1 421") && wrong_host.contains("X-Content-Type-Options: nosniff"), "{wrong_host}");
     }
 
     #[test]

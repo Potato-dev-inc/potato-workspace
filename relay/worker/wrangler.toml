@@ -96,5 +96,19 @@ globs = ["**/viewer.html", "**/viewer.js", "**/viewer.css"]
 # https://<name>.trycloudflare.com may be linked, and would turn the Worker into an open proxy.
 # Only the local test runner sets it. Never set TEST_HOOKS either.
 
+# Far-away pairing: one object per pairing link and one for the open boxes (the cap). The feature is off until the
+# app sets PAIR_OWNER (the public key of the PC that set this Worker up): it is added by the app when it deploys.
+[[durable_objects.bindings]]
+name = "PAIRS"
+class_name = "PairBox"
+
+[[durable_objects.bindings]]
+name = "PAIR_INDEX"
+class_name = "PairIndex"
+
+[[migrations]]
+tag = "v4"
+new_sqlite_classes = ["PairBox", "PairIndex"]
+
 [observability]
 enabled = true

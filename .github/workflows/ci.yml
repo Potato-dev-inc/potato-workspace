@@ -1,0 +1,279 @@
+name: CI
+
+# Manual only (founder 2026-11-01): checks run locally on the dev PC before merging
+# (a local script mirrors these jobs). Use "Run workflow" on GitHub to run them there.
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+# A new push to a pull request cancels the run it replaces. Pushes to main always run to the end.
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+env:
+  CARGO_TERM_COLOR: always
+  CARGO_INCREMENTAL: "0"
+
+jobs:
+  # Which jobs this change needs. A docs-only change runs none; a frontend-only change skips the Rust jobs.
+  changes:
+    name: What changed
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      contents: read
+      pull-requests: read
+    outputs:
+      rust: ${{ steps.filter.outputs.rust }}
+      frontend: ${{ steps.filter.outputs.frontend }}
+      relay: ${{ steps.filter.outputs.relay }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+
+      # Public repo: no real user folder or personal email in any tracked file.
+      - name: Privacy guard (no personal paths or emails)
+        run: node scripts/check-no-personal-paths.mjs
+
+      - uses: dorny/paths-filter@v3
+        id: filter
+        with:
+          filters: |
+            rust:
+              - .github/workflows/ci.yml
+              - packages/app/src-tauri/**
+              - tools/pm-fake-tui/**
+              - relay/**
+              # Read by Rust tests (include_str! or at run time).
+              - integrations/**
+              - packages/shared/fixtures/**
+              - packages/app/src/components/simple/folder-cases.json
+            relay:
+              - .github/workflows/ci.yml
+              - relay/**
+            frontend:
+              - .github/workflows/ci.yml
+              - package.json
+              - package-lock.json
+              - tsconfig.base.json
+              - packages/app/*
+              - packages/app/src/**
+              - packages/app/public/**
+              - packages/shared/**
+
+  # The team relay: the Rust server and protocol (cargo test in relay/) and the Cloudflare Worker's own tests.
+  relay:
+    name: Relay (server + worker)
+    needs: changes
+    if: needs.changes.outputs.relay == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+
+      - uses: dtolnay/rust-toolchain@stable
+
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: relay
+
+      - name: Relay server and protocol tests
+        working-directory: relay
+        run: cargo test
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: relay/worker/package-lock.json
+
+      # The Worker's own tests under wrangler dev. `npm test` would also build the desktop app to run its relay
+      # tests against the Worker, which needs Windows (or GTK on Linux); the Windows Rust jobs already run the
+      # app's relay tests against the Rust relay.
+      - name: Worker tests
+        working-directory: relay/worker
+        run: |
+          npm ci
+          npm run test:worker
+
+  frontend:
+    name: Frontend (vitest + tsc)
+    needs: changes
+    if: needs.changes.outputs.frontend == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: package-lock.json
+
+      - name: Install dependencies
+        run: npm ci
+
+      # @potato-workspace/app imports @potato-workspace/shared through its dist/ output, so build it first.
+      - name: Build shared package
+        run: npm run build --workspace=@potato-workspace/shared
+
+      - name: Unit tests (vitest)
+        run: npm run test --workspace=@potato-workspace/app
+
+      - name: Typecheck (tsc --noEmit, app and service worker)
+        run: npm run typecheck --workspace=@potato-workspace/app
+
+  # The frontend build the Rust jobs compile against, built once. tauri::generate_context! embeds
+  # packages/app/dist (frontendDist); nothing else of the npm build is needed to compile or run the tests.
+  web-dist:
+    name: Frontend build for the Rust jobs
+    needs: changes
+    if: needs.changes.outputs.rust == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: package-lock.json
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Build shared package
+        run: npm run build --workspace=@potato-workspace/shared
+
+      # Only the vite output. The full app build also bundles cloudflared, the phone app and the MCP
+      # server (with a Rust build of the MCP exe) into src-tauri/resources: release-only, no test reads them.
+      - name: Build the frontend (vite)
+        working-directory: packages/app
+        run: npx vite build
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: web-dist
+          path: packages/app/dist
+          retention-days: 1
+          if-no-files-found: error
+
+  rust:
+    # ~7,800 tests (about 2,600 per shard), each in its own process: split over three runners. Many spawn git and node (missions,
+    # worktrees, checkpoints) and slow each other down when several share a 4-vCPU runner.
+    name: Rust unit tests (${{ matrix.shard }}/3)
+    needs: [changes, web-dist]
+    if: needs.changes.outputs.rust == 'true'
+    runs-on: windows-latest
+    timeout-minutes: 40
+    strategy:
+      fail-fast: false
+      matrix:
+        shard: [1, 2, 3]
+    env:
+      # Tests do not use the bundle's resources (cloudflared, the phone app, the MCP exe), which the
+      # web-dist job does not build; tauri-build would otherwise insist that their globs match files.
+      TAURI_CONFIG: '{"bundle":{"resources":[]}}'
+      # The LLVM linker that ships with rustc: links the big test executables faster than link.exe.
+      CARGO_TARGET_X86_64_PC_WINDOWS_MSVC_LINKER: rust-lld
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+
+      # No rust-toolchain.toml in the repo, so this is the stable channel.
+      - uses: dtolnay/rust-toolchain@stable
+
+      # One cache for every Rust job (same dependencies, same profile, same paths).
+      - uses: Swatinem/rust-cache@v2
+        with:
+          shared-key: rust-tests
+          workspaces: |
+            packages/app/src-tauri
+            tools/pm-fake-tui
+          cache-on-failure: true
+
+      - uses: taiki-e/install-action@v2
+        with:
+          tool: cargo-nextest
+
+      - uses: actions/download-artifact@v4
+        with:
+          name: web-dist
+          path: packages/app/dist
+
+      - name: Unit tests in the library and the binaries
+        working-directory: packages/app/src-tauri
+        run: cargo nextest run --profile ci --lib --bins --partition count:${{ matrix.shard }}/3
+
+  fake-tui:
+    # Dev-only fake agent (tools/pm-fake-tui) on a real ConPTY and a PowerShell host, which the
+    # windows-latest runner has. Every test runs in its own process with its own app-data folder
+    # (src/fake_tui/world.rs), so the suite is split across four runners and runs in parallel on each.
+    name: Fake agent e2e (${{ matrix.shard }}/4)
+    needs: [changes, web-dist]
+    if: needs.changes.outputs.rust == 'true'
+    runs-on: windows-latest
+    timeout-minutes: 40
+    strategy:
+      fail-fast: false
+      matrix:
+        shard: [1, 2, 3, 4]
+    env:
+      TAURI_CONFIG: '{"bundle":{"resources":[]}}'
+      CARGO_TARGET_X86_64_PC_WINDOWS_MSVC_LINKER: rust-lld
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+
+      - uses: dtolnay/rust-toolchain@stable
+
+      - uses: Swatinem/rust-cache@v2
+        with:
+          shared-key: rust-tests
+          workspaces: |
+            packages/app/src-tauri
+            tools/pm-fake-tui
+          cache-on-failure: true
+
+      - uses: taiki-e/install-action@v2
+        with:
+          tool: cargo-nextest
+
+      - uses: actions/download-artifact@v4
+        with:
+          name: web-dist
+          path: packages/app/dist
+
+      # Unit tests of the fake agent itself (engine, script format, renderer), once.
+      - name: pm-fake-tui unit tests
+        if: matrix.shard == 1
+        working-directory: tools/pm-fake-tui
+        run: cargo test
+
+      # Built once here so the test processes do not each run `cargo build` for it (src/fake_tui/world.rs).
+      - name: Build pm-fake-tui
+        working-directory: tools/pm-fake-tui
+        run: |
+          cargo build
+          "PM_FAKE_TUI_EXE=$PWD\target\debug\pm-fake-tui.exe" | Out-File -FilePath $env:GITHUB_ENV -Append -Encoding utf8
+
+      # fake_tui_e2e.rs, which also includes the Missions and Wizard tests (tests/fake_tui_missions.rs,
+      # tests/fake_tui_wizard.rs) through #[path], so there is no separate --test run for them (cargo
+      # discovers those files as targets too, without the dev-fake-tui feature they need).
+      - name: Fake agent end-to-end tests
+        working-directory: packages/app/src-tauri
+        run: cargo nextest run --profile ci --features dev-fake-tui --test fake_tui_e2e --partition count:${{ matrix.shard }}/4

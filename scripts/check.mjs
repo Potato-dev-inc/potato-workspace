@@ -10,7 +10,7 @@
 //
 // Rust lane: `cargo test --lib` (the library unit tests; the fake-agent end-to-end tests need
 // `npm run test:fake-tui` or `scripts/test-changed.mjs --e2e`). JS lane: `tsc --noEmit` for the app and the
-// service worker (incremental: ~5 s when nothing changed), then `vitest run`. Guards: no personal paths in tracked files, no merge leftovers.
+// service worker (incremental: ~5 s when nothing changed), then `vitest run`. Guards: no personal paths in tracked files, no merge leftovers, no product separation breaks, no packages/ reads of a top-level docs/ folder.
 //
 // Logs go to <tmp>/pm-check/<checkout name>/ (override with PM_CHECK_LOGS); the terminal gets one line per
 // lane and the first failing lines. Exit code 0 only when every lane passed.
@@ -97,6 +97,7 @@ const guards = [
   ['guard personal paths', 'node', [join(repoRoot, 'scripts', 'check-no-personal-paths.mjs')], 'guard-paths.log'],
   ['guard merge leftovers', 'node', [join(repoRoot, 'scripts', 'check-merge-leftovers.mjs')], 'guard-merge.log'],
   ['guard product separation', 'node', [join(repoRoot, 'scripts', 'check-separation.mjs')], 'guard-separation.log'],
+  ['guard no docs imports', 'node', [join(repoRoot, 'scripts', 'check-no-docs-imports.mjs')], 'guard-docs-imports.log'],
 ];
 for (const [label, cmd, a, log] of guards) lanes.push(runLogged(label, cmd, a, { cwd: repoRoot, logPath: join(logs, log) }));
 

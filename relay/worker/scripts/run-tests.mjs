@@ -8,7 +8,7 @@
 //
 // Needs Rust (cargo) for the Rust parts. Set CARGO_TARGET_DIR to keep build output out of the repo.
 import { spawn, spawnSync } from "node:child_process";
-import { createHash } from "node:crypto";
+import { createHash, createPrivateKey, createPublicKey } from "node:crypto";
 import { mkdtempSync, rmSync } from "node:fs";
 import { createServer } from "node:net";
 import { tmpdir } from "node:os";
@@ -21,7 +21,14 @@ const relay = resolve(worker, "..");
 const app = resolve(relay, "..", "packages", "app", "src-tauri");
 const wrangler = join(worker, "node_modules", "wrangler", "bin", "wrangler.js");
 const args = new Set(process.argv.slice(2));
-const only = args.has("--worker-only") ? "worker" : args.has("--app-only") ? "app" : "all";
+const only = args.has("--worker-only") ? "worker" : args.has("--app-only") ? "app" : args.has("--pair-app") ? "pair-app" : "all";
+
+/** The public key id of `key(21)` in test/proto.mjs (seed byte 21): the owner of the pairing test Worker. */
+function pairOwnerId() {
+  const secret = Buffer.alloc(32, 21);
+  const privateKey = createPrivateKey({ key: Buffer.concat([Buffer.from("302e020100300506032b657004220420", "hex"), secret]), format: "der", type: "pkcs8" });
+  return Buffer.from(createPublicKey(privateKey).export({ format: "jwk" }).x, "base64url").toString("base64url");
+}
 
 const children = [];
 const scratch = mkdtempSync(join(tmpdir(), "pm-relay-worker-"));
@@ -91,6 +98,13 @@ process.on("exit", stopAll);
 process.on("SIGINT", () => process.exit(130));
 
 try {
+  if (only === "pair-app") {
+    // Far-away pairing, end to end with the app's own client: two PCs pair through a local Worker.
+    const pairOn = await startWorker("pair-app", { PAIR_OWNER: pairOwnerId() });
+    run("far-away pairing through the real Worker (Rust)", "cargo", ["test", "--lib", "--", "far_worker_loopback"], { cwd: app, env: { ...process.env, PM_PAIR_URL: pairOn } });
+    if (failed) process.exitCode = 1;
+    process.exit(failed ? 1 : 0);
+  }
   if (only === "all") {
     run("protocol checks (Rust, native)", "cargo", ["test", "-p", "pm-relay-wasm"], { cwd: relay });
   }
@@ -123,6 +137,13 @@ try {
     run("Stable link tests (node)", process.execPath, ["--test", "--test-concurrency=1", join(worker, "test", "stable.test.mjs")], {
       cwd: worker,
       env: { ...process.env, PM_LINK_URL: hooked, PM_LINK_STRICT_URL: linkStrict, PM_LINK_SETUP_SECRET: linkSecret },
+    });
+    // Far-away pairing: one Worker with the owner key set (a small box cap), one without (the feature is off).
+    const pairOn = await startWorker("pair-on", { PAIR_OWNER: pairOwnerId(), LIMIT_PAIR_MAX_OPEN: "3" });
+    const pairOff = await startWorker("pair-off", {});
+    run("Far-away pairing tests (node)", process.execPath, ["--test", "--test-concurrency=1", join(worker, "test", "pair.test.mjs")], {
+      cwd: worker,
+      env: { ...process.env, PM_PAIR_URL: pairOn, PM_PAIR_OFF_URL: pairOff },
     });
     run("Live Room tests (node)", process.execPath, ["--test", "--test-concurrency=1", join(worker, "test", "room.test.mjs")], {
       cwd: worker,

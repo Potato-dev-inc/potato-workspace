@@ -171,3 +171,180 @@
     padding: 20px 16px 40px;
   }
 }
+
+.cn-relay {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 4px 10px;
+  margin: 0;
+  padding: 7px 10px;
+  width: fit-content;
+  max-width: 100%;
+  font-size: 12px;
+  color: var(--label-2);
+  background: var(--fill);
+  border: 1px solid var(--sep);
+  border-radius: 8px;
+}
+.cn-relay-label {
+  color: var(--label-3);
+}
+.cn-relay-status {
+  padding: 1px 8px;
+  border: 1px solid var(--sep);
+  border-radius: 999px;
+}
+.cn-relay[data-state='linked'] .cn-relay-status {
+  color: var(--label);
+}
+.cn-relay-used {
+  color: var(--label-3);
+}
+
+/* Phone, default view: one line, one code, one status line. The code sits on a white card in both themes so a camera can read it. */
+.cn-simple {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 14px;
+  padding: 12px 0 8px;
+  text-align: center;
+}
+.cn-simple-lead {
+  margin: 0;
+  font-size: 16px;
+  color: var(--label);
+}
+.cn-qr {
+  padding: 8px;
+  background: #fff; /* a QR code needs a white quiet zone to scan */
+  border: 1px solid var(--sep);
+  border-radius: 12px;
+}
+.cn-qr[hidden] {
+  display: none;
+}
+.cn-qr-canvas {
+  display: block;
+  width: min(280px, 70vw);
+  height: auto;
+  aspect-ratio: 1;
+}
+.cn-simple-status {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 0;
+  font-size: 14px;
+  color: var(--label);
+}
+.cn-simple-status .cn-dot[data-on='true'] {
+  background: var(--accent);
+  opacity: 1;
+}
+.cn-simple-note {
+  margin: 0;
+  font-size: 12px;
+  color: var(--label-3);
+}
+.cn-problem {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+  max-width: 100%;
+}
+.cn-problem p {
+  margin: 0;
+}
+.cn-problem-details {
+  max-width: 100%;
+  font-size: 12px;
+  color: var(--label-3);
+  text-align: start;
+}
+.cn-detail-line {
+  margin: 4px 0 0;
+  overflow-wrap: anywhere;
+}
+.cn-offer {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+  max-width: 420px;
+  padding: 12px 14px;
+  background: var(--fill);
+  border: 1px solid var(--sep);
+  border-radius: 10px;
+  font-size: 13px;
+  color: var(--label-2);
+}
+.cn-offer-text {
+  margin: 0;
+}
+.cn-offer-actions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 8px;
+}
+
+/* Advanced: closed by default, grey, at the bottom. */
+.cn-adv {
+  margin-top: 12px;
+  border-top: 1px solid var(--sep);
+  padding-top: 8px;
+}
+.cn-adv-summary {
+  cursor: pointer;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--label-3);
+}
+.cn-adv-body {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding-top: 10px;
+  min-width: 0;
+}
+.cn-adv-intro {
+  margin: 0;
+  font-size: 12px;
+  color: var(--label-3);
+}
+.cn-adv-terms {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  margin: 0;
+  font-size: 12px;
+}
+.cn-adv-term {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 2px 8px;
+}
+.cn-adv-term dt {
+  font-weight: 600;
+  color: var(--label-2);
+}
+.cn-adv-term dd {
+  margin: 0;
+  color: var(--label-3);
+}
+
+/* Code hidden because the window is not being looked at: a blurred card, click to show again. */
+.cn-qr-away {
+  width: min(296px, 80vw);
+  aspect-ratio: 1;
+  display: grid;
+  place-items: center;
+  color: var(--label-2);
+  background: var(--fill);
+  font: inherit;
+  cursor: pointer;
+  backdrop-filter: blur(6px);
+}

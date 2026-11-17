@@ -1,5 +1,5 @@
 //! Tauri commands for workflows (Labs "Workflows"; Rust `crews::workflow`): the New agent page lists the workflows
-//! (crews with a Front), asks for the plan of one in a folder (the brief the Front gets first), and, in whole-horde
+//! (every saved crew; a crew with no marked Front uses its lead), asks for the plan of one in a folder (the brief the Front gets first), and, in whole-horde
 //! mode, starts the helpers right after the Front. Errors read `CODE: message` like the other crew commands.
 
 use super::AppState;
@@ -34,13 +34,38 @@ pub struct WorkflowSummary {
     pub plan: Plan,
 }
 
-/// A crew with a Front, its `{default}` agents filled in.
+/// Any saved crew read as a workflow, its `{default}` agents filled in. A crew with no marked Front uses its lead as the
+/// Front (derived here, never saved).
 fn load_workflow(slug: &str) -> Result<Crew, CrewError> {
-    let stored = store::load(&store::dir(), slug)?;
+    let stored = workflow::with_default_front(&store::load(&store::dir(), slug)?);
     if !workflow::is_workflow(&stored) {
         return Err(CrewError::new("WORKFLOW_NOT_FOUND", "There is no such workflow."));
     }
     agents::resolve_defaults(&stored, live::choices().default.as_deref())
+}
+
+/// How many saved crews the picker leaves out because they have a problem (so it can say so instead of "no workflows").
+#[tauri::command]
+pub async fn workflows_hidden_count(app: AppHandle) -> Result<u32, String> {
+    if !on(&app) {
+        return Ok(0);
+    }
+    tauri::async_runtime::spawn_blocking(|| store::list(&store::dir(), &live::agent_state).iter().filter(|s| s.problem.is_some()).count() as u32)
+        .await
+        .map_err(internal)
+}
+
+/// The first problem that stops a start. A crew saved with a Front is checked with the workflow rules; an older crew
+/// (its Front derived from its lead) is checked as the plain crew it is, so it needs no "when to use" lines.
+fn validate_for_start(slug: &str, resolved: &Crew) -> Option<CrewError> {
+    let saved_front = store::load(&store::dir(), slug).map(|c| c.roles.iter().any(|r| r.front)).unwrap_or(true);
+    let mut checked = resolved.clone();
+    if !saved_front {
+        for role in &mut checked.roles {
+            role.front = false;
+        }
+    }
+    validate::validate(&validate::normalized(&checked), &live::agent_state).into_iter().next()
 }
 
 /// The saved workflows; `None` while Labs "Workflows" is off. The brief is left empty here (it needs a folder).
@@ -80,7 +105,7 @@ pub async fn workflows_plan(app: AppHandle, slug: String, folder: String, reques
     let reply = style(&app);
     tauri::async_runtime::spawn_blocking(move || {
         let crew = load_workflow(&slug).map_err(text)?;
-        if let Some(first) = validate::validate(&validate::normalized(&crew), &live::agent_state).into_iter().next() {
+        if let Some(first) = validate_for_start(&slug, &crew) {
             return Err(text(first));
         }
         live::check_folder(&folder).map_err(text)?;
@@ -114,7 +139,7 @@ pub async fn workflows_start_helpers(app: AppHandle, state: State<'_, AppState>,
         if let Some(refused) = workflow::refuse_horde_start(&crew, live_pane) {
             return Err(text(refused));
         }
-        if let Some(first) = validate::validate(&validate::normalized(&crew), &live::agent_state).into_iter().next() {
+        if let Some(first) = validate_for_start(&slug, &crew) {
             return Err(text(first));
         }
         live::check_folder(&folder).map_err(text)?;

@@ -31,12 +31,15 @@ pub mod iroh_net;
 #[cfg(test)]
 pub mod memory;
 pub mod discovery;
+pub mod far;
 pub mod pairing;
 pub mod session;
 pub mod trust;
 
 #[cfg(test)]
 mod guard_tests;
+#[cfg(test)]
+pub(crate) mod far_tests;
 #[cfg(test)]
 mod tests;
 
@@ -70,6 +73,9 @@ pub const LEND_LABS_KEY: &str = "lend_enabled";
 
 /// Devices (another paired Workspace runs agents here) has its own Labs switch too.
 pub const DEVICES_LABS_KEY: &str = "devices_enabled";
+
+/// Far-away pairing through the person's own Worker has its own Labs switch (off by default).
+pub const FAR_PCS_LABS_KEY: &str = "far_pcs_enabled";
 
 pub fn labs_key_for(capability: &str) -> &'static str {
     if capability == capability::SPACES {
@@ -169,6 +175,8 @@ pub struct P2p {
     spaces_labs: Arc<AtomicBool>,
     lend_labs: Arc<AtomicBool>,
     devices_labs: Arc<AtomicBool>,
+    /// Labs `far_pcs_enabled`: pairing may meet through the person's own Worker (`far.rs`).
+    far_labs: AtomicBool,
     /// No outside relay is ever used (the founder's "My own route only"): the endpoint binds without relays.
     no_relay: AtomicBool,
     /// True while either switch is on: the accept loop refuses everything otherwise.
@@ -194,6 +202,7 @@ impl P2p {
             spaces_labs: Arc::new(AtomicBool::new(false)),
             lend_labs: Arc::new(AtomicBool::new(false)),
             devices_labs: Arc::new(AtomicBool::new(false)),
+            far_labs: AtomicBool::new(false),
             no_relay: AtomicBool::new(false),
             any_labs: Arc::new(AtomicBool::new(false)),
             keys,
@@ -232,6 +241,11 @@ impl P2p {
         self.labs.load(Ordering::SeqCst)
     }
 
+    /// Whether far-away pairing through the person's own Worker is switched on (Labs).
+    pub fn far_pcs_on(&self) -> bool {
+        self.far_labs.load(Ordering::SeqCst)
+    }
+
     pub fn labs_for(&self, capability: &str) -> bool {
         if capability == capability::SPACES {
             self.spaces_labs.load(Ordering::SeqCst)
@@ -255,6 +269,7 @@ impl P2p {
         let spaces = labs_on_for(public, capability::SPACES);
         let lend = labs_on_for(public, capability::AGENTS_LEND);
         let devices = labs_on_for(public, capability::AGENTS_REMOTE);
+        self.far_labs.store(public.get(FAR_PCS_LABS_KEY).and_then(Value::as_bool).unwrap_or(false), Ordering::SeqCst);
         self.labs.store(desk, Ordering::SeqCst);
         self.spaces_labs.store(spaces, Ordering::SeqCst);
         self.lend_labs.store(lend, Ordering::SeqCst);

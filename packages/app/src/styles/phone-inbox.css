@@ -111,3 +111,66 @@
 .ph .ph-drow--static {
   cursor: default;
 }
+
+/* Done today: minimize to one row, or hide for the day. Tokens only. */
+.ph .ph-ibx-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding-right: 8px;
+}
+.ph .ph-ibx-head .ph-ibx-lab {
+  flex: 1;
+  min-width: 0;
+}
+.ph .ph-ibx-fold {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-height: 44px;
+  padding: 0;
+  border: 0;
+  background: none;
+  color: inherit;
+  font: inherit;
+  text-transform: inherit;
+  letter-spacing: inherit;
+  text-align: left;
+}
+.ph .ph-ibx-chev {
+  width: 14px;
+  height: 14px;
+  flex: none;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 2;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  transform: rotate(90deg);
+}
+.ph .ph-ibx-fold[aria-expanded='false'] .ph-ibx-chev {
+  transform: none;
+}
+.ph .ph-ibx-x {
+  display: flex;
+  width: 44px;
+  height: 44px;
+  flex: none;
+  align-items: center;
+  justify-content: center;
+  border: 0;
+  border-radius: 10px;
+  background: none;
+  color: var(--label-3);
+}
+.ph .ph-ibx-x:active {
+  background: var(--fill-active);
+}
+.ph .ph-ibx-x svg {
+  width: 16px;
+  height: 16px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 2;
+  stroke-linecap: round;
+}

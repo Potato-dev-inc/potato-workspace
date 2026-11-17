@@ -31,7 +31,7 @@ const VARIANTS = {
 };
 
 const argv = process.argv.slice(2);
-const opt = { out: path.join(tmpdir(), 'pm-roam'), only: null, variants: ['dark', 'light', 'narrow'], jobs: 3, port: null };
+const opt = { out: path.join(tmpdir(), 'pm-roam'), only: null, variants: ['dark', 'light', 'narrow'], jobs: 3, port: null, lang: '' };
 for (let i = 0; i < argv.length; i++) {
   const a = argv[i];
   if (a === '--out') opt.out = argv[++i];
@@ -39,6 +39,7 @@ for (let i = 0; i < argv.length; i++) {
   else if (a === '--variants') opt.variants = argv[++i].split(',');
   else if (a === '--jobs') opt.jobs = Math.max(1, Number(argv[++i]) || 1);
   else if (a === '--port') opt.port = Number(argv[++i]);
+  else if (a === '--lang') opt.lang = argv[++i];
   else {
     console.error(USAGE);
     process.exit(2);
@@ -344,7 +345,7 @@ async function runJob(browser, job) {
   const result = { ...job, hits: [], texts: [], png: null };
   browser.takeExceptions();
   await send('Emulation.setDeviceMetricsOverride', { width: job.width, height: job.height, deviceScaleFactor: 1, mobile: false });
-  await send('Page.navigate', { url: `${base}/?harness=${encodeURIComponent(job.name)}&theme=${job.theme}` });
+  await send('Page.navigate', { url: `${base}/?harness=${encodeURIComponent(job.name)}&theme=${job.theme}${opt.lang ? `&lang=${opt.lang}` : ''}` });
   let ready = false;
   for (let i = 0; i < 80 && !ready; i++) {
     await sleep(500);

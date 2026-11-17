@@ -3,6 +3,7 @@
 // agents. Nothing here shows a command; the output is behind "Details". The only manual part is the Cloudflare
 // approval in the browser. The picture is the shared SetupStepBlock, so a failure looks the same as everywhere else.
 import { useEffect, useRef, useState } from 'react';
+import { useDismissable } from '../../hooks/useDismissable';
 import { useT } from '../../i18n';
 import { requestAddAgentAction } from '../../lib/addAgentActions';
 import {
@@ -19,7 +20,7 @@ import type { AcpLaneView } from '../../lib/acpChat';
 import { SetupStepBlock, type SetupStep } from '../common/SetupStepBlock';
 import { Btn } from './settings-ui';
 
-export type UpdateButtonLabel = 'wu.update' | 'wu.setup' | 'wu.setupLink';
+export type UpdateButtonLabel = 'wu.update' | 'wu.setup' | 'wu.setupLink' | 'wu.fresh';
 
 type Handoff = { kind: 'none' } | { kind: 'busy' } | { kind: 'sent'; agent: string } | { kind: 'copy'; note: string; failed: boolean };
 
@@ -31,6 +32,7 @@ export function WorkerUpdateButton({
   loadAgents = loadAgentView,
   handOff = requestAddAgentAction,
   pauseMs,
+  fresh = false,
 }: {
   /** The Worker to update; none: a new one is set up. */
   address: string | null;
@@ -42,6 +44,8 @@ export function WorkerUpdateButton({
   handOff?: (kind: 'chat', agentId: string, task: string) => void;
   /** The pause before a failed step runs again (tests give 0). */
   pauseMs?: number;
+  /** Delete the Worker at `address` and make a new one (asks first). */
+  fresh?: boolean;
 }) {
   const t = useT();
   const [steps, setSteps] = useState<SetupStep[] | null>(null);
@@ -49,6 +53,16 @@ export function WorkerUpdateButton({
   const [finished, setFinished] = useState<UpdateRun | null>(null);
   const [handoff, setHandoff] = useState<Handoff>({ kind: 'none' });
   const [copied, setCopied] = useState(false);
+  const [asking, setAsking] = useState(false);
+  const confirmRef = useRef<HTMLDivElement>(null);
+  // Escape closes only this question, not the sheet around it; the other ways to dismiss are off.
+  useDismissable(asking, { inside: [confirmRef], ignore: ['outside', 'focus', 'blur', 'scroll'], onDismiss: () => setAsking(false) });
+  useEffect(() => {
+    if (!asking) return undefined;
+    const stop = (e: KeyboardEvent) => e.key === 'Escape' && e.stopPropagation();
+    document.addEventListener('keydown', stop, true);
+    return () => document.removeEventListener('keydown', stop, true);
+  }, [asking]);
   const alive = useRef(true);
   useEffect(() => {
     alive.current = true;
@@ -61,6 +75,7 @@ export function WorkerUpdateButton({
     prepare: t('wu.step.prepare'),
     install: t('wu.step.install'),
     login: t('wu.step.login'),
+    delete: t('wu.step.delete'),
     deploy: t('wu.step.deploy'),
     check: t('wu.step.check'),
   });
@@ -84,6 +99,7 @@ export function WorkerUpdateButton({
   };
 
   const start = async () => {
+    setAsking(false);
     setRunning(true);
     setFinished(null);
     setHandoff({ kind: 'none' });
@@ -92,6 +108,7 @@ export function WorkerUpdateButton({
       address,
       api,
       pauseMs,
+      fresh,
       isCancelled: () => !alive.current,
       onChange: (next) =>
         alive.current &&
@@ -119,10 +136,23 @@ export function WorkerUpdateButton({
     <div data-testid="worker-update-button" className="stable-update">
       {!steps && <p>{t('wu.intro')}</p>}
       <div className="flex gap-2 items-center">
-        <Btn primary data-testid="worker-update-go" disabled={running} onClick={() => void start()}>
+        <Btn primary data-testid="worker-update-go" disabled={running || asking} onClick={() => (fresh ? setAsking(true) : void start())}>
           {running ? t('setupStep.status.running') : t(label)}
         </Btn>
       </div>
+      {fresh && asking && (
+        <div ref={confirmRef} role="alertdialog" aria-label={t('wu.fresh')} data-testid="worker-fresh-confirm">
+          <p>{t('wu.freshSure', { name: (address ?? '').replace(/^https:\/\//, '').split('.')[0] })}</p>
+          <div className="flex gap-2 items-center">
+            <Btn primary data-testid="worker-fresh-yes" onClick={() => void start()}>
+              {t('wu.freshYes')}
+            </Btn>
+            <Btn data-testid="worker-fresh-no" onClick={() => setAsking(false)}>
+              {t('wu.freshNo')}
+            </Btn>
+          </div>
+        </div>
+      )}
       {steps && (
         <SetupStepBlock
           testId="worker-update"

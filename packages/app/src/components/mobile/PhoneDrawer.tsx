@@ -174,6 +174,7 @@ export function PhoneDrawer({
   onSearch,
   onSettings,
   children,
+  footExtra,
   locks,
   onStopPane,
   onClosePane,
@@ -203,6 +204,8 @@ export function PhoneDrawer({
   onSettings: () => void;
   /** Night, Review and Focus summaries: cards at the top of the drawer. */
   children?: ReactNode;
+  /** A button in the bottom bar, between the PC state and Settings ("Leave my desk"). */
+  footExtra?: ReactNode;
   /** Per agent: how far the PC lets this phone go (a lock on its row). Agents with no entry have no limit. */
   locks?: Record<string, RuleLimit | null>;
   /** Stop one agent turn. Without it the row menu has no Stop. */
@@ -496,6 +499,7 @@ export function PhoneDrawer({
               </button>
             )}
           </div>
+          {footExtra}
           <button type="button" className="ph-iconbtn ph-dsettings" aria-label={t('phone.settings')} onClick={onSettings}>
             <svg viewBox="0 0 24 24" aria-hidden="true">
               <circle cx="12" cy="12" r="3" />

@@ -34,6 +34,7 @@ const plan = (start_mode: string, reply_style = 'translator'): WorkflowChoice['p
 });
 
 let workflows: WorkflowChoice[] | null;
+let hidden = 0;
 const planFor = vi.fn(async (_slug: string, _folder: string, _request: string) => plan('front'));
 const helpers = vi.fn(async (_slug: string, _folder: string, _pane: string): Promise<string | null> => null);
 
@@ -49,6 +50,7 @@ const api = (): NewAgentApi => ({
   saveCards: async () => undefined,
   onHomeChanged: async () => () => undefined,
   workflows: async () => workflows,
+  workflowsHidden: async () => hidden,
   workflowPlan: planFor,
   workflowHelpers: helpers,
 });
@@ -64,6 +66,7 @@ let root: Root;
 beforeEach(() => {
   localStorage.clear();
   planFor.mockClear();
+  hidden = 0;
   helpers.mockClear();
   workflows = [{ slug: 'haiku-router', plan: plan('front') }];
   host = document.createElement('div');
@@ -165,5 +168,39 @@ describe('New agent page: Workflow dropdown', () => {
     await mount();
     await pick('Haiku router');
     expect(byId('na-wf-summary')!.textContent).toContain("The front shows each agent's own words.");
+  });
+});
+
+describe('New agent page: crews with no marked front', () => {
+  it('lists a crew whose front is its lead, with the summary line and the Edit workflow link', async () => {
+    const lead = plan('front');
+    lead.name = 'Builder + Reviewer';
+    lead.helpers = [{ name: 'Reviewer', agent_type: 'alpha', model: null, when_to_use: '', kind: 'minion' }];
+    workflows = [{ slug: 'builder-reviewer', plan: lead }];
+    await mount();
+    expect(document.body.textContent).not.toContain('No workflows yet');
+    await pick('Builder + Reviewer');
+    const line = byId('na-wf-summary')!.textContent!;
+    expect(line).toContain('Others: Alpha (minion).');
+    expect(line).not.toContain('(,');
+    expect([...document.querySelectorAll('button')].some((b) => b.textContent === 'Edit workflow')).toBe(true);
+  });
+
+  it('shows the empty message only when there really are no crews', async () => {
+    workflows = [];
+    await mount();
+    await click(byId('na-workflow'));
+    expect(document.body.textContent).toContain('No workflows yet. Make one on the Crews page.');
+  });
+});
+
+describe('New agent page: crews hidden because they need fixing', () => {
+  it('says some crews need fixing instead of "no workflows yet"', async () => {
+    workflows = [];
+    hidden = 2;
+    await mount();
+    await click(byId('na-workflow'));
+    expect(document.body.textContent).toContain('Some crews need fixing on the Crews page.');
+    expect(document.body.textContent).not.toContain('No workflows yet');
   });
 });

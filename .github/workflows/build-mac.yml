@@ -1,0 +1,53 @@
+name: Build Mac
+
+# Manual only (same rule as ci.yml): nothing starts this except "Run workflow" on GitHub.
+# Builds an UNSIGNED Mac app and disk image and attaches them to the run as an artifact.
+# No secrets, no signing, no notarization, no release. See docs/BUILD-MAC.md.
+on:
+  workflow_dispatch:
+    inputs:
+      runner:
+        description: 'Mac runner: macos-latest (Apple silicon) or macos-15-intel (Intel)'
+        type: choice
+        default: macos-latest
+        options:
+          - macos-latest
+          - macos-15-intel
+
+permissions:
+  contents: read
+
+jobs:
+  build-mac:
+    name: Build Mac app (${{ inputs.runner }})
+    runs-on: ${{ inputs.runner }}
+    timeout-minutes: 90
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      # No rust-toolchain.toml in the repo, so this is the stable channel (the app needs Rust 1.91 or newer).
+      - uses: dtolnay/rust-toolchain@stable
+
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: packages/app/src-tauri
+          cache-on-failure: true
+
+      - name: Install packages
+        run: npm ci
+
+      # tauri.macos.conf.json is merged over tauri.conf.json on a Mac: app + dmg, no updater files, ad-hoc signature.
+      - name: Build the app and the disk image
+        run: npm run tauri -- build
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: potato-workspace-mac-${{ runner.arch }}
+          if-no-files-found: error
+          path: packages/app/src-tauri/target/release/bundle/dmg/*.dmg

@@ -183,3 +183,62 @@ fn a_plain_crew_is_not_a_workflow_even_if_a_role_has_a_when_line() {
     let plain = Crew { name: "p".into(), roles: vec![role("Lead", None), Role { when_to_use: Some("x".into()), ..role("W", Some("Lead")) }], ..Crew::default() };
     assert!(!super::workflow::is_workflow(&plain));
 }
+
+#[test]
+fn a_crew_without_a_front_reads_as_a_workflow_led_by_its_lead() {
+    use super::workflow::{helpers_of, is_workflow, with_default_front};
+    let old = Crew { name: "Old".into(), roles: vec![role("Lead", None), role("Worker", Some("Lead")), role("Checker", Some("Lead"))], ..Crew::default() };
+    let before = to_toml(&old).unwrap();
+    let derived = with_default_front(&old);
+    assert!(is_workflow(&derived));
+    assert_eq!(front_of(&derived).unwrap().name, "Lead");
+    assert_eq!(helpers_of(&derived).len(), 2);
+    let p = plan(&derived, "C:/p", ReplyStyle::default(), "hi").unwrap();
+    assert_eq!((p.helpers.len(), p.start_mode.as_str()), (2, "horde"));
+    assert!(p.helpers.iter().all(|h| h.kind == "minion" && h.when_to_use.is_empty()));
+    let brief = front_brief(&derived, "C:/p", ReplyStyle::default()).unwrap();
+    assert!(brief.contains("- Worker - use for:"));
+    // the saved crew is untouched, byte for byte
+    assert!(!is_workflow(&old));
+    assert_eq!(to_toml(&old).unwrap(), before);
+    assert!(!to_toml(&derived).unwrap().is_empty());
+}
+
+#[test]
+fn a_real_front_is_kept_and_an_empty_crew_stays_empty() {
+    use super::workflow::with_default_front;
+    let w = workflow();
+    assert_eq!(with_default_front(&w), w);
+    let empty = Crew { name: "None".into(), ..Crew::default() };
+    assert_eq!(with_default_front(&empty), empty);
+    assert!(plan(&with_default_front(&empty), "C:/p", ReplyStyle::default(), "").is_none());
+}
+
+#[test]
+fn a_derived_front_starts_the_whole_crew_and_a_real_front_keeps_its_mode() {
+    use super::workflow::with_default_front;
+    let flat = Crew { name: "Flat".into(), roles: vec![role("Lead", None), role("Worker", Some("Lead"))], ..Crew::default() };
+    let p = plan(&with_default_front(&flat), "C:/p", ReplyStyle::default(), "").unwrap();
+    assert_eq!(p.start_mode, "horde");
+    // a start mode the crew saved is kept
+    let mut front_only = flat.clone();
+    front_only.start_mode = Some("front".into());
+    assert_eq!(plan(&with_default_front(&front_only), "C:/p", ReplyStyle::default(), "").unwrap().start_mode, "front");
+    // a real front keeps its own mode (the default is `front`), and nothing is added to it
+    assert_eq!(plan(&workflow(), "C:/p", ReplyStyle::default(), "").unwrap().start_mode, "front");
+    assert_eq!(with_default_front(&workflow()), workflow());
+    // the saved crew has no start mode
+    assert!(flat.start_mode.is_none());
+}
+
+#[test]
+fn a_deeper_crew_or_one_that_hands_work_on_is_not_read_as_a_workflow() {
+    use super::workflow::{is_workflow, with_default_front};
+    let deep = Crew { name: "Deep".into(), roles: vec![role("Lead", None), role("Worker", Some("Lead")), role("Checker", Some("Worker"))], ..Crew::default() };
+    assert!(!is_workflow(&with_default_front(&deep)));
+    let mut hands = Crew { name: "Hands".into(), roles: vec![role("Lead", None), role("Worker", Some("Lead"))], ..Crew::default() };
+    hands.roles[1].hands_to = vec!["Lead".into()];
+    assert!(!is_workflow(&with_default_front(&hands)));
+    let two_roots = Crew { name: "Two".into(), roles: vec![role("A", None), role("B", None)], ..Crew::default() };
+    assert!(!is_workflow(&with_default_front(&two_roots)));
+}

@@ -104,14 +104,15 @@ describe('start a team', () => {
     return m;
   };
 
-  it('asks for the team name and your name (already filled in), with the relay first and the other ways folded', async () => {
+  it('asks for the team name and your name (already filled in), with the relay setup first and the other ways folded', async () => {
     await open();
     expect(field('Your name').value).toBe('Pat'); // this computer's name, until Settings has one
     const order = buttons();
-    expect(order).toContain('Create team relay');
+    expect(order).toContain('Set up my relay');
+    expect(order).not.toContain('Create team relay'); // the token way is under Other ways
     expect(hasText(host, 'Recommended')).toBe(true);
     const other = buttonStarting('Other ways')!;
-    expect(order.indexOf('Create team relay')).toBeLessThan(order.findIndex((t) => t?.startsWith('Other ways')));
+    expect(order.indexOf('Set up my relay')).toBeLessThan(order.findIndex((t) => t?.startsWith('Other ways')));
     expect(other.getAttribute('aria-expanded')).toBe('false');
     expect(hasText(host, 'Use my own address')).toBe(false);
     expect(hasText(host, 'Use a shared folder')).toBe(false);
@@ -129,6 +130,7 @@ describe('start a team', () => {
 
   it('create team relay: one button deploys a relay with a pasted token, creates the team with it and shows the invite', async () => {
     const { api } = await open();
+    await click(buttonStarting('Other ways'));
     expect(buttonByText(host, 'Create team relay')!.disabled).toBe(true);
     await typeInto(field('Team name'), 'Acme');
     await click(buttonByText(host, 'Create team relay'));
@@ -165,6 +167,7 @@ describe('start a team', () => {
       return { status: 'done', url: 'https://pm-relay.maya.workers.dev' };
     };
     await typeInto(field('Team name'), 'Acme');
+    await click(buttonStarting('Other ways'));
     await click(buttonByText(host, 'Create team relay'));
     await typeInto(sheet()!.querySelector<HTMLInputElement>('input[aria-label="Cloudflare token"]')!, 'cf-token');
     await click(sheetButton('Create team link'));
@@ -203,6 +206,7 @@ describe('start a team', () => {
           };
     };
     await typeInto(field('Team name'), 'Acme');
+    await click(buttonStarting('Other ways'));
     await click(buttonByText(host, 'Create team relay'));
     expect(sheet()!.querySelector('[aria-label="Cloudflare account"]')).toBeNull();
     await typeInto(sheet()!.querySelector<HTMLInputElement>('input[aria-label="Cloudflare token"]')!, 'cf-token');
