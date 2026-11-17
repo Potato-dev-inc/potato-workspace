@@ -36,6 +36,13 @@ const mount = async (props: Partial<React.ComponentProps<typeof SettingsPanel>> 
 const nav = () => [...host.querySelectorAll('.st-nav .st-nav-row')];
 const navLabels = () => nav().map((b) => b.textContent);
 const main = () => host.querySelector('.st-main') as HTMLElement;
+// The Labs areas are cards that start closed: open each one.
+const openAllCards = async () => {
+  for (const toggle of [...main().querySelectorAll<HTMLElement>('.st-labs-area .st-adv-toggle[aria-expanded="false"]')]) {
+    await act(async () => toggle.click());
+  }
+  await settle(2);
+};
 
 describe('Labs is a real page in the Settings nav', () => {
   it('the nav lists Labs as a page, between Shortcuts and Advanced', async () => {
@@ -53,6 +60,7 @@ describe('Labs is a real page in the Settings nav', () => {
     const labsRow = nav().find((b) => b.textContent === 'Labs');
     expect(labsRow?.getAttribute('aria-current')).toBe('page');
     expect(main().querySelector('h1')?.textContent).toBe('Labs');
+    await openAllCards();
     expect(main().textContent).toContain('Simple mode');
   });
 
@@ -67,6 +75,7 @@ describe('Labs is a real page in the Settings nav', () => {
 
   it('the other early features keep their own switch or Open button on the Labs page', async () => {
     await mount({ initialTab: 'labs' });
+    await openAllCards();
     expect(main().querySelectorAll('.st-labs-feature').length).toBeGreaterThan(5);
     expect(main().querySelector('[aria-label*="Ask bar"]')).not.toBeNull();
   });

@@ -17,6 +17,8 @@
 //   The reader is 你 (not 您). Chinese text uses full-width punctuation, with a space between Chinese and Latin or digits.
 import type { EnglishKey } from './en';
 import { minions } from './zh-TW/minions';
+import { taskDrag } from './zh-TW/taskDrag';
+import { crewChip } from './zh-TW/crewChip';
 import { common } from './zh-TW/common';
 import { sidebar } from './zh-TW/sidebar';
 import { whatsnew } from './zh-TW/whatsnew';
@@ -87,6 +89,7 @@ import { appUx } from './zh-TW/appUx';
 import { deskReview } from './zh-TW/deskReview';
 import { devices } from './zh-TW/devices';
 import { crews } from './zh-TW/crews';
+import { workflows } from './zh-TW/workflows';
 import { crewCanvas } from './zh-TW/crewCanvas';
 import { crewTalk } from './zh-TW/crewTalk';
 import { account } from './zh-TW/account';
@@ -166,10 +169,13 @@ export const zhTW: Partial<Record<EnglishKey, string>> = {
   ...devices,
   ...crews,
   ...crewCanvas,
+  ...workflows,
   ...crewTalk,
   ...account,
   ...agentRules,
   ...rail,
   ...connect,
   ...minions,
+  ...taskDrag,
+  ...crewChip,
 };

@@ -47,6 +47,13 @@ describe('the word "helper" is not shown to people in English', () => {
   });
 });
 
+describe('the word 幫手 is not shown to people in Traditional Chinese', () => {
+  it('no zh-TW value uses it (the app says 小代理, 分支對話 or 待命代理)', () => {
+    const found = Object.entries(zhTW as Record<string, string>).filter(([, v]) => typeof v === 'string' && v.includes('幫手')).map(([k, v]) => `${k}: ${v}`);
+    expect(found).toEqual([]);
+  });
+});
+
 describe('the Two types overlay', () => {
   it('every overlay key is a real key in both languages (so the switch never adds a stray text)', () => {
     for (const key of Object.keys(twoTypesEn)) {

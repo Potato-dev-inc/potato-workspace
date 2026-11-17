@@ -555,3 +555,22 @@ fn old_helpers_are_spin_offs_and_hidden_runs_are_minions() {
     assert_eq!(legacy_kind(true, true), StartedAs::Minion);
     assert_eq!(legacy_kind(false, true), StartedAs::Minion);
 }
+
+#[test]
+fn a_caller_that_says_keep_pane_false_is_believed_until_the_person_chooses() {
+    // The default (the person never chose): said out loud, the pane closes when done; left out, the default keeps it.
+    let mut keep = false;
+    assert!(!apply_keep_open_for_caller_with(&mut keep, true, true, false));
+    assert!(!keep, "said close, no choice by the person: it closes");
+    let mut keep = false;
+    assert!(apply_keep_open_for_caller_with(&mut keep, false, true, false));
+    assert!(keep, "left out: the default keeps it open");
+    // The person chose "keep open": their word wins over the caller.
+    let mut keep = false;
+    assert!(apply_keep_open_for_caller_with(&mut keep, true, true, true));
+    assert!(keep);
+    // The person chose "close when done": nothing is kept, whatever the caller said.
+    let mut keep = false;
+    assert!(!apply_keep_open_for_caller_with(&mut keep, false, false, true));
+    assert!(!keep);
+}

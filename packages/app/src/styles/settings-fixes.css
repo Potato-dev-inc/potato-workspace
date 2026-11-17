@@ -356,7 +356,7 @@
 .stable-sheet {
   width: 100%;
   max-width: 520px;
-  max-height: 88vh;
+  max-height: calc(88vh / var(--ui-scale, 1));
   overflow: auto;
   padding: 16px;
   border: 1px solid rgb(var(--pm-border));
@@ -370,3 +370,13 @@
 .stable-cmd { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin: 4px 0; padding: 4px 8px; border: 1px solid rgb(var(--pm-border)); border-radius: 8px; }
 .stable-status { margin: 0 0 12px; font-size: 12px; }
 .stable-status[data-linked='true'] { border: 1px solid var(--sep); border-radius: 8px; padding: 6px 8px; }
+
+/* Labs area cards: a jump-button feature lines up with the switch rows beside it (same side padding, same label weight). */
+.settings .st-labs-area .st-labs-item {
+  margin: 0;
+  padding: 10px 14px;
+  border-radius: 0;
+}
+.settings .st-labs-area .st-labs-name {
+  font-weight: 500;
+}

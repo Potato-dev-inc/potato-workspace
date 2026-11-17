@@ -3,7 +3,8 @@
 // per turn (one tap opens the list), and a failed step never folded (D11).
 import { act } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
-import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { setPhoneMotion } from '../../lib/phone-motion';
 import { groupTurns, type ChatItem } from '../../lib/sessionChat';
 import { setLanguagePref } from '../../i18n';
 import { foldTurnSteps } from './foldSteps';
@@ -99,11 +100,11 @@ describe('PhoneConversation', () => {
     expect(host.querySelector('[data-testid="phone-fold"]')?.textContent).not.toContain('npm test');
   });
 
-  it('says what runs now while the turn works', () => {
+  it('says what runs now in plain words while the turn works, never the command', () => {
     render([{ kind: 'user', id: 'u1', at: null, text: 'go' }, call(1, 'Bash', 'npm run build', 0)]);
     const fold = host.querySelector('[data-testid="phone-fold"]')!;
-    expect(fold.textContent).toContain('Working');
-    expect(fold.textContent).toContain('npm run build');
+    expect(fold.textContent).toBe('Running a command');
+    expect(fold.textContent).not.toContain('npm run build');
   });
 
   it('shows the dock, the pending bubbles and the composer under the conversation', () => {
@@ -118,5 +119,49 @@ describe('PhoneConversation', () => {
     expect(host.textContent).toContain('Chat unavailable');
     expect(host.textContent).toContain('This agent is not running any more.');
     expect(host.querySelector('[data-testid="comp"]')).toBeNull();
+  });
+});
+
+describe('Smooth text: the last agent message of a running turn', () => {
+  const LONG = Array.from({ length: 70 }, (_, i) => `word${i}`).join(' ').slice(0, 300);
+  const running = (text: string): ChatItem[] => [
+    { kind: 'user', id: 'u1', at: null, text: 'go' },
+    { kind: 'assistant', id: 'a1', at: null, text, model: null, finalAnswer: false },
+  ];
+  const agentText = () => host.querySelector('.ph-agent-text')?.textContent ?? '';
+  const tick = (ms: number) => act(() => { vi.advanceTimersByTime(ms); });
+  beforeEach(() => { vi.useFakeTimers(); localStorage.clear(); });
+  afterEach(() => { vi.useRealTimers(); localStorage.clear(); });
+
+  it('a 300-letter update is not all there after one tick, and is all there once the timers run', () => {
+    render(running('Start'));
+    expect(agentText()).toBe('Start');
+    render(running(LONG));
+    tick(24);
+    expect(agentText().length).toBeGreaterThan(0);
+    expect(agentText().length).toBeLessThan(LONG.length);
+    expect(LONG.startsWith(agentText())).toBe(true);
+    tick(10_000);
+    expect(agentText()).toBe(LONG);
+  });
+
+  it('shows it at once with reduced motion', () => {
+    setPhoneMotion('reduce');
+    render(running('Start'));
+    render(running(LONG));
+    expect(agentText()).toBe(LONG);
+  });
+
+  it('shows it at once when the turn is over (the chat is not live)', () => {
+    render([...running('Start')]);
+    render([...running(LONG), { kind: 'turnEnd', id: 'e1', at: null, outcome: 'completed', durationMs: 1000 }]);
+    expect(agentText()).toBe(LONG);
+  });
+
+  it('never holds back an ask: the dock is there at once while the text is still coming out', () => {
+    render(running('Start'));
+    render(running(LONG), { dock: <div data-testid="the-dock">Allow once?</div> });
+    expect(host.querySelector('[data-testid="the-dock"]')).not.toBeNull();
+    expect(agentText().length).toBeLessThan(LONG.length);
   });
 });

@@ -19,8 +19,8 @@ pub async fn set_tunnel_config(app: AppHandle, input: TunnelConfigInput) -> Resu
 }
 
 #[tauri::command]
-pub async fn restart_tunnel(app: AppHandle) -> Result<TunnelStatus, String> {
-    tauri::async_runtime::spawn_blocking(move || mobile_tunnel::restart_mobile_tunnel(&app))
+pub async fn restart_tunnel(app: AppHandle, try_anyway: Option<bool>) -> Result<TunnelStatus, String> {
+    tauri::async_runtime::spawn_blocking(move || mobile_tunnel::restart_mobile_tunnel_with(&app, try_anyway == Some(true)))
         .await
         .map_err(|err| err.to_string())?
 }

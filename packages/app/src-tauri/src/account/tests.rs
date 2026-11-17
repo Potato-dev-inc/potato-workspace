@@ -390,3 +390,66 @@ fn a_session_the_server_refuses_is_forgotten_here_too() {
     assert!(!thief.view().signed_in, "the refused session is removed");
     assert_eq!(thief.view().message.as_deref(), Some("You were signed out. Sign in again."));
 }
+
+// ---------- the link as the OS and the url crate hand it over ----------
+
+fn server_link() -> (String, String, String, String) {
+    // Built like account/server/src/auth.ts: ticket b64u of 32 bytes, state = the app's own state, acct = a uuid,
+    // each through encodeURIComponent (a no-op for url-safe base64 and a uuid).
+    let ticket = b64(&crate::keys::crypto::random_bytes::<32>());
+    let pending = PendingSignIn::default().start(0);
+    let state = pending.state().to_string();
+    let acct = uuid::Uuid::new_v4().to_string();
+    (format!("potato-workspace://signin?ticket={ticket}&state={state}&acct={acct}"), ticket, state, acct)
+}
+
+#[test]
+fn the_exact_server_link_survives_the_url_crate_and_the_single_instance_argv() {
+    for _ in 0..50 {
+        let (link, ticket, state, acct) = server_link();
+        let want = SignInLink { ticket, state, account: acct };
+        // deep-link plugin: Url::parse(arg) then `.to_string()` (both the on_open_url path and the argv path).
+        let round = url::Url::parse(&link).unwrap().to_string();
+        assert_eq!(parse_link(&link), Some(want.clone()), "{link}");
+        assert_eq!(parse_link(&round), Some(want.clone()), "{round}");
+        // Forms a browser or the OS may hand over.
+        let (head, query) = link.split_once('?').unwrap();
+        for form in [
+            format!("{head}/?{query}"),
+            format!("{link}/"),
+            format!("{head}/?{query}/"),
+            format!("\"{link}\""),
+            link.replacen("potato-workspace://signin", "POTATO-WORKSPACE://SIGNIN", 1),
+        ] {
+            assert_eq!(parse_link(&form), Some(want.clone()), "{form}");
+            // (a quoted argv value is not a URL for the url crate; the app reads it straight)
+            if let Ok(url) = url::Url::parse(&form) {
+                assert_eq!(parse_link(&url.to_string()), Some(want.clone()), "{url}");
+            }
+        }
+    }
+}
+
+#[test]
+fn percent_encoded_values_are_decoded_and_still_checked() {
+    // encodeURIComponent leaves url-safe base64 alone, but a proxy may encode '-' and '_'.
+    let enc = |s: &str| s.replace('-', "%2D").replace('_', "%5F");
+    let link = link_url(&enc(TICKET), &enc(STATE), ACCT);
+    assert_eq!(parse_link(&link), Some(SignInLink { ticket: TICKET.into(), state: STATE.into(), account: ACCT.into() }));
+    // An escape that decodes to a bad character, a broken escape and a decoded slash are refused.
+    for t in ["abcdefghijklmnop%2Fqrstuvwxyz", "abcdefghijklmnop%2", "abcdefghijklmnop%ZZqrst", "abcdefghijklmnop%00qrst"] {
+        assert_eq!(parse_link(&link_url(t, STATE, ACCT)), None, "{t}");
+    }
+}
+
+#[test]
+fn a_refused_sign_in_link_says_why_without_values() {
+    use super::signin::{check_link, Refused};
+    let good = link_url(TICKET, STATE, ACCT);
+    assert_eq!(check_link("potato-workspace://join/ABC?w=x").unwrap_err(), Refused::NotSignIn);
+    assert_eq!(check_link(&format!("{good}&x=1")).unwrap_err(), Refused::Shape);
+    assert_eq!(check_link(&format!("{good}#f")).unwrap_err(), Refused::Value);
+    assert_eq!(check_link(&link_url("short", STATE, ACCT)).unwrap_err(), Refused::Value);
+    assert_eq!(check_link(&"potato-workspace://signin?".repeat(30)).unwrap_err(), Refused::TooLong);
+    assert!(!Refused::Value.why().contains(TICKET));
+}

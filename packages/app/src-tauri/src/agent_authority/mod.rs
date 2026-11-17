@@ -36,6 +36,7 @@ pub mod gate;
 pub mod merge;
 pub mod pane_keys;
 pub mod shell_gate;
+pub mod terminal_gate;
 #[cfg(test)]
 mod tests;
 

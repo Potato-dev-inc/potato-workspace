@@ -122,7 +122,7 @@
 .cockpit .ck-chat-dock .ck-dock {
   position: relative;
   top: auto;
-  max-height: 40vh;
+  max-height: calc(40vh / var(--ui-scale, 1));
   border-bottom: 0;
   box-shadow: none;
 }
@@ -1052,8 +1052,8 @@
 /* "Save as page" preview (ChatExportMenu): a wide sheet with the page in a frame. The frame is white in both themes:
    the page carries its own colours. */
 .cockpit .ck-chat-export.ck-sheet {
-  width: min(760px, calc(100vw - 32px));
-  max-height: calc(100vh - 48px);
+  width: min(760px, calc(calc(100vw / var(--ui-scale, 1)) - 32px));
+  max-height: calc(calc(100vh / var(--ui-scale, 1)) - 48px);
 }
 .cockpit .ck-chat-export-body {
   display: flex;
@@ -1063,7 +1063,7 @@
 .cockpit .ck-chat-export-frame {
   flex: 1;
   width: 100%;
-  height: min(60vh, 560px);
+  height: min(calc(60vh / var(--ui-scale, 1)), 560px);
   border: 1px solid var(--sep);
   border-radius: 8px;
   background: var(--paper, white);
@@ -1075,7 +1075,7 @@
 .cockpit .ck-chat-export-text {
   flex: 1;
   width: 100%;
-  height: min(60vh, 560px);
+  height: min(calc(60vh / var(--ui-scale, 1)), 560px);
   margin: 0;
   overflow: auto;
   padding: 12px;
@@ -1135,4 +1135,33 @@
   color: var(--label-3, var(--label-2));
   opacity: 0.8;
   padding-right: 4px;
+}
+
+/* The View menu's chat-look switches (ChatLookSwitches): a hairline above, then one row per switch, label left and the
+   app's own switch (.ck-switch) on the right. */
+.cockpit .ck-chat-look {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  margin-top: 4px;
+  padding-top: 6px;
+  border-top: 1px solid var(--sep);
+}
+.cockpit .ck-chat-look-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  min-height: 28px;
+  padding: 0 8px;
+  font-size: 12px;
+  color: var(--label-2);
+}
+.cockpit .ck-chat-look-label {
+  min-width: 0;
+}
+
+/* The pane's tab row (Chat, Terminal, Changes) keeps its pressed segment without the orange line under it. */
+.cockpit .ck-pane-head .ck-seg-pill::after {
+  display: none;
 }

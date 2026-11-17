@@ -5,7 +5,7 @@
 //! A task is typed to an agent as a prompt; it is never run through a shell. Even so, it must be
 //! plain text: no control characters, a bounded length, and `{folder}` as its only placeholder.
 
-use super::model::{Crew, CrewError, Permissions, Role, DEFAULT_AGENT, MAX_ROLES, PLACEHOLDER, RUN_LEVELS, WRITE_LEVELS};
+use super::model::{Crew, CrewError, Permissions, Role, DEFAULT_AGENT, KINDS, MAX_ROLES, PLACEHOLDER, RUN_LEVELS, START_MODES, WRITE_LEVELS};
 
 pub const MAX_NAME_CHARS: usize = 60;
 pub const MAX_ROLE_NAME_CHARS: usize = 40;
@@ -16,6 +16,10 @@ const MAX_MODEL_CHARS: usize = 80;
 pub const MAX_HELPERS_CAP: u32 = 64;
 /// The most fix loops (checker back to the lead) a crew may allow.
 pub const MAX_FIX_LOOPS: u32 = 5;
+/// The longest "when to use me" line.
+pub const MAX_WHEN_CHARS: usize = 120;
+/// The most helper runs per message a workflow may allow.
+pub const MAX_HELPER_CAP: u32 = 10;
 /// The most warm standbys one role may ask for.
 pub const MAX_STANDBYS_PER_ROLE: u8 = 4;
 
@@ -51,12 +55,18 @@ pub fn normalized(crew: &Crew) -> Crew {
                 hands_to: r.hands_to.iter().map(|h| h.trim().to_string()).collect(),
                 check: r.check,
                 position: r.position,
+                front: r.front,
+                kind: trimmed(&r.kind),
+                when_to_use: trimmed(&r.when_to_use),
             })
             .collect(),
         budget: crew.budget.clone(),
         max_helpers: crew.max_helpers,
         fix_loops: crew.fix_loops,
         routing_file: trimmed(&crew.routing_file),
+        how_i_work: trimmed(&crew.how_i_work),
+        start_mode: trimmed(&crew.start_mode),
+        helper_cap: crew.helper_cap,
     }
 }
 
@@ -88,7 +98,55 @@ pub fn validate_with(crew: &Crew, agent_state: &dyn Fn(&str) -> AgentState, mode
     }
     check_tree(crew, &mut out);
     check_edges(crew, &mut out);
+    check_workflow(crew, &mut out);
     out
+}
+
+/// The workflow fields. A crew without a Front is a plain crew; its (unused) workflow fields are still checked for shape.
+fn check_workflow(crew: &Crew, out: &mut Vec<CrewError>) {
+    let fronts: Vec<&Role> = crew.roles.iter().filter(|r| r.front).collect();
+    if fronts.len() > 1 {
+        out.push(CrewError::new("CREW_FRONTS", "A workflow has one Front; this one marks more than one."));
+    }
+    if let Some(front) = fronts.first() {
+        if front.parent.is_some() {
+            out.push(CrewError::for_role("CREW_FRONT_NOT_LEAD", &front.name, format!("The Front ({}) must be the lead of the crew.", front.name)));
+        }
+        for role in crew.roles.iter().filter(|r| !r.front) {
+            // v1: every helper reports to the Front; no helper-to-helper chains.
+            if role.parent.as_deref().is_some_and(|p| !front.is_called(p)) {
+                out.push(CrewError::for_role("CREW_WORKFLOW_CHAIN", &role.name, format!("{} must report to the Front ({}); helpers do not report to each other.", role.name, front.name)));
+            }
+            if role.when_to_use.is_none() {
+                out.push(CrewError::for_role("CREW_WHEN_TO_USE", &role.name, format!("Say when to use {} (one line, like \"hard coding tasks\").", role.name)));
+            }
+        }
+    }
+    for role in &crew.roles {
+        if let Some(kind) = role.kind.as_deref() {
+            if !KINDS.contains(&kind) || role.front {
+                out.push(CrewError::for_role("CREW_KIND", &role.name, format!("{}: kind can be minion or spin_off (helpers only).", role.name)));
+            }
+        }
+        if let Some(when) = role.when_to_use.as_deref() {
+            if when.chars().count() > MAX_WHEN_CHARS || when.chars().any(char::is_control) {
+                out.push(CrewError::for_role("CREW_WHEN_TO_USE", &role.name, format!("The \"when to use\" line of {} must be one short line.", role.name)));
+            }
+        }
+    }
+    if let Some(mode) = crew.start_mode.as_deref() {
+        if !START_MODES.contains(&mode) {
+            out.push(CrewError::new("CREW_START_MODE", "start_mode can be front or horde."));
+        }
+    }
+    if crew.helper_cap.is_some_and(|n| n == 0 || n > MAX_HELPER_CAP) {
+        out.push(CrewError::new("CREW_HELPER_CAP", format!("helper_cap must be between 1 and {MAX_HELPER_CAP}.")));
+    }
+    if let Some(note) = crew.how_i_work.as_deref() {
+        if let Some(why) = bad_task(note) {
+            out.push(CrewError::new("CREW_HOW_I_WORK", format!("The shared note {why}.")));
+        }
+    }
 }
 
 /// Crew-wide numbers and the routing file name.

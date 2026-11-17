@@ -57,6 +57,56 @@ export function filterModels(models: readonly string[], query: string): string[]
   return words.length === 0 ? [...models] : models.filter((m) => words.every((w) => m.toLowerCase().includes(w)));
 }
 
+/** Who makes a model, read from its id or name ("claude-opus", "Gemini 3.8 Flash", "openai/gpt-5"): the heading it sits under. */
+export function providerOf(model: { value: string; name?: string }): string | null {
+  const id = model.value.toLowerCase();
+  const hay = `${id} ${(model.name ?? '').toLowerCase()}`;
+  const slash = id.indexOf('/');
+  if (slash > 0) {
+    const maker = id.slice(0, slash);
+    return maker === 'openai' ? 'OpenAI' : modelName(maker);
+  }
+  if (/\b(claude|opus|sonnet|haiku|anthropic)\b/.test(hay)) return 'Claude';
+  if (/\b(gemini|gemma)\b/.test(hay)) return 'Gemini';
+  if (/\b(gpt|codex|openai)\b|(^|[\s-])o[134]\b/.test(hay)) return 'OpenAI';
+  if (/\b(llama|mistral|qwen|deepseek|grok|kimi)\b/.test(hay)) return modelName(/\b(llama|mistral|qwen|deepseek|grok|kimi)\b/.exec(hay)![1]!);
+  return null;
+}
+
+export interface ModelGroup<T> {
+  /** The heading, or null for the single list of a short or one-maker list. */
+  heading: string | null;
+  items: T[];
+}
+
+/**
+ * Puts the rows under their maker (first seen first, models of an unknown maker last under "Other"). A list that has only
+ * one maker, or too few rows to need headings, stays one list with no heading.
+ */
+export function groupModels<T>(items: readonly T[], makerOf: (item: T) => string | null, other: string): ModelGroup<T>[] {
+  const order: string[] = [];
+  const buckets = new Map<string, T[]>();
+  for (const item of items) {
+    const maker = makerOf(item) ?? other;
+    if (!buckets.has(maker)) {
+      buckets.set(maker, []);
+      order.push(maker);
+    }
+    buckets.get(maker)!.push(item);
+  }
+  if (order.length < 2 || items.length < 4) return items.length ? [{ heading: null, items: [...items] }] : [];
+  const named = order.filter((m) => m !== other);
+  return [...named, ...order.filter((m) => m === other)].map((heading) => ({ heading, items: buckets.get(heading)! }));
+}
+
+function Tick() {
+  return (
+    <svg className="mp-tick" width="12" height="12" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+      <path d="M3.5 8.5l3 3 6-7" />
+    </svg>
+  );
+}
+
 export interface ModelPickerProps {
   state: ModelListState;
   /** The chosen model id; '' is the default. */
@@ -138,21 +188,42 @@ export function ModelPicker({ state, value, onChange, defaultWord: defaultWordPr
           <button type="button" role="option" aria-selected={value === '' || (liveDefault !== null && value === 'default')} className={`mp-item${liveDefault ? ' mp-item-live' : ''}`} onClick={() => choose('')}>
             <span>{liveDefault ? liveDefault.name : defaultWord}</span>
             {liveDefault ? liveDefault.description && <span className="mp-item-hint">{liveDefault.description}</span> : defaultModel && <span className="mp-item-hint">{modelName(defaultModel)}</span>}
+            {(value === '' || (liveDefault !== null && value === 'default')) && <Tick />}
           </button>
-          {liveRows.map((m) => (
-            <button key={m.value} type="button" role="option" aria-selected={value === m.value} className="mp-item mp-item-live" onClick={() => choose(m.value)}>
-              <span className="mp-item-id">{m.name}</span>
-              {m.description && <span className="mp-item-hint">{m.description}</span>}
-            </button>
+          {groupModels(liveRows, providerOf, t('state.model.other')).map((g) => (
+            <div key={g.heading ?? ''} role="group" aria-label={g.heading ?? undefined} className="mp-group">
+              {g.heading && (
+                <div className="mp-group-h" aria-hidden="true">
+                  {g.heading}
+                </div>
+              )}
+              {g.items.map((m) => (
+                <button key={m.value} type="button" role="option" aria-selected={value === m.value} className="mp-item mp-item-live" onClick={() => choose(m.value)}>
+                  <span className="mp-item-id">{m.name}</span>
+                  {m.description && <span className="mp-item-hint">{m.description}</span>}
+                  {value === m.value && <Tick />}
+                </button>
+              ))}
+            </div>
           ))}
           {state.status === 'loading' && <p className="mp-note">{t('state.model.loading')}</p>}
           {state.status === 'failed' && <p className="mp-note">{t('state.model.failed')}</p>}
           {state.status === 'ready' && options?.liveFailed && <p className="mp-note">{t('state.model.liveFailed')}</p>}
           {state.status === 'ready' && !options?.liveFailed && models.length === 0 && <p className="mp-note">{t('state.model.noList')}</p>}
-          {shown.map((m) => (
-            <button key={m} type="button" role="option" aria-selected={value === m} className="mp-item" onClick={() => choose(m)}>
-              <span className="mp-item-id">{modelName(m)}</span>
-            </button>
+          {groupModels(shown, (m) => providerOf({ value: m }), t('state.model.other')).map((g) => (
+            <div key={g.heading ?? ''} role="group" aria-label={g.heading ?? undefined} className="mp-group">
+              {g.heading && (
+                <div className="mp-group-h" aria-hidden="true">
+                  {g.heading}
+                </div>
+              )}
+              {g.items.map((m) => (
+                <button key={m} type="button" role="option" aria-selected={value === m} className="mp-item" onClick={() => choose(m)}>
+                  <span className="mp-item-id">{modelName(m)}</span>
+                  {value === m && <Tick />}
+                </button>
+              ))}
+            </div>
           ))}
           {custom && (
             <button type="button" role="option" aria-selected={false} className="mp-item" onClick={() => choose(q)}>
@@ -162,6 +233,7 @@ export function ModelPicker({ state, value, onChange, defaultWord: defaultWordPr
           {value !== '' && value !== 'default' && !models.includes(value) && (
             <button type="button" role="option" aria-selected className="mp-item" onClick={() => choose(value)}>
               <span className="mp-item-id">{modelName(value)}</span>
+              <Tick />
             </button>
           )}
         </Popover>

@@ -344,3 +344,239 @@
     width: 320px;
   }
 }
+
+/* The dock: panes stacked in the column, a splitter between them, a thin strip when the column is folded. */
+.cockpit .tk-col {
+  max-width: 60%;
+}
+.cockpit .tk-col--full {
+  max-width: none;
+}
+.cockpit .tk-pane {
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+.cockpit .tk-pane[data-folded='true'] {
+  flex: 0 0 auto;
+}
+.cockpit .tk-pane[data-folded='true'] .tk-head {
+  border-bottom: 0;
+}
+.cockpit .tk-split {
+  flex: none;
+  position: relative;
+  height: 9px;
+  margin: -4px 0;
+  cursor: row-resize;
+  touch-action: none;
+  outline: none;
+  z-index: 6;
+}
+.cockpit .tk-split::before {
+  content: '';
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: 4px;
+  height: 1px;
+  background: var(--sep);
+  transition: background-color var(--dur-fast) var(--ease);
+}
+.cockpit .tk-split:hover::before,
+.cockpit .tk-split:focus-visible::before {
+  background: var(--label-3);
+}
+.cockpit .tk-split:focus-visible::before {
+  height: 2px;
+  top: 3px;
+}
+.cockpit .tk-state {
+  flex: none;
+  font-size: var(--fs-meta);
+  color: var(--label-3);
+}
+.cockpit .tk-strip {
+  flex: none;
+  width: 36px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+  padding: 8px 0;
+  border-left: 1px solid var(--sep);
+  background: var(--bg);
+}
+.cockpit .tk-page-area {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin: 8px 12px 12px;
+  border-radius: 8px;
+  background: var(--fill);
+}
+.cockpit .tk-term .tk-meta {
+  padding-bottom: 8px;
+}
+.cockpit .tk-term-out {
+  flex: 1;
+  margin: 0;
+  padding: 0 14px;
+}
+@media (prefers-reduced-motion: reduce) {
+  .cockpit .tk-split::before {
+    transition: none;
+  }
+}
+.cockpit .tk-glyph {
+  flex: none;
+  display: inline-flex;
+  color: var(--label-2);
+}
+.cockpit .tk-glyph svg {
+  width: 16px;
+  height: 16px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.5;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+/* The agent browser in the side panel: tabs, the bar, and the page area the native page sits over (BrowserPane.tsx). */
+.cockpit .bp-tabs {
+  flex: none;
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  padding: 2px 8px 0;
+  overflow-x: auto;
+}
+.cockpit .bp-tab {
+  flex: 0 1 140px;
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  height: 26px;
+  border-radius: 6px;
+  color: var(--label-2);
+}
+.cockpit .bp-tab:hover {
+  background: var(--fill-hover);
+}
+.cockpit .bp-tab[data-active='true'] {
+  background: var(--fill);
+  color: var(--label);
+}
+.cockpit .bp-tab-main {
+  flex: 1;
+  min-width: 0;
+  height: 100%;
+  padding: 0 4px 0 8px;
+  text-align: left;
+  font-size: var(--fs-meta);
+  color: inherit;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.cockpit .bp-tab-x {
+  flex: none;
+  width: 20px;
+  height: 20px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 5px;
+  color: var(--label-3);
+}
+.cockpit .bp-tab-x:hover {
+  background: var(--fill-hover);
+  color: var(--label);
+}
+.cockpit .bp-tab-x svg {
+  width: 12px;
+  height: 12px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.5;
+  stroke-linecap: round;
+}
+.cockpit .bp-bar {
+  flex: none;
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  padding: 4px 8px;
+}
+.cockpit .bp-address {
+  flex: 1;
+  min-width: 0;
+  height: 26px;
+  padding: 0 10px;
+  margin: 0 4px;
+  border-radius: 6px;
+  background: var(--fill);
+  color: var(--label);
+  font-size: var(--fs-meta);
+}
+.cockpit .bp-address:disabled {
+  opacity: 0.5;
+}
+.cockpit .bp-text {
+  padding: 0 8px;
+}
+.cockpit .bp-error {
+  flex: none;
+  margin: 0;
+  padding: 2px 14px 4px;
+  font-size: var(--fs-meta);
+  color: var(--danger);
+}
+/* The native page covers this box exactly, so it has square corners and no margin of its own at the top. */
+.cockpit .bp-page {
+  position: relative;
+  margin: 0 8px 8px;
+  border-radius: 0;
+  overflow: hidden;
+}
+.cockpit .bp-still {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: fill;
+}
+.cockpit .bp-note {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+  padding: 16px;
+  text-align: center;
+}
+/* A command's output in the details column: read only, mono, the last lines. */
+.cockpit .tk-out {
+  flex: 1;
+  min-height: 0;
+  margin: 0 12px 8px;
+  padding: 8px 10px;
+  overflow: auto;
+  border-radius: 8px;
+  background: var(--fill);
+  color: var(--label);
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  line-height: 1.45;
+}
+.cockpit .tk-fold-cmd {
+  margin-top: 4px;
+}
+.cockpit .tk-fold-cmd summary {
+  cursor: pointer;
+  color: var(--label-2);
+  font-size: var(--fs-meta);
+}

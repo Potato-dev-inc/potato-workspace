@@ -23,6 +23,7 @@ import { Btn, InfoRow, Note, SettingBlock, SettingRow } from '../settings-ui';
 import { AgentNotifyRows } from '../NotifyRows';
 import { openAddAgentWith } from './agentTarget';
 import { CapChips } from './CapChips';
+import { LogoRow } from './LogoRow';
 import { ChatAdapterRow, type ChatAdapterApi } from './ChatAdapterRow';
 import { standingWords, type AgentRow } from './useAgentRows';
 
@@ -178,6 +179,8 @@ export function AgentPage({ row, env, onBack, onCheck, apis = defaultPageApis }:
       </div>
 
       <RepairNote row={row} recheck={apis.recheck} />
+
+      <LogoRow row={row} />
 
       <SettingBlock label={t('agentPage.canDo')} description={cli ? undefined : t('agentPage.canDoHelp')}>
         {cli ? <p className="ag-terminal-note">{t('agentPage.terminalOnly', { label: row.label })}</p> : row.caps ? <CapChips caps={row.caps} name={row.label} /> : <p className="ag-caption">{t('agentPage.nothingChecked')}</p>}

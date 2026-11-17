@@ -2,6 +2,9 @@
 export const sentFrom = {
   'sentFrom.from': 'from {name}',
   'sentFrom.app': 'from Potato Workspace: an agent finished',
+  'sentFrom.handover': 'from Potato Workspace: a task was handed over',
+  'sentFrom.parent': 'from {name}',
+  'sentFrom.spinOff': 'from the spin-off “{name}”',
   'drive.typing': '{name} is typing…',
   'drive.driving': '{name} is driving',
   'drive.takeBack': 'Take back',

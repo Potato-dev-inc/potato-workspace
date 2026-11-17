@@ -16,17 +16,16 @@ pub fn askbar_settings_set(app: AppHandle, settings: Settings) -> Settings {
     applied
 }
 
-/// Agents that can answer a headless read-only question and are installed.
+/// Every installed agent. The ones that can answer a read-only question in the bar come first; the others open in a window.
 #[tauri::command]
 pub fn askbar_agents() -> Vec<AgentEntry> {
-    let labels: std::collections::HashMap<&str, String> =
-        crate::tui::descriptors().into_iter().map(|d| (d.id, d.label)).collect();
-    let capable: Vec<(String, String)> = crate::tui::read_only_backends()
+    let every: Vec<(String, String)> = crate::tui::descriptors()
         .into_iter()
-        .filter(|id| crate::tui::is_agent_backend(id))
-        .map(|id| (id.to_string(), labels.get(id).cloned().unwrap_or_else(|| id.to_string())))
+        .filter(|d| crate::tui::is_agent_backend(d.id))
+        .map(|d| (d.id.to_string(), d.label))
         .collect();
-    askbar::list_agents(&capable, &|id| crate::tui::profile_for(id).is_installed(), &crate::standby::ready_agents())
+    let quick: Vec<String> = crate::tui::read_only_backends().into_iter().map(str::to_string).collect();
+    askbar::list_every_agent(&every, &quick, &|id| crate::tui::profile_for(id).is_installed(), &crate::standby::ready_agents())
 }
 
 /// The clipboard text, cut for attaching (`null` when empty or not text).

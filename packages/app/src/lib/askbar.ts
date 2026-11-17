@@ -16,12 +16,14 @@ export interface AskbarSettings {
 /** The fixed choice list the backend accepts. Keep in sync with `askbar::SHORTCUT_CHOICES`. */
 export const ASKBAR_SHORTCUTS = ['Ctrl+Alt+Space', 'Ctrl+Shift+Space', 'Alt+Space', 'Ctrl+Alt+K'] as const;
 
-/** An agent that can answer a headless read-only question. */
+/** An agent set up on this computer. */
 export interface AskbarAgent {
   id: string;
   label: string;
   /** A warm standby worker is waiting, so the answer starts at once. */
   ready: boolean;
+  /** Answers inside the bar. `false`: the agent is set up but opens in a window with the question instead. */
+  quick?: boolean;
 }
 
 export interface AskbarClipboard {

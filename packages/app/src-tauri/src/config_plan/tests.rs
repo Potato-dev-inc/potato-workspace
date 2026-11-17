@@ -17,7 +17,7 @@ impl Fake {
     }
 
     pub fn with_standby(self, name: &str, agent: &str) -> Self {
-        self.store.lock().add(NewHelper { name: name.into(), agent: agent.into(), model: None, project: "/work/app".into(), after_task: AfterTask::Wait, home: Some("pane-1".into()) }, format!("sb-{name}")).unwrap();
+        self.store.lock().add(NewHelper { name: name.into(), agent: agent.into(), model: None, project: "/work/app".into(), after_task: AfterTask::Wait, home: Some("pane-1".into()), kind: None }, format!("sb-{name}")).unwrap();
         self
     }
 }
@@ -109,7 +109,7 @@ fn a_stale_plan_is_refused_and_changes_nothing() {
     let view = plan_of(&world, &plans, json!([{ "kind": "standby_close", "target": "reviewer" }])).unwrap();
     // The person closed it in the app while the plan waited.
     world.store.lock().remove("sb-Reviewer");
-    world.store.lock().add(NewHelper { name: "Other".into(), agent: "codex".into(), model: None, project: "/work/app".into(), after_task: AfterTask::Wait, home: None }, "sb-other".into()).unwrap();
+    world.store.lock().add(NewHelper { name: "Other".into(), agent: "codex".into(), model: None, project: "/work/app".into(), after_task: AfterTask::Wait, home: None, kind: None }, "sb-other".into()).unwrap();
     let error = apply(&world, &plans, &view.plan_id, 2_000).unwrap_err();
     assert_eq!(error.0, "PLAN_STALE", "{error:?}");
     assert_eq!(world.store.lock().helpers.len(), 1, "the other standby is still there");
@@ -173,7 +173,7 @@ fn the_standby_limit_is_checked_when_planning_so_apply_cannot_half_finish() {
 #[test]
 fn a_name_two_standbys_share_needs_the_id() {
     let (world, plans) = (Fake::new().with_standby("Same", "codex"), PlanStore::default());
-    world.store.lock().add(NewHelper { name: "same".into(), agent: "codex".into(), model: None, project: "/work/app".into(), after_task: AfterTask::Wait, home: None }, "sb-2".into()).unwrap();
+    world.store.lock().add(NewHelper { name: "same".into(), agent: "codex".into(), model: None, project: "/work/app".into(), after_task: AfterTask::Wait, home: None, kind: None }, "sb-2".into()).unwrap();
     assert_eq!(plan_of(&world, &plans, json!([{ "kind": "standby_close", "target": "SAME" }])).unwrap_err().0, "AMBIGUOUS");
     plan_of(&world, &plans, json!([{ "kind": "standby_close", "target": "sb-2" }])).expect("the id names exactly one");
 }

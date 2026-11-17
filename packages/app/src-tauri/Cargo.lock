@@ -5166,6 +5166,7 @@ dependencies = [
  "tracing-subscriber",
  "tungstenite 0.24.0",
  "ureq",
+ "url",
  "uuid",
  "vt100",
  "web-push-native",

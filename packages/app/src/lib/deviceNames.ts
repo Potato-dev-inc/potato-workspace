@@ -12,6 +12,21 @@ export const LOCAL_DEVICE = 'local';
  * the app hands to the agent that asked for it. */
 export const APP_SENDER_PREFIX = 'app:';
 export const isAppSender = (from: string | undefined | null): boolean => !!from && from.startsWith(APP_SENDER_PREFIX);
+/** The app's notice that a task was handed to this agent, or from it to another (Rust `handover`). */
+export const APP_HANDOVER_SENDER = 'app:handover';
+
+/** Notes between an agent and the agent it spun off (Rust `acp/chat/spin_off.rs`): `parent:<name>` is the agent that spun this chat
+ * off, writing in it; `spinoff:<name>` is a spin-off writing to this chat. Neither is a device of the person. */
+export const FROM_PARENT_PREFIX = 'parent:';
+export const FROM_SPIN_OFF_PREFIX = 'spinoff:';
+const agentNote = (from: string | undefined | null): { name: string; kind: 'parent' | 'spinOff' } | null => {
+  if (!from) return null;
+  if (from.startsWith(FROM_PARENT_PREFIX)) return { name: from.slice(FROM_PARENT_PREFIX.length), kind: 'parent' };
+  if (from.startsWith(FROM_SPIN_OFF_PREFIX)) return { name: from.slice(FROM_SPIN_OFF_PREFIX.length), kind: 'spinOff' };
+  return null;
+};
+/** Not the person's own words: the app wrote it, or another agent did. */
+export const isAgentSender = (from: string | undefined | null): boolean => isAppSender(from) || agentNote(from) !== null;
 
 export type DeviceNameMap = Record<string, { name: string; kind: string }>;
 export type DeviceNamesLoader = () => Promise<DeviceNameMap>;
@@ -32,12 +47,17 @@ export function sentFromLines(turns: readonly ChatTurn[], names: DeviceNameMap):
   const out = new Map<string, string>();
   const senders = new Set<string>();
   // A message the app wrote always says so, and is never counted as a device of the person.
-  for (const turn of turns) if (turn.user && isAppSender(turn.user.from)) out.set(turn.id, t('sentFrom.app'));
-  for (const turn of turns) if (turn.user && !isAppSender(turn.user.from)) senders.add(turn.user.from || LOCAL_DEVICE);
+  for (const turn of turns) if (turn.user && isAppSender(turn.user.from)) out.set(turn.id, t(turn.user.from === APP_HANDOVER_SENDER ? 'sentFrom.handover' : 'sentFrom.app'));
+  // A note from another agent says whose it is, and is not counted as a device either.
+  for (const turn of turns) {
+    const note = turn.user ? agentNote(turn.user.from) : null;
+    if (note) out.set(turn.id, t(note.kind === 'parent' ? 'sentFrom.parent' : 'sentFrom.spinOff', { name: note.name }));
+  }
+  for (const turn of turns) if (turn.user && !isAgentSender(turn.user.from)) senders.add(turn.user.from || LOCAL_DEVICE);
   const mixed = senders.size > 1 || (senders.size === 1 && !senders.has(LOCAL_DEVICE));
   if (!mixed) return out;
   for (const turn of turns) {
-    if (!turn.user || isAppSender(turn.user.from)) continue;
+    if (!turn.user || isAgentSender(turn.user.from)) continue;
     const name = deviceName(turn.user.from, names);
     if (name) out.set(turn.id, t('sentFrom.from', { name }));
   }

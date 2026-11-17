@@ -90,6 +90,8 @@ export const state: Partial<Record<EnglishKey, string>> = {
   'state.helperOf': '由 {title} 啟動',
   'state.startedBy': '由 {host} 啟動',
   'state.startedByAgent': '由 AI 助理啟動',
+  'state.spunOffClosed': '分支自 {name}（已關閉）',
+  'state.spunOffClosedAnon': '分支自已關閉的 AI 助理',
   'state.startedByTask': '{who}：{task}',
   'state.startedByTitle': '{who}。任務：{task}',
   // ship hints
@@ -147,6 +149,7 @@ export const state: Partial<Record<EnglishKey, string>> = {
   'state.stream.starting': '啟動中',
   'state.stream.other': '其他',
   // model picker
+  'state.model.other': '其他',
   'state.model.default': '預設',
   'state.model.typeId': '輸入模型 ID',
   'state.model.searchOrType': '搜尋或輸入模型 ID',

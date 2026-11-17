@@ -50,5 +50,9 @@ export const phoneShell = {
   'phone.text.small': 'Small',
   'phone.text.normal': 'Normal',
   'phone.text.large': 'Large',
+  'phone.motion.title': 'Motion',
+  'phone.motion.full': 'Full',
+  'phone.motion.reduced': 'Reduced',
+  'phone.motion.hint': 'Reduced turns slides into quick fades',
   'phone.menu.display': 'Display',
 } as const;

@@ -24,11 +24,19 @@ const MAX_SEGMENTS: usize = 40;
 /// Split on unquoted `;`, `&&`, `||`, `|`, `&` and newlines. A here-document keeps only the line
 /// that starts it (the body is data, not commands).
 pub fn split_segments(command: &str) -> Vec<Segment> {
+    split_checked(command).0
+}
+
+/// Whether `split_segments` dropped part of the command (too many characters or too many segments): the tail was never judged.
+pub fn is_cut(command: &str) -> bool {
+    split_checked(command).1
+}
+
+fn split_checked(command: &str) -> (Vec<Segment>, bool) {
+    let cut = std::cell::Cell::new(command.chars().count() > MAX_CHARS);
     let mut text: String = command.chars().take(MAX_CHARS).collect();
-    if let Some(at) = text.find("<<") {
-        if let Some(nl) = text[at..].find('\n') {
-            text.truncate(at + nl);
-        }
+    if strip_heredocs(&mut text) {
+        cut.set(true);
     }
     let chars: Vec<char> = text.chars().collect();
     let mut out = Vec::new();
@@ -39,6 +47,8 @@ pub fn split_segments(command: &str) -> Vec<Segment> {
         let t = cur.trim();
         if !t.is_empty() && out.len() < MAX_SEGMENTS {
             out.push(Segment { text: t.to_string(), sep });
+        } else if !t.is_empty() {
+            cut.set(true);
         }
         cur.clear();
     };
@@ -91,7 +101,65 @@ pub fn split_segments(command: &str) -> Vec<Segment> {
     if let Some(last) = out.last_mut() {
         last.sep = Sep::End;
     }
-    out
+    (out, cut.get())
+}
+
+/// Takes the bodies of here-documents (`<<EOF ... EOF`) out of the text: a body is data, and what follows its end line is
+/// still read. A `<<` inside quotes is not a here-document. Returns true when a here-document could not be followed
+/// (no name, or no end line): the rest was then dropped and the command counts as cut.
+fn strip_heredocs(text: &mut String) -> bool {
+    loop {
+        let chars: Vec<(usize, char)> = text.char_indices().collect();
+        let mut quote: Option<char> = None;
+        let mut found = None;
+        for (k, &(at, c)) in chars.iter().enumerate() {
+            if let Some(q) = quote {
+                if c == q {
+                    quote = None;
+                }
+                continue;
+            }
+            if c == '\'' || c == '"' {
+                quote = Some(c);
+            } else if c == '<' && chars.get(k + 1).map(|x| x.1) == Some('<') && chars.get(k + 2).map(|x| x.1) != Some('<') && (k == 0 || chars[k - 1].1 != '<') {
+                found = Some(at);
+                break;
+            }
+        }
+        let Some(at) = found else { return false };
+        let Some(nl) = text[at..].find('\n').map(|n| at + n) else { return false };
+        let after = text[at + 2..nl].trim_start_matches('-').trim_start();
+        let name: String = after.chars().take_while(|c| !c.is_whitespace() && !matches!(c, ';' | '|' | '&' | '>' | '<' | ')')).collect();
+        let name = name.trim_matches(|c| c == '\'' || c == '"' || c == '\\').to_string();
+        if name.is_empty() {
+            text.truncate(nl);
+            return true;
+        }
+        let body = &text[nl + 1..];
+        let mut offset = 0;
+        let mut end = None;
+        for line in body.split_inclusive('\n') {
+            offset += line.len();
+            if line.trim() == name {
+                end = Some(offset);
+                break;
+            }
+        }
+        match end {
+            Some(end) => {
+                let rest = body[end..].to_string();
+                text.truncate(nl);
+                if !rest.trim().is_empty() {
+                    text.push('\n');
+                    text.push_str(&rest);
+                }
+            }
+            None => {
+                text.truncate(nl);
+                return true;
+            }
+        }
+    }
 }
 
 /// Words that mark a segment as PowerShell or cmd rather than a POSIX shell.

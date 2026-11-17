@@ -78,10 +78,14 @@ async function render(onOpenReview?: () => void) {
   await act(async () => root.render(<Sidebar c={fakeApi()} onOpenPalette={() => {}} onOpenReview={onOpenReview} ship={ship} />));
   await act(async () => {});
 }
-// The footer button is an icon: its words are the aria-label ("Review", or "Review, 7 waiting"), its number a badge.
-const button = () => host.querySelector<HTMLButtonElement>('button[aria-label^="Review"]');
-const words = () => button()?.getAttribute('aria-label');
-const badge = () => host.querySelector('.ck-side-count')?.textContent ?? null;
+// Review is the first row of the sidebar's ... menu: its words are the aria-label ("Review", or "Review, 7 waiting"), its number a badge.
+const openMore = () => {
+  if (!document.querySelector('[role="menu"]')) act(() => host.querySelector<HTMLButtonElement>('button[aria-label="More"]')?.click());
+};
+const button = () => document.querySelector<HTMLButtonElement>('[role="menuitem"][aria-label^="Review"]');
+const words = () => (openMore(), button()?.getAttribute('aria-label'));
+const badge = () => (openMore(), document.querySelector('.ck-menu-review .ck-side-count')?.textContent ?? null);
+const bottomBarButton = () => host.querySelector('.ck-foot-icons > button[aria-label^="Review"]');
 
 describe('sidebar: Review', () => {
   it('shows "Review 7" when seven things wait, and opens the desk on click', async () => {
@@ -90,6 +94,7 @@ describe('sidebar: Review', () => {
     await render(open);
     expect(words()).toBe('Review, 7 waiting');
     expect(badge()).toBe('7');
+    expect(bottomBarButton()).toBeNull();
     act(() => button()!.click());
     expect(open).toHaveBeenCalledTimes(1);
   });
@@ -110,6 +115,7 @@ describe('sidebar: Review', () => {
   it('has no button, and reads no count, without an open handler', async () => {
     review.count.mockResolvedValue(3);
     await render();
+    openMore();
     expect(button()).toBeNull();
     expect(review.count).not.toHaveBeenCalled();
   });

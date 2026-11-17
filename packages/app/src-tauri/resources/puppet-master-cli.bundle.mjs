@@ -4205,6 +4205,8 @@ var SettingsSchema = external_exports.object({
   acp_chat_enabled: external_exports.boolean().optional(),
   /** What the "+" menu starts: a chat or a terminal. Absent: chat. Shown only while Chat is on. */
   new_agent_start: external_exports.enum(["chat", "terminal"]).optional(),
+  /** The main window's X: off (absent) = quit the app, asking first when an agent is working; on = hide to the tray and keep running. Rust: close_to_tray. */
+  close_to_tray: external_exports.boolean().optional(),
   /** Show terminals (Settings > General): off = every agent starts as a chat and terminal-only controls are hidden. Absent: off. Open terminals keep working. Rust: show_terminals. */
   show_terminals: external_exports.boolean().optional(),
   /** Model Bridge (Settings › General › Labs): connect a model service with a key and add it to Codex. Off unless chosen. Rust: model_bridge. */
@@ -4228,6 +4230,8 @@ var SettingsSchema = external_exports.object({
   project_guide_enabled: external_exports.boolean().optional(),
   /** Mark-up bar (Settings > General > Labs): draw, pick and send marks of a page to the chat that made it; Open in agent browser. Off unless chosen. */
   markup_bar_enabled: external_exports.boolean().optional(),
+  /** Browser in the side panel (Settings > General > Labs): the agent browser's page shows in the details column instead of its own window. Off unless chosen. Rust: browser::dock. */
+  dock_browser_enabled: external_exports.boolean().optional(),
   /** The Today page (Settings > General > Labs): one line for the whole day, and a way back to any point on it. Off unless chosen. Rust: timeline. */
   timeline_day_enabled: external_exports.boolean().optional(),
   /** Desktop Potato: size 'small' | 'medium' | 'large', hidden-until (epoch ms), quiet. Rust: pet. */

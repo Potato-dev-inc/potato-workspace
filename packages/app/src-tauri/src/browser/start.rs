@@ -46,7 +46,7 @@ pub fn strings() -> Value {
         "en": {
             "title": "Browser",
             "lead": "Type an address",
-            "hint": "Type a web address in the box at the top, then press Enter. Pages on this computer, such as localhost:5173, work too.",
+            "hint": "Type a web address in the box at the top, then press Enter. You can also open pages on this computer, such as localhost:5173.",
             "errBad": "That is not a web address, so it was not opened. Try something like example.com.",
             "errPrivate": "That address is on a private network (a router, a printer or another computer), so it was not opened. Public web pages and this computer's own pages are fine.",
             "errNotFound": "That address could not be found, so nothing was opened. Check the spelling.",
@@ -55,7 +55,7 @@ pub fn strings() -> Value {
         "zh-TW": {
             "title": "瀏覽器",
             "lead": "輸入網址",
-            "hint": "在上方的欄位輸入網址，再按 Enter。這台電腦上的頁面（例如 localhost:5173）也可以開啟。",
+            "hint": "在上方的欄位輸入網址，再按 Enter。也可以開啟這台電腦上的頁面，例如 localhost:5173。",
             "errBad": "這不是網址，所以沒有開啟。請試試像 example.com 這樣的網址。",
             "errPrivate": "這個網址在私人網路上（路由器、印表機或另一台電腦），所以沒有開啟。公開的網頁和這台電腦上的頁面都可以開啟。",
             "errNotFound": "找不到這個網址，所以沒有開啟。請檢查拼字。",

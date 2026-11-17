@@ -48,6 +48,8 @@ mod rules;
 pub mod receipt;
 pub(crate) mod stall_support;
 pub mod right_size;
+mod spin_off;
+pub use spin_off::pane_can_message_parent;
 pub mod surface;
 
 #[cfg(test)]
@@ -234,6 +236,8 @@ pub struct AcpChat {
     started: Mutex<Option<crate::agent_run_mode::StartedRecord>>,
     /// This chat was taken from the warm (ready-made) chats instead of started fresh; the receipt says so.
     warm_claimed: AtomicBool,
+    /// The run said `keep_pane: false` (or the person's setting says close when done): the pane closes when its task is done.
+    close_when_done: AtomicBool,
     /// The standby seat this chat is the own chat of (`standby::seat_panes`); the tools' answers say a standby took the task.
     seat: Mutex<Option<String>>,
     /// What the `run_agent` that started this chat asked for and how its turns were checked (`receipt.rs`).
@@ -248,6 +252,10 @@ pub struct AcpChat {
     last_prompt_end: Mutex<Option<EndedPrompt>>,
     /// The device that sent the message about to go in (`None`: this PC), put on the person's message when it shows.
     next_from: Mutex<Option<String>>,
+    /// Words that go to the agent in front of the next message only (who wrote a note from another agent); not shown.
+    wire_prefix: Mutex<Option<String>>,
+    /// Notes from another agent that wait for the end of the turn (`spin_off.rs`).
+    notes: Mutex<std::collections::VecDeque<spin_off::Note>>,
     /// The sender of each message that came from another device, by item id, so a message stays marked when it is
     /// shown again.
     from_by_id: Mutex<HashMap<String, String>>,
@@ -439,6 +447,7 @@ impl AcpChat {
             lane_note: Mutex::new(None),
             started: Mutex::new(None),
             warm_claimed: AtomicBool::new(false),
+            close_when_done: AtomicBool::new(false),
             seat: Mutex::new(None),
             run_meta: Mutex::new(receipt::RunMeta::default()),
             journal,
@@ -446,6 +455,8 @@ impl AcpChat {
             choice_warnings: Mutex::new(Vec::new()),
             last_prompt_end: Mutex::new(None),
             next_from: Mutex::new(None),
+            wire_prefix: Mutex::new(None),
+            notes: Mutex::new(std::collections::VecDeque::new()),
             from_by_id: Mutex::new(HashMap::new()),
             drive: Mutex::new(drive::Drive::default()),
             right_size: right_size::Slot::default(),
@@ -590,6 +601,14 @@ impl AcpChat {
     }
 
     /// Marks this chat as taken from the warm chats (so the receipt's `standby_used` says so).
+    pub fn set_close_when_done(&self, close: bool) {
+        self.close_when_done.store(close, Ordering::SeqCst);
+    }
+
+    pub fn close_when_done(&self) -> bool {
+        self.close_when_done.load(Ordering::SeqCst)
+    }
+
     pub fn set_warm_claimed(&self, claimed: bool) {
         self.warm_claimed.store(claimed, Ordering::SeqCst);
     }
@@ -639,6 +658,11 @@ impl AcpChat {
     /// The items so far (what the pane's chat shows).
     pub fn items(&self) -> Vec<crate::session_chat::ChatItem> {
         self.feed.all()
+    }
+
+    /// The last `n` items (Background tasks reads a chat's recent commands every few seconds).
+    pub fn recent_items(&self, n: usize) -> Vec<crate::session_chat::ChatItem> {
+        self.feed.last(n)
     }
 
     /// How many items the chat shows: cheap enough for a wait to notice a reply that is still streaming in.
@@ -852,10 +876,16 @@ impl AcpChat {
                 // Before the items go out, so a screen that reads the project budget when the turn ends sees it counted.
                 let look = matches!(other, SessionEvent::TurnEnded(_)).then(|| mapper.last_turn_look());
                 drop(mapper);
+                let ended = look.is_some();
                 if let Some(look) = look {
                     self.after_turn(look);
                 }
                 self.push(items);
+                if ended {
+                    self.flush_notes_soon();
+                    // A task the person handed to another agent: tell whoever is owed, once its run really ended.
+                    crate::handover::turn_ended_soon(&self.pane_id);
+                }
             }
         }
     }
@@ -1353,6 +1383,7 @@ impl AcpChat {
         }
         crate::agent_runs::tree_proof::forget(&self.pane_id);
         crate::agent_runs::structured::forget(&self.pane_id);
+        crate::handover::forget(crate::handover::book(), &self.pane_id);
         // Cards still open are taken down without an answer: nobody is waiting any more.
         let open: Vec<Card> = std::mem::take(&mut *self.cards.lock()).into_values().collect();
         for card in &open {
@@ -1596,6 +1627,8 @@ impl AcpChat {
             "phase": serde_json::to_value(snapshot.phase).unwrap_or(Value::Null),
             "status": self.person_status(&snapshot).as_str(),
             "turnInFlight": snapshot.turn_in_flight(),
+            // What it is doing right now: the newest tool that has not ended ("Run command dir"). A short live line for the lists.
+            "doing": (snapshot.phase == Phase::Working).then(|| snapshot.running_tools.iter().rev().map(|t| t.title.trim()).find(|t| !t.is_empty()).map(|t| t.chars().take(120).collect::<String>())).flatten(),
             "stopping": snapshot.phase == Phase::Cancelling,
             "quietSecs": snapshot.quiet_secs,
             "canSteer": self.can_steer(),

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { helperRows } from './helperRows';
+import { commandOwners, helperRows } from './helperRows';
 
 const pane = (id: string, parent?: string, title?: string, status = 'idle', started_as?: string) => ({ status, info: { id, title, parent_pane_id: parent, started_as } });
 
@@ -32,5 +32,28 @@ describe('helperRows', () => {
   });
   it('is empty for a pane without helpers', () => {
     expect(helperRows([pane('p')], 'p', () => 'x')).toEqual([]);
+  });
+});
+
+describe('commandOwners', () => {
+  const list = [
+    pane('p', undefined, 'Main'),
+    pane('m', 'p', 'Review', 'running', 'minion'),
+    pane('s', 'p', 'Fix tests', 'running', 'spin_off'),
+    pane('g', 's', 'Deep helper', 'running'),
+    pane('other', undefined, 'Elsewhere'),
+  ];
+  it('lists the chat first, then every agent under it (minions, spin-offs and theirs in turn), and nobody else', () => {
+    const owners = commandOwners(list, 'p', () => 'Claude');
+    expect(owners.map((o) => [o.id, o.self])).toEqual([
+      ['p', true],
+      ['m', false],
+      ['s', false],
+      ['g', false],
+    ]);
+    expect(owners.find((o) => o.id === 's')).toMatchObject({ name: 'Fix tests', status: 'running' });
+  });
+  it('is only the chat itself when nothing runs under it', () => {
+    expect(commandOwners(list, 'other', () => 'Claude').map((o) => o.id)).toEqual(['other']);
   });
 });

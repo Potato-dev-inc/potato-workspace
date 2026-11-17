@@ -503,7 +503,7 @@ mod runtime {
         let statuses: Vec<&str> = panes.iter().map(|p| p.status.as_str()).collect();
         let refs: Vec<PaneRef> = panes
             .iter()
-            .map(|p| PaneRef { id: p.id.clone(), agent_type: p.agent_type.clone(), pid: p.pid })
+            .map(|p| PaneRef { id: p.id.clone(), agent_type: p.agent_type.clone(), pid: p.pid, chat_pid: None })
             .collect();
         let jobs: Vec<Job> = crate::pane_jobs::jobs_for_panes(&refs).into_values().flatten().collect();
         summary_line(&statuses, &jobs, need_you)

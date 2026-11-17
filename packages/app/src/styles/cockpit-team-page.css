@@ -407,7 +407,7 @@
 }
 .cockpit .tpg-sheet--pass {
   width: min(560px, 100%);
-  max-height: calc(100vh - 32px);
+  max-height: calc(calc(100vh / var(--ui-scale, 1)) - 32px);
   overflow-y: auto;
   background: var(--bg-raised);
   box-shadow: var(--float-shadow);

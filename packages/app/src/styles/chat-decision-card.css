@@ -54,7 +54,7 @@
   overflow: hidden;
 }
 .cockpit .ck-dc-cmd[data-open] {
-  max-height: 40vh;
+  max-height: calc(40vh / var(--ui-scale, 1));
   overflow: auto;
 }
 .cockpit .ck-dc-cmd[data-open] .ck-dc-cmd-tx {

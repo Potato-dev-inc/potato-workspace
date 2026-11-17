@@ -13,9 +13,9 @@ export const crewsRows: RowDef[] = [
     hint: 'Your crews of agents, and ready-made ones to start from.',
     keywords: 'crews crew team roles agents orchestrator checker difficulty routing standby workers canvas',
     labsFlag: 'crews_enabled',
-    render: () => (
+    render: (env) => (
       <Suspense fallback={null}>
-        <CrewsPage />
+        <CrewsPage workflows={env.settings.workflows_enabled === true} />
       </Suspense>
     ),
   },

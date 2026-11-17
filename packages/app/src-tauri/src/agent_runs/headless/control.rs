@@ -24,6 +24,12 @@ pub(super) fn children() -> &'static Mutex<HashMap<String, Arc<HeadlessControl>>
     CHILDREN.get_or_init(|| Mutex::new(HashMap::new()))
 }
 
+/// How many headless helper runs are alive right now (quitting would stop them).
+#[cfg_attr(test, allow(dead_code))]
+pub(crate) fn live_count() -> usize {
+    children().lock().len()
+}
+
 /// Stop the live headless child of `operation_id`, waiting until its process tree is gone. `false`
 /// when no child is alive for it (finished, or never headless). Used before a worktree is deleted.
 pub(crate) fn stop_for_operation(operation_id: &str) -> bool {

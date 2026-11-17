@@ -6,7 +6,7 @@ use serde::Serialize;
 use std::collections::{HashMap, HashSet};
 
 /// A process must have lived this long to count (a tool call's shell is young).
-pub const MIN_AGE_MS: u64 = 5_000;
+pub const MIN_AGE_MS: u64 = 3_000;
 /// Longest command text sent to the UI.
 pub const MAX_COMMAND_CHARS: usize = 200;
 /// A process the agent starts within this long of its own start is part of the agent's startup (its

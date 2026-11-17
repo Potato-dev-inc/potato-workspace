@@ -11,6 +11,7 @@ pub(super) fn handle_session(cx: &Ctx) -> Option<RouteResult> {
     Some(match (cx.method, cx.segments) {
         ("GET", ["mcp", "tools"]) => tools(cx),
         ("GET", ["mcp", "session"]) => session_identity(cx),
+        ("GET", ["mcp", "spin-off"]) => Ok((200, json!({ "spin_off": crate::mcp_sessions::clean_pane_hint(cx.query.trim_start_matches('?').split('&').find_map(|p| p.strip_prefix("pane=")).unwrap_or_default()).is_some_and(|pane| crate::acp::chat::pane_can_message_parent(&pane)) }))),
         ("POST", ["mcp", "mode"]) => set_mode(cx),
         _ => return None,
     })

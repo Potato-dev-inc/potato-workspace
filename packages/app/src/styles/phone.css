@@ -44,6 +44,19 @@
   font-size: var(--fs);
   line-height: var(--lh);
 }
+.ph[data-motion='reduce'] {
+  --t-press: 0.01ms;
+  --t-fade: 150ms;
+  --t-move: 150ms;
+  --t-exit: 150ms;
+}
+.ph[data-motion='reduce'] :not([data-keep-motion]),
+.ph[data-motion='reduce'] :not([data-keep-motion])::before,
+.ph[data-motion='reduce'] :not([data-keep-motion])::after {
+  animation-duration: 150ms !important;
+  animation-iteration-count: 1 !important;
+  transition-duration: 150ms !important;
+}
 .ph[data-text='small'] {
   --fs: 14px;
 }
@@ -125,6 +138,12 @@
   --scrim: rgba(0, 0, 0, 0.4);
   --ease: cubic-bezier(0.2, 0.8, 0.2, 1);
   --ease-sheet: cubic-bezier(0.32, 0.72, 0, 1);
+  /* Motion tokens (one place). Springs live in lib/phone-motion.ts (SPRING) and use the same times. Reduced = 150 ms fades. */
+  --t-press: 120ms;
+  --t-fade: 200ms;
+  --t-move: 240ms;
+  --t-exit: 200ms;
+  --ease-exit: cubic-bezier(0.4, 0, 1, 1);
   --font-ui: -apple-system, BlinkMacSystemFont, 'SF Pro Text', 'Inter', 'Segoe UI Variable Text', system-ui, 'Microsoft JhengHei UI', 'PingFang TC', 'Noto Sans TC', sans-serif;
   --font-mono: 'SF Mono', 'JetBrains Mono', 'Cascadia Code', ui-monospace, monospace;
   --font-doto: 'Doto', 'JetBrains Mono', ui-monospace, monospace;

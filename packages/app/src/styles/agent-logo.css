@@ -30,3 +30,8 @@
 .pm-agent-mono::before {
   content: attr(data-letter);
 }
+.pm-agent-logo-img {
+  flex: none;
+  object-fit: contain;
+  border-radius: 22%;
+}

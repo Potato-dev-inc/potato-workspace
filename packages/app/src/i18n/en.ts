@@ -59,6 +59,8 @@ import { artifacts } from './en/artifacts';
 import { guide } from './en/guide';
 import { pet } from './en/pet';
 import { minions } from './en/minions';
+import { taskDrag } from './en/taskDrag';
+import { crewChip } from './en/crewChip';
 import { phoneCompose } from './en/phoneCompose';
 import { phoneShell } from './en/phoneShell';
 import { phoneHalf } from './en/phoneHalf';
@@ -72,6 +74,7 @@ import { appUx } from './en/appUx';
 import { deskReview } from './en/deskReview';
 import { devices } from './en/devices';
 import { crews } from './en/crews';
+import { workflows } from './en/workflows';
 import { crewCanvas } from './en/crewCanvas';
 import { crewTalk } from './en/crewTalk';
 import { account } from './en/account';
@@ -149,6 +152,7 @@ export const en = {
   ...devices,
   ...crews,
   ...crewCanvas,
+  ...workflows,
   ...crewTalk,
   ...account,
   ...agentRules,
@@ -156,6 +160,8 @@ export const en = {
   ...timeline,
   ...connect,
   ...minions,
+  ...taskDrag,
+  ...crewChip,
 } as const;
 
 export type MessageKey = Exclude<keyof typeof en, `${string}_one` | `${string}_other`> | PluralKey;

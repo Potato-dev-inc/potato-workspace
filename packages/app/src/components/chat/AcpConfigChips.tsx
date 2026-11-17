@@ -56,6 +56,7 @@ export function AcpConfigChips({ paneId, state, api = tauriAcpChatApi }: { paneI
             value: shown,
             choices: chip.choices,
             disabled: off,
+            searchable: chip.category === 'model',
             onChange: (value: string) => change(chip.id, value),
           };
           // The permission chip: neutral for the safe modes, warning-yellow with a shield only for Full access. It changes

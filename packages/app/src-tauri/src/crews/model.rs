@@ -38,7 +38,21 @@ pub struct Crew {
     /// orchestrator. Never code, never a path.
     #[serde(default, skip_serializing_if = "Option::is_none", alias = "route_by")]
     pub routing_file: Option<String>,
+    /// Workflow (Labs): one shared note given to every role.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub how_i_work: Option<String>,
+    /// Workflow: `front` (only the Front starts; it starts helpers when needed, the default) or `horde` (all now).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub start_mode: Option<String>,
+    /// Workflow: most helper runs the Front may start per message from the person. `None`: `DEFAULT_HELPER_CAP`.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub helper_cap: Option<u32>,
 }
+
+/// Helper runs per message when a workflow does not say.
+pub const DEFAULT_HELPER_CAP: u32 = 3;
+pub const START_MODES: [&str; 2] = ["front", "horde"];
+pub const KINDS: [&str; 2] = ["minion", "spin_off"];
 
 #[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
@@ -121,6 +135,15 @@ pub struct Role {
     pub check: bool,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub position: Option<Position>,
+    /// Workflow: this role is the Front (at most one; it must be the lead).
+    #[serde(default, skip_serializing_if = "is_false")]
+    pub front: bool,
+    /// Workflow helper: `minion` (default) or `spin_off`.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub kind: Option<String>,
+    /// Workflow helper: one line, "hard coding tasks".
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub when_to_use: Option<String>,
 }
 
 fn is_zero(n: &u8) -> bool {

@@ -85,3 +85,15 @@ describe('RelaySheet under StrictMode', () => {
     expect(onDone).not.toHaveBeenCalled();
   });
 });
+
+describe('RelaySheet buttons', () => {
+  it('keeps Cancel and Create team link apart even where the Settings window styles are not around (the Connect page)', async () => {
+    await mountSheet(fakeApi(async () => ({ status: 'done', url: 'https://pm-relay.x.workers.dev' })), vi.fn());
+    const actions = host.querySelector<HTMLElement>('[data-testid="relay-actions"]')!;
+    // Spacing comes from the row's own gap, not from the Settings-only stylesheet.
+    expect(actions.classList.contains('gap-2')).toBe(true);
+    expect(actions.classList.contains('flex')).toBe(true);
+    const names = [...actions.querySelectorAll('button')].map((b) => b.textContent);
+    expect(names).toEqual(['Cancel', 'Create team link']);
+  });
+});

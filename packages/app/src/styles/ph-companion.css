@@ -13,7 +13,7 @@
 /* Face, feed and notes scroll above the chat, so the chat keeps room at the bottom. */
 .ph-comp-top {
   flex: none;
-  max-height: 34vh;
+  max-height: calc(34vh / var(--ui-scale, 1));
   overflow-y: auto;
   padding-bottom: 8px;
 }

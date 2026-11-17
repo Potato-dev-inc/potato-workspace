@@ -95,6 +95,9 @@ pub enum TunnelConfigInput {
         secret: Option<String>,
         #[serde(default)]
         secret_action: SecretAction,
+        /// "Make a new secret" only: go ahead even though the Worker could not forget the old one (the person confirmed).
+        #[serde(default)]
+        confirm_strand: bool,
     },
     /// A fixed address from OpenTunnel. Needs the Labs switch (checked where it is applied).
     OpenTunnel,
@@ -167,7 +170,7 @@ pub fn config_from_input(input: TunnelConfigInput, current: &TunnelConfig) -> Re
         TunnelConfigInput::Quick => Ok(TunnelConfig::Quick),
         TunnelConfigInput::Custom { url } => Ok(TunnelConfig::Custom { url: normalize_custom_url(&url)? }),
         TunnelConfigInput::OpenTunnel => Ok(TunnelConfig::OpenTunnel),
-        TunnelConfigInput::Stable { worker_url, secret, secret_action } => {
+        TunnelConfigInput::Stable { worker_url, secret, secret_action, .. } => {
             let worker_url = normalize_custom_url(&worker_url)?;
             let chosen = secret.as_deref().map(str::trim).filter(|s| !s.is_empty());
             let secret = match (chosen, secret_action, current.stable_secret()) {
@@ -461,7 +464,7 @@ mod tests {
     }
 
     fn stable_input(url: &str, secret: Option<&str>, action: SecretAction) -> TunnelConfigInput {
-        TunnelConfigInput::Stable { worker_url: url.into(), secret: secret.map(Into::into), secret_action: action }
+        TunnelConfigInput::Stable { worker_url: url.into(), secret: secret.map(Into::into), secret_action: action, confirm_strand: false }
     }
 
     #[test]

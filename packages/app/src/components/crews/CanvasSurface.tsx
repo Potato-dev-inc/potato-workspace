@@ -1,9 +1,10 @@
 // The boxes of a crew and the lines between them. A box is a button: Enter selects it, the arrow keys move it, a drag moves it.
 // The whole crew fits the room on open ("Fit" does it again; Ctrl + wheel zooms). Lines are drawn under the boxes (an svg)
 // and carry no text of their own; their meaning is in the box labels. Box text wraps, it is never cut off.
-import { useEffect, useLayoutEffect, useRef, useState, type KeyboardEvent, type PointerEvent } from 'react';
+import { useEffect, useLayoutEffect, useRef, useState, type KeyboardEvent, type MouseEvent, type PointerEvent } from 'react';
 import { useT } from '../../i18n';
 import type { Crew } from '../../lib/crews-api';
+import { Menu } from '../common/Floating';
 import type { ModelNamer } from './modelNames';
 import { BOX_H, BOX_W, clampZoom, edges, extent, fitZoom, keyOf, layout, problemsOf, rightsKeys, type Edge, type Spot } from './model';
 
@@ -42,6 +43,7 @@ export function CanvasSurface({
   readOnly,
   changed,
   touched,
+  onAddRole,
 }: {
   crew: Crew;
   selected: number | null;
@@ -61,6 +63,8 @@ export function CanvasSurface({
   changed?: string[];
   /** Boxes whose routing rules a proposal changes. */
   touched?: string[];
+  /** Adds a role under the lead (the canvas's right-click menu). Absent: the item is off (read-only, full, or no agent). */
+  onAddRole?: () => void;
 }) {
   const t = useT();
   const spots = layout(crew);
@@ -69,12 +73,34 @@ export function CanvasSurface({
   const [drag, setDrag] = useState<{ index: number; dx: number; dy: number } | null>(null);
   const start = useRef<{ x: number; y: number; moved: boolean } | null>(null);
   const scroller = useRef<HTMLDivElement>(null);
+  // Dragging empty space moves the whole canvas; it works when the crew fits too, so it is an offset, not the scroll bars.
+  const [pan, setPan] = useState({ x: 0, y: 0 });
+  const panning = useRef<{ x: number; y: number; from: { x: number; y: number } } | null>(null);
+  const [menu, setMenu] = useState<{ x: number; y: number } | null>(null);
   const sizeRef = useRef(size);
   sizeRef.current = size;
 
   const fit = () => {
     const box = scroller.current;
     if (box) setZoom(fitZoom(sizeRef.current, { width: box.clientWidth, height: box.clientHeight }));
+    setPan({ x: 0, y: 0 });
+  };
+  const onEmpty = (e: { target: EventTarget | null }) => !(e.target as HTMLElement | null)?.closest?.('.crewc-box');
+  const panDown = (e: PointerEvent<HTMLDivElement>) => {
+    if (e.button !== 0 || !onEmpty(e)) return;
+    panning.current = { x: e.clientX, y: e.clientY, from: pan };
+    e.currentTarget.setPointerCapture?.(e.pointerId);
+  };
+  const panMove = (e: PointerEvent<HTMLDivElement>) => {
+    const p = panning.current;
+    if (p) setPan({ x: p.from.x + e.clientX - p.x, y: p.from.y + e.clientY - p.y });
+  };
+  const panUp = () => {
+    panning.current = null;
+  };
+  const ask = (e: MouseEvent<HTMLDivElement>) => {
+    e.preventDefault();
+    setMenu({ x: e.clientX, y: e.clientY });
   };
   // The whole crew fits when the canvas opens (and again whenever a crew is opened in it).
   useLayoutEffect(fit, []);
@@ -146,8 +172,18 @@ export function CanvasSurface({
           +
         </button>
       </div>
-      <div className="crewc-scroll" ref={scroller} onMouseDown={(e) => e.target === e.currentTarget && onSelect(null)}>
-        <div style={{ width: size.width * zoom, height: size.height * zoom }}>
+      <div
+        className="crewc-scroll"
+        ref={scroller}
+        data-testid="crew-scroll"
+        onMouseDown={(e) => onEmpty(e) && onSelect(null)}
+        onPointerDown={panDown}
+        onPointerMove={panMove}
+        onPointerUp={panUp}
+        onPointerCancel={panUp}
+        onContextMenu={ask}
+      >
+        <div style={{ width: size.width * zoom, height: size.height * zoom, transform: `translate(${pan.x}px, ${pan.y}px)` }}>
           <div
             className="crewc-surface"
             role="group"
@@ -203,11 +239,12 @@ export function CanvasSurface({
                 >
                   <span className="crewc-box-top">
                     <span className="crewc-box-name">{role.name}</span>
-                    {!role.parent ? <span className="crewc-tag">{t('crewcanvas.box.lead')}</span> : null}
+                    {role.front ? <span className="crewc-tag">{t('crewcanvas.box.front')}</span> : !role.parent ? <span className="crewc-tag">{t('crewcanvas.box.lead')}</span> : null}
                     {role.check ? <span className="crewc-tag">{t('crewcanvas.box.checks')}</span> : null}
                     {step >= 0 ? <span className="crewc-step" aria-hidden="true">{step + 1}</span> : null}
                   </span>
                   <span className="crewc-box-agent">{model ? `${agentName(role.agent_type)} · ${model}` : agentName(role.agent_type)}</span>
+                  {!role.front && role.when_to_use ? <span className="crewc-box-when">{role.when_to_use}</span> : null}
                   <span className="crewc-box-rights">{rights.map((r) => t(`crewcanvas.right.${r}` as never)).join(' · ')}</span>
                   <span className="crewc-box-foot">
                     {(role.standbys ?? 0) > 0 ? <span>{t('crewcanvas.box.ready', { count: role.standbys ?? 0 })}</span> : null}
@@ -219,6 +256,33 @@ export function CanvasSurface({
           </div>
         </div>
       </div>
+      {menu ? (
+        <Menu point={menu} label={t('crewcanvas.canvasMenu')} onClose={() => setMenu(null)}>
+          <button
+            type="button"
+            role="menuitem"
+            className="ck-menu-item"
+            disabled={!onAddRole}
+            onClick={() => {
+              setMenu(null);
+              onAddRole?.();
+            }}
+          >
+            {t('crewcanvas.add')}
+          </button>
+          <button
+            type="button"
+            role="menuitem"
+            className="ck-menu-item"
+            onClick={() => {
+              setMenu(null);
+              fit();
+            }}
+          >
+            {t('crewcanvas.zoomFit')}
+          </button>
+        </Menu>
+      ) : null}
     </div>
   );
 }

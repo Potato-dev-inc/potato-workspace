@@ -39,10 +39,20 @@ afterEach(async () => {
   host.remove();
 });
 
+/** Sign in is a card on the Agents page and starts closed: open it. */
+async function openSignInCard() {
+  const toggle = host.querySelector<HTMLButtonElement>('.st-closed-group[data-group="Sign in"] .st-adv-toggle');
+  expect(toggle).not.toBeNull();
+  // The open card is remembered, so a second test may find it open already.
+  if (toggle!.getAttribute('aria-expanded') === 'false') await click(toggle);
+  await settle(6);
+}
+
 describe('Settings > Agents sign-in', () => {
   it('shows a Sign in button where the command line used to be, and no backtick text on the page', async () => {
     await act(async () => root.render(<SettingsPanel open api={api} initialTab="agents" />));
     await settle(10);
+    await openSignInCard();
     const main = host.querySelector('.st-main') as HTMLElement;
     const claude = main.querySelector('[data-testid="accounts-claude"]')!;
     const button = claude.querySelector<HTMLButtonElement>('[data-testid="signin-claude"]')!;
@@ -57,6 +67,7 @@ describe('Settings > Agents sign-in', () => {
   it('the button opens the sign-in sheet for that agent', async () => {
     await act(async () => root.render(<SettingsPanel open api={api} initialTab="agents" />));
     await settle(10);
+    await openSignInCard();
     await click(host.querySelector('[data-testid="signin-claude"]'));
     expect(peekSignInAgain()).toMatchObject({ agentId: 'claude', accountId: null });
   });

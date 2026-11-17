@@ -120,6 +120,7 @@ export function makeBridgeClient(baseUrl: string, transport?: BridgeTransport): 
     teamCards: () => call('GET', '/team/cards'),
     phoneDone: (since) => call('GET', `/phone/done?since=${Math.max(0, Math.floor(since))}`),
     phoneHelpers: () => call('GET', '/phone/helpers'),
+    phoneTasks: () => call('GET', '/phone/tasks'),
     teamDismiss: (id) => call('POST', `/team/cards/${encodeURIComponent(id)}/dismiss`, {}),
     teamPull: (id) => call('POST', `/team/cards/${encodeURIComponent(id)}/pull`, {}),
     teamQueue: (id, paneId, when) => call('POST', `/team/cards/${encodeURIComponent(id)}/queue`, { paneId, when }),

@@ -12,6 +12,7 @@ use RiskLevel::{High, Low, Medium};
 /// Rank breaks ties between findings of the same level: the highest rank names the headline.
 mod rank {
     pub const PIPE_TO_SHELL: u8 = 100;
+    pub const UNREAD: u8 = 20;
     pub const HIDDEN_CODE: u8 = 98;
     pub const SYSTEM: u8 = 95;
     pub const ELEVATED: u8 = 90;
@@ -58,6 +59,9 @@ impl<'a> Ctx<'a> {
 }
 
 // ---- whole-line patterns -------------------------------------------------------------------
+
+static SUBSTITUTION: Lazy<Regex> = Lazy::new(|| Regex::new(r"\$\(|`|<\(|>\(").expect("substitution pattern"));
+static GIT_CONFIG: Lazy<Regex> = Lazy::new(|| Regex::new(r"(?i)\bgit\b[^;|&\n]*\s(-c|--config[-\w]*)(\s|=|$)").expect("git config pattern"));
 
 static PIPE_TO_SHELL: Lazy<Regex> = Lazy::new(|| {
     Regex::new(
@@ -115,6 +119,16 @@ pub fn analyze(command: &str, ctx: &mut Ctx) {
     if ENCODED.is_match(command) {
         ctx.add(High, rank::HIDDEN_CODE, "Run hidden code", "The command is encoded, so you cannot read what it will do.");
     }
+    // What cannot be read in full, or runs another command inside this one, is never Low.
+    if command::is_cut(command) {
+        ctx.add(Medium, rank::UNREAD, "Run a long command", "It is too long to check in full, so check all of it before allowing it.");
+    }
+    if SUBSTITUTION.is_match(command) {
+        ctx.add(Medium, rank::UNREAD, "Run a command inside a command", "It runs another command hidden inside it, so check it before allowing it.");
+    }
+    if GIT_CONFIG.is_match(command) {
+        ctx.add(Medium, rank::UNREAD, "Change git settings for one run", "It sets git options that can run other programs, so check it before allowing it.");
+    }
     let segments = command::split_segments(command);
     for (i, seg) in segments.iter().enumerate() {
         let next_is_shell = seg.sep == Sep::Pipe
@@ -150,6 +164,25 @@ fn segment(text: &str, piped_into_shell: bool, ctx: &mut Ctx) {
         let Some(first) = words.first() else { return };
         let lower = first.to_ascii_lowercase();
         let assignment = first.contains('=') && !first.starts_with('-') && first.split('=').next().is_some_and(|k| !k.is_empty() && k.chars().all(|c| c.is_ascii_alphanumeric() || c == '_'));
+        if assignment {
+            // GIT_PAGER, LD_PRELOAD, PATH ... change what the command runs: only a few harmless ones pass.
+            let key = first.split('=').next().unwrap_or_default();
+            if !HARMLESS_ENV.contains(&key) {
+                ctx.add(Medium, rank::UNREAD, "Run a command with changed settings", "It sets an environment variable first, which can change what the command runs.");
+            }
+        }
+        // `timeout 30 npm test`: judge what it runs. (Not the Windows `timeout /t 5`.)
+        if lower == "timeout" && !windows && words.len() > 2 {
+            let mut at = 1;
+            while words.get(at).is_some_and(|w| w.starts_with('-')) {
+                // `-s KILL` and `-k 5` take a value.
+                at += if matches!(words[at].as_str(), "-s" | "-k" | "--signal" | "--kill-after") { 2 } else { 1 };
+            }
+            if words.get(at).is_some_and(|w| !w.is_empty() && w.chars().all(|c| c.is_ascii_digit() || c == '.' || "smhd".contains(c))) && words.len() > at + 1 {
+                words.drain(..=at);
+                continue;
+            }
+        }
         if assignment || matches!(lower.as_str(), "&" | "call" | "time" | "nohup" | "exec" | "command" | "env" | "nice" | "cross-env" | "builtin") {
             words.remove(0);
         } else {
@@ -175,6 +208,9 @@ fn segment(text: &str, piped_into_shell: bool, ctx: &mut Ctx) {
     let secrets: Vec<&String> = args.iter().filter(|a| is_secret_path(a)).collect();
 
     classify(&prog, &args, windows, ctx);
+    if let Some(why) = runs_other_programs(&prog, &args) {
+        ctx.add(Medium, rank::UNREAD, "Run a command that can start other programs", why);
+    }
 
     if !secrets.is_empty() {
         let names = secrets.iter().map(|s| s.as_str()).collect::<Vec<_>>().join(", ");
@@ -192,6 +228,40 @@ fn segment(text: &str, piped_into_shell: bool, ctx: &mut Ctx) {
             ctx.add(High, rank::WRITE_SECRET, "Change a file that may hold secrets", format!("It writes to {target}, which can hold passwords or keys."));
         }
     }
+}
+
+/// Env names that are safe to set in front of a command.
+const HARMLESS_ENV: &[&str] = &["NODE_ENV", "CI", "FORCE_COLOR", "NO_COLOR", "LANG", "LC_ALL", "TZ", "RUST_BACKTRACE", "RUST_LOG", "DEBUG", "PYTHONUNBUFFERED", "TERM"];
+
+/// A "read-only" program used with an option that makes it start another program.
+fn runs_other_programs(prog: &str, args: &[String]) -> Option<&'static str> {
+    const WHY: &str = "One of its options makes it run another program, so check it before allowing it.";
+    let has = |f: &dyn Fn(&str) -> bool| args.iter().any(|a| f(a));
+    let hit = match prog {
+        "awk" | "gawk" | "mawk" | "nawk" => has(&|a| a.contains("system(") || a.contains("| getline") || a.contains("|getline")),
+        "fd" | "fdfind" => has(&|a| a == "-x" || a == "-X" || a.starts_with("--exec") || a.starts_with("-x") && !a.starts_with("--")),
+        "rg" | "ripgrep" => has(&|a| a.starts_with("--pre") || a.starts_with("--hostname-bin")),
+        "sed" | "gsed" => has(&|a| !a.starts_with('-') && (sed_exec(a))),
+        "man" => has(&|a| a == "-P" || a.starts_with("-P") || a.starts_with("--pager")),
+        _ => false,
+    };
+    hit.then_some(WHY)
+}
+
+/// A sed script with the `e` command or the `e` flag of `s///` (it runs a shell command).
+fn sed_exec(script: &str) -> bool {
+    let t = script.trim();
+    if t.split([';', '{', '}', '\n']).any(|part| {
+        let part = part.trim().trim_start_matches(|c: char| c.is_ascii_digit() || c == ',' || c == '$' || c == '!').trim_start();
+        part == "e" || part.starts_with("e ")
+    }) {
+        return true;
+    }
+    t.split(';').any(|cmd| {
+        let cmd = cmd.trim();
+        let mut chars = cmd.chars();
+        chars.next() == Some('s') && chars.next().is_some_and(|d| cmd.rsplit(d).next().is_some_and(|flags| flags.contains('e')) && cmd.matches(d).count() >= 3)
+    })
 }
 
 fn write_target(ctx: &mut Ctx, path: &str, verb: &str) {
@@ -253,7 +323,7 @@ const READERS: &[&str] = &[
     "get-help", "man", "help", "tldr", "history", "lsof", "netstat", "ping", "nslookup", "dig", "ipconfig", "ifconfig", "get-alias", "get-member", "format-list", "select-object", "where-object", "sort-object", "group-object", "out-string", "convertto-json",
 ];
 const NEUTRAL: &[&str] = &[
-    "cd", "pushd", "popd", "set-location", "sl", "chdir", "pwd", "echo", "write-host", "write-output", "printf", "true", "false", ":", "exit", "clear", "cls", "export", "set", "sleep", "start-sleep", "timeout", "test", "[", "read", "export", "unset", "alias", "source",
+    "cd", "pushd", "popd", "set-location", "sl", "chdir", "pwd", "echo", "write-host", "write-output", "printf", "true", "false", ":", "exit", "clear", "cls", "export", "set", "sleep", "start-sleep", "timeout", "test", "[", "read", "export", "unset", "alias",
 ];
 
 fn classify(prog: &str, args: &[String], windows: bool, ctx: &mut Ctx) {
@@ -267,6 +337,11 @@ fn classify(prog: &str, args: &[String], windows: bool, ctx: &mut Ctx) {
                 }
                 ctx.cwd = Some(join_cwd(ctx.cwd.as_deref().or(ctx.workspace), dir));
             }
+        }
+        // Runs a script file in this shell: whatever is in it runs.
+        "source" | "." => ctx.add(Medium, rank::UNREAD, "Run a script", "It runs the commands in a script file, so check the script first."),
+        "echo" | "write-host" | "write-output" | "printf" if args.iter().any(|a| a.contains('(') || a.contains("$(")) => {
+            ctx.add(Medium, rank::UNREAD, "Run a command inside a command", "It runs another command hidden inside it, so check it before allowing it.")
         }
         p if NEUTRAL.contains(&p) => {}
         "sudo" | "doas" | "gsudo" | "runas" | "pkexec" => {
@@ -585,6 +660,12 @@ fn git(args: &[String], ctx: &mut Ctx) {
     let flags: Vec<String> = rest.iter().filter(|a| a.starts_with('-')).map(|a| a.to_ascii_lowercase()).collect();
     let force_flag = flags.iter().any(|f| f == "--force" || f == "--force-with-lease" || f.starts_with("--force-with-lease=") || f == "-f" || (f.starts_with('-') && !f.starts_with("--") && f[1..].contains('f')));
     match sub.as_str() {
+        "config" if !flags.iter().any(|f| matches!(f.as_str(), "--get" | "--get-all" | "--get-regexp" | "--list" | "-l" | "--show-origin")) => {
+            ctx.add(Medium, rank::UNREAD, "Change git settings", "Some git settings (a pager, an alias, a file watcher) run other programs, so check it before allowing it.")
+        }
+        "grep" if rest.iter().any(|a| a.starts_with("-O") || a.starts_with("--open-files-in-pager")) => {
+            ctx.add(Medium, rank::UNREAD, "Run a command that can start other programs", "One of its options makes it run another program, so check it before allowing it.")
+        }
         "push" => {
             let plus = rest.iter().any(|a| a.starts_with('+') && a.len() > 1);
             if force_flag || plus || flags.iter().any(|f| f == "--mirror" || f == "--delete") {

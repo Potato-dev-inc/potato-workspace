@@ -17,7 +17,7 @@
   right: 14px;
   bottom: 42px;
   width: 300px;
-  max-width: calc(100vw - 28px);
+  max-width: calc(calc(100vw / var(--ui-scale, 1)) - 28px);
   display: grid;
   gap: 8px;
   padding: 10px;

@@ -29,6 +29,7 @@ pub const CHOICE_DENY: &str = "deny";
 const ACTION_TAKE_OVER: &str = "take_over";
 const ACTION_ANSWER: &str = "answer_prompt";
 const ACTION_CONFIG: &str = "config_change";
+const ACTION_BACKGROUND: &str = "background_command";
 /// How long the agent's call can stay unanswered before the card expires.
 const CARD_TIMEOUT_S: u64 = 600;
 
@@ -38,6 +39,8 @@ pub enum Action {
     AnswerPrompt,
     /// A shell command (curl, the CLI) in an agent pane changes the app (`shell_gate`).
     ConfigChange,
+    /// An agent wants to start a command that keeps running in the background (`start_terminal`, `agent_terminals`).
+    BackgroundCommand,
 }
 
 impl Action {
@@ -46,6 +49,7 @@ impl Action {
             Self::TakeOver => ACTION_TAKE_OVER,
             Self::AnswerPrompt => ACTION_ANSWER,
             Self::ConfigChange => ACTION_CONFIG,
+            Self::BackgroundCommand => ACTION_BACKGROUND,
         }
     }
 }
@@ -103,6 +107,8 @@ struct Ledger {
     /// (agent identity, pane) pairs the person allowed to take over without asking again. Keyed by
     /// the agent too: "always" was said to the agent on the card, not to every agent.
     always: HashSet<(String, String)>,
+    /// Chats (their pane ids) where the person said "allow for this chat" to background commands.
+    chats: HashSet<String>,
 }
 
 static LEDGER: Lazy<Mutex<Ledger>> = Lazy::new(|| Mutex::new(Ledger::default()));
@@ -131,6 +137,10 @@ pub fn decide(ask: &Ask, now: u64) -> Verdict {
     if ask.action == Action::TakeOver && ledger.always.contains(&grant) {
         return Verdict::Allowed(Basis::Always);
     }
+    // "Allow for this chat": later background commands of that chat do not ask, unless one is dangerous (it has a risk).
+    if ask.action == Action::BackgroundCommand && ask.risk.is_none() && ledger.chats.contains(&ask.subject) {
+        return Verdict::Allowed(Basis::Always);
+    }
     if let Some(slot) = ledger.slots.get_mut(&key) {
         if let Some(question) = questions::store().get(&slot.question_id, now) {
             match question.state {
@@ -141,6 +151,10 @@ pub fn decide(ask: &Ask, now: u64) -> Verdict {
                     match choice {
                         Some(CHOICE_ALWAYS) if ask.action == Action::TakeOver => {
                             ledger.always.insert(grant);
+                            return Verdict::Allowed(Basis::Always);
+                        }
+                        Some(CHOICE_ALWAYS) if ask.action == Action::BackgroundCommand && ask.risk.is_none() => {
+                            ledger.chats.insert(ask.subject.clone());
                             return Verdict::Allowed(Basis::Always);
                         }
                         Some(CHOICE_ONCE) | Some(CHOICE_ALWAYS) if !slot.consumed => {
@@ -165,6 +179,11 @@ pub fn decide(ask: &Ask, now: u64) -> Verdict {
         // The store is full of unanswered questions: say "no" rather than let the call through.
         None => Verdict::Denied(String::new()),
     }
+}
+
+/// A chat ended: "allow for this chat" ends with it.
+pub fn forget_chat(chat_pane: &str) {
+    LEDGER.lock().chats.remove(chat_pane);
 }
 
 /// The requester's name inside a sentence: "Allow another agent to ..." rather than "Allow Another agent ...".
@@ -204,6 +223,19 @@ fn card_words(ask: &Ask) -> (String, String, Vec<Choice>) {
             config_change_reason(ask),
             vec![choice(CHOICE_ONCE, "Allow once"), choice(CHOICE_DENY, "Deny")],
         ),
+        Action::BackgroundCommand => {
+            // Words for the Inbox; the app shows its own sentence from `consent.action` (`ConsentCard`).
+            let mut choices = vec![choice(CHOICE_ONCE, "Allow once")];
+            if ask.risk.is_none() {
+                choices.push(choice(CHOICE_ALWAYS, "Allow for this chat"));
+            }
+            choices.push(choice(CHOICE_DENY, "No"));
+            (
+                format!("{who} wants to run a command in the background: {}", ask.target),
+                ask.risk_headline.clone().unwrap_or_default(),
+                choices,
+            )
+        }
         Action::AnswerPrompt => (
             format!("Allow {who} to answer a question in {}?", ask.target),
             ask.risk_headline
@@ -292,6 +324,8 @@ pub fn on_resolved(question: &Question) {
         )
     } else if info.action == ACTION_CONFIG {
         (format!("to change {}", info.target), format!("{who_asked} changing {}", info.target))
+    } else if info.action == ACTION_BACKGROUND {
+        (format!("to run {} in the background", info.target), format!("{who_asked} running {} in the background", info.target))
     } else {
         (format!("to control {}", info.target), format!("{who_asked} controlling {}", info.target))
     };

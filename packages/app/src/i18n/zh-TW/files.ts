@@ -73,6 +73,8 @@ export const files: Partial<Record<EnglishKey, string>> = {
   'files.searchModeLabel': '要搜尋什麼',
   'files.searchNames': '檔案名稱',
   'files.searchInside': '檔案內容',
+  'files.searchNamesTip': '只搜尋檔案和資料夾的名稱。',
+  'files.searchInsideTip': '搜尋檔案裡面的文字。',
   'files.collapseAll': '全部收合',
   'files.searchPlaceholder': '搜尋檔案內容',
   'files.searchLabel': '搜尋檔案裡的字',

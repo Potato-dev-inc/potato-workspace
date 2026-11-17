@@ -3,12 +3,14 @@
 import { invoke } from '@tauri-apps/api/core';
 import { listen } from '@tauri-apps/api/event';
 import { pickFiles } from '../../../lib/attachFiles';
+import { sendPaneMessage } from '../../../lib/paneOutbox';
 import { pickableAccounts, tauriAccountsApi, type Account } from '../../../lib/accounts';
 import { loadSettings, patchSettings } from '../../../lib/settings';
 import { shipApi, type RecentProject } from '../../../lib/ship-api';
 import { realRecents } from '../../../lib/ship-model';
 import { isValidProjectPath } from '../../../lib/project-path';
 import { tauri } from '../../../lib/tauri';
+import { fillDiscordNameOnce } from '../../../lib/discordName';
 import { cleanName, parseCards, type HomeCard, type LaneView } from './model';
 
 const inTauri = (): boolean => typeof window !== 'undefined' && '__TAURI_INTERNALS__' in window;
@@ -19,7 +21,33 @@ export interface HomeSettings {
   cards: HomeCard[];
 }
 
+/** A workflow as the page shows it (Rust `crews::workflow::Plan`; the brief is filled only by `workflowPlan`). */
+export interface WorkflowPlanView {
+  name: string;
+  front_name: string;
+  front_agent: string;
+  front_model: string | null;
+  helpers: { name: string; agent_type: string; model: string | null; when_to_use: string; kind: 'minion' | 'spin_off' | string }[];
+  start_mode: 'front' | 'horde' | string;
+  helper_cap: number;
+  reply_style: 'translator' | 'router' | string;
+  brief: string;
+  /** The brief, then the person's request: the front's first message. */
+  first_message: string;
+}
+
+export interface WorkflowChoice {
+  slug: string;
+  plan: WorkflowPlanView;
+}
+
 export interface NewAgentApi {
+  /** Labs "Workflows": the saved workflows; null while the switch is off. Absent on an older build. */
+  workflows?: () => Promise<WorkflowChoice[] | null>;
+  /** The plan of one workflow in a folder: who the front is and the brief it gets first. */
+  workflowPlan?: (slug: string, folder: string, request: string) => Promise<WorkflowPlanView>;
+  /** Whole-horde mode: start the helpers under the front's pane. Resolves to a plain sentence when some did not start. */
+  workflowHelpers?: (slug: string, folder: string, frontPane: string) => Promise<string | null>;
   /** Recent project folders, newest first (copies mapped back to their project). */
   recent: () => Promise<RecentProject[]>;
   /** The system folder dialog; null when cancelled. */
@@ -57,6 +85,21 @@ export function laneViewFromWire(wire: LaneWire | null | undefined): LaneView | 
 }
 
 export const tauriNewAgentApi: NewAgentApi = {
+  workflows: async () => {
+    if (!inTauri()) return null;
+    try {
+      return await invoke<WorkflowChoice[] | null>('workflows_list');
+    } catch {
+      return null; // an older build without the command
+    }
+  },
+  workflowPlan: (slug, folder, request) => invoke<WorkflowPlanView>('workflows_plan', { slug, folder, request }),
+  workflowHelpers: async (slug, folder, frontPane) => {
+    const out = await invoke<{ failed: { role: string; message: string } | null; started: unknown[]; note: string }>('workflows_start_helpers', { slug, folder, frontPane });
+    // The front is told which pane is which helper, so it uses them and does not start duplicates.
+    if (out.started.length > 0 && out.note) await sendPaneMessage(frontPane, out.note).catch(() => undefined);
+    return out.failed ? `${out.failed.role}: ${out.failed.message}` : null;
+  },
   recent: async () => realRecents(await shipApi.recent()),
   pickFolder: () => shipApi.pickFolder(),
   pickPaths: async () => pickFiles(),
@@ -82,7 +125,9 @@ export const tauriNewAgentApi: NewAgentApi = {
   },
   loadHome: async () => {
     const s = await loadSettings();
-    return { name: cleanName(s.display_name), cards: parseCards(s.home_cards) };
+    // Signed in with Discord and no name yet: start from the Discord name (once per account), at app start, not only in Settings.
+    const filled = cleanName(s.display_name) ? null : await fillDiscordNameOnce((name) => patchSettings({ display_name: name }));
+    return { name: filled ? cleanName(filled) : cleanName(s.display_name), cards: parseCards(s.home_cards) };
   },
   saveCards: async (cards) => {
     await patchSettings({ home_cards: cards.length > 0 ? cards : null });

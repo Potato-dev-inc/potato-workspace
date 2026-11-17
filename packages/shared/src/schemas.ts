@@ -71,6 +71,8 @@ export const SettingsSchema = z.object({
   acp_chat_enabled: z.boolean().optional(),
   /** What the "+" menu starts: a chat or a terminal. Absent: chat. Shown only while Chat is on. */
   new_agent_start: z.enum(['chat', 'terminal']).optional(),
+  /** The main window's X: off (absent) = quit the app, asking first when an agent is working; on = hide to the tray and keep running. Rust: close_to_tray. */
+  close_to_tray: z.boolean().optional(),
   /** Show terminals (Settings > General): off = every agent starts as a chat and terminal-only controls are hidden. Absent: off. Open terminals keep working. Rust: show_terminals. */
   show_terminals: z.boolean().optional(),
   /** Model Bridge (Settings › General › Labs): connect a model service with a key and add it to Codex. Off unless chosen. Rust: model_bridge. */
@@ -94,6 +96,8 @@ export const SettingsSchema = z.object({
   project_guide_enabled: z.boolean().optional(),
   /** Mark-up bar (Settings > General > Labs): draw, pick and send marks of a page to the chat that made it; Open in agent browser. Off unless chosen. */
   markup_bar_enabled: z.boolean().optional(),
+  /** Browser in the side panel (Settings > General > Labs): the agent browser's page shows in the details column instead of its own window. Off unless chosen. Rust: browser::dock. */
+  dock_browser_enabled: z.boolean().optional(),
   /** The Today page (Settings > General > Labs): one line for the whole day, and a way back to any point on it. Off unless chosen. Rust: timeline. */
   timeline_day_enabled: z.boolean().optional(),
   /** Desktop Potato: size 'small' | 'medium' | 'large', hidden-until (epoch ms), quiet. Rust: pet. */
@@ -106,6 +110,10 @@ export const SettingsSchema = z.object({
   smaller_updates_enabled: z.boolean().optional(),
   /** Crews (Settings > General > Labs): shows saved crews, read-only, and lets the command line check a crew file. Off unless chosen. Rust: crews. */
   crews_enabled: z.boolean().optional(),
+  /** Workflows (Settings > General > Labs): a crew with one Front role; the Front starts its helpers itself. Off unless chosen. Rust: crews/workflow. */
+  workflows_enabled: z.boolean().optional(),
+  /** How the Front of a workflow answers: translator (default) retells in its own words; router shows the helper's own words. */
+  workflow_reply_style: z.enum(['translator', 'router']).optional(),
   /** Fixed phone address (Settings > Early features): an address from the third-party OpenTunnel relay. Off unless chosen. Rust: mobile_tunnel/opentunnel. */
   opentunnel_stable_link: z.boolean().optional(),
   /** The version whose small update failed (written by the app); that version takes the full package. */

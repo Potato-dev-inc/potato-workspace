@@ -19,6 +19,7 @@ import type { WizardApi } from '../../../lib/agentWizard';
 import { errorCode, errorSentence } from '../../../lib/sayError';
 import { openSettingsAt } from '../../../lib/openSettingsAt';
 import { useShowTerminals } from '../../../lib/showTerminals';
+import { markAgentAdded } from '../../../lib/optInAgents';
 import { takeAddAgentPrefill } from '../agents/agentTarget';
 import { Btn } from '../settings-ui';
 import { AddAgentAdvanced } from './AddAgentAdvanced';
@@ -131,6 +132,8 @@ export function AddAgent({ api = addAgentApi, wizardApi, onStartChat, onOpenTerm
     setRun(next);
     setLastRun(next);
     setNow(t);
+    const chosen = next.result?.agent_id ?? next.agent_id;
+    if (chosen && next.state !== 'failed' && next.state !== 'cancelled') markAgentAdded(chosen);
     remember(next.state === 'failed' || next.state === 'cancelled' ? null : next.run_id);
   }, []);
 

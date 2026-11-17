@@ -88,6 +88,8 @@ export const state = {
   'state.helperOf': 'Started by {title}',
   'state.startedBy': 'Started by {host}',
   'state.startedByAgent': 'Started by an agent',
+  'state.spunOffClosed': 'Spun off from {name} (closed)',
+  'state.spunOffClosedAnon': 'Spun off from an agent that closed',
   'state.startedByTask': '{who}: {task}',
   'state.startedByTitle': '{who}. Task: {task}',
   // ship hints
@@ -145,6 +147,7 @@ export const state = {
   'state.stream.starting': 'Starting',
   'state.stream.other': 'Other',
   // model picker
+  'state.model.other': 'Other',
   'state.model.default': 'Default',
   'state.model.typeId': 'Type a model id',
   'state.model.searchOrType': 'Search or type a model id',

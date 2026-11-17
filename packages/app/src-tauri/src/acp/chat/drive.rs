@@ -55,6 +55,11 @@ impl Drive {
         from.is_some() && self.lock_now(now).is_some()
     }
 
+    /// A device is typing into the chat right now.
+    pub fn typing_now(&self, now: Instant) -> bool {
+        self.driver_now(now).and_then(|d| d.typing_until).is_some_and(|until| until > now)
+    }
+
     /// A device says it is typing. `false`: refused because the PC took this back.
     pub fn typing(&mut self, id: &str, now: Instant) -> bool {
         if self.refuses(Some(id), now) {

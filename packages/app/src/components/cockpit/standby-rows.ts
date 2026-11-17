@@ -4,9 +4,10 @@
 // (Ready -> Working -> Ready) and nothing else: no new row appears, the row is never drawn anywhere else, and the chat the
 // task runs in is this row's chat, never an agent of its own.
 //   every state (Ready, Working, With you, Starting, Resting, cannot start) -> under its home agent
-//   home agent gone                                  -> under the newest main agent of the same project
-//   no main agent in the project                     -> the project's "Helpers waiting for an agent" group
-import type { StandbyHelperEntry } from '../../lib/standbyHelpers';
+//   home agent gone (was set, now closed)           -> under the newest main agent of the same project
+//   never had a home (made from the crew sheet or Settings: nobody started it) -> the project's own "Standbys" group
+//   no main agent in the project                     -> the same "Standbys" group
+import { standbyKindOf, type StandbyHelperEntry } from '../../lib/standbyHelpers';
 import { liveParentId } from '../../lib/pane-helpers';
 import { folderKey } from './history-model';
 
@@ -35,6 +36,17 @@ export interface Placement {
   hiddenPanes: Set<string>;
   /** Free warm agents: removed from their agent and still running. They are drawn on the quiet line at the bottom of the sidebar. */
   warm: StandbyRow[];
+  /** Ready standbys set to "minion": no sidebar row. They show as "N ready" in their agent's Background tasks, by the pane they
+   * belong to (the same home rule as a row). */
+  readyMinions: Map<string, number>;
+}
+
+/** A standby with no sidebar row: set to "minion" while the app runs two types of started agents (otherwise the kind is ignored). */
+export const isMinionStandby = (h: StandbyHelperEntry, twoTypes: boolean): boolean => twoTypes && standbyKindOf(h) === 'minion';
+
+/** How many minion standbys are ready for agent `paneId`. Same home rule as the rows (its own, else the newest agent of the project). */
+export function readyMinionCount(helpers: readonly StandbyHelperEntry[], panes: ReadonlyArray<PaneLike>, paneId: string, twoTypes: boolean): number {
+  return placeHelpers(helpers, panes, new Set(), twoTypes).readyMinions.get(paneId) ?? 0;
 }
 
 export function rowState(h: StandbyHelperEntry): StandbyRowState {
@@ -57,7 +69,9 @@ const ORDER: Record<StandbyRowState, number> = { working: 0, withYou: 1, ready: 
 /** Puts every helper in its place. `panes` is the live pane list in the order the sidebar knows (newest last). `opening`: chats
  * that appeared while a helper was being opened: they are the helper's own chat (its row says so as soon as the list is read
  * again), so they never show as an agent in the meantime. */
-export function placeHelpers(helpers: readonly StandbyHelperEntry[], panes: ReadonlyArray<PaneLike>, opening: ReadonlySet<string> = new Set()): Placement {
+export function placeHelpers(helpers: readonly StandbyHelperEntry[], panes: ReadonlyArray<PaneLike>, opening: ReadonlySet<string> = new Set(), twoTypes = true): Placement {
+  const readyMinions = new Map<string, number>();
+  const spinOffs = helpers.filter((h) => !isMinionStandby(h, twoTypes));
   const ids = new Set(panes.map((p) => p.info.id));
   const hiddenPanes = new Set<string>(opening);
   const byAgent = new Map<string, StandbyRow[]>();
@@ -66,7 +80,7 @@ export function placeHelpers(helpers: readonly StandbyHelperEntry[], panes: Read
   // Panes that are a seat's own chat never count as agents: the chat the person opened on it, the chat its task runs in, and
   // (a finished task chat is an ordinary chat again: the pane list stops flagging it). The pane list itself says which seat a chat belongs to
   // (`standby_seat`), so a task's chat is hidden from the first moment it is listed, before the helper list is read again.
-  const seats = new Set(helpers.map((h) => h.id));
+  const seats = new Set(spinOffs.map((h) => h.id));
   const seatPane = new Map<string, string>();
   for (const p of panes) {
     const seat = p.info.standby_seat;
@@ -74,7 +88,7 @@ export function placeHelpers(helpers: readonly StandbyHelperEntry[], panes: Read
     hiddenPanes.add(p.info.id);
     seatPane.set(seat, p.info.id);
   }
-  for (const h of helpers) {
+  for (const h of spinOffs) {
     for (const id of [h.open_pane, h.pane_id]) if (id && ids.has(id)) hiddenPanes.add(id);
   }
   const mains = panes.filter((p) => !hiddenPanes.has(p.info.id) && !liveParentId(panes, p.info.id));
@@ -83,7 +97,13 @@ export function placeHelpers(helpers: readonly StandbyHelperEntry[], panes: Read
     const found = mains.filter((p) => folderKey(p.info.cwd) === key);
     return found.length > 0 ? found[found.length - 1].info.id : null;
   };
+  // A minion standby is never a row. A ready one is counted under its agent; one a task has taken is a minion pane (hidden elsewhere).
   for (const h of helpers) {
+    if (!isMinionStandby(h, twoTypes) || h.state !== 'ready') continue;
+    const home = h.home && ids.has(h.home) && !hiddenPanes.has(h.home) ? h.home : newestMainOf(h.project);
+    if (home) readyMinions.set(home, (readyMinions.get(home) ?? 0) + 1);
+  }
+  for (const h of spinOffs) {
     // The seat's chat right now: the task's chat, else the one the person opened, else a chat the pane list says is this
     // seat's (the helper list is a moment behind).
     const flagged = seatPane.get(h.id);
@@ -92,7 +112,8 @@ export function placeHelpers(helpers: readonly StandbyHelperEntry[], panes: Read
     // (A chat that is idle is a finished one the list has not dropped yet: the row stays Ready.)
     const taskListed = !!live && live !== h.open_pane && panes.some((p) => p.info.id === live && !!p.info.parent_pane_id && p.status === 'running');
     const state: StandbyRowState = h.state === 'ready' && taskListed ? 'working' : rowState(h);
-    const home = h.home && ids.has(h.home) && !hiddenPanes.has(h.home) ? h.home : newestMainOf(h.project);
+    // A standby that was never put under an agent is nobody's helper: it waits in the project's own group.
+    const home = h.home && ids.has(h.home) && !hiddenPanes.has(h.home) ? h.home : h.home ? newestMainOf(h.project) : null;
     const paneId = live;
     if (h.warm) {
       warm.push({ helper: h, state, paneId, under: null });
@@ -104,5 +125,5 @@ export function placeHelpers(helpers: readonly StandbyHelperEntry[], panes: Read
     into.set(key, [...(into.get(key) ?? []), row]);
   }
   for (const map of [byAgent, loose]) for (const [k, rows] of map) map.set(k, [...rows].sort((a, b) => ORDER[a.state] - ORDER[b.state]));
-  return { byAgent, loose, hiddenPanes, warm: warm.sort((a, b) => ORDER[a.state] - ORDER[b.state]) };
+  return { byAgent, loose, hiddenPanes, warm: warm.sort((a, b) => ORDER[a.state] - ORDER[b.state]), readyMinions };
 }

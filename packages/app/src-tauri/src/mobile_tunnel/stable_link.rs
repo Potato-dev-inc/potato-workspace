@@ -56,7 +56,7 @@ impl Outcome {
     pub fn problem(&self) -> Option<String> {
         match self {
             Self::Linked => None,
-            Self::SecretMismatch => Some("The secret does not match the one the Worker has. Make a new secret, or reset the Worker.".into()),
+            Self::SecretMismatch => Some("The secret does not match the one the Worker has. Another copy of Potato Workspace may have set it up first: paste that first secret under Secret, or use a new Worker.".into()),
             Self::AddressRefused => Some("The Worker refused this tunnel address. Is it a stable-link Worker?".into()),
             Self::WorkerTooOld => Some("Update your Worker: this address does not have the stable link yet. Open Settings > Connect and press Update Worker.".into()),
             Self::Retry(why) => Some(why.clone()),
@@ -108,15 +108,59 @@ pub fn register_once(worker_url: &str, secret: &str, origin: &str) -> Outcome {
     }
 }
 
+/// What the Worker said to "forget your link and secret".
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum ResetOutcome {
+    /// The Worker forgot the old secret.
+    Done,
+    /// 401/403: the Worker has another secret than the one we hold, so it kept what it has.
+    Rejected,
+    /// 404: this address is not a stable-link Worker (too old, or something else).
+    TooOld,
+    /// No answer, or any other answer (Worker down, no network).
+    Unreachable,
+}
+
+/// Read the Worker's answer to a reset call. Pure, so every case is a unit test.
+pub fn interpret_reset(http_status: Option<u16>) -> ResetOutcome {
+    match http_status {
+        Some(200..=299) => ResetOutcome::Done,
+        Some(401 | 403) => ResetOutcome::Rejected,
+        Some(404) => ResetOutcome::TooOld,
+        _ => ResetOutcome::Unreachable,
+    }
+}
+
 /// Ask the Worker to forget its link and secret (used before a new secret replaces the old one).
-/// Best effort: a Worker that is down or has another secret simply keeps what it has.
-pub fn reset_once(worker_url: &str, secret: &str) -> bool {
-    agent()
+/// The secret only goes in the `Authorization` header; the outcome carries no text from the request.
+pub fn reset(worker_url: &str, secret: &str) -> ResetOutcome {
+    let result = agent()
         .post(&reset_url(worker_url))
         .set("Authorization", &format!("Bearer {secret}"))
         .set("Accept-Encoding", "identity")
-        .call()
-        .is_ok()
+        .call();
+    match result {
+        Ok(resp) => interpret_reset(Some(resp.status())),
+        Err(ureq::Error::Status(code, _)) => interpret_reset(Some(code)),
+        Err(_) => interpret_reset(None),
+    }
+}
+
+/// Best effort: forget the old secret on the Worker, ignoring why it could not.
+pub fn reset_once(worker_url: &str, secret: &str) -> bool {
+    reset(worker_url, secret) == ResetOutcome::Done
+}
+
+/// The line the app log gets when a registration ends for good. Never has the secret or an address in it.
+/// `None` for a stop that was not an answer (a newer tunnel replaced this one).
+pub fn final_log_line(outcome: &Outcome) -> Option<(bool, String)> {
+    match outcome {
+        Outcome::Linked => Some((true, "stable link: registered with the Worker".into())),
+        Outcome::SecretMismatch => Some((false, "stable link: the Worker refused the secret (403); it holds another secret, so phones cannot reach this computer".into())),
+        Outcome::AddressRefused => Some((false, "stable link: the Worker refused the tunnel address (400)".into())),
+        Outcome::WorkerTooOld => Some((false, "stable link: the address is not a stable-link Worker (404)".into())),
+        Outcome::Retry(_) => None,
+    }
 }
 
 /// Try until linked, a final answer, or `is_current` turns false (a newer tunnel or a restart).
@@ -373,6 +417,35 @@ mod tests {
         assert!(requests[0].starts_with("GET /_pm/link/health "));
         assert!(requests[1].starts_with("POST /_pm/link/reset "));
         assert!(requests[1].contains("Bearer old-secret-0123456789"));
+    }
+
+    #[test]
+    fn a_reset_answer_is_read_as_done_rejected_or_unreachable() {
+        assert_eq!(interpret_reset(Some(200)), ResetOutcome::Done);
+        assert_eq!(interpret_reset(Some(403)), ResetOutcome::Rejected);
+        assert_eq!(interpret_reset(Some(401)), ResetOutcome::Rejected);
+        assert_eq!(interpret_reset(Some(404)), ResetOutcome::TooOld);
+        assert_eq!(interpret_reset(Some(500)), ResetOutcome::Unreachable);
+        assert_eq!(interpret_reset(None), ResetOutcome::Unreachable);
+    }
+
+    #[test]
+    fn a_fake_worker_that_refuses_the_old_secret_gives_rejected() {
+        let (url, _seen, server) = fake_worker(vec![(403, r#"{"error":"secret_mismatch"}"#)]);
+        assert_eq!(reset(&url, "old-secret-0123456789"), ResetOutcome::Rejected);
+        server.join().unwrap();
+        assert_eq!(reset("http://127.0.0.1:1", "old-secret-0123456789"), ResetOutcome::Unreachable);
+    }
+
+    #[test]
+    fn the_final_log_line_has_no_secret_and_no_address() {
+        for (outcome, ok) in [(Outcome::Linked, true), (Outcome::SecretMismatch, false), (Outcome::AddressRefused, false), (Outcome::WorkerTooOld, false)] {
+            let (is_info, line) = final_log_line(&outcome).unwrap();
+            assert_eq!(is_info, ok);
+            assert!(!line.contains("http") && !line.to_lowercase().contains("bearer"), "{line}");
+        }
+        assert!(final_log_line(&Outcome::SecretMismatch).unwrap().1.contains("403"));
+        assert!(final_log_line(&Outcome::Retry("stopped".into())).is_none());
     }
 
     #[test]

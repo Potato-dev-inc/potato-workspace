@@ -1,5 +1,6 @@
 // @vitest-environment jsdom
 import { setHelpersInSidebar } from './lib/helpersInSidebar';
+import { readFileSync } from 'node:fs';
 import { act, createElement } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
@@ -688,6 +689,14 @@ describe('CockpitApp main view precedence', () => {
   it('Connect: the sidebar row opens the page over the pane and the next pane click leaves it', () => {
     clickButton('Connect row');
     expect(mainText()).toBe('CONNECT VIEW phone');
+    // Layout guard: the page sits in a scroll container (jsdom has no layout, so read the rule the wrapper uses).
+    const wrap = host.querySelector('main [data-testid="connect-scroll"]');
+    expect(wrap?.className).toBe('ck-connect-scroll');
+    const css = readFileSync('src/styles/connect.css', 'utf8');
+    const rule = css.slice(css.indexOf(".cockpit .ck-connect-scroll {"), css.indexOf("}", css.indexOf(".cockpit .ck-connect-scroll {")));
+    expect(rule).toContain("overflow-y: auto");
+    expect(rule).toContain("min-height: 0");
+    expect(rule).toContain("flex: 1");
     clickButton('pane p2');
     expect(mainText()).toBe('PANE VIEW p2');
   });

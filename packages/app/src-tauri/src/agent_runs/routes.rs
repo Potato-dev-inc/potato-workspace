@@ -70,6 +70,14 @@ pub fn handle_request_as(
     // `run_agent` is prepared once, before the chat lane looks at it: the helper rules (Helper agents, keep open,
     // the person's default helper account) decide `headless` and `account`, and the chat lane must see the
     // effective values, not the raw body. The terminal path below continues with the same prepared request.
+    // No task: nothing starts and nothing is made up (a minion with no task is a standby, not a run).
+    if let ("POST", ["agents", "run"]) = (method, segments) {
+        if let Ok(Value::Object(map)) = serde_json::from_slice::<Value>(body) {
+            if map.get("task").and_then(Value::as_str).is_none_or(|task| task.trim().is_empty()) {
+                return Some(Err(super::capabilities::task_required_error()));
+            }
+        }
+    }
     let mut prepared: Option<AgentRunRequest> = None;
     let mut chat_body: Option<Vec<u8>> = None;
     if let ("POST", ["agents", "run"]) = (method, segments) {
@@ -307,11 +315,13 @@ fn prepare_run(
     }
     // "Helper agents": the person's choice decides whether the helper is shown or runs in the background.
     crate::agent_run_mode::apply_helper_visibility(&mut request);
-    // "Keep helpers open when they finish": a pane this helper opens is not closed when it ends.
+    // "Keep helpers open when they finish": a pane this helper opens is not closed when it ends, unless the person never chose
+    // and the caller said `keep_pane: false` out loud.
+    let said_close = serde_json::from_slice::<Value>(body).ok().and_then(|v| v.get("keep_pane").and_then(Value::as_bool)) == Some(false);
     request.kept_open_by_setting = request.turn_index == 0
         && request.pane_id.is_none()
         && request.worker_id.is_none()
-        && crate::agent_run_mode::apply_keep_open(&mut request.keep_pane);
+        && crate::agent_run_mode::apply_keep_open_for_caller(&mut request.keep_pane, said_close);
     if request
         .project_path
         .as_deref()
@@ -350,6 +360,8 @@ fn chat_view_of(body: &[u8], request: &AgentRunRequest) -> Vec<u8> {
     };
     map.insert("headless".into(), Value::Bool(headless));
     map.insert("task".into(), Value::String(request.task.clone()));
+    // Whether the pane stays after the run: the caller's own word, or "Keep started agents open" (already applied).
+    map.insert("keep_pane".into(), Value::Bool(request.keep_pane));
     // What the started agent is (a caller's own `started` key never counts).
     map.remove("started");
     if let Some(started) = &request.started {

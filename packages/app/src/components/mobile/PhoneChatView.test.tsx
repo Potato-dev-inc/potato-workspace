@@ -4,7 +4,11 @@
 import { act } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { ITEM_LOW } from '../../dev/attention-fixtures';
+import type { AttentionSnapshot } from '../../lib/attention';
 import type { BridgeClient } from '../../lib/bridge-types';
+import { PHONE_MOTION_KEY } from '../../lib/phone-motion';
+import { DockedCard } from './DockedCard';
 import type { ChatItem, PhoneChatReply } from '../../lib/sessionChatModel';
 import { publishBridgeOutbox } from '../../lib/paneOutbox-bridge';
 import type { OutboxMessage } from '../../lib/paneOutbox';
@@ -101,6 +105,7 @@ describe('PhoneChatView polling', () => {
     ]);
     await mount({ bridge });
     await advance(POLL_MS);
+    await advance(3000); // the new words are typed in over a moment
     expect(text()).toContain('first');
     expect(text()).toContain('partial answer');
     expect(host.querySelectorAll('.ck-chat-text')).toHaveLength(1);
@@ -363,5 +368,70 @@ describe('PhoneChatView message box', () => {
     await mount({ bridge, sendBlock: 'The agent is not running. Open Terminal.' });
     expect(text()).toContain('The agent is not running. Open Terminal.');
     expect(field().disabled).toBe(true);
+  });
+});
+
+describe('the dock grows from the message box', () => {
+  const snapshot: AttentionSnapshot = { v: 1, rev: 1, counts: { blocking: 1, ready: 0 }, items: [ITEM_LOW] };
+  const withAsk = () => {
+    const answerAttention = vi.fn(async () => ({ outcome: 'answered', choice_label: 'Allow once', at_ms: 1_700_000_000_000 }));
+    const { bridge } = bridgeWith([reply({ items: [user('1:0', 'run the tests')] })]);
+    const both = { ...bridge, answerAttention } as unknown as BridgeClient;
+    const dock = <DockedCard snapshot={snapshot} paneId={ITEM_LOW.pane!.id} bridge={both} canAnswer inChat onOpenPane={() => undefined} onOpenItem={() => undefined} />;
+    return { both, dock, answerAttention };
+  };
+  const natural = vi.spyOn(HTMLElement.prototype, 'offsetHeight', 'get');
+  beforeEach(() => {
+    natural.mockImplementation(function (this: HTMLElement) {
+      return this.classList.contains('ph-region-in') && this.childElementCount > 0 ? 140 : 0;
+    });
+  });
+  afterEach(() => natural.mockReset());
+
+  it('puts the card inside the bottom region, above the message box', async () => {
+    const { both, dock } = withAsk();
+    await mount({ bridge: both, dock, paneId: ITEM_LOW.pane!.id });
+    const region = host.querySelector('[data-region="bottom"]')!;
+    const card = region.querySelector('[data-testid="phone-ask-card"]')!;
+    const box = region.querySelector('[data-testid="phone-composer"]')!;
+    expect(card).not.toBeNull();
+    expect(box).not.toBeNull();
+    expect(card.compareDocumentPosition(box) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    expect(host.querySelector('[data-testid="phone-conversation"] > [data-testid="docked-card"]')).toBeNull();
+  });
+
+  it('after Allow once the dock is gone and one line stays in the chat', async () => {
+    localStorage.setItem(PHONE_MOTION_KEY, 'reduce');
+    const { both, dock, answerAttention } = withAsk();
+    await mount({ bridge: both, dock, paneId: ITEM_LOW.pane!.id });
+    const region = host.querySelector('[data-region="bottom"]')!;
+    const dockBox = region.querySelector<HTMLElement>('[data-region="dock"]')!;
+    // Reduced motion: the height is set in one frame (here: after the first layout pass), not walked there.
+    expect(dockBox.style.height === '' || dockBox.style.height === '140px').toBe(true);
+    await act(async () => { region.querySelector<HTMLButtonElement>('[data-choice="allow_once"]')!.click(); await Promise.resolve(); });
+    expect(answerAttention).toHaveBeenCalledTimes(1);
+    await advance(400);
+    expect(region.querySelector('[data-testid="docked-card"]')).toBeNull();
+    expect(region.textContent).not.toContain('Allow once');
+    const line = host.querySelector('[data-testid="phone-answer-line"]');
+    expect(line?.textContent).toContain('You allowed');
+    expect(host.querySelector('[data-testid="phone-conversation"] [data-testid="phone-answer-line"]')).not.toBeNull();
+    localStorage.removeItem(PHONE_MOTION_KEY);
+  });
+
+  it('with full motion the height closes over time, after the words fade', async () => {
+    // The spring runs on animation frames and the page clock: fake those too.
+    vi.useRealTimers();
+    vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout', 'setInterval', 'clearInterval', 'Date', 'requestAnimationFrame', 'cancelAnimationFrame', 'performance'] });
+    const { both, dock } = withAsk();
+    await mount({ bridge: both, dock, paneId: ITEM_LOW.pane!.id });
+    await advance(600);
+    const region = host.querySelector('[data-region="bottom"]')!;
+    await act(async () => { region.querySelector<HTMLButtonElement>('[data-choice="allow_once"]')!.click(); await Promise.resolve(); });
+    expect(region.querySelector('[data-region="dock"] .ph-region-in')?.getAttribute('data-open')).toBe('false');
+    expect(region.querySelector('[data-testid="docked-card"]')).not.toBeNull();
+    // Walk the clock in frame-sized steps so each frame's next frame is asked for.
+    for (let i = 0; i < 30; i++) await advance(50);
+    expect(region.querySelector('[data-testid="docked-card"]')).toBeNull();
   });
 });

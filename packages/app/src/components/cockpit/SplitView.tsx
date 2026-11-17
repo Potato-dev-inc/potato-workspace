@@ -4,7 +4,9 @@
 // The session rail on the right follows the focused side. Each side has its own message box (SessionChatPanel).
 import { ErrorBoundary } from '../common/ErrorBoundary';
 import { useEffect, useRef, useState, type CSSProperties, type ReactNode, type RefObject } from 'react';
-import { useT } from '../../i18n';
+import { twoTypesWording, useT } from '../../i18n';
+import { useStandbyHelpers } from '../../lib/standbyHelpers';
+import { readyMinionCount } from './standby-rows';
 import type { CockpitApi } from '../../hooks/useCockpit';
 import { SessionChatPanel, type ScreenAsk } from '../chat/SessionChatPanel';
 import { composerBlock } from '../../lib/paneOutbox';
@@ -25,7 +27,7 @@ import { NO_BELOW, canSplitDown, hasLayout, isStacked, isWide, shownIds, slotIds
 import { dockItems } from './pane-chrome';
 import { spinnerStatus, stateText } from './model';
 import { SessionRail } from './rail/SessionRail';
-import { helperRows } from './rail/helperRows';
+import { commandOwners, helperRows } from './rail/helperRows';
 import { useRailLayout } from './rail/useRailLayout';
 import { paneHeading } from './titles';
 
@@ -80,6 +82,7 @@ export function SplitView({
   onSplitDown?: (column: SplitColumn) => void;
 }) {
   const t = useT();
+  const { view: standbyView } = useStandbyHelpers();
   const rail = useRailLayout();
   const colsRef = useRef<HTMLDivElement>(null);
   const ids = slotIds(leftId, rightId, below);
@@ -175,6 +178,8 @@ export function SplitView({
           readsChat={chatAllowed}
           helperOf={helperOfLabel(c.registry.paneList, focusedId, (p) => paneHeading(p.info, c.names.get(p.info.id) ?? p.info.agent_type).primary)}
           helpers={helperRows(c.registry.paneList, focusedId, (p) => c.names.get(p.info.id) ?? p.info.agent_type)}
+          readyMinions={readyMinionCount(standbyView.helpers, c.registry.paneList, focusedId, twoTypesWording())}
+          owners={commandOwners(c.registry.paneList, focusedId, (p) => c.names.get(p.info.id) ?? p.info.agent_type)}
           onOpenPane={(id) => c.select(id)}
           onClose={rail.close}
           onStopHelper={(id) => c.interrupt(id)}

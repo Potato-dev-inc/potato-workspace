@@ -7,7 +7,7 @@
   display: flex;
   align-items: center;
   gap: 10px;
-  max-width: min(520px, calc(100vw - 24px));
+  max-width: min(520px, calc(calc(100vw / var(--ui-scale, 1)) - 24px));
   padding: 5px 6px 5px 10px;
   border-radius: 10px;
   background: var(--bg-raised, var(--bg-side));

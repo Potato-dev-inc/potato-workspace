@@ -40,6 +40,8 @@ export const chatUx: Partial<Record<EnglishKey, string>> = {
   'chatUx.price.tipLong': '這次比這個對話平常花更久。把要求拆小一點，通常會更快完成。',
   'chatUx.price.details': '這則回答的詳細內容',
   'chatUx.price.filesTitle': '有變動的檔案',
+  'chatUx.price.dontShow': '不再顯示',
+  'settings.row.usual-notes.label': '顯示「比平常多」的提示',
   'chatUx.rail.label': '訊息導覽列。按上下方向鍵可在你的訊息之間跳轉。',
   'chatUx.rail.you': '你',
   'chatUx.rail.agent': 'AI 助理',

@@ -13,7 +13,7 @@ use crate::pty::PaneRegistry;
 use parking_lot::Mutex;
 use std::sync::Arc;
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
-use tauri::{AppHandle, WebviewWindow};
+use tauri::{AppHandle, Webview};
 
 /// After a reload, how often and how long to look for the element again.
 const LOCATE_EVERY: Duration = Duration::from_millis(500);
@@ -84,7 +84,7 @@ pub fn run(app: &AppHandle) {
 }
 
 /// The element after the reload, saved as a screenshot in the project's shots folder (its path).
-fn shoot(window: &WebviewWindow, pending: &Pending) -> Result<std::path::PathBuf, &'static str> {
+fn shoot(window: &Webview, pending: &Pending) -> Result<std::path::PathBuf, &'static str> {
     let mut found = None;
     for look in 0..LOCATE_LOOKS {
         if look > 0 {
@@ -122,9 +122,9 @@ fn publish(app: &AppHandle, pending: &Pending, after: Option<std::path::PathBuf>
 }
 
 /// Shows the box beside the preview window.
-fn show_box(app: &AppHandle, window: &WebviewWindow) {
-    let (Ok(pos), Ok(size)) = (window.inner_position(), window.inner_size()) else { return };
-    box_window::show_near(app, (pos.x, pos.y, size.width, size.height));
+fn show_box(app: &AppHandle, window: &Webview) {
+    let Some(rect) = window::view_box(window) else { return };
+    box_window::show_near(app, rect);
     box_window::emit_state(app, &window::current_state(app));
 }
 

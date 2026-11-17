@@ -120,9 +120,22 @@ pub fn quit_decision(statuses: &[String], confirm_setting: bool) -> CloseDecisio
     }
 }
 
+/// Close-decision for quitting, counting live headless helper runs (they have no pane) as busy too.
+pub fn quit_decision_with_helpers(statuses: &[String], headless_live: usize, confirm_setting: bool) -> CloseDecision {
+    if confirm_setting && headless_live > 0 {
+        CloseDecision::Confirm
+    } else {
+        quit_decision(statuses, confirm_setting)
+    }
+}
+
 /// Event a pane window's React listens to: the X was pressed while its pane is busy.
 #[allow(dead_code)] // used only outside `cargo test`; kept for the app build
 pub const CONFIRM_CLOSE_EVENT: &str = "pane-window://confirm-close";
+
+/// True while the quit question is on screen.
+#[cfg(not(test))]
+static QUIT_ASKED: std::sync::atomic::AtomicBool = std::sync::atomic::AtomicBool::new(false);
 
 #[cfg(not(test))]
 fn confirm_setting(app: &AppHandle) -> bool {
@@ -143,11 +156,16 @@ pub fn request_quit(app: &AppHandle) {
         .get()
         .map(|(_, registry)| registry.lock().list_all().into_iter().map(|p| p.status).collect())
         .unwrap_or_default();
-    if quit_decision(&statuses, confirm_setting(app)) == CloseDecision::Close {
+    let headless = crate::agent_runs::headless::headless_live_count();
+    if quit_decision_with_helpers(&statuses, headless, confirm_setting(app)) == CloseDecision::Close {
         app.exit(0);
         return;
     }
-    let busy = statuses.iter().filter(|s| is_busy_status(s)).count();
+    // A second press while the question is open does nothing.
+    if QUIT_ASKED.swap(true, std::sync::atomic::Ordering::AcqRel) {
+        return;
+    }
+    let busy = statuses.iter().filter(|s| is_busy_status(s)).count() + headless;
     let message = if busy == 1 {
         "1 agent is still working. Quit and stop it?".to_string()
     } else {
@@ -160,6 +178,7 @@ pub fn request_quit(app: &AppHandle) {
         .kind(MessageDialogKind::Warning)
         .buttons(MessageDialogButtons::OkCancelCustom("Stop and quit".to_string(), "Keep open".to_string()))
         .show(move |stop| {
+            QUIT_ASKED.store(false, std::sync::atomic::Ordering::Release);
             if stop {
                 handle.exit(0);
             }
@@ -330,6 +349,14 @@ mod tests {
         assert_eq!(quit_decision(&s(&["idle", "error"]), true), CloseDecision::Close);
         assert_eq!(quit_decision(&s(&["running"]), false), CloseDecision::Close);
         assert_eq!(quit_decision(&[], true), CloseDecision::Close);
+    }
+
+    #[test]
+    fn quitting_asks_when_a_headless_helper_is_alive() {
+        assert_eq!(quit_decision_with_helpers(&[], 1, true), CloseDecision::Confirm);
+        assert_eq!(quit_decision_with_helpers(&[], 0, true), CloseDecision::Close);
+        assert_eq!(quit_decision_with_helpers(&[], 2, false), CloseDecision::Close);
+        assert_eq!(quit_decision_with_helpers(&["running".to_string()], 0, true), CloseDecision::Confirm);
     }
 
     #[test]

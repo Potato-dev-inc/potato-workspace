@@ -53,6 +53,8 @@ export function consentTitle(q: Question, paneName?: string): string {
   const who = inSentence(info.requester || UNKNOWN);
   // A change asked from an agent's command: the target is what changes ("your settings"), not a pane.
   if (info.action === 'config_change') return t('inboxCards.consent.changeTitle', { who, target: info.target });
+  // An agent wants to run a command that keeps running: "Claude 1 wants to run a command in the background: Dev server".
+  if (info.action === 'background_command') return t('inboxCards.consent.commandTitle', { who, target: info.target });
   const target = paneName?.trim() || info.target || t('inboxCards.consent.thatWindow');
   return info.action === 'answer_prompt'
     ? t('inboxCards.consent.answerTitle', { who, target })
@@ -105,7 +107,7 @@ export function ConsentCard({
           <>
             {has('deny') && (
               <CardButton tone="primary" role="answer" data-choice="deny" onClick={() => onAnswer({ choice_id: 'deny' })}>
-                {t('inboxCards.consent.deny')}
+                {q.consent?.action === 'background_command' ? t('inboxCards.consent.no') : t('inboxCards.consent.deny')}
               </CardButton>
             )}
             {has('allow_once') && (
@@ -115,7 +117,7 @@ export function ConsentCard({
             )}
             {has('always') && (
               <CardButton tone="plain" role="answer" data-choice="always" onClick={() => onAnswer({ choice_id: 'always' })}>
-                {t('inboxCards.consent.alwaysHere')}
+                {q.consent?.action === 'background_command' ? t('inboxCards.consent.allowChat') : t('inboxCards.consent.alwaysHere')}
               </CardButton>
             )}
           </>

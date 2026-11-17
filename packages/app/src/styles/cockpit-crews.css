@@ -1,7 +1,7 @@
 /* Crews: the "Save this team" and "Start crew" sheets and the rail button. Grayscale tokens only. */
 .cockpit .ck-sheet--crew {
   width: 560px;
-  max-height: calc(100vh - 64px);
+  max-height: calc(calc(100vh / var(--ui-scale, 1)) - 64px);
   overflow-y: auto;
 }
 .cockpit .ck-sheet--crew code {

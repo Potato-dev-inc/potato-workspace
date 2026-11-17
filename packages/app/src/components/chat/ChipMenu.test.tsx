@@ -3,7 +3,7 @@
 import { act } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { ChipMenu, ChipSegmented } from './ChipMenu';
+import { ChipMenu, ChipSegmented, filterChoices } from './ChipMenu';
 
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 
@@ -128,5 +128,21 @@ describe('ChipSegmented', () => {
   it('is switched off with the agent', () => {
     act(() => root.render(<ChipSegmented chipId="e" label="Effort" value="low" choices={three} disabled onChange={vi.fn()} />));
     expect(radios().every((r) => r.disabled)).toBe(true);
+  });
+});
+
+describe('filterChoices', () => {
+  const models = [
+    { value: 'opencode/Beam Free', name: 'Beam Free' },
+    { value: 'claude-opus', name: 'Opus', description: 'Slow and deep' },
+    { value: 'gemini-3', name: 'Gemini 3' },
+  ];
+  it('keeps everything for an empty query', () => expect(filterChoices(models, '  ')).toHaveLength(3));
+  it('matches name, id, note and maker, any case, all words', () => {
+    expect(filterChoices(models, 'BEAM').map((m) => m.value)).toEqual(['opencode/Beam Free']);
+    expect(filterChoices(models, 'opencode free').map((m) => m.value)).toEqual(['opencode/Beam Free']);
+    expect(filterChoices(models, 'deep').map((m) => m.value)).toEqual(['claude-opus']);
+    expect(filterChoices(models, 'claude').map((m) => m.value)).toEqual(['claude-opus']);
+    expect(filterChoices(models, 'nope')).toEqual([]);
   });
 });

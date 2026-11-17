@@ -21,14 +21,18 @@ import { DotSpinner } from './DotSpinner';
 import { mainPreview, openPreview, previewLabel } from '../../lib/pane-preview';
 import { pointApi } from '../../lib/point-api';
 import { dockItems, headerStateLine, dockLabel } from './pane-chrome';
-import { useT } from '../../i18n';
+import { twoTypesWording, useT } from '../../i18n';
+import { useStandbyHelpers } from '../../lib/standbyHelpers';
+import { readyMinionCount } from './standby-rows';
 import { IconGlobe, IconRail } from './Icons';
 import { subscribePaneActions, type PaneAction } from '../../lib/pane-actions';
 import { SessionRail } from './rail/SessionRail';
 import { useRailLayout } from './rail/useRailLayout';
 import { usePaneTourActions } from './usePaneTourActions';
-import { helperRows } from './rail/helperRows';
+import { commandOwners, helperRows } from './rail/helperRows';
 import { chatHelpers } from '../../lib/chat-helpers';
+import { crewMembers } from '../../lib/crew-chip';
+import { CrewChip } from '../chat/CrewChip';
 import { DockedCards } from './DockedCards';
 import { HelperQuestions, helperQuestionIds } from './HelperQuestions';
 import { StallNotice } from './StallNotice';
@@ -50,10 +54,12 @@ import { History } from './History';
 import { panesSharingFolder } from './history-model';
 import { RenameTitle } from './RenameTitle';
 import { useLastTurn } from './away-context';
-import { SegTabs } from './SegTabs';
+import { SegTabs, type SegOption } from './SegTabs';
 import { Sheet } from './Sheet';
 import { paneHeading } from './titles';
 import { helperOfLabel, isMinionPane, startedByLabel } from '../../lib/pane-helpers';
+import { askHandOver } from '../../lib/task-handover';
+import { isCompanionPaneId } from './companion/model';
 import { openMinionView } from '../../lib/task-view';
 import { placeLabel, placeTooltip } from '../../lib/wsl-place';
 import { isProseStream, transcriptSpeaker } from '../../lib/transcript-labels';
@@ -211,6 +217,7 @@ export function PaneView({
   handoff?: HandoffControl;
 }) {
   const t = useT();
+  const { view: standbyView } = useStandbyHelpers();
   const pane = c.registry.panes.get(paneId);
   const [tabPicked, setTabRaw] = useState<Tab>(() => rememberedTabs.get(paneId) ?? 'terminal');
   // A chat session over ACP has no terminal behind it: its Chat view is the pane, so it never shows a Terminal view.
@@ -451,6 +458,8 @@ export function PaneView({
   // A pane an agent started through Potato Workspace: names its parent and opens it.
   const startedBy = startedByLabel(info);
   const helperOf = helperOfLabel(c.registry.paneList, paneId, (p) => paneHeading(p.info, c.names.get(p.info.id) ?? p.info.agent_type).primary);
+  // A spin-off whose agent closed keeps the line, marked closed (the person owns it, so it lives on at the top level).
+  const spunOffClosed = info.started_as === 'spin_off' && !!info.parent_pane_id && !helperOf ? (info.origin?.host?.trim() ? t('state.spunOffClosed', { name: info.origin.host.trim() }) : t('state.spunOffClosedAnon')) : null;
   const waiting = pane.status === 'waiting_input';
   const elapsed = waiting && since ? formatElapsed(c.now - since) : null;
   const stateLine = isAcp
@@ -495,12 +504,17 @@ export function PaneView({
   // person counts as "needs you" whatever the helper's status says.
   const askingPanes = new Set(c.asked.questions.map((q) => q.pane_id).filter((id): id is string => !!id));
   const startedHelpers = chatHelpers(c.registry.paneList, paneId, (p) => c.names.get(p.info.id) ?? p.info.agent_type, askingPanes);
+  const crewList = crewMembers(c.registry.paneList, paneId, (p) => c.names.get(p.info.id) ?? p.info.agent_type, askingPanes);
   // A minion has no pane of its own on screen: its row opens the read-only view in the details column. Any other pane is selected.
   const openStarted = (id: string) => {
     const started = c.registry.paneList.find((p) => p.info.id === id);
     if (started && isMinionPane(started.info)) openMinionView(paneId, id);
     else c.select(id);
   };
+  // The other agents a minion of this chat can be handed to ("Hand to ..."): the agents the person talks to, not minions or standbys.
+  const handTargets = c.registry.paneList
+    .filter((p) => p.info.id !== paneId && !isMinionPane(p.info) && !isCompanionPaneId(p.info.id) && !p.info.standby_seat)
+    .map((p) => ({ id: p.info.id, name: c.names.get(p.info.id) ?? p.info.agent_type }));
   const chatDock =
     dockNow || helperAsks.length > 0 || isAcp || check.shown || stalledMin !== null ? (
       <>
@@ -585,6 +599,14 @@ export function PaneView({
     moreActions.push({ id: 'back-to-chat', label: t('pane.backToChat'), title: t('pane.backToChatTip'), disabled: handOver.busy, onSelect: () => handOver.start('toChat', heldConversation.conversation) });
   }
 
+  // The view tabs in the header. One option alone is not a choice, so the control is not drawn (see the render below).
+  const viewOptions: SegOption<Tab>[] = [
+    ...(mission ? [{ id: 'mission' as const, label: t('pane.tabMission') }] : []),
+    ...(isAcp ? [] : [{ id: 'terminal' as const, label: t('pane.tabTerminal') }]),
+    ...(chatAllowed ? [{ id: 'chat' as const, label: t('pane.tabChat') }] : []),
+    ...(worktree ? [{ id: 'changes' as const, label: t('pane.tabChanges'), badge: worktree.summary?.files_changed || undefined }] : []),
+  ];
+
   return (
     <div className="ck-pane" data-pane-tile={paneId} onKeyDown={backToAgent}>
       <header className="ck-pane-head" ref={headRef} data-fold={fold}>
@@ -605,7 +627,12 @@ export function PaneView({
               {placeLabel(info.place)}
             </span>
           )}
-          {startedBy && (
+          {spunOffClosed && (
+            <span className="ck-started-by" data-testid="pane-spun-off-closed">
+              {spunOffClosed}
+            </span>
+          )}
+          {startedBy && !spunOffClosed && (
             <span className="ck-started-by" data-testid="pane-started-by" title={startedBy.title}>
               {startedBy.text}
             </span>
@@ -616,17 +643,9 @@ export function PaneView({
             </button>
           )}
         </div>
-        <SegTabs
-          label={t('pane.viewLabel')}
-          value={tab}
-          onChange={setTab}
-          options={[
-            ...(mission ? [{ id: 'mission' as const, label: t('pane.tabMission') }] : []),
-            ...(isAcp ? [] : [{ id: 'terminal' as const, label: t('pane.tabTerminal') }]),
-            ...(chatAllowed ? [{ id: 'chat' as const, label: t('pane.tabChat') }] : []),
-            ...(worktree ? [{ id: 'changes' as const, label: t('pane.tabChanges'), badge: worktree.summary?.files_changed || undefined }] : []),
-          ]}
-        />
+        {viewOptions.length > 1 && (
+          <SegTabs label={t('pane.viewLabel')} value={tab} onChange={setTab} options={viewOptions} />
+        )}
         <span className="ck-head-gap" aria-hidden="true" />
         {tab === 'chat' && chatAllowed && <span className="ck-head-chat" ref={setChatSlot} data-testid="pane-head-chat" />}
         <UntestedChip agent={info.agent_type} />
@@ -793,6 +812,7 @@ export function PaneView({
                 screenAsk={screenAsk}
                 headerSlot={chatSlot ? { el: chatSlot, compact: fold >= 3 } : undefined}
                 helpers={startedHelpers}
+                crew={crewList.length > 0 ? <CrewChip members={crewList} now={c.now} onOpen={openStarted} onStop={(id) => c.interrupt(id)} /> : undefined}
                 move={move}
                 reply={{
                   blockedReason: move.blockedReason ?? (inTerminal ? handedBlock() : composerBlock(pane, !chatAllowed, isAcp)),
@@ -907,6 +927,8 @@ export function PaneView({
             readsChat={chatAllowed}
             helperOf={helperOf}
             helpers={helperRows(c.registry.paneList, paneId, (p) => c.names.get(p.info.id) ?? p.info.agent_type)}
+            readyMinions={readyMinionCount(standbyView.helpers, c.registry.paneList, paneId, twoTypesWording())}
+            owners={commandOwners(c.registry.paneList, paneId, (p) => c.names.get(p.info.id) ?? p.info.agent_type)}
             copy={copyKind ? { kind: copyKind } : null}
             canCreatePr={!!worktree}
             worktree={worktree}
@@ -923,6 +945,8 @@ export function PaneView({
             onOpenCopy={() => setDetails(true)}
             onOpenPane={openStarted}
             onStopHelper={(id) => c.interrupt(id)}
+            handTargets={handTargets}
+            onHandMinion={(minion, toId) => askHandOver({ taskPane: minion.id, taskName: minion.title, fromId: paneId, fromName: name, toId, toName: handTargets.find((x) => x.id === toId)?.name ?? toId })}
             onSaveTeam={() => setSaveTeam(true)}
             onClose={rail.close}
             onNotify={c.notify}

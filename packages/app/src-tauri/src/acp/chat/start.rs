@@ -53,9 +53,9 @@ pub struct StartRequest {
     pub parent_pane: Option<String>,
     /// A standby helper asked for by name.
     pub helper_name: Option<String>,
-    /// A ready standby (a spin-off) must not take this start: the agent asked for, or the person's setting makes, a
-    /// minion (`started_as`).
-    pub no_standby: bool,
+    /// What the starting agent made this chat (a spin-off or a minion), known before the adapter starts: the chat carries it from the
+    /// first moment, so its tool server (which asks the app what the chat is) lists `message_parent` at once.
+    pub early_started: Option<crate::agent_run_mode::StartedRecord>,
 }
 
 /// Why a chat session did not start. `fallback`: the terminal is the way to run this agent instead.
@@ -191,9 +191,9 @@ fn start_in(deps: &StartDeps, cfg: AgentConfig, request: StartRequest) -> Result
     // A standby seat the person made that fits this start comes first (agent, folder, account, and a model that agrees). An
     // agent's own seat that is still starting is waited for: the seat takes the task, nothing else is started for it.
     let seat_wait = if request.parent_pane.is_some() { WARM_WAIT } else { std::time::Duration::ZERO };
-    let helper = deps.conversations.as_ref().filter(|_| !request.no_standby).and_then(|_| crate::acp::warm::claim_helper_for(
+    let helper = deps.conversations.as_ref().and_then(|_| crate::acp::warm::claim_helper_for(
             &cfg,
-            &crate::acp::warm::HelperClaim { agent: &cfg.id, folder: &folder, account: account_id.as_deref(), model: match_model(&request).as_deref(), caller: request.parent_pane.as_deref(), name: request.helper_name.as_deref() },
+            &crate::acp::warm::HelperClaim { agent: &cfg.id, folder: &folder, account: account_id.as_deref(), model: match_model(&request).as_deref(), caller: request.parent_pane.as_deref(), name: request.helper_name.as_deref(), kind: request.early_started.as_ref().and_then(|s| s.standby_kind_wanted(request.helper_name.is_some())) },
             seat_wait,
         ));
     // The seat's chat exists already (the person has the seat open): the task runs in that chat. Nothing is built.
@@ -265,6 +265,12 @@ fn start_in(deps: &StartDeps, cfg: AgentConfig, request: StartRequest) -> Result
     }
     let chat = build_registered_chat(deps, &pane_id, &label, &session, &folder, request.project.as_deref(), warm_claimed);
     chat.set_seat(helper_meta.as_ref().map(|meta| meta.id.as_str()));
+    if let Some(started) = request.early_started.clone() {
+        chat.set_started(started);
+        if let Some(parent) = request.parent_pane.as_deref() {
+            chat.set_nested_under(Some(parent));
+        }
+    }
     ensure_sweeper();
 
     if let Err(error) = session.ensure_running() {

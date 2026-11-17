@@ -214,3 +214,51 @@ export function fitZoom(size: { width: number; height: number }, room: { width: 
   if (size.width <= 0 || size.height <= 0 || room.width <= 0 || room.height <= 0) return 1;
   return clampZoom(Math.min(1, room.width / size.width, room.height / size.height));
 }
+
+// ----- Workflows (Labs): a crew with one role marked Front. A crew with no Front is a plain crew and none of this applies. -----
+
+export const DEFAULT_HELPER_CAP = 3;
+export const MAX_HELPER_CAP = 10;
+
+export const frontOf = (crew: Crew): CrewRole | undefined => crew.roles.find((r) => r.front);
+export const isWorkflow = (crew: Crew): boolean => !!frontOf(crew);
+export const kindOf = (r: CrewRole): 'minion' | 'spin_off' => (r.kind === 'spin_off' ? 'spin_off' : 'minion');
+
+/**
+ * Make the lead the Front (or not). Turning it on puts every other role under the Front (v1: no helper-to-helper chains)
+ * and fills a missing "when to use". Turning it off clears the workflow fields, so the crew is plain again.
+ */
+export function setFront(crew: Crew, on: boolean, fallbackWhen = ''): Crew {
+  const lead = leadOf(crew);
+  if (!lead) return crew;
+  const front = keyOf(lead);
+  if (!on) {
+    return {
+      ...crew,
+      how_i_work: null,
+      start_mode: null,
+      helper_cap: null,
+      roles: crew.roles.map((r) => ({ ...r, front: false, kind: null, when_to_use: null })),
+    };
+  }
+  return {
+    ...crew,
+    roles: crew.roles.map((r) =>
+      r === lead ? { ...r, front: true, kind: null, when_to_use: null } : { ...r, front: false, parent: front, when_to_use: r.when_to_use?.trim() ? r.when_to_use : fallbackWhen },
+    ),
+  };
+}
+
+export const setStartMode = (crew: Crew, mode: 'front' | 'horde'): Crew => ({ ...crew, start_mode: mode === 'horde' ? 'horde' : null });
+
+export function setHelperCap(crew: Crew, n: number): Crew {
+  const cap = Math.min(MAX_HELPER_CAP, Math.max(1, Math.round(n) || DEFAULT_HELPER_CAP));
+  return { ...crew, helper_cap: cap === DEFAULT_HELPER_CAP ? null : cap };
+}
+
+/** A new helper of a workflow keeps the workflow's shape: it reports to the Front. */
+export const afterAddInWorkflow = (before: Crew, after: Crew, fallbackWhen: string): Crew => {
+  const front = frontOf(before);
+  if (!front) return after;
+  return { ...after, roles: after.roles.map((r, i) => (i >= before.roles.length ? { ...r, parent: keyOf(front), when_to_use: fallbackWhen } : r)) };
+};

@@ -2,6 +2,8 @@
 // "Search inside files" through the real pane view: the Files card in the right panel, its "Inside files" switch, the
 // lines found with the match marked, a click that opens the file tab at that line, and the palette command that asks
 // for all of it. Nothing opens a window; the backend is mocked.
+import { readFileSync } from 'node:fs';
+import { resolve } from 'node:path';
 import { act } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
@@ -193,6 +195,20 @@ describe('search inside files, in the right panel', () => {
     await wait(450);
     expect(searchCalls()).toHaveLength(0);
     expect(invoke.mock.calls.some((c) => c[0] === 'project_files_search')).toBe(true);
+  });
+
+  it('the two search buttons say what they search in a hint, and the labels are centred', async () => {
+    await act(async () => root.render(<PaneView c={cockpit()} paneId="p" />));
+    await flush();
+    const names = host.querySelector<HTMLButtonElement>('[data-testid="files-mode-names"]')!;
+    const inside = host.querySelector<HTMLButtonElement>('[data-testid="files-mode-inside"]')!;
+    expect(names.textContent).toBe('File names');
+    expect(names.title).toBe('Searches file and folder names only.');
+    expect(inside.title).toBe('Searches the words inside the files.');
+    // The label sits in the middle of the button (the button is a centred flex box).
+    expect(names.className).toBe('ck-fsearch-mode');
+    const css = readFileSync(resolve(__dirname, '../../styles/files.css'), 'utf8');
+    expect(css).toMatch(/\.cockpit \.ck-fsearch-mode \{[^}]*justify-content: center;[^}]*text-align: center;/);
   });
 
   it('a newer word asks the backend to stop the older search', async () => {

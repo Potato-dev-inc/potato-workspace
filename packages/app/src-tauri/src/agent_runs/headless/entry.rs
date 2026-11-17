@@ -89,11 +89,7 @@ pub fn run_agent(
         request.headless = false;
     }
     if request.task.trim().is_empty() {
-        return Err(OperationError::new(
-            "INVALID_TASK",
-            "task is required",
-            false,
-        ));
+        return Err(crate::agent_runs::task_required_error());
     }
     // An env guard is set only by Rust code inside the app. An unknown name is refused here (and
     // again by the spawn), never silently dropped.

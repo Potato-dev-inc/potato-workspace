@@ -70,6 +70,8 @@ export interface StatusLine {
 
 export function statusLine(status: TunnelStatus | null): StatusLine {
   if (!status) return { tone: 'idle', text: t('tunnel.status.desktopOnly') };
+  // Cloudflare is not giving a quick address: say why and what to do, never just "Starting".
+  if (status.problem && status.state === 'error') return { tone: 'bad', text: problemText(status) };
   const overridden = status.mode === 'env' ? ` ${t('tunnel.status.outside')}` : '';
   // Stable link: the phone-facing line is about the Worker, not the automatic address behind it.
   if (status.mode === 'stable' && status.stable && status.state !== 'error') return stableLine(status.stable, status.state);
@@ -82,6 +84,18 @@ export function statusLine(status: TunnelStatus | null): StatusLine {
       return { tone: 'bad', text: status.error ?? t('tunnel.status.stopped') };
     default:
       return { tone: status.error ? 'bad' : 'idle', text: status.error ?? t('tunnel.status.notRunning') };
+  }
+}
+
+/** The plain sentence (with the next step) for a quick address that is not coming. */
+export function problemText(status: TunnelStatus): string {
+  switch (status.problem) {
+    case 'rate_limited':
+      return t('tunnel.problem.rateLimited');
+    case 'slow_start':
+      return t('tunnel.problem.slowStart');
+    default:
+      return t('tunnel.problem.tooSoon', { minutes: Math.max(1, Math.ceil((status.retry_in_secs ?? 120) / 60)) });
   }
 }
 

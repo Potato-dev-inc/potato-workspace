@@ -1,0 +1,182 @@
+/* A background task as a sidebar row, the hand-over sheet, and the "in sidebar" mark. Colour tokens only; no coloured edges. */
+
+.cockpit .ck-taskwrap .ck-taskrow .ck-row-main {
+  gap: 6px;
+}
+.cockpit .ck-taskrow .tdr-dot {
+  display: block;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--label-4);
+}
+.cockpit .ck-taskrow .tdr-dot.is-live {
+  background: var(--live);
+  animation: tdr-pulse 1.6s ease-in-out infinite;
+}
+@keyframes tdr-pulse {
+  50% {
+    opacity: 0.4;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .cockpit .ck-taskrow .tdr-dot.is-live {
+    animation: none;
+  }
+}
+.cockpit .tdr-tag {
+  flex: none;
+  padding: 0 5px;
+  border-radius: 4px;
+  background: var(--fill);
+  color: var(--label-3);
+  font-size: var(--fs-caption, 11px);
+  line-height: 16px;
+}
+.cockpit .tdr-port {
+  margin-left: 4px;
+  font-family: var(--font-mono);
+  color: var(--label-3);
+}
+/* A task shown on its own keeps a quiet second line: "↳ Claude 1". */
+.cockpit .ck-taskwrap[data-nested='false'] .ck-taskrow.ck-row--slim {
+  height: auto;
+  min-height: 36px;
+  padding-top: 4px;
+  padding-bottom: 4px;
+}
+.cockpit .ck-taskwrap[data-nested='false'] .ck-taskrow .ck-row-main {
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 0;
+}
+.cockpit .ck-taskwrap[data-nested='false'] .ck-taskrow .ck-row-sub {
+  display: block;
+  color: var(--label-3);
+  font-size: var(--fs-caption, 11px);
+}
+.cockpit .tdr-ask {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-wrap: wrap;
+  padding: 4px 8px 6px;
+  color: var(--label-2);
+  font-size: var(--fs-caption, 11px);
+}
+
+/* The mark on a Background tasks row that is also in the sidebar. */
+.cockpit .rp-insb {
+  flex: none;
+  padding: 0 5px;
+  border-radius: 4px;
+  background: var(--fill);
+  color: var(--label-3);
+  font-size: var(--fs-caption, 11px);
+  line-height: 16px;
+}
+
+/* The group of tasks shown on their own. */
+.cockpit .ck-sb-tasks {
+  margin-top: 6px;
+}
+.cockpit .ck-sb-tasks-head {
+  padding: 4px 10px;
+  color: var(--label-3);
+  font-size: var(--fs-caption, 11px);
+}
+
+/* The hand-over sheet. */
+.cockpit .tdh-choices {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin: 12px 0;
+}
+.cockpit .tdh-choice {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 2px;
+  height: auto;
+  padding: 10px 12px;
+  text-align: left;
+  white-space: normal;
+}
+.cockpit .tdh-choice-name {
+  font-weight: var(--fw-medium);
+}
+.cockpit .tdh-choice-hint {
+  font-size: var(--fs-caption, 11px);
+  font-weight: var(--fw-regular);
+  opacity: 0.8;
+}
+
+/* A drop on the Background tasks section lights it up. */
+.cockpit .rp-bg.is-drop-target {
+  background: var(--accent-soft);
+  border-radius: 7px;
+}
+
+/* A task opened in the main area. */
+.cockpit .tk-main {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  min-width: 0;
+  min-height: 0;
+  background: var(--bg);
+}
+.cockpit .tk-main-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 12px 16px 8px;
+  border-bottom: 1px solid var(--sep);
+}
+.cockpit .tk-main-title {
+  margin: 0;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 15px;
+  font-weight: var(--fw-medium);
+  color: var(--label);
+}
+.cockpit .tk-main-tag {
+  flex: none;
+  padding: 0 6px;
+  border-radius: 4px;
+  background: var(--fill);
+  color: var(--label-3);
+  font-size: var(--fs-caption, 11px);
+  line-height: 18px;
+}
+.cockpit .tk-main > .tk-view {
+  flex: 1;
+  min-height: 0;
+}
+
+/* A long title never pushes the tag and the time out of the row. */
+.cockpit .ck-taskrow .ck-row-main {
+  min-width: 0;
+  flex: 1;
+  overflow: hidden;
+}
+.cockpit .ck-taskrow .ck-row-title {
+  display: block;
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.cockpit .ck-taskwrap[data-nested='false'] .ck-taskrow .ck-row-sub {
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.cockpit .ck-sb-tasks {
+  overflow: hidden;
+}

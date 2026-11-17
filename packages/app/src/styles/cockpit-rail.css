@@ -690,3 +690,50 @@
   height: 28px;
   padding: 0 8px;
 }
+
+/* A command row's "by <name>" (who ran it) and its name as a button that opens the output. */
+.cockpit .rp-stack {
+  flex: 1 1 0;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  padding: 3px 0;
+}
+.cockpit .rp-stack > .rp-name {
+  flex: none;
+}
+.cockpit .rp-by {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  min-width: 0;
+  color: var(--label-3);
+  font-size: var(--fs-meta);
+}
+.cockpit .rp-by-name {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.cockpit .rp-by svg,
+.cockpit .rp-by img {
+  flex: none;
+}
+.cockpit button.rp-open {
+  text-align: left;
+  cursor: pointer;
+  background: none;
+  border: 0;
+  padding: 0;
+  color: inherit;
+}
+.cockpit button.rp-open:hover {
+  text-decoration: underline;
+}
+.cockpit .rp-ask-text {
+  font-size: var(--fs-meta);
+  color: var(--label-2);
+  margin-right: 4px;
+}

@@ -206,6 +206,20 @@ export function AskBar({ api = tauriAskbarApi }: { api?: AskbarApi }): JSX.Eleme
     if (!q || view === 'running' || !agent) return;
     const id = newId();
     const req: LastRequest = { agent, question: q, clipboard: clipOn && clip ? clip.text : null };
+    // An agent that cannot answer a read-only question in the bar opens in a window with the question.
+    if (agents.find((a) => a.id === agent)?.quick === false) {
+      lastRequest.current = req;
+      setError(null);
+      try {
+        await api.continueInPane(req.agent, req.question, req.clipboard);
+      } catch (e) {
+        setError(messageOf(e));
+        setView('error');
+        return;
+      }
+      ignore(api.hide());
+      return;
+    }
     latestAsk.current = id;
     lastRequest.current = req;
     setResult(null);
@@ -304,6 +318,7 @@ export function AskBar({ api = tauriAskbarApi }: { api?: AskbarApi }): JSX.Eleme
                   onClick={() => chooseAgent(a.id)}
                 >
                   <span className="askbar-menu-label">{a.label}</span>
+                  {a.quick === false && <span className="askbar-menu-ready askbar-menu-window">Opens a window</span>}
                   {a.ready && <span className="askbar-menu-ready">Ready</span>}
                 </button>
               ))}

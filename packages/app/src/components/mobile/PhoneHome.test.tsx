@@ -240,6 +240,39 @@ describe('phone drawer: Ready standby helpers', () => {
     expect(onSelect).toHaveBeenCalledWith(PHONE_PANES[0].id);
   });
 
+  it('shows the tasks the person put in the sidebar on the PC, under their agent or on their own, read only', async () => {
+    const row = (taskId: string, kind: 'minion' | 'command', owner: string, under: string | null, name: string, status: string) => ({ taskId, kind, owner, under, name, status });
+    await render(
+      drawer({
+        phoneTasks: async () => ({ rows: [row('minion:m1', 'minion', PHONE_PANES[0].id, PHONE_PANES[0].id, 'Reviewer', 'running'), row('job:x:7:1', 'command', PHONE_PANES[0].id, null, 'Dev server', 'running')] }),
+      }),
+    );
+    const section = host.querySelector('[data-testid="drawer-tasks"]')!;
+    expect(section.querySelector('h2')?.textContent).toBe('Tasks');
+    const rows = Array.from(section.querySelectorAll('[data-task-id]'));
+    expect(rows.map((r) => r.getAttribute('data-task-id'))).toEqual(['minion:m1', 'job:x:7:1']);
+    expect(rows[0].textContent).toContain('minion');
+    expect(rows[1].textContent).toContain('command');
+    // The one on its own names its agent quietly; nothing here can be dragged or stopped.
+    expect(rows[1].textContent).toContain('↳');
+    expect(section.querySelector('button')).toBeNull();
+  });
+
+  it('shows no Tasks part when there are none, the PC is old, or the PC refuses', async () => {
+    await render(drawer({ phoneTasks: async () => ({ rows: [] }) }));
+    expect(host.querySelector('[data-testid="drawer-tasks"]')).toBeNull();
+    await render(drawer({}));
+    expect(host.querySelector('[data-testid="drawer-tasks"]')).toBeNull();
+    await render(
+      drawer({
+        phoneTasks: async () => {
+          throw new Error('403');
+        },
+      }),
+    );
+    expect(host.querySelector('[data-testid="drawer-tasks"]')).toBeNull();
+  });
+
   it('shows no Ready part when none is ready, the PC is old, or the PC refuses', async () => {
     await render(drawer({ phoneHelpers: async () => ({ max: 4, helpers: PHONE_HELPERS.helpers.slice(2) }) }));
     expect(host.querySelector('[data-testid="drawer-ready"]')).toBeNull();

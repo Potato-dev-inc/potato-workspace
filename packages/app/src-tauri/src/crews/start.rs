@@ -44,6 +44,8 @@ pub struct Step {
     pub folder: String,
     /// The pane the role's parent got when it started (`None` for the root).
     pub parent_pane: Option<String>,
+    /// The crew has a Front (a workflow): a helper then starts with its model and kind. A plain crew role starts as before.
+    pub workflow: bool,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
@@ -111,7 +113,7 @@ pub fn run(crew: &Crew, folder: &str, starter: &mut dyn Starter) -> Outcome {
             .as_deref()
             .and_then(|p| crew.roles.iter().position(|r| r.name.eq_ignore_ascii_case(p)))
             .and_then(|p| panes[p].clone());
-        let step = Step { role: role.clone(), task: fill_folder(&role.task, folder), folder: folder.to_string(), parent_pane };
+        let step = Step { role: role.clone(), task: fill_folder(&role.task, folder), folder: folder.to_string(), parent_pane, workflow: super::workflow::is_workflow(crew) };
         match starter.start(&step) {
             Ok(pane_id) => {
                 panes[i] = Some(pane_id.clone());

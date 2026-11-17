@@ -20,7 +20,7 @@ path = "src/bin/puppet-master-mcp.rs"
 tauri-build = { version = "2", features = [] }
 
 [dependencies]
-tauri = { version = "2", features = ["tray-icon"] }
+tauri = { version = "2", features = ["tray-icon", "unstable"] }
 tauri-plugin-dialog = "2"
 tauri-plugin-store = "2"
 tauri-plugin-updater = "2"
@@ -37,6 +37,7 @@ portable-pty = "0.8"
 vt100 = "0.16"
 tokio = { version = "1", features = ["rt-multi-thread", "sync", "macros", "fs", "process", "io-util", "time", "net"] }
 parking_lot = "0.12"
+url = "2"
 uuid = { version = "1", features = ["v4", "serde"] }
 regex = "1"
 strsim = "0.11"

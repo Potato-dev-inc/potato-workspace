@@ -22,6 +22,8 @@ export const lookFeel = {
   "lookFeel.usageBar.hint": "How much of its plan each signed-in agent has used, at the bottom of the sidebar.",
   "lookFeel.usageLogin.label": "Read Claude usage with my Claude sign-in",
   "lookFeel.usageLogin.hint": "Asks Anthropic for your Claude usage using your Claude sign-in.",
+  "lookFeel.closeToTray.label": "Keep running in the tray when I close the window",
+  "lookFeel.closeToTray.hint": "Off: the X at the top right quits Potato. If an agent is working, you are asked first. On: the app keeps running in the tray.",
   "lookFeel.yourName.label": "Your name",
   "lookFeel.yourName.hint": "Used in the greeting on the New agent page. Leave it empty for no name.",
   "lookFeel.yourName.placeholder": "Optional",

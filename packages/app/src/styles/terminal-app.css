@@ -64,7 +64,7 @@
 @media (max-width: 980px) {
   .pm-terminal-shell {
     grid-template-columns: 1fr;
-    grid-template-rows: minmax(0, 1fr) minmax(320px, 44vh);
+    grid-template-rows: minmax(0, 1fr) minmax(320px, calc(44vh / var(--ui-scale, 1)));
   }
 
   .pm-terminal-shell--detached {

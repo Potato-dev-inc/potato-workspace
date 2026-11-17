@@ -781,7 +781,7 @@
 }
 .settings .st-sheet {
   width: 380px;
-  max-width: calc(100vw - 32px);
+  max-width: calc(calc(100vw / var(--ui-scale, 1)) - 32px);
   padding: 20px;
   border-radius: 14px;
   background: var(--float-bg);

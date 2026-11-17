@@ -6,6 +6,7 @@ mod accounts;
 pub(super) mod sender;
 mod acp_chat;
 mod artifacts;
+mod terminals;
 mod attention;
 pub(super) mod definitions;
 pub(super) mod health;
@@ -132,6 +133,7 @@ pub(super) fn dispatch(cx: &Ctx) -> Option<RouteResult> {
         .or_else(|| phone_home::handle(cx))
         .or_else(|| chat_more::handle(cx))
         .or_else(|| artifacts::handle(cx))
+        .or_else(|| terminals::handle(cx))
         .or_else(|| panes::handle(cx))
         .or_else(|| plans::handle(cx))
 }

@@ -105,7 +105,7 @@ export function settingsShortcuts(
       run: open('budget-turns'),
     },
     {
-      id: 'act:team',
+      id: 'act:team-headsup',
       group: 'Actions',
       title: 'Team…',
       desc: 'Tell teammates when your agent pushes',

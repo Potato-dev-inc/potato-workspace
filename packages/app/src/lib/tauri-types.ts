@@ -240,6 +240,12 @@ export interface TunnelStatus {
   stable?: TunnelStableStatus | null;
   /** Only on the answer to a save that made the secret or asked to show it. */
   secret_once?: string | null;
+  /** Set when "Make a new secret" was not done because the Worker could not forget the old one (why, in plain words). */
+  secret_not_reset?: string | null;
+  /** Why no quick address is coming (the screen has the words for each). */
+  problem?: 'rate_limited' | 'slow_start' | 'too_soon' | null;
+  /** With a problem: seconds until the tunnel may be started again. */
+  retry_in_secs?: number | null;
 }
 
 export interface TunnelStableStatus {
@@ -247,6 +253,8 @@ export interface TunnelStableStatus {
   quick_url: string | null;
   link: 'waiting' | 'linking' | 'linked' | 'failed';
   error: string | null;
+  /** The Worker holds another secret than the one saved here. */
+  secret_mismatch?: boolean;
 }
 
 export type TunnelConfigInput =
@@ -260,6 +268,8 @@ export type TunnelConfigInput =
       /** A secret the person chose; empty or null keeps the stored one (or makes one). */
       secret?: string | null;
       secret_action?: 'keep' | 'regenerate' | 'show';
+      /** "Make a new secret" only: go ahead although the Worker could not forget the old one. */
+      confirm_strand?: boolean;
     };
 
 export interface TunnelConnectionTest {

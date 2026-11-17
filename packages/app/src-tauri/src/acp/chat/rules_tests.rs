@@ -98,6 +98,57 @@ fn force_yes_answers_a_low_risk_question_logs_it_and_leaves_a_quiet_line() {
 }
 
 #[test]
+fn force_yes_answers_a_command_that_is_only_in_the_title_like_agy_does() {
+    // Agy sends kind execute and the title `dir`, with no rawInput: the title is the command.
+    let rig = Rig::new("", |_| {});
+    rig.chat.set_force_yes(true);
+    rig.say("permwith execute title:dir");
+    assert!(rig.said("asked:execute outcome:selected option:allow_once"), "{:?}", rig.texts());
+    assert_eq!(rig.chat.state()["permissions"].as_array().map(Vec::len), Some(0), "no card was raised");
+    // The prefix some agents add does not matter either.
+    let rig = Rig::new("", |_| {});
+    rig.chat.set_force_yes(true);
+    rig.say("permwith execute title:Run command: dir");
+    assert!(rig.said("outcome:selected option:allow_once"), "{:?}", rig.texts());
+}
+
+#[test]
+fn a_risky_or_unknown_command_in_the_title_still_asks() {
+    for ask in ["permwith execute title:rm -rf /", "permwith execute title:Run the tests please"] {
+        let rig = Rig::new("", |_| {});
+        rig.chat.set_force_yes(true);
+        rig.chat.send(ask).unwrap();
+        assert!(rig.asked(), "{ask} must come to the person");
+        assert!(!rig.said("Auto-allowed"), "{ask}: {:?}", rig.texts());
+    }
+}
+
+#[test]
+fn titles_that_hide_a_command_inside_a_command_or_were_cut_still_ask() {
+    let long = format!("{}; rm -rf ~", "dir ".repeat(600));
+    let many = format!("{}rm -rf ~", "dir;".repeat(45));
+    let cut = format!("{}…", "dir ".repeat(10));
+    let dots = format!("{}...", "dir ".repeat(10));
+    let asks = [
+        "echo $(rm -rf ~)".to_string(),
+        "ls `rm -rf ~`".to_string(),
+        "git -c core.pager='rm -rf ~' log".to_string(),
+        "cat <(rm -rf ~)".to_string(),
+        many,
+        long,
+        cut,
+        dots,
+    ];
+    for title in asks {
+        let rig = Rig::new("", |_| {});
+        rig.chat.set_force_yes(true);
+        rig.chat.send(&format!("permwith execute title:{title}")).unwrap();
+        assert!(rig.asked(), "{} must come to the person", title.chars().take(60).collect::<String>());
+        assert!(!rig.said("Auto-allowed"), "{:?}", rig.texts());
+    }
+}
+
+#[test]
 fn a_risky_ask_still_reaches_the_person_with_force_yes_on() {
     let rig = Rig::new("", |_| {});
     rig.chat.set_force_yes(true);

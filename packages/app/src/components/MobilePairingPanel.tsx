@@ -16,16 +16,20 @@ import {
   localDevPwaUrl,
   normalizePublicBridgeUrl,
   publicOriginFromBridgeUrl,
-  resolvePairingBridgeUrl,
-  resolvePwaOriginForQr,
   type PublicBridgeDevInfo,
   isLoopbackOrigin,
 } from '../lib/public-bridge-url';
+import { resolvePhoneAddress } from '../lib/phone-address';
+import type { TunnelStatus } from '../lib/tauri-types';
+import { DisabledReason } from './common/DisabledReason';
 import { watchTunnelDevInfo } from '../lib/load-tunnel-dev-info';
 import { NumberControl, TextControl } from './settings/controls';
 import { Btn, Note } from './settings/settings-ui';
 import { PairingAddress, defaultTunnelApi } from './PairingAddress';
-import { TunnelSection, type TunnelApi } from './settings/TunnelSection';
+import type { TunnelApi } from './settings/TunnelSection';
+
+/** How often the panel re-reads how this PC is reached, so the QR never keeps an address that is gone. */
+const STATUS_POLL_MS = 3000;
 
 /** Fired on window when paired devices change (a phone paired, Revoke, Revoke all, abilities). */
 export const DEVICES_CHANGED_EVENT = 'pm-devices-changed';
@@ -81,8 +85,25 @@ export function MobilePairingPanel({
   const [err, setErr] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
 
-  const bridgeUrl = resolvePairingBridgeUrl(devInfo, publicPwaUrl, devServerPort);
-  const { origin: pwaOrigin } = resolvePwaOriginForQr(devInfo, publicPwaUrl, devServerPort);
+  // How this PC is reached right now (the same status the Public address card edits), re-read while this panel is open.
+  const [tunnelStatus, setTunnelStatus] = useState<TunnelStatus | null>(null);
+  useEffect(() => {
+    let alive = true;
+    const read = () =>
+      void Promise.resolve()
+        .then(() => tunnelApi.getStatus())
+        .then((next) => alive && setTunnelStatus(next))
+        .catch(() => undefined);
+    read();
+    const timer = window.setInterval(read, STATUS_POLL_MS);
+    return () => {
+      alive = false;
+      window.clearInterval(timer);
+    };
+  }, [tunnelApi]);
+
+  const { bridgeUrl, origin: pwaOrigin, blocked } = resolvePhoneAddress(devInfo, publicPwaUrl, devServerPort, tunnelStatus);
+  const isBlocked = blocked !== null;
   const localProxyTarget = localDevPwaUrl(devServerPort);
   const tunnelOrigin = devInfo?.tunnelUrl?.replace(/\/+$/, '') ?? null;
   const qrReadyRef = useRef(false);
@@ -109,6 +130,8 @@ export function MobilePairingPanel({
   }, [refreshDevices]);
 
   const refreshPairing = useCallback(async () => {
+    // A chosen Worker this PC is not linked to would show "your PC is offline" on the phone: make no code yet.
+    if (isBlocked) return;
     setBusy(true);
     setErr(null);
     try {
@@ -129,7 +152,7 @@ export function MobilePairingPanel({
     } finally {
       setBusy(false);
     }
-  }, [bridgeUrl, pwaOrigin, choice]);
+  }, [bridgeUrl, pwaOrigin, choice, isBlocked]);
 
   // A different choice needs a new code: the choice is bound to the code on the PC.
   const prevChoiceRef = useRef(choice);
@@ -150,6 +173,13 @@ export function MobilePairingPanel({
   // is made only by the "Pair a phone" button. If the address the phone would use changes while a code
   // is up, that code points at the old address: drop it and let the person make a new one.
   const shownOriginRef = useRef<string | null>(null);
+  useEffect(() => {
+    // The Worker stopped being linked while a code was up: that code would now open "your PC is offline".
+    if (isBlocked) {
+      qrReadyRef.current = false;
+      setSession(null);
+    }
+  }, [isBlocked]);
   useEffect(() => {
     const prev = shownOriginRef.current;
     shownOriginRef.current = pwaOrigin;
@@ -190,7 +220,7 @@ export function MobilePairingPanel({
           <p className="st-note">{t('phone.choice.note')}</p>
         </fieldset>
 
-        <PairingAddress pwaOrigin={pwaOrigin} api={tunnelApi} offer={!compact} />
+        <PairingAddress pwaOrigin={pwaOrigin} api={tunnelApi} offer={!compact} status={tunnelStatus} onStatus={setTunnelStatus} />
         <div className="flex flex-col sm:flex-row gap-4 items-start">
           <div className="rounded-lg border border-pm-border bg-pm-bg p-2 shrink-0" hidden={!session}>
             <canvas ref={canvasRef} className="block" aria-label={t('phone.qrLabel')} />
@@ -204,7 +234,7 @@ export function MobilePairingPanel({
               <div className="text-[10px] text-pm-muted">{t('phone.expires', { time: expiresLabel })}</div>
               <button
                 type="button"
-                disabled={busy}
+                disabled={busy || isBlocked}
                 onClick={() => {
                   qrReadyRef.current = true;
                   void refreshPairing();
@@ -219,7 +249,7 @@ export function MobilePairingPanel({
               <Btn
                 primary
                 data-testid="pair-a-phone"
-                disabled={busy}
+                disabled={busy || isBlocked}
                 onClick={() => {
                   qrReadyRef.current = true;
                   void refreshPairing();
@@ -227,7 +257,11 @@ export function MobilePairingPanel({
               >
                 {busy ? t('phone.making') : t('phone.pair.title')}
               </Btn>
-              <div className="text-[10px] text-pm-muted">{t('phone.makesCode')}</div>
+              {blocked ? (
+                <DisabledReason reason={t('phone.codeWaits')} />
+              ) : (
+                <div className="text-[10px] text-pm-muted">{t('phone.makesCode')}</div>
+              )}
             </div>
           )}
         </div>
@@ -235,9 +269,6 @@ export function MobilePairingPanel({
         {!compact && (
         <details className="st-fold" data-testid="pairing-address">
           <summary>{t('phone.address.summary')}</summary>
-        <div className="mb-3" data-testid="pairing-tunnel-modes">
-          <TunnelSection api={tunnelApi} />
-        </div>
         <div>
           <label htmlFor="pairing-public-url" className="block text-[11px] text-pm-muted mb-1">
             {t('phone.address.label')}

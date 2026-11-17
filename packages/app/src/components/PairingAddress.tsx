@@ -2,6 +2,7 @@
 import { useCallback, useEffect, useState } from 'react';
 import { useT } from '../i18n';
 import { originNotice } from '../lib/origin-notice';
+import { phoneStable } from '../lib/phone-address';
 import { tauri } from '../lib/tauri';
 import type { TunnelStatus } from '../lib/tauri-types';
 import { StableLinkSheet } from './StableLinkSheet';
@@ -23,24 +24,56 @@ const hostOf = (url: string | null | undefined): string => {
 };
 const isAutomatic = (origin: string) => hostOf(origin).endsWith('.trycloudflare.com');
 
-export function PairingAddress({ pwaOrigin, api = defaultTunnelApi, offer = true }: { pwaOrigin: string; api?: TunnelApi; offer?: boolean }) {
+export function PairingAddress({
+  pwaOrigin,
+  api = defaultTunnelApi,
+  offer = true,
+  status: shared,
+  onStatus: onShared,
+}: {
+  pwaOrigin: string;
+  api?: TunnelApi;
+  offer?: boolean;
+  /** The panel above reads how this PC is reached and hands it down, so the line and the QR code can never disagree. */
+  status?: TunnelStatus | null;
+  onStatus?: (status: TunnelStatus) => void;
+}) {
   const t = useT();
-  const [status, setStatus] = useState<TunnelStatus | null>(null);
+  const [own, setOwn] = useState<TunnelStatus | null>(null);
+  const status = shared !== undefined ? shared : own;
+  const setStatus = onShared ?? setOwn;
   const [open, setOpen] = useState(false);
   useEffect(() => {
+    if (shared !== undefined) return;
     let alive = true;
     void Promise.resolve()
       .then(() => api.getStatus())
-      .then((s) => alive && setStatus(s))
+      .then((s) => alive && setOwn(s))
       .catch(() => undefined);
     return () => {
       alive = false;
     };
-  }, [api]);
-  const onStatus = useCallback((s: TunnelStatus) => setStatus(s), []);
+  }, [api, shared]);
+  const onStatus = useCallback((s: TunnelStatus) => setStatus(s), [setStatus]);
 
   const stable = status?.mode === 'stable' && status.stable ? status.stable : null;
-  const linked = stable?.link === 'linked';
+  const phone = phoneStable(status);
+  const linked = phone?.linked === true;
+  // A chosen Worker that this PC is not linked to: say why, instead of an address that would open "your PC is offline".
+  if (phone && !phone.linked) {
+    return (
+      <div data-testid="pairing-origin-block">
+        <p className="text-xs" data-testid="pairing-not-ready">
+          <span className="text-pm-muted">{t('phone.notReady', { host: hostOf(phone.worker) })} </span>
+          <span className="block mt-1" data-testid="pairing-not-ready-why">{phone.reason}</span>
+          <button type="button" className="st-linkbtn stable-keep mt-1" data-testid="stable-fix" onClick={() => setOpen(true)}>
+            {t('stable.fix')}
+          </button>
+        </p>
+        {open && <StableLinkSheet api={api} initial={status} onStatus={onStatus} onClose={() => setOpen(false)} />}
+      </div>
+    );
+  }
   // Linked: show the Worker. Otherwise whatever address the phone would be sent to.
   const shownOrigin = linked && stable ? stable.worker_url : pwaOrigin;
   const notice = originNotice(shownOrigin);
@@ -66,25 +99,12 @@ export function PairingAddress({ pwaOrigin, api = defaultTunnelApi, offer = true
           {t('settings.copy')}
         </button>
         {notice.warning && <span className="block mt-1 text-pm-muted">{notice.warning}</span>}
-        {linked && stable?.quick_url && (
-          <span className="block mt-1 text-pm-muted" data-testid="pairing-behind">
-            {t('stable.behind', { host: hostOf(stable.quick_url) })}
-          </span>
-        )}
       </p>
       {offer && !linked && isAutomatic(shownOrigin) && (
         <p className="text-xs mt-1" data-testid="stable-offer">
           <span className="text-pm-muted">{t('stable.changes')} </span>
           <button type="button" className="st-linkbtn stable-keep" data-testid="keep-one-address" onClick={() => setOpen(true)}>
             {t('stable.keep')}
-          </button>
-        </p>
-      )}
-      {offer && !linked && stable && (
-        <p className="text-xs mt-1" data-testid="stable-pending">
-          <span className="text-pm-muted">{t('stable.pending')} </span>
-          <button type="button" className="st-linkbtn stable-keep" data-testid="stable-fix" onClick={() => setOpen(true)}>
-            {t('stable.fix')}
           </button>
         </p>
       )}

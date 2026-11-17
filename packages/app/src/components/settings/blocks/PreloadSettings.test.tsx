@@ -116,6 +116,45 @@ describe('PreloadSettings', () => {
     expect(line?.textContent).toContain('Not warming it until you open it.');
   });
 
+  it('shows one short line with what to do, and keeps the long reason and the folders under More details', async () => {
+    const api = mockApi();
+    api.getStatus.mockResolvedValue({
+      ...statusFor(DEFAULT_STANDBY_CONFIG),
+      agents_blocked: [{ agent_type: 'claude', reason: 'dialog', message: 'it stops at a trust or approval prompt (open it once yourself first)', fails: 3, retry_in_ms: 0, cold: true }],
+      blocked: [{ key: 'claude c:/work/tests', reason: 'dialog', fails: 3, retry_in_ms: 0, cold: true }],
+    });
+    await render(api);
+    const short = host.querySelector('[data-testid="preload-short-claude"]')!;
+    expect(short.textContent).toBe('Claude is not kept warm: it stops at a prompt. Open it once yourself and answer it.');
+    const details = host.querySelector<HTMLDetailsElement>('[data-testid="preload-details"]')!;
+    expect(details.open).toBe(false);
+    expect(details.textContent).toContain('Held back:');
+    expect(short.closest('details')).toBeNull();
+  });
+
+  it('has a Never close switch that saves, and a standby then says it stays ready', async () => {
+    const api = mockApi();
+    api.getStatus.mockResolvedValue({ ...statusFor(DEFAULT_STANDBY_CONFIG), standbys: [{ id: 's1', agent_type: 'claude', project: 'D:/x', state: 'ready', headless: false, idle_expires_in_ms: 60000 } as never] });
+    const helpersApi = { get: vi.fn(async () => ({ helpers: [], max: 4, idle_minutes: 30, never_close: false })), setNeverClose: vi.fn(async (on: boolean) => ({ helpers: [], max: 4, idle_minutes: 30, never_close: on })) } as never;
+    await act(async () => {
+      root.render(<PreloadSettings api={api} helpersApi={helpersApi} />);
+    });
+    for (let i = 0; i < 4; i++) {
+      await act(async () => {
+        await new Promise((r) => setTimeout(r, 0));
+      });
+    }
+    expect(host.textContent).toContain('sleeps in 1m');
+    const toggle = [...host.querySelectorAll('[role="switch"]')].find((s) => s.closest('div')?.parentElement?.textContent?.includes('Never close') || s.getAttribute('aria-label') === 'Never close') as HTMLElement;
+    await click(toggle);
+    expect((helpersApi as { setNeverClose: ReturnType<typeof vi.fn> }).setNeverClose).toHaveBeenCalledWith(true);
+    await act(async () => {
+      await Promise.resolve();
+    });
+    expect(host.textContent).toContain('stays ready');
+    expect(host.textContent).not.toContain('sleeps in');
+  });
+
   it('shows which folder warm agents follow and why', async () => {
     const api = mockApi();
     api.getStatus.mockResolvedValue({

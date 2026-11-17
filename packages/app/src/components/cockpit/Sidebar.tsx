@@ -11,7 +11,7 @@ import { NewAgentMenu, type ProjectChoice } from './NewAgentMenu';
 import { shipApi, type GitState, type ShipApi } from '../../lib/ship-api';
 import { tauri } from '../../lib/tauri';
 import { useAcpLanes } from '../../hooks/useAcpLanes';
-import { addableChat, chatCapable, errorSentence, startTerminalChat, tauriAcpChatApi, terminalChatCapable, type AcpChatApi } from '../../lib/acpChat';
+import { ACP_LANE, addableChat, chatCapable, errorSentence, startTerminalChat, tauriAcpChatApi, terminalChatCapable, type AcpChatApi } from '../../lib/acpChat';
 import { tauriAcpAddonApi, type AcpAddonApi } from '../../lib/acpAddon';
 import { settingsStartModeApi, useStartMode, type StartModeApi } from '../../lib/newAgentStart';
 import type { AddChatKind, NoChatAgent } from './NoChatPrompt';
@@ -29,7 +29,7 @@ import '../../styles/live-preview.css';
 import '../../styles/cockpit-helpers.css';
 import '../../styles/cockpit-sidebar.css';
 import { DotSpinner } from './DotSpinner';
-import { useT } from '../../i18n';
+import { twoTypesWording, useT } from '../../i18n';
 import { PotatoMark, IconChevronDown, IconClosedChats, IconFolderPlus, IconGlobe, IconInbox, IconMore, IconNewAgent, IconPin, IconSearch, IconSort, IconConnect } from './Icons';
 import { RowMark } from './RowMark';
 import { PlanLine } from '../common/PlanLine';
@@ -55,8 +55,11 @@ import { descendants, groupHelperTree, isMinionPane, readFoldedParents, writeFol
 import { markStandbyOpen, openNewStandby, tauriStandbyHelpersApi, useStandbyHelpers, type StandbyHelpersApi } from '../../lib/standbyHelpers';
 import { placeHelpers, type StandbyRow } from './standby-rows';
 import { SidebarStandbyRow, type StandbyRowActions } from './SidebarStandbyRow';
+import { useSidebarTasks } from './useSidebarTasks';
+import type { JobsApi } from '../../lib/pane-jobs';
 import { folderKey } from './history-model';
 import { multiLoginAgents, paneHeading, paneSubline } from './titles';
+import { RowDoing } from './RowDoing';
 import { LastTurnContext } from './away-context';
 import { projectWithCopy } from './shell-labels';
 import type { CompanionView } from '../../lib/companion';
@@ -125,6 +128,9 @@ export function Sidebar({
   handoff,
   devices,
   standbyApi = tauriStandbyHelpersApi,
+  openTaskId = null,
+  onOpenTask,
+  jobsApi,
 }: {
   c: CockpitApi;
   onOpenPalette: () => void;
@@ -194,6 +200,11 @@ export function Sidebar({
   devices?: { groups: DeviceGroup[]; selectedKey: string | null; onOpen: (row: RemoteRow) => void; onRetry?: () => void; where?: WhereProps };
   /** The standby helpers (list, add, remove, open). Replaceable in tests. */
   standbyApi?: StandbyHelpersApi;
+  /** The background task shown in the main area (a task row of the sidebar), and the way to open or close one (null closes). */
+  openTaskId?: string | null;
+  onOpenTask?: (taskId: string | null) => void;
+  /** Stopping a command row. Replaceable in tests. */
+  jobsApi?: JobsApi;
 }) {
   const t = useT();
   const list = c.registry.paneList;
@@ -209,7 +220,7 @@ export function Sidebar({
   // Opening a standby makes its chat before the list of helpers says so: until it does, a chat that just appeared is not an agent.
   const [openingFrom, setOpeningFrom] = useState<ReadonlySet<string> | null>(null);
   const opening = new Set(openingFrom ? list.filter((p) => !openingFrom.has(p.info.id)).map((p) => p.info.id) : []);
-  const placement = placeHelpers(showHelperTree ? standbyView.helpers : [], list, opening);
+  const placement = placeHelpers(showHelperTree ? standbyView.helpers : [], list, opening, twoTypesWording());
   // A chat that is a seat's own came or went (a task started or ended): read the helpers again now, not at the next poll.
   const seatChats = list.filter((p) => p.info.standby_seat).map((p) => p.info.id).join(' ');
   useEffect(() => {
@@ -396,6 +407,9 @@ export function Sidebar({
     api: adoptApi,
     notify: c.notify,
   });
+  // Background tasks the person put in the sidebar: nested under their agent, or on their own.
+  const agentIds = new Set(panes.map((p) => p.info.id));
+  const tasks = useSidebarTasks({ c, agentIds, nameOf: adoptName, sideRef, openTaskId, onOpenTask, jobsApi });
   const agentLabelOf = (agent: string) => c.launchEntries.find((e) => e.type === agent)?.label ?? agent;
   const standbyActions: StandbyRowActions = {
     open: async (r) => {
@@ -437,11 +451,12 @@ export function Sidebar({
         text: t('standby.removed', { name: h.name }),
         failText: t('undo.failed'),
         ms: 5000,
-        undo: async () => applyStandby(await standbyApi.add({ name: h.name, agent: h.agent, model: h.model, project: h.project, after_task: h.after_task, home: h.home })),
+        undo: async () => applyStandby(await standbyApi.add({ name: h.name, agent: h.agent, model: h.model, project: h.project, after_task: h.after_task, home: h.home, kind: h.kind })),
       });
     },
     rename: (r, name) => void standbyApi.update(r.helper.id, { name }).then(applyStandby).catch((e) => c.notify(errorSentence(e))),
     setModel: (r, model) => void standbyApi.update(r.helper.id, { model }).then(applyStandby).catch((e) => c.notify(errorSentence(e))),
+    setKind: (r, kind) => void standbyApi.update(r.helper.id, { kind }).then(applyStandby).catch((e) => c.notify(errorSentence(e))),
     moveUnder: (r, agentId) => void standbyApi.update(r.helper.id, { home: agentId }).then(applyStandby).catch((e) => c.notify(errorSentence(e))),
     start: (r) => void standbyApi.start(r.helper.id).then(applyStandby).catch(() => {}),
   };
@@ -497,10 +512,10 @@ export function Sidebar({
       c.notify(parent ? t('standby.tookToast', { agent: paneTitle(parent), name: h.name }) : t('standby.tookAnon', { name: h.name }));
     }
   }); // eslint-disable-line react-hooks/exhaustive-deps
-  const row = (p: Pane, awayFrom?: Pane, helperCount = 0) => {
+  const row = (p: Pane, awayFrom?: Pane, helperCount = 0, spinOffOf?: Pane) => {
     const id = p.info.id;
     const since = c.statusSince.get(id);
-    const active = c.selectedId === id && !c.spawn && !openCompanionId;
+    const active = c.selectedId === id && !c.spawn && !openCompanionId && !openTaskId;
     const heading = paneHeading(p.info, c.names.get(id) ?? p.info.agent_type);
     const detail =
       activityText(p.status, c.activities?.[id]) ??
@@ -525,7 +540,11 @@ export function Sidebar({
           type="button"
           data-pane-row={id}
           className={`ck-row ck-row--slim${active ? ' is-active' : ''}${asking ? ' is-needs' : ''}${broken ? ' is-error' : ''}${calm ? (p.status === 'idle' ? ' is-idle' : ' is-ended') : ''}`}
-          onClick={() => c.select(id)}
+          onClick={() => {
+            // A task open in the main area gives way to the agent, even when that agent is the one already selected.
+            if (openTaskId) onOpenTask?.(null);
+            c.select(id);
+          }}
           {...dragSourceProps({ kind: 'chat', id, label: heading.primary })}
           onContextMenu={(e) => {
             e.preventDefault();
@@ -542,9 +561,21 @@ export function Sidebar({
           <span className="ck-row-glyph">
             <RowMark status={p.status} asking={asking && p.status !== 'error'} agentId={p.info.agent_type} agentName={entry?.label} />
           </span>
-          <span className="ck-row-main" title={[...new Set([heading.primary, entry?.label, subline, projectWithCopy(p.info.cwd)])].filter(Boolean).join(' · ')}>
+          <span
+            className="ck-row-main"
+            title={
+              spinOffOf
+                ? t('sidebar.spinOffTip', { name: paneTitle(spinOffOf), ago: formatElapsed(c.now - p.info.created_at) })
+                : [...new Set([heading.primary, entry?.label, subline, projectWithCopy(p.info.cwd)])].filter(Boolean).join(' · ')
+            }
+          >
+            {spinOffOf && (
+              <span className="ck-row-nest" data-testid="row-spinoff-mark" aria-hidden="true">
+                ↳
+              </span>
+            )}
             <span className="ck-row-title">{heading.primary}</span>
-            <span className="ck-row-sub">{subline}</span>
+            {working && p.info.lane === ACP_LANE && !awayFrom ? <RowDoing paneId={id} api={acp} fallback={subline} /> : <span className="ck-row-sub">{subline}</span>}
             <PlanLine paneId={id} />
           </span>
           {preview && (
@@ -600,7 +631,7 @@ export function Sidebar({
         >
           <IconMore />
         </button>
-        <AdoptZone paneId={id} name={heading.primary} refusal={(childId) => adopt.refusal(childId, id)} onAdopt={(childId, parentId) => void adopt.adopt(childId, parentId)} />
+        <AdoptZone paneId={id} name={heading.primary} refusal={(childId) => adopt.refusal(childId, id)} onAdopt={(childId, parentId) => void adopt.adopt(childId, parentId)} onTask={tasks.onTaskDrop} />
         {peek.open?.id === id && (
           <div style={{ display: 'contents', ['--peek-left' as string]: `${peek.open.left}px`, ['--peek-top' as string]: `${peek.open.top}px` }}>
             <PeekCard
@@ -619,16 +650,22 @@ export function Sidebar({
     );
   };
   // A row, and under it its helpers: indented behind a thin guide line, folded by the "N helpers" chip.
-  const node = (n: HelperNode<Pane>): JSX.Element => {
+  // `parent` is the row this one is nested under. A spin-off under its agent shows "↳"; whatever else is nested stays plain.
+  const node = (n: HelperNode<Pane>, parent?: Pane): JSX.Element => {
     const id = n.pane.info.id;
     const standbyRows = showHelperTree ? (placement.byAgent.get(id) ?? []) : [];
-    if (n.helpers.length === 0 && standbyRows.length === 0) return row(n.pane, n.awayFrom);
-    // The helpers bar above the chat is where helpers live: the row only counts them (unless the person wants the tree).
-    if (!showHelperTree) return row(n.pane, n.awayFrom, descendants(n).length);
+    const taskRows = tasks.rowsFor(id);
+    const mark = parent && n.pane.info.started_as === 'spin_off' ? parent : undefined;
+    // A spin-off is the person's own chat: it nests whatever the helpers switch says. Other helpers follow the switch.
+    const kids = showHelperTree ? n.helpers : n.helpers.filter((h) => h.pane.info.started_as === 'spin_off');
+    if (kids.length === 0 && standbyRows.length === 0 && taskRows.length === 0) {
+      // The helpers bar above the chat is where the other helpers live: the row only counts them (unless the person wants the tree).
+      return row(n.pane, n.awayFrom, showHelperTree ? 0 : descendants(n).length, mark);
+    }
     const open = !folded.has(id);
     return (
       <div key={id} className="ck-node">
-        {row(n.pane, n.awayFrom)}
+        {row(n.pane, n.awayFrom, showHelperTree ? 0 : descendants(n).length - kids.length, mark)}
         <div className="ck-helpers" role="group" aria-label={t('sidebar.helpersOf', { name: paneTitle(n.pane) })}>
           <button
             type="button"
@@ -637,11 +674,12 @@ export function Sidebar({
             aria-expanded={open}
             title={t(open ? 'sidebar.hideHelpers' : 'sidebar.showHelpers')}
           >
-            {t('state.helpers', { count: descendants(n).length + standbyRows.length })}
+            {t('state.helpers', { count: (showHelperTree ? descendants(n).length : kids.length) + standbyRows.length + taskRows.length })}
             <span className={`ck-helper-caret${open ? ' is-open' : ''}`} aria-hidden="true" />
           </button>
-          {open && n.helpers.map(node)}
+          {open && kids.map((kid) => node(kid, n.pane))}
           {open && standbyRows.map(standbyRowView)}
+          {open && taskRows}
         </div>
       </div>
     );
@@ -665,7 +703,7 @@ export function Sidebar({
           {title}
           {count ? <span className="ck-caption-count">{count}</span> : null}
         </div>
-        {items.map(node)}
+        {items.map((n) => node(n))}
         {extraRow > 0 && questionsRow(extraRow)}
       </div>
     );
@@ -798,10 +836,10 @@ export function Sidebar({
                             <span className="ck-pill-quiet">{bg.copy ? t('sidebar.copy') : t('sidebar.primary')}</span>
                             {bg.pr && <span className="ck-branch-pr">{bg.pr}</span>}
                           </div>
-                          {bg.items.map(node)}
+                          {bg.items.map((n) => node(n))}
                         </div>
                       ))
-                    : g.items.map(node)}
+                    : g.items.map((n) => node(n))}
                 </ReorderList>
               ) : g.path ? (
                 <button type="button" className="ck-proj-newrow" data-testid="proj-new-agent" onClick={() => g.path && newAgentIn(g.path, g.name)}>
@@ -1047,7 +1085,7 @@ export function Sidebar({
           onPlace={(id, slot, visible) => placePin(id, slot, visible)}
           labelOf={(id) => paneTitle(list.find((p) => p.info.id === id) ?? list[0])}
         >
-          {pinnedNodes.map(node)}
+          {pinnedNodes.map((n) => node(n))}
         </PinnedGroup>
         {groupBy === 'projects' ? (
           projectsSection
@@ -1060,6 +1098,7 @@ export function Sidebar({
             {looseGroup([...placement.loose.values()].flat())}
           </>
         )}
+        {tasks.ownGroup}
         {list.length === 0 && c.registry.initialReady && (
           <>
             <div className="ck-side-empty" data-testid="side-empty">

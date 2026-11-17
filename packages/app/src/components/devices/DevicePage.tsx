@@ -2,7 +2,7 @@
 // The words are from the giver's side: this switch says what that device may do HERE. A device cannot turn it on itself.
 import { useEffect, useRef, useState } from 'react';
 import { useT } from '../../i18n';
-import { chipText, devicesApi, deviceNotices, nextStepLine, stateSentence, type Device, type DevicesApi, type DeviceLevel } from '../../lib/devices';
+import { chipText, deviceLabel, devicesApi, deviceNotices, nextStepLine, stateSentence, type Device, type DevicesApi, type DeviceLevel } from '../../lib/devices';
 import { DEVICE_NAMES_CHANGED } from '../../lib/deviceNames';
 import { errorSentence } from '../../lib/sayError';
 import { DeviceActivity } from './DeviceActivity';
@@ -37,7 +37,7 @@ export function DevicePage({ device, api = devicesApi, onBack, onRetry, focusRig
       <button type="button" className="dev-btn is-plain" onClick={onBack} data-testid="device-back">
         ‹ {t('devices.back')}
       </button>
-      <h3>{device.name}</h3>
+      <h3>{deviceLabel(device)}</h3>
       <p className="dev-note">
         <span className={`dev-dot${device.state === 'online' ? ' is-up' : ''}`} aria-hidden="true" /> {stateSentence(device)}
         {chip && (

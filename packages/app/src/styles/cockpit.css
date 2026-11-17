@@ -514,7 +514,7 @@
 .cockpit .ck-menu--start {
   right: auto;
   left: 0;
-  max-width: calc(100vw - 16px);
+  max-width: calc(calc(100vw / var(--ui-scale, 1)) - 16px);
 }
 .cockpit .ck-menu--left {
   right: auto;
@@ -617,7 +617,7 @@
   align-items: center;
   gap: 8px;
   max-width: 420px;
-  margin: 12vh auto 0;
+  margin: calc(12vh / var(--ui-scale, 1)) auto 0;
   text-align: center;
 }
 .cockpit .ck-empty-title {
@@ -995,11 +995,11 @@
 }
 .cockpit .ck-scrim--top {
   place-items: start center;
-  padding-top: 14vh;
+  padding-top: calc(14vh / var(--ui-scale, 1));
 }
 .cockpit .ck-palette {
   width: 560px;
-  max-width: calc(100vw - 32px);
+  max-width: calc(calc(100vw / var(--ui-scale, 1)) - 32px);
   border-radius: 12px;
   overflow: hidden;
   background: var(--bg-float);
@@ -1077,7 +1077,7 @@
 }
 .cockpit .ck-sheet {
   width: 380px;
-  max-width: calc(100vw - 32px);
+  max-width: calc(calc(100vw / var(--ui-scale, 1)) - 32px);
   padding: 20px;
   display: flex;
   flex-direction: column;
@@ -1274,7 +1274,7 @@
 }
 .cockpit .ck-title-input {
   width: 260px;
-  max-width: 40vw;
+  max-width: calc(40vw / var(--ui-scale, 1));
   padding: 1px 6px;
   margin: -2px 2px -2px -7px;
   border: 1px solid var(--sep);
@@ -1618,6 +1618,6 @@
   bottom: auto;
   z-index: 1000;
   box-sizing: border-box;
-  max-width: calc(100vw - 16px);
+  max-width: calc(calc(100vw / var(--ui-scale, 1)) - 16px);
   overflow-y: auto;
 }

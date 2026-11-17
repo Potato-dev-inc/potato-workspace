@@ -127,6 +127,20 @@ describe('ask bar', () => {
     expect(api.ask.mock.calls[0][0]).toMatchObject({ agent: 'codex', question: 'Why is the build red?' });
   });
 
+  it('lists an agent that cannot answer in the bar, and asking it opens a window with the question', async () => {
+    const api = fakeApi();
+    api.agents.mockResolvedValue([...AGENTS, { id: 'opencode', label: 'OpenCode', ready: false, quick: false }]);
+    await renderBar(api);
+    act(() => (host.querySelector('.askbar-chip') as HTMLButtonElement).click());
+    const rows = Array.from(host.querySelectorAll('.askbar-menu-row'));
+    expect(rows.map((r) => r.querySelector('.askbar-menu-label')!.textContent)).toEqual(['Claude', 'Kilo', 'Codex', 'OpenCode']);
+    expect(rows[3].textContent).toContain('Opens a window');
+    act(() => (rows[3] as HTMLButtonElement).click());
+    await ask(api, 'Look at this');
+    expect(api.ask).not.toHaveBeenCalled();
+    expect(api.continueInPane).toHaveBeenCalledWith('opencode', 'Look at this', null);
+  });
+
   it('the clipboard is off by default: nothing is read on open and the chip offers "+ Clipboard"', async () => {
     const api = fakeApi();
     api.clipboard.mockResolvedValue({ text: 'password=hunter2', chars: 16, truncated: false });

@@ -119,6 +119,13 @@ impl Feed {
         self.inner.lock().entries.iter().map(|(_, item)| item.clone()).collect()
     }
 
+    /// The last `n` items, in order (a reader that only needs the recent ones does not copy the whole chat).
+    pub fn last(&self, n: usize) -> Vec<ChatItem> {
+        let inner = self.inner.lock();
+        let skip = inner.entries.len().saturating_sub(n);
+        inner.entries.iter().skip(skip).map(|(_, item)| item.clone()).collect()
+    }
+
     /// The item with this id, if the feed has it.
     #[allow(dead_code)]
     pub fn get(&self, id: &str) -> Option<ChatItem> {

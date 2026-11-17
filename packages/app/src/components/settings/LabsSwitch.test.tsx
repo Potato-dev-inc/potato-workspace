@@ -66,7 +66,7 @@ describe('the Labs page note', () => {
     await settle(3);
     expect(hasText(m.host, DEV_LABS_NOTE)).toBe(true);
     const text = m.host.textContent ?? '';
-    expect(text.indexOf(DEV_LABS_NOTE)).toBeLessThan(text.indexOf('Night Shift'));
+    expect(text.indexOf(DEV_LABS_NOTE)).toBeLessThan(text.indexOf('Agents that agents start'));
   });
 
   it('is not shown in a build where the override is off', async () => {
@@ -74,6 +74,8 @@ describe('the Labs page note', () => {
     m = await mountRows([labsIndexRow()]);
     await settle(3);
     expect(hasText(m.host, DEV_LABS_NOTE)).toBe(false);
+    expect(hasText(m.host, 'Night Shift')).toBe(false); // the area card starts closed
+    await click(m.host.querySelector('.st-labs-area .st-adv-toggle'));
     expect(hasText(m.host, 'Night Shift')).toBe(true);
   });
 });

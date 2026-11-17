@@ -2,7 +2,7 @@
 import { act, createElement, useRef, useState } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { Menu, Popover } from './Floating';
+import { FLOAT_EDGE, Menu, Popover, placeFloating } from './Floating';
 
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 
@@ -136,6 +136,25 @@ describe('Popover and Menu', () => {
     spy.mockRestore();
   });
 
+  it('a capped list opened above its button ends right above it, not at the top of the window', () => {
+    const rect = { left: 100, right: 200, top: 600, bottom: 620, width: 100, height: 20, x: 100, y: 600, toJSON: () => ({}) } as DOMRect;
+    vi.spyOn(HTMLElement.prototype, 'offsetWidth', 'get').mockReturnValue(260);
+    vi.spyOn(HTMLElement.prototype, 'scrollHeight', 'get').mockReturnValue(900); // the whole model list
+    vi.spyOn(HTMLElement.prototype, 'getBoundingClientRect').mockImplementation(() => rect);
+    Object.assign(window, { innerWidth: 1000, innerHeight: 700 });
+    function Capped() {
+      const a = useRef<HTMLButtonElement>(null);
+      return createElement('div', null, createElement('button', { ref: a }, 'Model'), createElement(Popover, { anchorRef: a, maxHeight: 320, testId: 'list', onClose: () => {}, children: 'x' }));
+    }
+    act(() => root.render(createElement(Capped)));
+    const el = q('list')!;
+    const top = Number.parseInt(el.style.top, 10);
+    const h = Number.parseInt(el.style.maxHeight, 10);
+    expect(h).toBe(320);
+    expect(top + h).toBe(600 - 6); // its bottom sits one gap above the button
+    expect(top).toBeGreaterThanOrEqual(8);
+  });
+
   it('a point anchor (a right-click) places the menu at that point', () => {
     vi.spyOn(HTMLElement.prototype, 'offsetWidth', 'get').mockReturnValue(100);
     vi.spyOn(HTMLElement.prototype, 'scrollHeight', 'get').mockReturnValue(50);
@@ -148,6 +167,64 @@ describe('Popover and Menu', () => {
     const menu = document.querySelector<HTMLElement>('[role="menu"]')!;
     expect(menu.style.left).toBe('300px');
     expect(menu.style.top).toBe('206px');
+    vi.restoreAllMocks();
+  });
+});
+
+describe('placeFloating: never cut off', () => {
+  const view = { width: 1280, height: 600 };
+  const bottomAnchor = { left: 20, right: 44, top: 560, bottom: 584 };
+  it('a menu taller than the space below opens above its anchor', () => {
+    const p = placeFloating(bottomAnchor, { width: 220, height: 300 }, view, 'start', 'down');
+    expect(p.up).toBe(true);
+    expect(p.capped).toBe(false);
+    expect(p.top + 300).toBeLessThanOrEqual(560);
+    expect(p.top).toBeGreaterThanOrEqual(FLOAT_EDGE);
+  });
+  it('a menu taller than the whole window is cut to the room and scrolls, 8px from the edges', () => {
+    const p = placeFloating(bottomAnchor, { width: 220, height: 900 }, view, 'start', 'up');
+    expect(p.capped).toBe(true);
+    expect(p.top).toBe(FLOAT_EDGE);
+    expect(p.top + p.maxHeight).toBeLessThanOrEqual(560 - 6);
+    expect(p.maxHeight).toBeLessThanOrEqual(view.height - 2 * FLOAT_EDGE);
+  });
+  it('a menu at the right edge is pulled back 8px inside', () => {
+    const p = placeFloating({ left: 1270, right: 1280, top: 10, bottom: 30 }, { width: 220, height: 100 }, view, 'start');
+    expect(p.left + 220).toBe(1280 - FLOAT_EDGE);
+  });
+});
+
+describe('Menu on a scrolling window', () => {
+  it('is cut to the window and scrolls when it is taller, and arrow keys scroll the item into view', () => {
+    vi.spyOn(HTMLElement.prototype, 'offsetWidth', 'get').mockReturnValue(200);
+    vi.spyOn(HTMLElement.prototype, 'scrollHeight', 'get').mockReturnValue(900);
+    vi.spyOn(HTMLElement.prototype, 'getBoundingClientRect').mockImplementation(
+      () => ({ left: 10, right: 40, top: 560, bottom: 584, width: 30, height: 24, x: 10, y: 560, toJSON: () => ({}) }) as DOMRect,
+    );
+    Object.assign(window, { innerWidth: 1280, innerHeight: 600 });
+    const into = vi.fn();
+    Element.prototype.scrollIntoView = into;
+    const anchor = document.createElement('button');
+    document.body.appendChild(anchor);
+    act(() =>
+      root.render(
+        createElement(Menu, {
+          anchorRef: { current: anchor },
+          prefer: 'up',
+          align: 'start',
+          onClose: () => {},
+          label: 'Tall',
+          children: [createElement('button', { key: 'a', role: 'menuitem', 'data-testid': 'ta' }, 'A'), createElement('button', { key: 'b', role: 'menuitem', 'data-testid': 'tb' }, 'B')],
+        }),
+      ),
+    );
+    const menu = document.querySelector<HTMLElement>('[role="menu"]')!;
+    expect(menu.style.overflowY).toBe('auto');
+    expect(menu.style.top).toBe('8px');
+    expect(Number.parseInt(menu.style.maxHeight, 10)).toBeLessThanOrEqual(546);
+    act(() => void q('ta')!.dispatchEvent(new KeyboardEvent('keydown', { key: 'ArrowDown', bubbles: true })));
+    expect(into).toHaveBeenCalledWith({ block: 'nearest' });
+    anchor.remove();
     vi.restoreAllMocks();
   });
 });

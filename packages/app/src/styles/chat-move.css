@@ -1,7 +1,7 @@
 /* Move to…: the sheet (components/chat/MoveSheet.tsx) and the note under a chat that moved (MovedNote.tsx).
    Colour tokens only. The sheet reuses the Branch sheet's rows. */
 .cockpit .ck-move-sheet {
-  width: min(500px, calc(100vw - 32px));
+  width: min(500px, calc(calc(100vw / var(--ui-scale, 1)) - 32px));
 }
 .cockpit .ck-move-way .ck-branch-state {
   grid-column: 2 / -1;

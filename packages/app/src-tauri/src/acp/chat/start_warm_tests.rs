@@ -238,7 +238,7 @@ fn standby_pool(rig: &Rig, helpers: &[(&str, Option<&str>)]) -> Installed {
     let pool = Pool::new(Arc::new(LiveHost { conversations: rig.conversations.clone(), registry: Some(rig.deps.registry.clone()) }));
     let wants = helpers
         .iter()
-        .map(|(id, model)| HelperWant::new(HelperMeta { id: (*id).into(), name: format!("Helper {id}"), model: model.map(str::to_string), close_after_use: false, home: None }, "fake", &rig.dir, None))
+        .map(|(id, model)| HelperWant::new(HelperMeta { id: (*id).into(), name: format!("Helper {id}"), model: model.map(str::to_string), close_after_use: false, home: None, kind: Default::default() }, "fake", &rig.dir, None))
         .collect();
     pool.set_policy(Policy { cap: 8, idle_ms: 20 * 60_000, helper_idle_ms: 20 * 60_000, recent_ms: 3_600_000, helpers: wants, ..Policy::default() });
     let installed = Installed(pool.clone());

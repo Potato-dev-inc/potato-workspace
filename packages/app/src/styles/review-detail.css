@@ -209,7 +209,7 @@
 
 /* The sheets: Keep and Ask to fix, on the shared Sheet shell. */
 .cockpit .ck-sheet.ck-rd-sheet {
-  width: min(460px, calc(100vw - 32px));
+  width: min(460px, calc(calc(100vw / var(--ui-scale, 1)) - 32px));
 }
 .cockpit .ck-rd-sheet-body {
   display: flex;

@@ -15,7 +15,10 @@ afterEach(async () => {
 });
 
 const labsIndex = () => arrangeSections(BASE_SECTIONS).find((s) => s.id === 'labs')!.rows.find((r) => r.id === LABS_INDEX_ID)!;
-const areaTitles = () => [...(m?.host.querySelectorAll('.st-labs-area h4') ?? [])].map((h) => h.textContent);
+const areaTitles = () => [...(m?.host.querySelectorAll('.st-labs-area .st-adv-toggle') ?? [])].map((h) => h.children[1]?.textContent);
+const openAll = async () => {
+  for (const toggle of [...(m?.host.querySelectorAll<HTMLElement>('.st-labs-area .st-adv-toggle[aria-expanded="false"]') ?? [])]) await click(toggle);
+};
 const nightSwitch = () => m?.host.querySelector<HTMLButtonElement>('[role="switch"][aria-label="Night Shift"]');
 const search = () => m!.host.querySelector<HTMLInputElement>('input[type="search"]')!;
 
@@ -25,6 +28,13 @@ describe('the Labs page', () => {
     m = await mountRows([labsIndex()]);
     await settle(3);
     expect(areaTitles()).toEqual(['Chat', 'Agents that agents start', 'Devices', 'Team', 'Phone', 'Other']);
+    // Every area is a card that starts closed: no feature is on the page until one is opened.
+    expect(m.host.querySelectorAll('.st-labs-area[data-open="false"]')).toHaveLength(6);
+    expect(m.host.querySelector('.st-labs-feature')).toBeNull();
+    await click(m.host.querySelector('.st-labs-area[data-area="Helpers"] .st-adv-toggle'));
+    expect(m.host.querySelector('.st-labs-area[data-area="Helpers"]')?.getAttribute('data-open')).toBe('true');
+    expect(m.host.querySelector('.st-labs-area[data-area="Chat"] .st-labs-feature')).toBeNull();
+    await openAll();
     expect(hasText(m.host, 'Agents work overnight in copies. You keep or drop each one in the morning.')).toBe(true);
     expect(hasText(m.host, 'Missions')).toBe(true);
   });
@@ -65,6 +75,7 @@ describe('the Labs page', () => {
     setDevLabsOverrideForTests(false);
     m = await mountRows([labsIndex()]);
     await settle(3);
+    await openAll();
     expect(nightSwitch()!.getAttribute('aria-checked')).toBe('false');
     await click(nightSwitch());
     await settle(2);

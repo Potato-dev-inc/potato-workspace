@@ -30,6 +30,8 @@ pub use supervise::supervise_existing;
 pub(crate) use fallback::{convert as convert_to_fallback, start_headless as start_fallback_headless};
 
 pub(super) use control::{blocked_on_trust, cancel_headless};
+#[cfg_attr(test, allow(unused_imports))]
+pub(crate) use control::live_count as headless_live_count;
 pub(crate) use control::stop_for_operation;
 #[cfg(test)]
 pub(super) use finish::failure_message;

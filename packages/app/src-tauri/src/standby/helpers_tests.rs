@@ -4,7 +4,7 @@ use super::*;
 use crate::acp::warm::AgentProbe;
 
 fn input(name: &str, agent: &str) -> NewHelper {
-    NewHelper { name: name.into(), agent: agent.into(), model: Some("gpt-5".into()), project: "C:/work/app".into(), after_task: AfterTask::Wait, home: None }
+    NewHelper { name: name.into(), agent: agent.into(), model: Some("gpt-5".into()), project: "C:/work/app".into(), after_task: AfterTask::Wait, home: None, kind: None }
 }
 
 fn temp_file() -> HelperFile {
@@ -48,7 +48,7 @@ fn the_limit_stops_a_new_standby_and_is_never_lowered_under_the_count() {
     assert!(store.remove("2"));
     assert!(!store.remove("2"));
     store.set_settings(1, 30).unwrap();
-    assert_eq!(HelperStore { settings: HelperSettings { max: 99, idle_minutes: 0, idle_explicit: false }, ..Default::default() }.clamped_for(None).settings, HelperSettings { max: MAX_HELPERS, idle_minutes: 1, idle_explicit: true });
+    assert_eq!(HelperStore { settings: HelperSettings { max: 99, idle_minutes: 0, idle_explicit: false, ..Default::default() }, ..Default::default() }.clamped_for(None).settings, HelperSettings { max: MAX_HELPERS, idle_minutes: 1, idle_explicit: true, ..Default::default() });
 }
 
 #[test]
@@ -253,10 +253,39 @@ fn a_standby_sleeps_sooner_on_a_small_pc_unless_the_person_set_a_time() {
     let mut set = HelperStore::default();
     set.set_settings(4, 45).unwrap();
     assert_eq!(set.clone().clamped_for(Some(8 * GB)).settings.idle_minutes, 45);
-    let legacy = HelperStore { settings: HelperSettings { max: 4, idle_minutes: 12, idle_explicit: false }, ..Default::default() };
+    let legacy = HelperStore { settings: HelperSettings { max: 4, idle_minutes: 12, idle_explicit: false, ..Default::default() }, ..Default::default() };
     assert_eq!(legacy.clamped_for(Some(8 * GB)).settings.idle_minutes, 12);
     // Choosing today's default on a small PC is still a choice.
     let mut small = HelperStore::default().clamped_for(Some(8 * GB));
     small.set_settings(4, DEFAULT_IDLE_MINUTES).unwrap();
     assert_eq!(small.clamped_for(Some(8 * GB)).settings.idle_minutes, DEFAULT_IDLE_MINUTES);
+}
+
+#[test]
+fn a_standby_is_a_spin_off_unless_set_to_minion_and_the_setting_decides_when_none_is_picked() {
+    use crate::agent_run_mode::StartedAs;
+    let mut store = HelperStore::default();
+    assert_eq!(store.add(input("A", "codex"), "sb-1".into()).unwrap().kind, StartedAs::SpinOff, "spin-off by default");
+    store.settings.default_kind = StartedAs::Minion;
+    assert_eq!(store.add(input("B", "codex"), "sb-2".into()).unwrap().kind, StartedAs::Minion, "the setting decides");
+    let mut own = input("C", "codex");
+    own.kind = Some(StartedAs::SpinOff);
+    assert_eq!(store.add(own, "sb-3".into()).unwrap().kind, StartedAs::SpinOff, "the pick decides over the setting");
+    store.set_kind("sb-1", StartedAs::Minion).unwrap();
+    assert_eq!(store.helpers[0].kind, StartedAs::Minion);
+    assert!(store.set_kind("nope", StartedAs::Minion).is_err());
+    // Limits keep the setting; the view and the policy carry the kind.
+    store.set_settings(5, 30).unwrap();
+    assert_eq!(store.settings.default_kind, StartedAs::Minion);
+    let view = build_view(&store, &BTreeMap::new(), |_| true, |_| true);
+    assert_eq!((view.helpers[0].kind, view.helpers[1].kind, view.default_kind), (StartedAs::Minion, StartedAs::Minion, StartedAs::Minion));
+}
+
+#[test]
+fn an_old_file_without_kinds_loads_as_spin_offs() {
+    use crate::agent_run_mode::StartedAs;
+    let old = r#"{"settings":{"max":4,"idle_minutes":30,"idle_explicit":false},"helpers":[{"id":"sb-1","name":"Reviewer","agent":"codex","project":"C:/work/app"}]}"#;
+    let store: HelperStore = serde_json::from_str(old).unwrap();
+    assert_eq!(store.helpers[0].kind, StartedAs::SpinOff);
+    assert_eq!(store.settings.default_kind, StartedAs::SpinOff);
 }

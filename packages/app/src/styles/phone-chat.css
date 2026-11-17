@@ -156,7 +156,7 @@
 }
 .ph .ph-chat .ph-dock {
   position: static;
-  max-height: 55vh;
+  max-height: calc(55vh / var(--ui-scale, 1));
   padding-bottom: calc(6px + var(--safe-b));
   border-bottom: 0;
 }
@@ -188,7 +188,7 @@
 .ph .ph-chat .ck-chat-composer-field {
   flex: 1;
   min-width: 0;
-  max-height: 50vh;
+  max-height: calc(50vh / var(--ui-scale, 1));
   margin: 0;
   padding: 6px 0;
   border: none;
@@ -713,7 +713,7 @@
   margin: 6px 0 2px 5px;
   padding: 2px 0 2px 12px;
   border-left: 2px solid var(--line);
-  max-height: 40vh;
+  max-height: calc(40vh / var(--ui-scale, 1));
   overflow: auto;
   color: var(--muted);
   font-size: var(--fs-sm);
@@ -800,7 +800,7 @@
   transition: width 500ms ease;
 }
 .ph .ph-plan-list {
-  max-height: 40vh;
+  max-height: calc(40vh / var(--ui-scale, 1));
   margin: 0;
   padding: 6px var(--pad-x) 10px;
   overflow-y: auto;
@@ -869,4 +869,71 @@
   border-radius: 12px;
   font-size: var(--fs-sm);
   opacity: 0.9;
+}
+
+/* ---------- live line and rolling words (RollText): the old word goes up and fades, the new one rises from below ---------- */
+.ph .ph-roll {
+  position: relative;
+  display: inline-block;
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  vertical-align: bottom;
+  padding: 0 1px;
+}
+.ph .ph-roll[data-prev] {
+  animation: ph-roll-in 240ms var(--ease) both;
+}
+.ph .ph-roll[data-prev]::before {
+  content: attr(data-prev);
+  position: absolute;
+  inset: 0 1px;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+  overflow: hidden;
+  pointer-events: none;
+  animation: ph-roll-out 160ms cubic-bezier(0.4, 0, 1, 1) both;
+}
+@keyframes ph-roll-in {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+@keyframes ph-roll-out {
+  from {
+    opacity: 1;
+    transform: none;
+    filter: blur(0);
+  }
+  to {
+    opacity: 0;
+    transform: translateY(-7px);
+    filter: blur(2px);
+  }
+}
+.ph[data-motion='reduce'] .ph-roll[data-prev] {
+  animation: ph-roll-fade 150ms ease-out both;
+}
+.ph[data-motion='reduce'] .ph-roll[data-prev]::before {
+  display: none;
+}
+@keyframes ph-roll-fade {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+.ph .ph-chat .ph-live-verb {
+  color: var(--muted);
+}
+.ph .ph-chat .ph-live-thing {
+  color: var(--text);
 }

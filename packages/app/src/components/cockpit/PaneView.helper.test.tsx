@@ -104,6 +104,17 @@ describe('helper pane header', () => {
     await flush();
     expect(host.querySelector('.ck-helper-of')).toBeNull();
   });
+
+  it('keeps the line for a spin-off whose agent closed, marked closed', async () => {
+    const h = mk('h', 'Fix flaky tests', 'gone');
+    (h.info as Record<string, unknown>).started_as = 'spin_off';
+    (h.info as Record<string, unknown>).origin = { host: 'Claude Code', task: 'Fix the flaky tests' };
+    const c = cockpit([h], 'h');
+    await act(async () => root.render(<PaneView c={c} paneId="h" />));
+    await flush();
+    expect(host.querySelector('[data-testid="pane-spun-off-closed"]')!.textContent).toBe('Spun off from Claude Code (closed)');
+    expect(host.querySelector('.ck-helper-of')).toBeNull();
+  });
 });
 
 // A minion's questions (Two types mode). The app keeps an ordinary ask from the person (the minion reads as working, so

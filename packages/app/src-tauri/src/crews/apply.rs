@@ -55,6 +55,7 @@ pub fn plan(crew: &Crew, folder: &str, existing: &[StandbyHelper], can_wait: &dy
                     project: folder.to_string(),
                     after_task: AfterTask::Close,
                     home: None,
+                    kind: None,
                 });
             }
         }

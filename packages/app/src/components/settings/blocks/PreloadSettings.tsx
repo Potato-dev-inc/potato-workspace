@@ -1,7 +1,8 @@
 // Settings > Preload: keep a warm agent (CLI at its input box + a hidden pane window) per ticked
 // provider, so opening a pane for it is instant. Backed by the standby pool (`standby-pool.json`).
 import { errorSentence } from '../../../lib/sayError';
-import { useT } from '../../../i18n';
+import { useT, type MessageKey } from '../../../i18n';
+import { tauriStandbyHelpersApi, useStandbyHelpers, type StandbyHelpersApi } from '../../../lib/standbyHelpers';
 import { useCallback, useEffect, useState } from 'react';
 import { tauri, type StandbyConfig, type StandbyStatus } from '../../../lib/tauri';
 import { useAgentRegistry } from '../../../lib/agentRegistry';
@@ -37,8 +38,10 @@ const DEFAULT_API: PreloadApi = {
 };
 
 /** One global switch (idle time under Details). Which agents stay ready is each agent page's Keep ready line (KeepReadyRow). */
-export function PreloadSettings({ api = DEFAULT_API, onSaved }: { api?: PreloadApi; onSaved?: () => void }) {
+export function PreloadSettings({ api = DEFAULT_API, helpersApi = tauriStandbyHelpersApi, onSaved }: { api?: PreloadApi; helpersApi?: StandbyHelpersApi; onSaved?: () => void }) {
   const t = useT();
+  const { view: helpersView, apply: applyHelpers } = useStandbyHelpers(helpersApi);
+  const neverClose = !!helpersView.never_close;
   const registry = useAgentRegistry();
   const [status, setStatus] = useState<StandbyStatus | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -67,6 +70,13 @@ export function PreloadSettings({ api = DEFAULT_API, onSaved }: { api?: PreloadA
       setError(errorSentence(e));
     }
   };
+  const agentName = (id: string) => registry.agents.find((a) => a.id === id)?.label ?? id;
+  // What to do, in one short line, for each reason a warm-up cannot stay.
+  const actFor = (reason: string): string => {
+    const key = (['dialog', 'needs_attention', 'untested_version'] as const).find((r) => r === reason);
+    return t(key ? (`preload.act.${key}` as MessageKey) : 'preload.act.other');
+  };
+  const hasDetails = !!status && (!!status.following || status.blocked.length > 0 || (status.agents_blocked?.length ?? 0) > 0);
   const { hidden } = useHiddenAgents();
   // An agent turned off in Settings > Agents > Definitions is not offered here (unless it is already kept warm).
   const providers = preloadProviders(registry.agents).filter((p) => !hidden.includes(p.id) || preloadCount(config, p.id) > 0);
@@ -86,6 +96,14 @@ export function PreloadSettings({ api = DEFAULT_API, onSaved }: { api?: PreloadA
           void save(chosen || !first ? on : withPreloadCount(on, first.id, 1));
         }}
       />
+      <SettingToggle
+        label={t('preload.neverClose')}
+        description={t('preload.neverCloseHelp')}
+        checked={neverClose}
+        onChange={(value) => {
+          void (helpersApi.setNeverClose?.(value) ?? Promise.resolve(null)).then((next) => applyHelpers(next)).catch((e) => setError(errorSentence(e)));
+        }}
+      />
       <Fold label={t('settings.details')}>
       <SettingBlock
         label={t('preload.idle')}
@@ -97,6 +115,35 @@ export function PreloadSettings({ api = DEFAULT_API, onSaved }: { api?: PreloadA
       <SettingBlock label={t('preload.status')} description={summarizePreload(status)}>
         <div className="space-y-2 text-sm">
           {error && <p className="text-pm-text">{error}</p>}
+          {/* One short line per warm-up with what to do. The long reasons and the folders are folded under "More details". */}
+          {status?.agents_blocked?.map((agent) => (
+            <p key={`short-${agent.agent_type}`} className="text-sm text-pm-text" data-testid={`preload-short-${agent.agent_type}`}>
+              <span className="font-medium">{agentName(agent.agent_type)}</span> {actFor(agent.reason)}
+            </p>
+          ))}
+          {status?.following?.not_warmed.map((item) => (
+            <p key={`short-trust-${item.agent_type}`} className="text-sm text-pm-text" data-testid={`preload-short-trust-${item.agent_type}`}>
+              <span className="font-medium">{agentName(item.agent_type)}</span> {t('preload.act.needs_trust')}
+            </p>
+          ))}
+          {status?.standbys
+            .filter((standby) => !standby.headless)
+            .map((standby) => (
+              <div key={standby.id} className="flex flex-wrap items-center gap-x-4 gap-y-1 rounded-lg border border-pm-border px-3 py-2">
+                <span className="font-medium">{registry.agents.find((a) => a.id === standby.agent_type)?.label ?? standby.agent_type}</span>
+                <span className="font-mono text-xs text-pm-muted">{standby.project}</span>
+                <span>{standby.state}</span>
+                {neverClose ? (
+                  <span className="text-pm-muted">{t('preload.staysReady')}</span>
+                ) : (
+                  standby.idle_expires_in_ms != null && <span className="text-pm-muted">{t('preload.closesIn', { time: formatDuration(standby.idle_expires_in_ms) })}</span>
+                )}
+              </div>
+            ))}
+          {hasDetails && (
+          <details data-testid="preload-details">
+            <summary className="cursor-pointer text-xs text-pm-muted">{t('preload.moreDetails')}</summary>
+            <div className="mt-2 space-y-2">
           {status?.following && (
             <p className="text-sm text-pm-text" data-testid="preload-following">
               {t('preload.following')} <span className="font-mono text-xs">{status.following.project}</span> — {followWhyText(status.following.why)}
@@ -109,18 +156,6 @@ export function PreloadSettings({ api = DEFAULT_API, onSaved }: { api?: PreloadA
               <span className="text-pm-muted"> {t('preload.openOnce')}</span>
             </p>
           ))}
-          {status?.standbys
-            .filter((standby) => !standby.headless)
-            .map((standby) => (
-              <div key={standby.id} className="flex flex-wrap items-center gap-x-4 gap-y-1 rounded-lg border border-pm-border px-3 py-2">
-                <span className="font-medium">{registry.agents.find((a) => a.id === standby.agent_type)?.label ?? standby.agent_type}</span>
-                <span className="font-mono text-xs text-pm-muted">{standby.project}</span>
-                <span>{standby.state}</span>
-                {standby.idle_expires_in_ms != null && (
-                  <span className="text-pm-muted">{t('preload.closesIn', { time: formatDuration(standby.idle_expires_in_ms) })}</span>
-                )}
-              </div>
-            ))}
           {status?.agents_blocked?.map((agent) => (
             <p key={agent.agent_type} className="text-sm text-pm-text" data-testid={`preload-blocked-${agent.agent_type}`}>
               {t('preload.cantStay', { agent: registry.agents.find((a) => a.id === agent.agent_type)?.label ?? agent.agent_type, message: agent.message })}{' '}
@@ -138,6 +173,9 @@ export function PreloadSettings({ api = DEFAULT_API, onSaved }: { api?: PreloadA
               {t('preload.heldBack', { key: holdKeyLabel(blocked.key), reason: holdReasonText(blocked.reason), extra: blocked.cold ? t('preload.warmsAgain') : t('preload.retryIn', { time: formatDuration(blocked.retry_in_ms) }) })}
             </p>
           ))}
+            </div>
+          </details>
+          )}
         </div>
       </SettingBlock>
     </>

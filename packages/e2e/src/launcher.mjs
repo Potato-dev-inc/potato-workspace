@@ -162,6 +162,7 @@ export async function startApp(opts) {
   const env = {
     ...process.env,
     POTATO_WORKSPACE_PROFILE: profile,
+    POTATO_WORKSPACE_NO_URL_HANDLER: '1', // a test app must never take the potato-workspace:// handler from the real app
     APPDATA: dirs.appdata,
     LOCALAPPDATA: dirs.local,
     // homeMode 'split' (real-app check, real agents): the APP sees a throwaway HOME (it reads HOME first, so every file it
@@ -314,7 +315,14 @@ export async function findCockpit(app) {
  * this right after the bridge answers, before anything else; `ensureCockpit` only waits.
  */
 async function requestCockpit(app) {
-  const sp = await app.bridge.post('/panes', { agent_type: 'powershell', cwd: app.dirs.projects, cols: 100, rows: 30 });
+  // The harness is a stranger to the app (it is not in the app's own process tree), so the first pane start asks for a card. This is the
+  // harness's own throwaway profile: the card is answered once, the way the Allow once button does it, and the call is repeated.
+  let sp = await app.bridge.post('/panes', { agent_type: 'powershell', cwd: app.dirs.projects, cols: 100, rows: 30 });
+  for (let i = 0; i < 4 && sp.status === 503 && sp.body?.code === 'CONSENT_PENDING' && sp.body?.context?.consent_id; i++) {
+    await app.bridge.post(`/questions/${sp.body.context.consent_id}/answer`, { choice_id: 'allow_once' });
+    await sleep(600);
+    sp = await app.bridge.post('/panes', { agent_type: 'powershell', cwd: app.dirs.projects, cols: 100, rows: 30 });
+  }
   if (sp.status >= 300) throw new Error(`could not open the cockpit (spawn): ${sp.status} ${JSON.stringify(sp.body).slice(0, 300)}`);
   const id = sp.body?.snapshot?.pane_id || sp.body?.pane_id;
   await app.bridge.post(`/panes/${encodeURIComponent(id)}/detach`, {});

@@ -24,6 +24,7 @@ import { useEarlier } from '../../hooks/useEarlier';
 import type { RuleLimit } from '../../lib/pane-rule-view';
 import { PendingMessages } from '../chat/PendingMessages';
 import { MessageActionsSheet, type PressedMessage } from './MessageActions';
+import { PhoneAnswerLines, PhoneDockContext, usePhoneDockState } from './PhoneBottomRegion';
 import { PhoneComposer } from './PhoneComposer';
 import { PhonePicker } from './PhonePicker';
 import type { ChatAttachment } from '../../lib/attachFiles';
@@ -232,6 +233,7 @@ export function PhoneChatView({
   const { bubbles, hide } = usePendingBubbles(outbox.messages, userTexts);
   const pending = canSend ? <PendingMessages messages={bubbles} onCancel={outbox.cancel} onHold={outbox.hold} onEdit={outbox.edit} onHide={hide} onRetry={(text) => outbox.send(text)} onStartFresh={canType && bridge?.acpCancel ? () => void bridge.acpCancel?.(paneId).catch(() => undefined) : undefined} /> : undefined;
   const t = useT();
+  const dockState = usePhoneDockState(paneId);
 
   // Typed while the PC cannot be reached: kept on the phone, asked about when the PC is back.
   const queue = useOfflineQueue(paneId, t('phone.queue.full'));
@@ -369,6 +371,7 @@ export function PhoneChatView({
   }
   return (
     <div className="ph-chat" data-testid="phone-chat">
+      <PhoneDockContext.Provider value={dockState.state}>
       <ChatAnswerContext.Provider value={canSend ? sendOrKeep : null}>
       <PhoneConversation
         state={status.state}
@@ -379,7 +382,7 @@ export function PhoneChatView({
         dock={dock}
         pending={pending}
         progress={<PhoneProgress note={progress} />}
-        after={result}
+        after={<><PhoneAnswerLines lines={dockState.lines} />{result}</>}
         above={bars}
         composer={composer}
         staleAt={!reach && readAt !== null && grouped.turns.length > 0 ? readAt : null}
@@ -392,6 +395,7 @@ export function PhoneChatView({
         pictures={pictures}
       />
       </ChatAnswerContext.Provider>
+      </PhoneDockContext.Provider>
       {openPage && <PhoneArtifactScreen bridge={bridge} paneId={paneId} id={openPage.ref.id} version={openPage.ref.version} title={openPage.title} onClose={() => setOpenPage(null)} />}
       {pressed && <MessageActionsSheet message={pressed} handlers={actions} onClose={() => setPressed(null)} />}
     </div>

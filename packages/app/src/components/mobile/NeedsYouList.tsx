@@ -6,7 +6,9 @@
 // and offers its pane. Nothing is dropped: a card leaves only when the PC resolves it.
 import { useCallback, useEffect, useState } from 'react';
 import type { AttentionItem, AttentionSnapshot } from '../../lib/attention';
-import { COPY } from '../../lib/attention-copy';
+import { COPY, isRiskyAsk } from '../../lib/attention-copy';
+import { useT } from '../../i18n';
+import { RiskGlyph } from '../cockpit/InboxCard';
 import type { BridgeClient } from '../../lib/bridge-types';
 import { PROMPT_KINDS, QUESTION_KINDS, isOpen, subjectOf, visibleQueue } from '../../lib/needs-you-queue';
 import type { Question } from '../../lib/questions';
@@ -42,6 +44,25 @@ export function NoteCard({ item, onOpenPane }: { item: AttentionItem; onOpenPane
   );
 }
 
+/** A risky ask as one line: who, what, how risky. It carries no command; a tap opens the full card. */
+export function RiskyAskRow({ item, onOpen, compact = false }: { item: AttentionItem; onOpen: (item: AttentionItem) => void; compact?: boolean }) {
+  const t = useT();
+  const level = item.risk?.level ?? 'medium';
+  const title = item.risk?.headline?.trim() || item.title;
+  return (
+    <button type="button" className={`ph-risky-row ph-risky-row--${level}${compact ? ' ph-risky-row--dock' : ''}`} data-testid="risky-row" data-item-kind={item.kind} aria-label={t('phone.full.rowLabel', { title })} onClick={() => onOpen(item)}>
+      <span className="ph-risky-row-glyph" aria-hidden="true">
+        <RiskGlyph level={level} />
+      </span>
+      <span className="ph-risky-row-text">
+        <b>{item.pane?.heading ?? item.pane?.agent ?? t('phone.full.review')}</b>
+        <span>{title}</span>
+      </span>
+      <span className="ph-risky-row-go">{t('phone.full.review')}</span>
+    </button>
+  );
+}
+
 export function NeedsYouList({
   snapshot,
   bridge,
@@ -51,6 +72,7 @@ export function NeedsYouList({
   labels,
   onOpenPane,
   onRefresh,
+  onOpenCard,
   showEmpty = false,
   emptyText,
 }: {
@@ -64,6 +86,8 @@ export function NeedsYouList({
   onOpenPane: (paneId: string) => void;
   /** An answer came back stale: read the PC's list again. */
   onRefresh?: () => void;
+  /** A risky ask is one line that opens its full card here (the phone home). Without it the card is drawn in the list. */
+  onOpenCard?: (item: AttentionItem) => void;
   /** Draw "Nothing needs you" when the queue is empty. */
   showEmpty?: boolean;
   /** The empty state in other words (the phone home says "Nothing needs you right now."). */
@@ -101,6 +125,7 @@ export function NeedsYouList({
   return (
     <section aria-label="Needs you" className="ph-queue" data-testid="needs-you-queue">
       {queue.map((item) => {
+        if (onOpenCard && isRiskyAsk(item)) return <RiskyAskRow key={item.id} item={item} onOpen={onOpenCard} />;
         if (PROMPT_KINDS.includes(item.kind)) {
           return (
             <ApprovalCard

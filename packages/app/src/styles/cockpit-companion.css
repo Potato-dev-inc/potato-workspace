@@ -328,7 +328,7 @@
 /* ---------- sheets ---------- */
 .cockpit .ck-companion-sheet {
   width: 440px;
-  max-height: calc(100vh - 48px);
+  max-height: calc(calc(100vh / var(--ui-scale, 1)) - 48px);
   overflow-y: auto;
   gap: 10px;
 }

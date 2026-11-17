@@ -20,7 +20,7 @@
   gap: 12px;
   width: 440px;
   max-width: 100%;
-  max-height: calc(100vh - 48px);
+  max-height: calc(calc(100vh / var(--ui-scale, 1)) - 48px);
   overflow-y: auto;
   padding: 20px;
   border-radius: 14px;
@@ -618,6 +618,14 @@
   gap: 10px;
   padding: 12px 0;
 }
+.dev-place-page {
+  box-sizing: border-box;
+  width: 100%;
+  max-width: 720px;
+  margin: 0 auto;
+  /* Room below, so the "Finish setup" chip (fixed, bottom right) never sits on the form. */
+  padding: 20px 24px 72px;
+}
 .dev-pick {
   display: flex;
   flex-wrap: wrap;
@@ -658,6 +666,10 @@
 .dev-place .dev-actions {
   display: flex;
   justify-content: flex-end;
+}
+.dev-place .dev-actions .dev-btn {
+  min-width: 72px;
+  padding: 0 18px;
 }
 /* Files and transfers (Devices): the Files tab, the table, the preview, transfer rows, the Get it card. Tokens only. */
 .dev-remote-folder {

@@ -192,3 +192,193 @@
   font: 600 12px var(--font-ui);
   color: var(--label-2);
 }
+
+/* ---------- risky ask: the full card (CardSheet -> ApprovalCard variant "full") ---------- */
+.ph .ph-full {
+  position: fixed;
+  inset: 0;
+  z-index: 60;
+  display: flex;
+  flex-direction: column;
+  overflow-y: auto;
+  padding: calc(14px + env(safe-area-inset-top, 0px)) 18px calc(16px + env(safe-area-inset-bottom, 0px));
+  background: var(--bg);
+  color: var(--label);
+  animation: ph-sheet-in 420ms var(--ease-sheet) both;
+}
+.ph[data-motion='reduce'] .ph-full {
+  animation-name: ph-fade;
+}
+@media (prefers-reduced-motion: reduce) {
+  .ph .ph-full {
+    animation-name: ph-fade;
+    animation-duration: 150ms;
+  }
+}
+.ph .ph-full-later {
+  align-self: flex-end;
+  min-height: 44px;
+  padding: 0 4px;
+  color: var(--label-2);
+  font: 500 14px/1.2 var(--font-ui);
+}
+.ph .ph-full-card {
+  display: flex;
+  flex: 1 1 auto;
+  flex-direction: column;
+  min-height: 0;
+}
+.ph .ph-full-card p,
+.ph .ph-full-card h2,
+.ph .ph-full-card dl,
+.ph .ph-full-card dd {
+  margin: 0;
+}
+.ph .ph-full-who {
+  margin-bottom: 22px !important;
+  color: var(--label-2);
+  font: 500 13px/1.3 var(--font-ui);
+}
+.ph .ph-full-risk {
+  display: inline-flex;
+  align-items: center;
+  align-self: flex-start;
+  gap: 6px;
+  margin-bottom: 12px !important;
+  padding: 4px 10px;
+  border: 1px solid currentColor;
+  border-radius: 999px;
+  font: 600 13px/1.3 var(--font-ui);
+}
+.ph .ph-full-risk[data-risk='medium'] {
+  color: var(--risk);
+}
+.ph .ph-full-risk[data-risk='high'] {
+  color: var(--danger);
+}
+.ph .ph-full-title {
+  margin-bottom: 18px !important;
+  font: 600 24px/1.2 var(--font-ui);
+  letter-spacing: -0.01em;
+  overflow-wrap: anywhere;
+}
+.ph .ph-full-rows > div {
+  display: flex;
+  gap: 10px;
+  padding: 10px 0;
+  border-top: 1px solid var(--sep);
+  font: 400 15px/1.4 var(--font-ui);
+}
+.ph .ph-full-rows dt {
+  flex: none;
+  width: 74px;
+  color: var(--label-3);
+}
+.ph .ph-full-rows dd {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+.ph .ph-full-step {
+  align-self: flex-start;
+  min-height: 44px;
+  padding: 0;
+  color: var(--label-2);
+  font: 400 13px/1.2 var(--font-ui);
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+.ph .ph-full-code {
+  display: block;
+  padding: 10px;
+  border: 1px solid var(--sep);
+  border-radius: 10px;
+  background: var(--fill);
+  color: var(--label-2);
+  font: 400 12.5px/1.5 var(--font-mono);
+  overflow-wrap: anywhere;
+  animation: ph-fade var(--t-fade) both;
+}
+.ph .ph-full-status {
+  margin-top: 12px !important;
+  color: var(--label-2);
+  font: 500 14px/1.35 var(--font-ui);
+}
+.ph .ph-full-foot {
+  display: grid;
+  gap: 8px;
+  margin-top: auto;
+  padding-top: 18px;
+}
+.ph .ph-full-deny,
+.ph .ph-full-allow {
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 52px;
+  overflow: hidden;
+  border-radius: 14px;
+  font: 600 16px/1.2 var(--font-ui);
+}
+.ph .ph-full-deny {
+  background: var(--primary-bg);
+  color: var(--primary-fg);
+}
+.ph .ph-full-allow {
+  border: 1px solid var(--danger);
+  background: none;
+  color: var(--label);
+}
+.ph .ph-full-allow .ph-hold-fill {
+  opacity: 0.35;
+}
+
+/* A risky ask as one line (the dock of its chat, the phone home list). */
+.ph .ph-risky-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  min-height: 52px;
+  padding: 8px 14px;
+  border: 1px solid var(--sep);
+  border-radius: 14px;
+  background: var(--bg-raised);
+  color: var(--label);
+  text-align: left;
+}
+.ph .ph-risky-row--dock {
+  width: auto;
+  margin: 8px 12px;
+}
+.ph .ph-risky-row-glyph {
+  flex: none;
+  display: inline-flex;
+}
+.ph .ph-risky-row--medium .ph-risky-row-glyph {
+  color: var(--risk);
+}
+.ph .ph-risky-row--high .ph-risky-row-glyph {
+  color: var(--danger);
+}
+.ph .ph-risky-row-text {
+  display: flex;
+  flex: 1 1 auto;
+  flex-direction: column;
+  min-width: 0;
+  font: 400 14px/1.35 var(--font-ui);
+}
+.ph .ph-risky-row-text b {
+  font-weight: 600;
+}
+.ph .ph-risky-row-text span {
+  overflow: hidden;
+  color: var(--label-2);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.ph .ph-risky-row-go {
+  flex: none;
+  color: var(--label-2);
+  font: 500 13px/1 var(--font-ui);
+}

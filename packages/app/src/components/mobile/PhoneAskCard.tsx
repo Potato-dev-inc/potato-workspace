@@ -14,7 +14,7 @@ import { HoldButton } from './HoldButton';
 import '../../styles/phone-ask.css';
 
 /** A choice that would allow the same thing again later. Not offered on a high-risk prompt. */
-const ALWAYS = /^\s*(always|every time)\b|永遠|一律|總是/i;
+export const ALWAYS = /^\s*(always|every time)\b|永遠|一律|總是/i;
 
 export function PhoneAskCard({
   item,
@@ -33,7 +33,8 @@ export function PhoneAskCard({
   autoFocus?: boolean;
   /** Tests and the harness drive a state without a request. */
   localOverride?: LocalAnswer;
-  onAnswered?: () => void;
+  /** Once per answer: which choice, whether it said yes, and the card's own title. */
+  onAnswered?: (info: { label: string; allowed: boolean; title: string }) => void;
   onRefresh?: () => void;
 }) {
   const t = useT();
@@ -42,7 +43,10 @@ export function PhoneAskCard({
   const root = useRef<HTMLElement>(null);
   const answered = local.phase === 'answered';
   useEffect(() => {
-    if (answered) onAnswered?.();
+    if (answered && local.phase === 'answered') {
+      const choice = (item.prompt?.choices ?? []).find((c) => c.label === local.label);
+      onAnswered?.({ label: local.label, allowed: choice ? !isDenyLabel(choice) : true, title: view.title });
+    }
     // Once per answer.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [answered]);

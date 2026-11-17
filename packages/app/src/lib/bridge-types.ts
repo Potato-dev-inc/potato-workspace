@@ -293,6 +293,19 @@ export interface PhoneHelpersReply {
   max: number;
 }
 
+/** One background task the person put in the sidebar on the PC (`GET /phone/tasks`). `under` is the agent it sits under, null: on its own. */
+export interface PhoneTaskRow {
+  taskId: string;
+  kind: 'minion' | 'command';
+  owner: string;
+  under: string | null;
+  name: string;
+  status: string;
+}
+export interface PhoneTasksReply {
+  rows: PhoneTaskRow[];
+}
+
 /** Body of `GET /team/cards`; `can` is what this phone's pairing allows. */
 export interface TeamCardsReply {
   enabled: boolean;
@@ -365,6 +378,8 @@ export interface BridgeClient {
   phoneDone?(since: number): Promise<PhoneDoneReply>;
   /** `GET /phone/helpers` (needs `watch`): the standby helpers and their state. Absent on old PCs. */
   phoneHelpers?(): Promise<PhoneHelpersReply>;
+  /** `GET /phone/tasks` (needs `watch`): the background tasks the person put in the sidebar on the PC. Absent on old PCs. */
+  phoneTasks?(): Promise<PhoneTasksReply>;
   /** The team action routes (`/team/cards/{id}/dismiss|pull|queue`, `/team/jobs/{id}/apply|discard`). */
   teamDismiss?(cardId: string): Promise<{ ok: boolean }>;
   teamPull?(cardId: string): Promise<{ ok: boolean; result: string }>;

@@ -36,10 +36,10 @@ fn a_long_lived_child_of_the_agent_is_a_job_and_the_agent_is_not() {
 }
 
 #[test]
-fn processes_younger_than_five_seconds_or_of_unknown_age_are_left_out() {
+fn processes_younger_than_three_seconds_or_of_unknown_age_are_left_out() {
     let mut unknown = row(22, 11, "node.exe", 0, "node a.js");
     unknown.started_ms = None;
-    let rows = [row(20, 11, "bash.exe", 4_999, "bash -c ls"), row(21, 11, "bash.exe", 5_000, "bash -c sleep 99"), unknown];
+    let rows = [row(20, 11, "bash.exe", 2_999, "bash -c ls"), row(21, 11, "bash.exe", 3_000, "bash -c sleep 99"), unknown];
     let jobs = select(&rows, &no_ports(), Some((11, None)), &[], NOW);
     assert_eq!(jobs.iter().map(|j| j.pid).collect::<Vec<_>>(), vec![21]);
 }
@@ -260,7 +260,7 @@ mod windows {
         use crate::pty::proc_tree::test_support::*;
         let (mut child, grandchild) = spawn_child_with_grandchild();
         let me = std::process::id();
-        let pane = super::super::PaneRef { id: "test-pane-jobs".into(), agent_type: "shell".into(), pid: me };
+        let pane = super::super::PaneRef { id: "test-pane-jobs".into(), agent_type: "shell".into(), pid: me, chat_pid: None };
         // The child is below this test process: it is "the pane", so the child is a job of it.
         let refused = super::super::stop_job(&pane, 4, 1).unwrap_err();
         assert!(refused.contains("not run under this pane") || refused.contains("already gone"), "{refused}");

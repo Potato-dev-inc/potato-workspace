@@ -18,7 +18,14 @@ use std::collections::HashSet;
 pub const HELPERS_CLOSED_REASON: &str = "its agent was closed";
 
 /// Every pane below `root` in the helper links, nearest first. `root` itself is not in the list.
+#[cfg(test)]
 pub(crate) fn helpers_of(registry: &Mutex<PaneRegistry>, root: &str) -> Vec<String> {
+    helpers_of_keeping(registry, root, false)
+}
+
+/// [`helpers_of`], and with `keep_spin_offs` (Two types) a spin-off is left out with everything under it: the person owns it, so it
+/// stays when its agent closes and moves to the top level.
+pub(crate) fn helpers_of_keeping(registry: &Mutex<PaneRegistry>, root: &str, keep_spin_offs: bool) -> Vec<String> {
     let reg = registry.lock();
     let mut seen: HashSet<String> = HashSet::from([root.to_string()]);
     let mut order = Vec::new();
@@ -30,6 +37,7 @@ pub(crate) fn helpers_of(registry: &Mutex<PaneRegistry>, root: &str) -> Vec<Stri
                 .panes
                 .iter()
                 .filter(|(_, pane)| pane.info.parent_pane_id.as_deref() == Some(parent.as_str()))
+                .filter(|(_, pane)| !(keep_spin_offs && pane.info.effective_started_as() == Some(crate::agent_run_mode::StartedAs::SpinOff)))
                 .map(|(id, _)| id)
                 .collect();
             children.sort();
@@ -76,7 +84,7 @@ pub(crate) fn minions_of(registry: &Mutex<PaneRegistry>, root: &str) -> Vec<Stri
 
 /// The rule with its inputs given, so a test can set them: close the helpers only when the setting
 /// is on and the app is not ending. A minion is not a helper the person keeps: it stops with its agent
-/// whatever the setting says (a spin-off stays, or follows the setting).
+/// whatever the setting says. A spin-off stays in Two types (the person owns it); in One type it follows the setting.
 pub(crate) fn close_with_helpers(
     registry: &Mutex<PaneRegistry>,
     pane_id: &str,
@@ -84,7 +92,9 @@ pub(crate) fn close_with_helpers(
     setting_on: bool,
     app_ending: bool,
 ) -> Result<(), String> {
-    let mut helpers = if setting_on && !app_ending { helpers_of(registry, pane_id) } else { Vec::new() };
+    // Two types: a spin-off is the person's own chat, so it stays (at the top level) when its agent closes.
+    let keep_spin_offs = crate::agent_run_mode::started_agent_types() == crate::agent_run_mode::StartedAgentTypes::Two;
+    let mut helpers = if setting_on && !app_ending { helpers_of_keeping(registry, pane_id, keep_spin_offs) } else { Vec::new() };
     if !app_ending {
         for minion in minions_of(registry, pane_id) {
             if !helpers.contains(&minion) {

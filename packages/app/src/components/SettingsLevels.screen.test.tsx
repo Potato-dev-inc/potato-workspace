@@ -129,10 +129,10 @@ describe('basic rows across the real catalog', () => {
     for (const section of SECTIONS) for (const r of section.rows) expect(['basic', 'advanced', 'developer']).toContain(rowLevel(r));
   });
 
-  // Spec 2026-11-13: at most 10 basic rows on a page. Today (1.1.8): 38 in all, one more than 1.1.7.
-  it('shows at most 38 basic rows in all, and at most 10 on any one page', () => {
+  // Spec 2026-11-13: at most 10 basic rows on a page. Today (1.1.9): 39 in all (the Labs row "How the front answers" is one more than 1.1.8).
+  it('shows at most 39 basic rows in all, and at most 10 on any one page', () => {
     const counts = SECTIONS.map((s) => s.rows.filter((r) => rowLevel(r) === 'basic').length);
-    expect(counts.reduce((a, b) => a + b, 0)).toBeLessThanOrEqual(38);
+    expect(counts.reduce((a, b) => a + b, 0)).toBeLessThanOrEqual(39);
     for (const c of counts) expect(c).toBeLessThanOrEqual(10);
   });
 });

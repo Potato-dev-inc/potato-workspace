@@ -12,6 +12,7 @@ import { Menu } from '../common/Floating';
 import { PhoneAgentTile } from './PhoneAgentTile';
 import { PhoneQuiet } from './PhoneQuiet';
 import { PhoneReadyHelpers } from './PhoneReadyHelpers';
+import { PhoneSidebarTasks } from './PhoneSidebarTasks';
 import { PhoneInboxHome } from './PhoneInboxHome';
 import type { BridgeClient } from '../../lib/bridge-types';
 import { Avatar } from '../companion/Avatar';
@@ -217,7 +218,7 @@ export function PhoneDrawer({
   /** The foot's usage line: this month's turns (null until known) and a tap that opens the usage sheet. Absent: no such line. */
   usage?: { turns: number | null; onOpen: () => void };
   /** For the Inbox part (Done today, Team activity) and the "Ready" standby helpers. Absent: no such parts. */
-  bridge?: Pick<BridgeClient, 'phoneHelpers' | 'phoneDone' | 'teamCards'>;
+  bridge?: Pick<BridgeClient, 'phoneHelpers' | 'phoneDone' | 'teamCards' | 'phoneTasks'>;
 }) {
   const t = useT();
   const [menu, setMenu] = useState<{ paneId: string; title: string } | null>(null);
@@ -330,6 +331,7 @@ export function PhoneDrawer({
           )}
           {bridge && <PhoneInboxHome bridge={bridge} bridgeReady={bridgeReady} labels={labels} onOpen={onSelect} inDrawer />}
           {bridge && <PhoneReadyHelpers bridge={bridge} open={open} />}
+          {bridge && <PhoneSidebarTasks bridge={bridge} open={open} agentName={(id) => labels.get(id) ?? id} />}
           {groups.map((group) => (
             <section key={group.project} aria-label={group.project}>
               <h2 className="ph-dsec">{group.project}</h2>

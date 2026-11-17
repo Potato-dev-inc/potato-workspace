@@ -51,5 +51,9 @@ export const phoneShell: Partial<Record<EnglishKey, string>> = {
   'phone.text.small': '小',
   'phone.text.normal': '標準',
   'phone.text.large': '大',
+  'phone.motion.title': '動畫',
+  'phone.motion.full': '完整',
+  'phone.motion.reduced': '減少',
+  'phone.motion.hint': '減少時，滑動會改成快速淡入淡出',
   'phone.menu.display': '顯示',
 };

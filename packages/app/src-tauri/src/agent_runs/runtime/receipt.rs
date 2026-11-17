@@ -242,6 +242,13 @@ pub(super) fn build_receipt(
     if read_only == "unenforced" {
         not_verified.push("read_only not enforced".to_string());
     }
+    // Not asked for, and this agent could not be made read-only anyway: say so from the start (not only when it was asked).
+    if read_only == "off"
+        && !(held.read_only_headless || held.read_only_spawned_pane || held.read_only_visible_flags)
+        && !crate::agent_runs::read_only_run_table(&snapshot.agent_type)
+    {
+        not_verified.push(crate::agent_runs::read_only_cannot_note(&snapshot.agent_type));
+    }
     if warnings
         .iter()
         .any(|warning| warning.code == "SHELL_COMMAND_REJECTED")

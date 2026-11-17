@@ -404,7 +404,7 @@ fn prompts_include_status_check() {
 /// constant deliberately when a tool is added or changed; a pure refactor must not move it.
 #[test]
 fn catalog_version_is_pinned() {
-    assert_eq!(catalog_version(), "85-ceaf67f5d1840250");
+    assert_eq!(catalog_version(), "90-0bcaa6bdc78fc8df");
 }
 
 /// Every tool input that names an agent (`agent_type`, or `backend` on quick_ask) uses the one
@@ -630,6 +630,26 @@ fn companion_recall_is_callable_in_agent_mode_but_listed_only_for_a_companions_a
     assert!(companion_recall_for_pane(Some("companion-mochi"), McpMode::Shell, &tools_for_mode(McpMode::Shell)).is_none());
 }
 
+#[test]
+fn message_parent_is_callable_in_agent_mode_but_listed_only_for_an_agent_in_a_spin_off() {
+    use super::message_parent_for_pane;
+    for mode in [McpMode::Agent, McpMode::Both, McpMode::All] {
+        assert!(tool_visible_in_mode("message_parent", mode), "{mode:?}");
+    }
+    assert!(!tool_visible_in_mode("message_parent", McpMode::Shell));
+    for mode in [McpMode::Agent, McpMode::Shell, McpMode::Both] {
+        assert!(!tools_for_mode(mode).iter().any(|t| t.name == "message_parent"), "{mode:?}");
+    }
+    let agent_list = tools_for_mode(McpMode::Agent);
+    assert!(message_parent_for_pane(true, McpMode::Agent, &agent_list).is_some(), "an agent in a spin-off gets it");
+    assert!(message_parent_for_pane(false, McpMode::Agent, &agent_list).is_none(), "any other agent does not");
+    assert!(message_parent_for_pane(true, McpMode::All, &tools_for_mode(McpMode::All)).is_none(), "not twice");
+    assert!(message_parent_for_pane(true, McpMode::Shell, &tools_for_mode(McpMode::Shell)).is_none());
+    let tool = tools().into_iter().find(|t| t.name == "message_parent").expect("message_parent");
+    assert_eq!((tool.method, tool.path), ("POST", "/agents/message-parent"));
+    assert_eq!(tool.input_schema["required"], serde_json::json!(["message"]));
+}
+
 /// "How agent runs work": the catalog tells a lead how the agent's setting interacts with `headless`
 /// and where to read `headless_verified` (output fields only; no input property was added).
 #[test]
@@ -671,8 +691,8 @@ fn run_agent_is_short_and_leads_with_the_launch_and_wait_example() {
         assert!(text.starts_with("Advanced:"), "{field}: {text}");
     }
     // 6_000 before review_by (about 300 more bytes) joined the schema; trust's `detail` field
-    // and the merged schema measured 6_405 bytes; auto_approve and the model note bring it to 6_790; `strict` and the lane hint make 6_840, so the limit was 6_850; the standby `helper` field makes it 7_050; `as` (minion / spin-off) makes it 7_300.
-    assert!(run.input_schema.to_string().len() < 7_300, "{} bytes", run.input_schema.to_string().len());
+    // and the merged schema measured 6_405 bytes; auto_approve and the model note bring it to 6_790; `strict` and the lane hint make 6_840, so the limit was 6_850; the standby `helper` field makes it 7_050; `as` (minion / spin-off) makes it 7_300; the spin-off's message_parent / refusals sentence on `as` makes it 7_700; the clearer `as`, `task` and `keep_pane` words make it 8_200.
+    assert!(run.input_schema.to_string().len() < 8_200, "{} bytes", run.input_schema.to_string().len());
 }
 
 #[test]

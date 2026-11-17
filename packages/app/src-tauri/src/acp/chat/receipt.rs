@@ -212,6 +212,8 @@ pub struct ReceiptInputs<'a> {
     pub read_only_enforcement: &'a str,
     /// The before/after look at the folder for this turn, once the turn ended (`agent_runs::tree_proof`).
     pub read_only_proof: Option<&'a crate::agent_runs::tree_proof::ReadOnlyProof>,
+    /// The agent that cannot be made read-only here (`None`: it can). Said in `not_verified` while the guards are off.
+    pub read_only_cannot: Option<&'a str>,
     pub checks: &'a [Check],
     pub facts: &'a ResultFacts,
 }
@@ -258,6 +260,9 @@ pub fn build(inputs: &ReceiptInputs) -> RunReceipt {
         checks: checks_guarantee(inputs.checks, inputs.results, inputs.final_turn),
         model: ModelGuarantee { asked: inputs.requested_model.map(str::to_string), confirmed: model_confirmed },
     };
+    if let Some(agent) = inputs.read_only_cannot.filter(|_| !inputs.read_only) {
+        not_verified.push(crate::agent_runs::read_only_cannot_note(agent));
+    }
     if guarantees.read_only.proof.as_deref() == Some(crate::agent_runs::tree_proof::TREE_CHANGED) {
         not_verified.push("a read-only run changed files in the folder".to_string());
     }

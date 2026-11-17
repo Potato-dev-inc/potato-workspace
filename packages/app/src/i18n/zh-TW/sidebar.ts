@@ -2,8 +2,10 @@
 import type { EnglishKey } from '../en';
 
 export const sidebar: Partial<Record<EnglishKey, string>> = {
+  'sidebar.thinking': '思考中…',
   'sidebar.errorIn': '錯誤 · {where}',
   'sidebar.helperOf': '由 {name} 啟動 · {detail}',
+  'sidebar.spinOffTip': '{name} 的分支對話 · {ago}前開始',
   'sidebar.rowNeedsYou': '{name}，需要你',
   'sidebar.hasPreviewAt': '有預覽 · {address}',
   'sidebar.hasPreview': '有預覽',

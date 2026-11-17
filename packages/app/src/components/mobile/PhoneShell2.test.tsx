@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 // Phone part 2 around the chat: the drawer (lock, long press: Stop and Close), the connection line, the setup steps and Help.
-import { act } from 'react';
+import React, { act } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { PHONE_PANES } from '../../dev/phone-fixtures';
@@ -12,6 +12,7 @@ import { PhoneHeader } from './PhoneHeader';
 import { PhoneLinkLine } from './PhoneLinkLine';
 import { PhoneSetupSteps } from './PhoneSetupSteps';
 import { MenuSheet } from './MobileSheet';
+import { usePhoneMotion } from '../../lib/phone-motion';
 import { ControlAskNotice } from '../cockpit/ControlAskNotice';
 
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
@@ -304,5 +305,46 @@ describe('P20: the notice on the PC', () => {
     await act(async () => { await Promise.resolve(); });
     await act(async () => { ([...document.querySelectorAll('button')].find((b) => b.textContent === 'No') as HTMLButtonElement).click(); });
     expect(tauriMock.answer).toHaveBeenCalledWith('ask-1', false);
+  });
+});
+
+describe('Motion: Full / Reduced in the phone settings', () => {
+  function Shell() {
+    const ref = React.useRef<HTMLDivElement>(null);
+    usePhoneMotion(ref);
+    return (
+      <div ref={ref} className="ph" data-testid="shell">
+        <MenuSheet
+          onClose={() => undefined}
+          bridgeUrl="http://x"
+          bridgeReady
+          settings={DEFAULT_PUBLIC_SETTINGS}
+          onPatchSettings={() => undefined}
+          link={null}
+          echo={null}
+          activeLabel={null}
+          onCloseActive={() => undefined}
+          onEditConnection={() => undefined}
+        />
+      </div>
+    );
+  }
+  const shell = () => document.querySelector('[data-testid="shell"]') as HTMLElement;
+  const choice = (v: string) => document.querySelector(`[data-motion-choice="${v}"]`) as HTMLButtonElement;
+
+  it('Reduced puts data-motion on the shell and the choice survives a remount', async () => {
+    await render(<Shell />);
+    expect(shell().dataset.motion).toBeUndefined();
+    expect(choice('full').getAttribute('aria-checked')).toBe('true');
+    await act(async () => { choice('reduce').click(); });
+    expect(shell().dataset.motion).toBe('reduce');
+    expect(choice('reduce').getAttribute('aria-checked')).toBe('true');
+    act(() => root.unmount());
+    root = createRoot(host);
+    await render(<Shell />);
+    expect(shell().dataset.motion).toBe('reduce');
+    expect(choice('reduce').getAttribute('aria-checked')).toBe('true');
+    await act(async () => { choice('full').click(); });
+    expect(shell().dataset.motion).toBeUndefined();
   });
 });

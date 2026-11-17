@@ -56,6 +56,25 @@ export interface Device {
   room_at?: number | null;
   /** That device is using THIS PC right now. */
   connected: boolean;
+  /** The first 4 characters of its id, set only when another PC shares its name (so two alike can be told apart). */
+  short_id?: string | null;
+}
+
+/** The name to show for a device: with its short id after it when another PC has the same name. */
+export function deviceLabel(d: Pick<Device, 'name' | 'short_id'>): string {
+  return d.short_id ? `${d.name} · ${d.short_id}` : d.name;
+}
+
+/** Marks each device whose name another device (or this PC) also has; names compare without case or spaces at the ends. */
+export function withShortIds<T extends Pick<Device, 'node' | 'name'>>(devices: T[], ownName = ''): (T & { short_id: string | null })[] {
+  const key = (n: string) => n.trim().toLowerCase();
+  const seen = new Map<string, number>();
+  for (const d of devices) seen.set(key(d.name), (seen.get(key(d.name)) ?? 0) + 1);
+  const own = key(ownName);
+  return devices.map((d) => ({
+    ...d,
+    short_id: (seen.get(key(d.name)) ?? 0) > 1 || (own !== '' && key(d.name) === own) ? d.node.slice(0, 4) : null,
+  }));
 }
 
 export interface HostingView {

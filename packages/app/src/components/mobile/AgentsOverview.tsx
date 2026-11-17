@@ -9,7 +9,7 @@ import { glyphStatus, groupPanes, previewLines, projectName, waitingCount } from
 import { DotSpinner } from '../cockpit/DotSpinner';
 import { DigestCard } from './DigestCard';
 import { isLive } from '../../lib/questions';
-import { blockingCount, type AttentionSnapshot } from '../../lib/attention';
+import { blockingCount, type AttentionItem, type AttentionSnapshot } from '../../lib/attention';
 import { QuestionsView, useQuestionPolling } from './QuestionsList';
 import { NeedsYouList } from './NeedsYouList';
 import { TeamGroup } from './TeamGroup';
@@ -64,6 +64,7 @@ export function AgentsOverview({
   onRefreshAttention,
   night,
   setup,
+  onOpenCard,
 }: {
   bridge: BridgeClient;
   bridgeReady: boolean;
@@ -94,6 +95,8 @@ export function AgentsOverview({
   night?: ReactNode;
   /** The home's top line: how many setup steps are done, and what opens them. The chip hides when all are done. */
   setup?: { done: number; total: number; onOpen: () => void };
+  /** A risky ask in the Needs you list opens its full card. */
+  onOpenCard?: (item: AttentionItem) => void;
 }) {
   const t = useT();
   const { questions, refresh } = useQuestionPolling(bridge, bridgeReady && questionsRevision !== undefined, questionsRevision ?? 0);
@@ -168,6 +171,7 @@ export function AgentsOverview({
           labels={labels}
           onOpenPane={onOpen}
           onRefresh={onRefreshAttention}
+          onOpenCard={onOpenCard}
           showEmpty
           emptyText={t('phone.needsYou.empty')}
         />

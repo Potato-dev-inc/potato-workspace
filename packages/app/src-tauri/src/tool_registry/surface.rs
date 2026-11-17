@@ -93,6 +93,13 @@ const ADVANCED: &[&str] = &[
     "companion_recall",
     // A page the agent made, as a card in its chat: callable by name, listed for an agent started in a Potato pane.
     "show_artifact",
+    // A spin-off's one way to write to the agent that spun it off: listed by the shim only inside a spin-off.
+    "message_parent",
+    // Background terminals (the app hosts a command for the agent): listed by the shim for an agent in a Potato pane, callable by name.
+    "start_terminal",
+    "read_terminal",
+    "wait_terminal",
+    "stop_terminal",
     // More than one agent, and a second opinion by another agent: callable by name, listed in mode all.
     "run_agents",
     "review_agent",

@@ -6,6 +6,7 @@ import { errorSentence } from '../lib/sayError';
 import { teamApi } from '../lib/team';
 import type { TunnelStatus } from '../lib/tauri-types';
 import { Btn, FieldInput } from './settings/settings-ui';
+import { SecretValue } from './settings/SecretValue';
 import { WorkerSuggestion } from './settings/WorkerSuggestion';
 import { WorkerUpdateButton } from './settings/WorkerUpdateButton';
 import { workersDevAddress, type WorkerHealth } from '../lib/worker';
@@ -16,34 +17,6 @@ import type { TunnelApi } from './settings/TunnelSection';
 /** A team relay address saved in Settings > Team, when it is a workers.dev address. */
 async function defaultRelaySuggestion(): Promise<string | null> {
   return workersDevAddress((await teamApi.configGet()).relay);
-}
-
-async function copyText(text: string): Promise<void> {
-  try {
-    await navigator.clipboard.writeText(text);
-  } catch {
-    /* no clipboard here: the text stays selectable */
-  }
-}
-
-function CopyLine({ text, label }: { text: string; label: string }) {
-  const t = useT();
-  const [done, setDone] = useState(false);
-  return (
-    <div className="stable-cmd">
-      <code className="font-mono break-all">{text}</code>
-      <Btn
-        small
-        aria-label={label}
-        onClick={() => {
-          void copyText(text);
-          setDone(true);
-        }}
-      >
-        {done ? t('tunnel.secretCopied') : t('settings.copy')}
-      </Btn>
-    </div>
-  );
 }
 
 export function StableLinkSheet({
@@ -185,7 +158,7 @@ export function StableLinkSheet({
             <p>{t('stable.secretHelp')}</p>
             {secret ? (
               <>
-                <CopyLine text={secret} label={`${t('settings.copy')}: ${t('tunnel.secret')}`} />
+                <SecretValue value={secret} copyLabel={`${t('settings.copy')}: ${t('tunnel.secret')}`} onError={setError} />
                 <Btn small onClick={() => setSecret(null)}>
                   {t('tunnel.secretHide')}
                 </Btn>

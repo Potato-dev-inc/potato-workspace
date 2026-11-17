@@ -149,7 +149,7 @@ impl AccountService {
     /// A link came back from the browser. Checked against the sign-in this app started; anything else is dropped.
     pub fn finish_sign_in(&self, link: &SignInLink) -> bool {
         let Some(pending) = self.pending.accept(link, now()) else {
-            tracing::info!("account: a sign-in link did not match a pending sign-in");
+            tracing::info!(reason = "state", "account: a sign-in link did not match a pending sign-in (wrong state, expired or nothing pending)");
             return false;
         };
         match self.redeem(link, pending.verifier()) {

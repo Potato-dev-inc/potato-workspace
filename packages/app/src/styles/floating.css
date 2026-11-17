@@ -6,5 +6,5 @@
   right: auto;
   bottom: auto;
   box-sizing: border-box;
-  max-width: calc(100vw - 16px);
+  max-width: calc(calc(100vw / var(--ui-scale, 1)) - 16px);
 }

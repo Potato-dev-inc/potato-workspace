@@ -137,3 +137,19 @@ describe('a new card waits while a finger is on the list', () => {
     expect(cards()).toHaveLength(2);
   });
 });
+
+describe('slice 4: the phone home shows a risky ask as one line', () => {
+  it('with onOpenCard a high-risk ask is one row with no command; a low-risk one stays a card; the row opens the card', async () => {
+    const onOpenCard = vi.fn();
+    const bridge = { answerAttention: vi.fn() } as unknown as BridgeClient;
+    await act(async () => {
+      root.render(<NeedsYouList snapshot={snap([ITEM_HIGH, ITEM_LOW])} bridge={bridge} canAnswer questions={[]} refreshQuestions={() => undefined} labels={new Map()} onOpenPane={() => undefined} onOpenCard={onOpenCard} />);
+    });
+    const rows = host.querySelectorAll('[data-testid="risky-row"]');
+    expect(rows).toHaveLength(1);
+    expect(rows[0].textContent).not.toContain('rm -rf');
+    expect(host.querySelectorAll('.ph-appr')).toHaveLength(1);
+    await act(async () => (rows[0] as HTMLButtonElement).click());
+    expect(onOpenCard).toHaveBeenCalledWith(ITEM_HIGH);
+  });
+});

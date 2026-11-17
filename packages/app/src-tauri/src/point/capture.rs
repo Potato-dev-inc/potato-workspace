@@ -56,13 +56,14 @@ pub fn wait_png(rx: &mpsc::Receiver<Result<Vec<u8>, &'static str>>, timeout: Dur
     }
 }
 
-/// PNG of the preview window's viewport. Call from a worker thread, never the main thread.
+/// PNG of one webview's viewport (a preview window's page, or the docked browser's child webview). Call from a worker
+/// thread, never the main thread.
 #[cfg(windows)]
-pub fn viewport_png(window: &tauri::WebviewWindow, timeout: Duration) -> Result<Vec<u8>, &'static str> {
+pub fn viewport_png(webview: &tauri::Webview, timeout: Duration) -> Result<Vec<u8>, &'static str> {
     let (tx, rx) = mpsc::channel::<Result<Vec<u8>, &'static str>>();
     let tx_start = tx.clone();
     // `with_webview` runs this closure on the main thread and returns; it does not wait for the picture.
-    window
+    webview
         .with_webview(move |pv| {
             if let Err(e) = windows_impl::start(&pv, tx) {
                 let _ = tx_start.send(Err(e));
@@ -73,7 +74,7 @@ pub fn viewport_png(window: &tauri::WebviewWindow, timeout: Duration) -> Result<
 }
 
 #[cfg(not(windows))]
-pub fn viewport_png(_window: &tauri::WebviewWindow, _timeout: Duration) -> Result<Vec<u8>, &'static str> {
+pub fn viewport_png(_window: &tauri::Webview, _timeout: Duration) -> Result<Vec<u8>, &'static str> {
     Err(ERR_NO_WINDOWS)
 }
 

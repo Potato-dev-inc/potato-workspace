@@ -81,6 +81,11 @@ pub fn tool_visible_in_mode(name: &str, mode: McpMode) -> bool {
         "ask_guide",
         "workspace_config",
         "show_artifact",
+        "message_parent",
+        "start_terminal",
+        "read_terminal",
+        "wait_terminal",
+        "stop_terminal",
     ];
     const SHELL_TOOLS: &[&str] = &[
         "list_panes",

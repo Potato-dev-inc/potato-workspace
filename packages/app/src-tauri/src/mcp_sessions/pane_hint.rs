@@ -40,6 +40,12 @@ pub fn claimed_session_pane(session_id: &str) -> Option<String> {
     SESSION_PANES.lock().ok()?.get(session_id).cloned()
 }
 
+/// A connection that says it runs in `pane` (any one of them, when a reconnect left several). Used when the person hands a task
+/// to the agent in that pane, so its tool calls count as the new owner's.
+pub fn session_of_pane(pane: &str) -> Option<String> {
+    SESSION_PANES.lock().ok()?.iter().find(|(_, p)| p.as_str() == pane).map(|(session, _)| session.clone())
+}
+
 /// The OS process id of the MCP process serving this connection, as it reported it.
 pub fn session_pid(session_id: &str) -> Option<u32> {
     SESSION_PIDS.lock().ok()?.get(session_id).copied()

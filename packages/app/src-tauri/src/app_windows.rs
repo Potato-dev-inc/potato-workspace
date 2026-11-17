@@ -221,6 +221,32 @@ pub fn plan_placements(anchor: Option<Anchor>, first_slot: usize, grids: &[(u16,
     grids.iter().enumerate().map(|(i, (cols, rows))| pane_placement(anchor, first_slot + i, *cols, *rows)).collect()
 }
 
+/// What the X on one of the app's own windows does.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum MainClose {
+    /// Not one of these windows: close as usual.
+    PassThrough,
+    /// Hide the window; the app keeps running in the tray.
+    HideToTray,
+    /// Quit the app, after asking when an agent is still working.
+    AskToQuit,
+}
+
+/// Settings always hides. The main window quits unless `close_to_tray` is on.
+pub fn main_close_action(label: &str, close_to_tray: bool) -> MainClose {
+    if label == SETTINGS_LABEL {
+        MainClose::HideToTray
+    } else if label == COCKPIT_LABEL {
+        if close_to_tray {
+            MainClose::HideToTray
+        } else {
+            MainClose::AskToQuit
+        }
+    } else {
+        MainClose::PassThrough
+    }
+}
+
 mod runtime {
     use super::*;
     use std::sync::atomic::{AtomicUsize, Ordering};
@@ -637,15 +663,23 @@ mod runtime {
         }
     }
 
-    /// Closing the Settings window only hides it: the app keeps running in the tray.
+    /// Closing the Settings window only hides it. The main window's X quits the app (asking first when an agent is
+    /// working), unless the person chose "Keep running in the tray" (`close_to_tray`): then it hides, as before.
     pub fn on_close_requested(app: &AppHandle, label: &str) -> bool {
-        if label != SETTINGS_LABEL && label != COCKPIT_LABEL {
-            return false;
+        let close_to_tray = crate::settings_store::read_public_settings(app).get("close_to_tray").and_then(|v| v.as_bool()).unwrap_or(false);
+        match main_close_action(label, close_to_tray) {
+            MainClose::PassThrough => false,
+            MainClose::HideToTray => {
+                if let Some(window) = app.get_webview_window(label) {
+                    let _ = window.hide();
+                }
+                true
+            }
+            MainClose::AskToQuit => {
+                crate::pane_windows::request_quit(app);
+                true
+            }
         }
-        if let Some(window) = app.get_webview_window(label) {
-            let _ = window.hide();
-        }
-        true
     }
 }
 
@@ -657,6 +691,14 @@ pub use runtime::{
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn the_main_window_x_quits_unless_close_to_tray_is_on() {
+        assert_eq!(main_close_action(COCKPIT_LABEL, false), MainClose::AskToQuit);
+        assert_eq!(main_close_action(COCKPIT_LABEL, true), MainClose::HideToTray);
+        assert_eq!(main_close_action(SETTINGS_LABEL, false), MainClose::HideToTray);
+        assert_eq!(main_close_action("detached-pane-1", false), MainClose::PassThrough);
+    }
 
     #[test]
     fn settings_url_defaults_to_the_agents_tab_and_rejects_odd_tab_names() {

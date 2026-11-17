@@ -13,6 +13,7 @@ import { resolveSettingsFilePath } from '../../../lib/settings';
 import { cockpitApi } from '../../../lib/cockpit-api';
 import { parseSwitchStyle, parseWindowLayout, type SwitchStyle } from '../../../lib/mode-switch/model';
 import { t, useT } from '../../../i18n';
+import { useDiscordNameFill } from '../../../lib/discordName';
 import { styleLabel } from '../i18n-labels';
 import { tauri, type AppInstallInfo, type CoordinationStorageInfo } from '../../../lib/tauri';
 import { budgetRows } from './BudgetRows';
@@ -257,6 +258,24 @@ function WindowLayoutRow({ env }: { env: SettingsEnv }) {
   );
 }
 
+/** "Your name": starts from the Discord login name when signed in with Discord and the field is empty. */
+function YourNameRow({ env }: { env: SettingsEnv }) {
+  useDiscordNameFill(env.settings.display_name, (name) => void env.patch({ display_name: name }));
+  return (
+    <SettingRow label={t('lookFeel.yourName.label')} description={t('lookFeel.yourName.hint')}>
+      <TextControl
+        aria-label={t('lookFeel.yourName.label')}
+        value={env.settings.display_name ?? ''}
+        mode="blur"
+        maxLength={60}
+        placeholder={t('lookFeel.yourName.placeholder')}
+        normalize={(text) => text.replace(/\s+/g, ' ').trim()}
+        onCommit={(next) => env.patch({ display_name: next || null })}
+      />
+    </SettingRow>
+  );
+}
+
 // ---------- the rows ----------
 
 export const generalRows: RowDef[] = [
@@ -274,19 +293,7 @@ export const generalRows: RowDef[] = [
     hint: 'Used in the greeting on the New agent page. Leave it empty for no name.',
     keywords: 'name greeting hello welcome new agent page profile display',
     group: 'Appearance',
-    render: (env) => (
-      <SettingRow label={t('lookFeel.yourName.label')} description={t('lookFeel.yourName.hint')}>
-        <TextControl
-          aria-label={t('lookFeel.yourName.label')}
-          value={env.settings.display_name ?? ''}
-          mode="blur"
-          maxLength={60}
-          placeholder={t('lookFeel.yourName.placeholder')}
-          normalize={(text) => text.replace(/\s+/g, ' ').trim()}
-          onCommit={(next) => env.patch({ display_name: next || null })}
-        />
-      </SettingRow>
-    ),
+    render: (env) => <YourNameRow env={env} />,
   },
   {
     id: 'start-at-sign-in',
@@ -395,6 +402,21 @@ export const generalRows: RowDef[] = [
         description={t('lookFeel.confirmClose.hint')}
         checked={env.settings.confirm_close_running_pane ?? true}
         onChange={(value) => void env.patch({ confirm_close_running_pane: value })}
+      />
+    ),
+  },
+  {
+    id: 'close-to-tray',
+    label: 'Keep running in the tray when I close the window',
+    hint: 'Off: the X at the top right quits Potato. On: the app keeps running in the tray.',
+    keywords: 'close x quit exit tray background keep running minimize hide window',
+    group: 'While agents work',
+    render: (env) => (
+      <SettingToggle
+        label={t('lookFeel.closeToTray.label')}
+        description={t('lookFeel.closeToTray.hint')}
+        checked={env.settings.close_to_tray ?? false}
+        onChange={(value) => void env.patch({ close_to_tray: value })}
       />
     ),
   },
@@ -750,6 +772,22 @@ export const generalRows: RowDef[] = [
     ),
   },
   {
+    id: 'dock-browser-labs',
+    label: 'Browser in the side panel',
+    hint: 'Show the browser your agent uses next to the chat, not in its own window.',
+    keywords: 'browser side panel dock details column agent page window pop out labs early',
+    group: 'Labs',
+    labs: { name: 'Browser in the side panel', about: 'Show your agent browser next to the chat instead of in a separate window.' },
+    render: (env) => (
+      <SettingToggle
+        label={t('settings.row.dock-browser-labs.label')}
+        description={t('settings.row.dock-browser-labs.hint')}
+        checked={env.settings.dock_browser_enabled ?? false}
+        onChange={(value) => void env.patch({ dock_browser_enabled: value })}
+      />
+    ),
+  },
+  {
     id: 'smaller-updates-labs',
     label: 'Smaller updates',
     hint: 'Updates download only the app, about a third of the size. Built-in tools stay.',
@@ -795,6 +833,42 @@ export const generalRows: RowDef[] = [
         checked={env.settings.crews_enabled ?? false}
         onChange={(value) => void env.patch({ crews_enabled: value })}
       />
+    ),
+  },
+  {
+    id: 'workflows-labs',
+    label: 'Workflows',
+    hint: 'A crew with one main agent (the front) that starts the right helper for each request.',
+    keywords: 'workflows workflow front helpers router crew start helper hard easy labs early',
+    group: 'Labs',
+    labs: { name: 'Workflows', about: 'A main agent reads each request and starts the right helper itself.' },
+    render: (env) => (
+      <SettingToggle
+        label={t('settings.row.workflows-labs.label')}
+        description={t('settings.row.workflows-labs.hint')}
+        checked={env.settings.workflows_enabled ?? false}
+        onChange={(value) => void env.patch({ workflows_enabled: value })}
+      />
+    ),
+  },
+  {
+    id: 'workflow-reply-labs',
+    label: 'How the front answers',
+    hint: "Translator retells a result in its own words. Router shows the agent's own words.",
+    keywords: 'workflow front answers reply translator router helper report words labs early',
+    group: 'Labs',
+    labs: { name: 'How the front answers', about: "Choose whether the front retells a helper's result or shows its own words." },
+    render: (env) => (
+      <SettingRow label={t('settings.row.workflow-reply-labs.label')} description={t('settings.row.workflow-reply-labs.hint')}>
+        <Popup
+          aria-label={t('settings.row.workflow-reply-labs.label')}
+          value={env.settings.workflow_reply_style === 'router' ? 'router' : 'translator'}
+          onChange={(event) => void env.patch({ workflow_reply_style: event.target.value === 'router' ? 'router' : 'translator' })}
+        >
+          <option value="translator">{t('settings.row.workflow-reply-labs.translator')}</option>
+          <option value="router">{t('settings.row.workflow-reply-labs.router')}</option>
+        </Popup>
+      </SettingRow>
     ),
   },
   { id: 'version', label: 'Version', hint: 'Check for updates and download the installer.', keywords: 'app version update release download install', group: 'About', render: () => <VersionRow /> },

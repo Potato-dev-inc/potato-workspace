@@ -92,6 +92,8 @@ pub struct Policy {
     pub helpers: Vec<helpers::HelperWant>,
     /// A standby helper unused this long is closed (0: the same as `idle_ms`).
     pub helper_idle_ms: i64,
+    /// "Never close": no idle time shuts a warm session or a standby down.
+    pub never_close: bool,
 }
 
 /// Why a warm start failed.
@@ -302,6 +304,7 @@ impl<H: WarmHost> Pool<H> {
             inner.slots.entry(key.clone()).or_insert_with(|| Slot::new(folder.clone()));
         }
         let effective = Self::effective(inner, now);
+        let never_close = inner.policy.never_close;
         let plain_idle_ms = inner.policy.idle_ms;
         let helper_idle_ms = if inner.policy.helper_idle_ms > 0 { inner.policy.helper_idle_ms } else { plain_idle_ms };
         for (key, slot) in inner.slots.iter_mut() {
@@ -313,7 +316,7 @@ impl<H: WarmHost> Pool<H> {
                 // (A seat busy with an agent's task holds its next clean session here: that is not idling either.)
                 let person_held = slot.opened.is_some() || slot.busy.is_some();
                 let gone = slot.opened.as_deref().is_some_and(|pane| self.host.working(pane).is_none());
-                let idle = now - *since >= idle_ms && !person_held;
+                let idle = !never_close && now - *since >= idle_ms && !person_held;
                 if dead || gone || idle || !wanted_now {
                     slot.opened = None;
                     if let State::Ready { item, .. } = std::mem::replace(&mut slot.state, State::Empty) {

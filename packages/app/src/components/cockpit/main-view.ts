@@ -3,7 +3,7 @@
 // booleans whose render order decides).
 import { isMacPlatform, matchesAction } from '../../lib/shortcuts';
 
-export type MainView = 'inbox' | 'pane' | 'doctor' | 'memory' | 'plans' | 'morning' | 'scores' | 'review' | 'spawn' | 'settings' | 'companion' | 'store' | 'newagent' | 'spaces' | 'board' | 'device' | 'routines' | 'guide' | 'connect' | 'today';
+export type MainView = 'inbox' | 'pane' | 'doctor' | 'memory' | 'plans' | 'morning' | 'scores' | 'review' | 'spawn' | 'settings' | 'companion' | 'store' | 'newagent' | 'task' | 'spaces' | 'board' | 'device' | 'routines' | 'guide' | 'connect' | 'today';
 
 /**
  * Where the main area rests when nothing was opened on top: an agent that is starting, else the

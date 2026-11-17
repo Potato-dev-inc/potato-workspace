@@ -59,7 +59,7 @@ html.mb-root #root {
   align-items: center;
   gap: 6px;
   box-sizing: border-box;
-  height: 100vh;
+  height: calc(100vh / var(--ui-scale, 1));
   padding: 0 8px;
   border: 1px solid var(--mb-sep);
   border-radius: 10px;

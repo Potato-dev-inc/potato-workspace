@@ -1,0 +1,28 @@
+// English messages for the crew chip at the top of a chat: one small chip that counts the agents this chat started
+// (spin-offs and minions) and opens a list of them. Plain words, short. Plural: `<key>_one` / `<key>_other`.
+export const crewChip = {
+  'crew.aria': 'Agents started by this chat',
+  'crew.kind.spinOff': 'Spin-off',
+  'crew.kind.minion': 'Minion',
+  'crew.state.working': 'working',
+  'crew.state.needsYou': 'needs you',
+  'crew.state.done': 'done',
+  'crew.state.failed': 'failed',
+  'crew.chip.one': '{kind}: {title} · {state}',
+  'crew.n.spinOffs_one': '{count} spin-off',
+  'crew.n.spinOffs_other': '{count} spin-offs',
+  'crew.n.minions_one': '{count} minion',
+  'crew.n.minions_other': '{count} minions',
+  'crew.n.needYou_one': '{count} needs you',
+  'crew.n.needYou_other': '{count} need you',
+  'crew.n.working': '{count} working',
+  'crew.n.done': '{count} done',
+  'crew.n.failed': '{count} failed',
+  'crew.group.spinOffs': 'Spin-offs ({n})',
+  'crew.group.minions': 'Minions ({n})',
+  'crew.showDone': '{n} done · show',
+  'crew.hideDone': 'Hide the done ones',
+  'crew.open': 'Open {title}',
+  'crew.peek': 'Read {title}. You can read it and stop it.',
+  'crew.stop': 'Stop {title}',
+} as const;

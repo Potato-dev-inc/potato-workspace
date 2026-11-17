@@ -176,11 +176,20 @@ fn only_installed_capable_agents_are_listed_with_ready_marks() {
     assert_eq!(
         list,
         vec![
-            AgentEntry { id: "alpha".into(), label: "Alpha".into(), ready: false },
-            AgentEntry { id: "gamma".into(), label: "Gamma".into(), ready: true },
+            AgentEntry { id: "alpha".into(), label: "Alpha".into(), ready: false, quick: true },
+            AgentEntry { id: "gamma".into(), label: "Gamma".into(), ready: true, quick: true },
         ]
     );
     assert!(list_agents(&capable(), &|_| false, &[]).is_empty());
+}
+
+#[test]
+fn every_installed_agent_is_listed_and_the_ones_that_answer_in_the_bar_come_first() {
+    let every = vec![("opencode".to_string(), "OpenCode".to_string()), ("claude".into(), "Claude".into()), ("agy".into(), "Agy".into()), ("gone".into(), "Gone".into())];
+    let quick = vec!["claude".to_string()];
+    let list = list_every_agent(&every, &quick, &|id| id != "gone", &["AGY".to_string()]);
+    let seen: Vec<(&str, bool, bool)> = list.iter().map(|e| (e.id.as_str(), e.quick, e.ready)).collect();
+    assert_eq!(seen, vec![("claude", true, false), ("opencode", false, false), ("agy", false, true)]);
 }
 
 #[test]

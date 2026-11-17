@@ -48,6 +48,8 @@ export interface AcpChatState {
   phase: string;
   status: 'running' | 'waiting_input' | 'idle' | 'error';
   turnInFlight: boolean;
+  /** What it is doing right now (the newest tool that has not ended), or null. A short live line for the lists. */
+  doing?: string | null;
   /** Stop was asked and the agent has not ended the turn yet. */
   stopping: boolean;
   /** The agent has said nothing for this many seconds and the person is asked: Stop or Keep waiting. Absent/null: not asked. */

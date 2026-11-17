@@ -33,6 +33,7 @@ pub mod talk;
 pub mod templates;
 pub mod validate;
 pub mod view;
+pub mod workflow;
 
 pub use model::{CrewError};
 
@@ -60,3 +61,5 @@ mod share_tests;
 mod starter_tests;
 #[cfg(test)]
 mod tests;
+#[cfg(test)]
+mod workflow_tests;

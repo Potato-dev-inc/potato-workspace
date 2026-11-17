@@ -36,6 +36,8 @@ pub struct HelperMeta {
     pub close_after_use: bool,
     /// The agent (pane id) the seat sits under. Only that agent's tasks take it while that agent is there.
     pub home: Option<String>,
+    /// What a task that takes it becomes: a spin-off (the default) or a minion (plan 2.5).
+    pub kind: crate::agent_run_mode::StartedAs,
 }
 
 /// A helper the policy wants kept ready.
@@ -88,6 +90,9 @@ pub struct HelperClaim<'a> {
     pub caller: Option<&'a str>,
     /// Asked for by name (`run_agent({ helper })`).
     pub name: Option<&'a str>,
+    /// The kind of standby the run may take (`StartedRecord::standby_kind_wanted`). `None`: either. Ignored when `name` is
+    /// set: a named standby is taken whatever its kind.
+    pub kind: Option<crate::agent_run_mode::StartedAs>,
 }
 
 /// A seat a task took. The task runs in the seat's own chat: `pane` is that chat when it exists already (the person had the
@@ -230,6 +235,11 @@ impl Wanted {
         if claim.name.is_some_and(|n| !meta.name.eq_ignore_ascii_case(n.trim())) {
             return Some(Miss::plain("another standby was asked for by name"));
         }
+        if let (None, Some(want)) = (claim.name, claim.kind) {
+            if meta.kind != want {
+                return Some(Miss::plain(format!("it is a {} standby and the task is a {}", meta.kind.as_str(), want.as_str())));
+            }
+        }
         // A standby under another agent is fine when the project is the same: the caller's own seats are tried first.
         let _ = home_alive;
         None
@@ -329,7 +339,7 @@ impl<H: WarmHost> Pool<H> {
 
     /// Whether a helper fits a task, without taking it.
     pub fn helper_match(&self, agent: &str, folder: &Path, account: Option<&str>, model: Option<&str>) -> HelperMatch {
-        self.helper_match_for(&HelperClaim { agent, folder, account, model, caller: None, name: None })
+        self.helper_match_for(&HelperClaim { agent, folder, account, model, caller: None, name: None, kind: None })
     }
 
     /// `helper_match` with who asks: only a seat this task may take counts.
@@ -367,7 +377,7 @@ impl<H: WarmHost> Pool<H> {
     /// Takes a ready helper that fits the task. It is busy from now until its chat has finished a turn. A matching helper
     /// that is asleep is woken (it starts again) but this call still misses.
     pub fn claim_helper(&self, agent: &str, folder: &Path, account: Option<&str>, model: Option<&str>, now: i64) -> Option<(H::Item, HelperMeta)> {
-        let claimed = self.claim_helper_for(&HelperClaim { agent, folder, account, model, caller: None, name: None }, now)?;
+        let claimed = self.claim_helper_for(&HelperClaim { agent, folder, account, model, caller: None, name: None, kind: None }, now)?;
         Some((claimed.item?, claimed.meta))
     }
 

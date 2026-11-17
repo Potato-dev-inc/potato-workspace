@@ -14,7 +14,7 @@
   border: 0;
   border-radius: 8px;
   background: transparent;
-  color: var(--label-2, #666);
+  color: var(--label-2);
   font: inherit;
   font-size: 12.5px;
   cursor: pointer;
@@ -39,7 +39,7 @@
   position: fixed;
   z-index: 1000;
   box-sizing: border-box;
-  max-width: min(420px, calc(100vw - 16px));
+  max-width: min(420px, calc(calc(100vw / var(--ui-scale, 1)) - 16px));
   width: max-content;
   overflow-y: auto;
   padding: 6px;
@@ -65,7 +65,7 @@
   outline: none;
   box-shadow: var(--focus, 0 0 0 2px rgba(127, 127, 127, 0.5));
 }
-.mp-item {
+.mp-menu .mp-item {
   display: flex;
   align-items: center;
   justify-content: space-between;
@@ -81,14 +81,14 @@
   text-align: left;
   cursor: pointer;
 }
-.mp-item:hover,
-.mp-item[aria-selected='true'] {
+.mp-menu .mp-item:hover,
+.mp-menu .mp-item[aria-selected='true'] {
   background: var(--fill-hover, rgba(127, 127, 127, 0.14));
 }
-.mp-item[aria-selected='true'] {
+.mp-menu .mp-item[aria-selected='true'] {
   font-weight: 600;
 }
-.mp-item:focus-visible {
+.mp-menu .mp-item:focus-visible {
   outline: none;
   box-shadow: var(--focus, 0 0 0 2px rgba(127, 127, 127, 0.5));
 }
@@ -101,16 +101,16 @@
 .mp-item-hint {
   flex: 0 0 auto;
   font-size: 11.5px;
-  color: var(--label-3, #888);
+  color: var(--label-3);
 }
 .mp-note {
   margin: 4px 8px;
   font-size: 12px;
-  color: var(--label-3, #888);
+  color: var(--label-3);
 }
 
 /* A row the agent itself offered: the name, with its own description under it. */
-.mp-item-live {
+.mp-menu .mp-item-live {
   flex-direction: column;
   align-items: flex-start;
   justify-content: flex-start;
@@ -121,4 +121,33 @@
 }
 .mp-item-live .mp-item-hint {
   font-weight: 400;
+}
+
+/* Grouped by maker, the chosen model ticked. */
+.mp-group + .mp-group {
+  margin-top: 4px;
+}
+.mp-group-h {
+  padding: 8px 8px 3px;
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  color: var(--label-3);
+}
+.mp-menu .mp-item[aria-selected='true'] {
+  background: var(--fill-active, var(--fill-hover, rgba(127, 127, 127, 0.14)));
+}
+.mp-tick {
+  flex: 0 0 auto;
+  margin-left: auto;
+  color: var(--label, inherit);
+}
+.mp-item-live .mp-tick {
+  position: absolute;
+  right: 10px;
+  top: 9px;
+}
+.mp-menu .mp-item-live {
+  position: relative;
+  padding-right: 28px;
 }

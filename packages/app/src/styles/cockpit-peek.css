@@ -5,7 +5,7 @@
   left: var(--peek-left, 280px);
   top: var(--peek-top, 80px);
   width: 280px;
-  max-width: calc(100vw - 24px);
+  max-width: calc(calc(100vw / var(--ui-scale, 1)) - 24px);
   display: flex;
   flex-direction: column;
   gap: 8px;

@@ -62,7 +62,7 @@ const FOLDER: &str = "C:/work/app";
 const A_WHILE_MS: i64 = 120_000;
 
 fn meta(id: &str, model: Option<&str>, close: bool) -> HelperMeta {
-    HelperMeta { id: id.into(), name: format!("Helper {id}"), model: model.map(str::to_string), close_after_use: close, home: None }
+    HelperMeta { id: id.into(), name: format!("Helper {id}"), model: model.map(str::to_string), close_after_use: close, home: None, kind: Default::default() }
 }
 
 fn want(id: &str, agent: &str, model: Option<&str>, close: bool) -> HelperWant {
@@ -177,6 +177,17 @@ fn an_unused_helper_is_closed_after_the_idle_time_and_sleeps() {
 }
 
 #[test]
+fn with_never_close_the_idle_time_shuts_nothing_down() {
+    let host = Arc::new(Fake::default());
+    let pool = Pool::new(host.clone());
+    pool.set_policy(Policy { cap: 4, idle_ms: 20 * 60_000, helper_idle_ms: 5 * 60_000, recent_ms: 3_600_000, helpers: vec![want("a", "codex", Some("gpt-5"), false)], never_close: true, ..Policy::default() });
+    settle(&pool, &host, 0);
+    settle(&pool, &host, 60 * 60_000);
+    assert!(host.closed.lock().is_empty(), "nothing was closed");
+    assert_eq!(state(&pool, "a"), HelperState::Ready);
+}
+
+#[test]
 fn a_helper_taken_off_the_list_is_closed() {
     let (pool, host) = pool_one();
     settle(&pool, &host, 0);
@@ -212,18 +223,18 @@ fn a_task_from_its_home_agent_takes_its_own_helper_first() {
     mine.home = Some("pane-A".into());
     let (pool, host) = pool(vec![want("other", "codex", None, false), HelperWant::new(mine, "codex", &PathBuf::from(FOLDER), None)], 4);
     settle(&pool, &host, 0);
-    let claimed = pool.claim_helper_for(&HelperClaim { agent: "codex", folder: Path::new(FOLDER), account: None, model: None, caller: Some("pane-A"), name: None }, 1).unwrap();
+    let claimed = pool.claim_helper_for(&HelperClaim { agent: "codex", folder: Path::new(FOLDER), account: None, model: None, caller: Some("pane-A"), name: None, kind: None }, 1).unwrap();
     assert_eq!(claimed.meta.id, "mine");
-    let again = pool.claim_helper_for(&HelperClaim { agent: "codex", folder: Path::new(FOLDER), account: None, model: None, caller: Some("pane-A"), name: None }, 2).unwrap();
+    let again = pool.claim_helper_for(&HelperClaim { agent: "codex", folder: Path::new(FOLDER), account: None, model: None, caller: Some("pane-A"), name: None, kind: None }, 2).unwrap();
     assert_eq!(again.meta.id, "other", "then any free match");
-    assert!(pool.claim_helper_for(&HelperClaim { agent: "codex", folder: Path::new(FOLDER), account: None, model: None, caller: Some("pane-A"), name: None }, 3).is_none());
+    assert!(pool.claim_helper_for(&HelperClaim { agent: "codex", folder: Path::new(FOLDER), account: None, model: None, caller: Some("pane-A"), name: None, kind: None }, 3).is_none());
 }
 
 #[test]
 fn a_helper_can_be_asked_for_by_name() {
     let (pool, host) = pool(vec![want("a", "codex", None, false), want("b", "codex", None, false)], 4);
     settle(&pool, &host, 0);
-    let by_name = |name| pool.claim_helper_for(&HelperClaim { agent: "codex", folder: Path::new(FOLDER), account: None, model: None, caller: None, name: Some(name) }, 1);
+    let by_name = |name| pool.claim_helper_for(&HelperClaim { agent: "codex", folder: Path::new(FOLDER), account: None, model: None, caller: None, name: Some(name), kind: None }, 1);
     assert_eq!(by_name("helper B").unwrap().meta.id, "b");
     assert!(by_name("helper B").is_none(), "the named one is busy");
     assert!(by_name("nobody").is_none());
@@ -245,7 +256,7 @@ fn the_person_using_a_helper_ends_when_their_turn_is_over() {
 // ---- opening a standby as a chat, using it, taking it over, taking it back ---------------------------------------------------
 
 fn any_claim<'a>(caller: Option<&'a str>) -> HelperClaim<'a> {
-    HelperClaim { agent: "codex", folder: Path::new(FOLDER), account: None, model: None, caller, name: None }
+    HelperClaim { agent: "codex", folder: Path::new(FOLDER), account: None, model: None, caller, name: None, kind: None }
 }
 
 /// Opens helper `id` the way the app does: a chat around its waiting session (here: a pane named after the session).
@@ -311,7 +322,7 @@ fn a_task_that_names_no_model_takes_a_standby_of_its_agent_whatever_its_model_an
     mine.home = Some("pane-A".into());
     let (pool, host) = pool(vec![want("other", "codex", Some("o3"), false), HelperWant::new(mine, "codex", &PathBuf::from(FOLDER), None), want("claude-one", "claude", Some("opus"), false)], 6);
     settle(&pool, &host, 0);
-    let ask = |caller, model, now| pool.claim_helper_for(&HelperClaim { agent: "codex", folder: Path::new(FOLDER), account: None, model, caller, name: None }, now);
+    let ask = |caller, model, now| pool.claim_helper_for(&HelperClaim { agent: "codex", folder: Path::new(FOLDER), account: None, model, caller, name: None, kind: None }, now);
     assert_eq!(ask(Some("pane-A"), None, 1).unwrap().meta.id, "mine", "the caller's own standby first, on its own model");
     assert_eq!(ask(Some("pane-A"), None, 2).unwrap().meta.id, "other", "then the other standby, whatever its model");
     assert!(ask(Some("pane-A"), None, 3).is_none(), "another agent type is never taken");
@@ -322,7 +333,7 @@ fn a_task_that_names_no_model_takes_a_standby_of_its_agent_whatever_its_model_an
 fn a_task_that_names_a_model_takes_only_a_standby_with_that_model_or_none() {
     let (pool, host) = pool(vec![want("a", "codex", Some("gpt-5"), false), want("b", "codex", None, false)], 4);
     settle(&pool, &host, 0);
-    let ask = |model, now| pool.claim_helper_for(&HelperClaim { agent: "codex", folder: Path::new(FOLDER), account: None, model, caller: None, name: None }, now).map(|c| c.meta.id);
+    let ask = |model, now| pool.claim_helper_for(&HelperClaim { agent: "codex", folder: Path::new(FOLDER), account: None, model, caller: None, name: None, kind: None }, now).map(|c| c.meta.id);
     assert_eq!(ask(Some("o3"), 1).as_deref(), Some("b"), "a standby with no model takes any model");
     assert_eq!(ask(Some("o3"), 2), None, "the one with gpt-5 does not take o3");
     assert_eq!(ask(Some("gpt-5"), 3).as_deref(), Some("a"));
@@ -337,7 +348,7 @@ fn seat(id: &str, agent: &str, model: Option<&str>, home: &str) -> HelperWant {
 }
 
 fn ask<'a>(agent: &'a str, caller: Option<&'a str>, model: Option<&'a str>) -> HelperClaim<'a> {
-    HelperClaim { agent, folder: Path::new(FOLDER), account: None, model, caller, name: None }
+    HelperClaim { agent, folder: Path::new(FOLDER), account: None, model, caller, name: None, kind: None }
 }
 
 /// What the person counts: the seats, and how many sessions the pool holds.
@@ -671,7 +682,7 @@ fn a_task_in_a_folder_of_the_standbys_project_takes_the_standby() {
     host.chats.lock().insert("orch".into(), false);
     settle(&pool, &host, 0);
     fn inner(folder: &Path) -> HelperClaim<'_> {
-        HelperClaim { agent: "opencode", folder, account: None, model: None, caller: Some("orch"), name: None }
+        HelperClaim { agent: "opencode", folder, account: None, model: None, caller: Some("orch"), name: None, kind: None }
     }
     assert!(pool.claim_helper_for(&inner(Path::new("C:/elsewhere")), 1).is_none(), "another project");
     assert!(pool.claim_helper_for(&inner(Path::new("C:/work/app/packages/ui")), 2).is_some(), "a folder inside the standby's project");
@@ -694,7 +705,7 @@ fn a_seat_that_waits_for_memory_shows_that_stage_and_is_not_a_failure() {
 // ---- wake on claim ----------------------------------------------------------------------------------------------------
 
 fn claim_for<'a>(agent: &'a str, folder: &'a Path) -> HelperClaim<'a> {
-    HelperClaim { agent, folder, account: None, model: None, caller: None, name: None }
+    HelperClaim { agent, folder, account: None, model: None, caller: None, name: None, kind: None }
 }
 
 /// A seat that sat unused until it went to sleep: its program is closed and its slot is cold.
@@ -864,4 +875,86 @@ fn a_claim_that_woke_a_sleeping_seat_counts_as_a_use_and_leaves_no_skip_reason()
     let status = pool.helper_statuses_on(&today)["a"].clone();
     assert_eq!(status.used_today, 1);
     assert_eq!(status.skip_reason, None);
+}
+
+// ---- standby kinds (plan 2.5, 5.1): which standby a run may take and what the run becomes ----
+
+mod kinds {
+    use super::*;
+    use crate::agent_run_mode::{decide_started_as, StartedAgentKind, StartedAgentTypes, StartedAs, StartedRecord};
+
+    fn standby(id: &str, kind: StartedAs) -> HelperWant {
+        let mut m = meta(id, None, false);
+        m.kind = kind;
+        HelperWant::new(m, "codex", &PathBuf::from(FOLDER), None)
+    }
+
+    /// What `run_agent` does: decide the run, ask the pool for the kind the run may take, and let the standby's kind settle the run.
+    fn run_agent(wants: Vec<HelperWant>, setting: StartedAgentKind, asked: Option<StartedAs>, name: Option<&str>) -> (Option<String>, StartedRecord) {
+        let (pool, host) = pool(wants, 4);
+        settle(&pool, &host, 0);
+        let mut record = decide_started_as(StartedAgentTypes::Two, setting, asked);
+        let kind = record.standby_kind_wanted(name.is_some());
+        let claimed = pool.claim_helper_for(&HelperClaim { agent: "codex", folder: Path::new(FOLDER), account: None, model: None, caller: Some("pane-A"), name, kind }, 1);
+        if let Some(claimed) = &claimed {
+            record.took_standby(name.is_some(), claimed.meta.kind);
+        }
+        (claimed.map(|c| c.meta.id), record)
+    }
+
+    fn used(record: &StartedRecord) -> (&str, &str) {
+        (record.as_used.as_str(), record.as_reason.as_str())
+    }
+
+    #[test]
+    fn no_as_takes_a_spin_off_standby_and_the_run_is_a_spin_off() {
+        let (taken, record) = run_agent(vec![standby("sp", StartedAs::SpinOff)], StartedAgentKind::AgentChooses, None, None);
+        assert_eq!(taken.as_deref(), Some("sp"));
+        assert_eq!(used(&record), ("spin_off", "standby"));
+        assert_eq!(record.started_as.as_deref(), Some("spin_off"));
+    }
+
+    #[test]
+    fn no_as_takes_a_minion_standby_and_the_run_is_a_minion() {
+        let (taken, record) = run_agent(vec![standby("mi", StartedAs::Minion)], StartedAgentKind::AgentChooses, None, None);
+        assert_eq!(taken.as_deref(), Some("mi"));
+        assert_eq!(used(&record), ("minion", "standby"));
+    }
+
+    #[test]
+    fn as_minion_takes_only_a_minion_standby_or_none() {
+        let (taken, record) = run_agent(vec![standby("sp", StartedAs::SpinOff)], StartedAgentKind::AgentChooses, Some(StartedAs::Minion), None);
+        assert_eq!(taken, None, "a spin-off standby is left alone: a fresh minion starts");
+        assert_eq!(used(&record), ("minion", "requested"));
+        let (taken, record) = run_agent(vec![standby("sp", StartedAs::SpinOff), standby("mi", StartedAs::Minion)], StartedAgentKind::AgentChooses, Some(StartedAs::Minion), None);
+        assert_eq!(taken.as_deref(), Some("mi"));
+        assert_eq!(record.started_as.as_deref(), Some("minion"));
+        // The person's setting forces the same rule.
+        let (taken, _) = run_agent(vec![standby("sp", StartedAs::SpinOff)], StartedAgentKind::Minion, None, None);
+        assert_eq!(taken, None);
+    }
+
+    #[test]
+    fn as_spin_off_takes_only_a_spin_off_standby_or_none() {
+        let (taken, record) = run_agent(vec![standby("mi", StartedAs::Minion)], StartedAgentKind::AgentChooses, Some(StartedAs::SpinOff), None);
+        assert_eq!(taken, None, "a minion standby is left alone: a fresh spin-off starts");
+        assert_eq!(used(&record), ("spin_off", "requested"));
+        let (taken, record) = run_agent(vec![standby("mi", StartedAs::Minion), standby("sp", StartedAs::SpinOff)], StartedAgentKind::AgentChooses, Some(StartedAs::SpinOff), None);
+        assert_eq!(taken.as_deref(), Some("sp"));
+        assert_eq!(record.started_as.as_deref(), Some("spin_off"));
+        let (taken, _) = run_agent(vec![standby("mi", StartedAs::Minion)], StartedAgentKind::SpinOff, None, None);
+        assert_eq!(taken, None, "a forced Spin-off setting takes only spin-off standbys");
+    }
+
+    #[test]
+    fn a_named_standby_wins_whatever_its_kind_and_its_kind_wins() {
+        let wants = || vec![standby("sp", StartedAs::SpinOff), standby("mi", StartedAs::Minion)];
+        // Helper names are "Helper <id>" in this rig.
+        let (taken, record) = run_agent(wants(), StartedAgentKind::AgentChooses, Some(StartedAs::Minion), Some("Helper sp"));
+        assert_eq!(taken.as_deref(), Some("sp"));
+        assert_eq!(used(&record), ("spin_off", "standby"));
+        let (taken, record) = run_agent(wants(), StartedAgentKind::AgentChooses, Some(StartedAs::SpinOff), Some("Helper mi"));
+        assert_eq!(taken.as_deref(), Some("mi"));
+        assert_eq!(used(&record), ("minion", "standby"));
+    }
 }

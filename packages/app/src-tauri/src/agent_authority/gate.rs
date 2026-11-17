@@ -61,9 +61,11 @@ fn pending(ask: &Ask, id: &str) -> OperationError {
         Action::TakeOver => format!("control {}", ask.target),
         Action::AnswerPrompt => format!("answer a question in {}", ask.target),
         Action::ConfigChange => format!("change {}", ask.target),
+        Action::BackgroundCommand => format!("run {} in the background", ask.target),
     };
     let (why, instead) = match ask.action {
         Action::ConfigChange => ("a command from an agent window may not change the app by itself", ""),
+        Action::BackgroundCommand => ("a command that keeps running needs the person's yes (once, or for this whole chat)", ""),
         _ => ("that pane was not started by you", " If you do not need that pane, start your own agent with run_agent instead."),
     };
     let mut error = OperationError::new(
@@ -167,6 +169,10 @@ pub(crate) fn check_take_over_at(
         detail,
     );
     Ok(())
+}
+
+pub fn agent_label_of(agent_type: &str) -> String {
+    agent_label(agent_type)
 }
 
 pub(super) fn questions_now() -> u64 {

@@ -99,6 +99,8 @@ export interface HarnessScenario {
   canary?: CanaryStatus;
   /** Settings: tab id passed as `?tab=`. */
   settingsTab?: string;
+  /** Workflows (Labs `workflows_enabled`, with Crews): one workflow exists, and the mocked crew and workflow commands answer. */
+  workflows?: boolean;
   /** User accounts the mocked backend reports (Settings > Agents > Accounts, the "+" menu). */
   accounts?: Account[];
   /** Cockpit: add an agent that has no pane of its own (only other agents can run it) to the "+" menu. */

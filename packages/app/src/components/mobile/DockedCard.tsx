@@ -1,15 +1,17 @@
 // The open agent's own approval, docked above its terminal (design 2.1): one card at a time, and
 // under it how many other things wait and the next one. The terminal dims behind it. A card of another
 // pane is never swapped in by itself: "Next" is a tap.
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useContext, useEffect, useMemo, useState } from 'react';
 import { useT } from '../../i18n';
 import type { AttentionSnapshot } from '../../lib/attention';
-import { COPY } from '../../lib/attention-copy';
+import { COPY, isRiskyAsk } from '../../lib/attention-copy';
 import type { BridgeClient } from '../../lib/bridge-types';
 import { helperItems } from '../../lib/helper-questions';
 import { PROMPT_KINDS, dockFor } from '../../lib/needs-you-queue';
 import { ApprovalCard } from './ApprovalCard';
+import { PhoneDockContext } from './PhoneBottomRegion';
 import { PhoneAskCard } from './PhoneAskCard';
+import { RiskyAskRow } from './NeedsYouList';
 import '../../styles/mobile-approval.css';
 
 export function DockedCard({
@@ -46,6 +48,7 @@ export function DockedCard({
   inChat?: boolean;
 }) {
   const t = useT();
+  const region = useContext(PhoneDockContext);
   const [now, setNow] = useState(() => Date.now());
   const [own, setOwn] = useState<ReadonlyMap<string, number>>(() => new Map());
   const markOwn = useCallback((id: string) => setOwn((prev) => (prev.has(id) ? prev : new Map(prev).set(id, Date.now()))), []);
@@ -54,13 +57,16 @@ export function DockedCard({
     return () => window.clearInterval(timer);
   }, []);
 
-  const helperCards = helperItems(snapshot.items, helperPaneIds, (item) => PROMPT_KINDS.includes(item.kind));
-  const { current, more, next } = dockFor(snapshot, paneId, own, now, new Set(helperCards.map((i) => i.id)));
+  // A card answered in the chat has left the dock (the chat keeps one line about it).
+  const visible = useMemo(() => (region.retired.size === 0 ? snapshot : { ...snapshot, items: snapshot.items.filter((i) => !region.retired.has(i.id)) }), [snapshot, region.retired]);
+  const helperCards = helperItems(visible.items, helperPaneIds, (item) => PROMPT_KINDS.includes(item.kind));
+  const { current, more, next } = dockFor(visible, paneId, own, now, new Set(helperCards.map((i) => i.id)));
   if (!current && more === 0 && helperCards.length === 0) return null;
   const nextHeading = next?.pane?.heading ?? next?.title;
   return (
     <div className="ph-dock" data-testid="docked-card">
-      {current && inChat && (
+      {current && inChat && isRiskyAsk(current) && <RiskyAskRow key={current.id} item={current} compact onOpen={(i) => onOpenItem(i.id)} />}
+      {current && inChat && !isRiskyAsk(current) && (
         <PhoneAskCard
           key={current.id}
           item={current}
@@ -68,7 +74,13 @@ export function DockedCard({
           canAnswer={canAnswer}
           autoFocus={autoFocus}
           onOpenPane={onOpenPane}
-          onAnswered={() => markOwn(current.id)}
+          onAnswered={(info) => {
+            markOwn(current.id);
+            region.report({
+              id: current.id,
+              text: t(info.allowed ? 'phone.dock.youAllowed' : 'phone.dock.youDeclined', { what: info.title }),
+            });
+          }}
           onRefresh={onRefresh}
         />
       )}

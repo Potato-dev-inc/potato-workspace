@@ -24,8 +24,9 @@ use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicBool, AtomicU32, AtomicU64, Ordering};
 use std::sync::{mpsc, Arc};
 use std::time::Duration;
-use tauri::webview::NewWindowResponse;
-use tauri::{AppHandle, Emitter, Manager, PhysicalPosition, PhysicalSize, WebviewUrl, WebviewWindow, WebviewWindowBuilder, WindowEvent};
+use std::collections::HashMap;
+use tauri::webview::{NewWindowResponse, WebviewBuilder};
+use tauri::{AppHandle, Emitter, LogicalPosition, LogicalSize, Manager, PhysicalPosition, PhysicalSize, Webview, WebviewUrl, WebviewWindow, WebviewWindowBuilder, WindowEvent};
 
 /// Every preview window's label starts with this. No capability may match it (pinned by a test).
 pub const PREVIEW_PREFIX: &str = "preview-";
@@ -52,7 +53,7 @@ const HEIGHT_SHARE: f64 = 0.85;
 /// windows, and the one the person opens, go where `browser::guard` allows (public pages and local dev servers) and
 /// carry the browser bar.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-enum Kind {
+pub(crate) enum Kind {
     Point,
     Agent,
     Person,
@@ -89,9 +90,21 @@ struct Preview {
     armed_until: Arc<AtomicU64>,
     gone: Arc<AtomicBool>,
     warned: Arc<AtomicBool>,
+    kind: Kind,
+    /// How many views this preview has had (a pop out or a dock back makes a new one, so its label needs a new number).
+    views: Arc<AtomicU32>,
+}
+
+/// Where one preview's page lives now: the label of its webview, and whether it is the docked browser's child webview
+/// (inside the cockpit window) or the page of a window of its own.
+#[derive(Clone)]
+struct ViewRef {
+    label: String,
+    docked: bool,
 }
 
 static PREVIEWS: Lazy<Mutex<Vec<Preview>>> = Lazy::new(|| Mutex::new(Vec::new()));
+static VIEWS: Lazy<Mutex<HashMap<String, ViewRef>>> = Lazy::new(|| Mutex::new(HashMap::new()));
 static NEXT_PREVIEW: AtomicU32 = AtomicU32::new(1);
 
 // ---------------------------------------------------------------- pure helpers
@@ -241,26 +254,53 @@ pub fn open(app: &AppHandle, pane_id: &str, port: u16, armed: bool) -> Result<Pr
     if let Some(info) = reuse(app, &origin, &url, armed, Show::Focus, false) {
         return Ok(info);
     }
-    create(app, url, origin, pane.id.clone(), pane.cwd.clone(), armed, Show::Focus, Kind::Point)
+    create(app, url, origin, pane.id.clone(), pane.cwd.clone(), armed, Show::Focus, Kind::Point, None)
+}
+
+/// The webview of an open preview: the page of its window, or the docked browser's child webview.
+pub(crate) fn view_of(app: &AppHandle, preview_id: &str) -> Option<Webview> {
+    let label = VIEWS.lock().get(preview_id)?.label.clone();
+    app.get_webview(&label)
+}
+
+/// Whether this preview's page is in the dock now.
+pub(crate) fn is_docked(preview_id: &str) -> bool {
+    VIEWS.lock().get(preview_id).is_some_and(|v| v.docked)
+}
+
+/// The physical screen box of a webview: where its top-left corner is and how big it is. A window's page and the docked
+/// browser's child webview are read the same way.
+pub(crate) fn view_box(view: &Webview) -> Option<(i32, i32, u32, u32)> {
+    let inner = view.window().inner_position().ok()?;
+    let at = view.position().unwrap_or(PhysicalPosition::new(0, 0));
+    let size = view.size().ok()?;
+    Some((inner.x + at.x, inner.y + at.y, size.width, size.height))
 }
 
 /// The agent browser's window: the preview window of `origin` if there is one (it goes to `url`), else a new one with
-/// no dev server pane behind it. The caller has checked `url` with `browser::guard::check_url`.
-pub fn open_for_browser(app: &AppHandle, url: &str, origin: PreviewOrigin, show: Show) -> Result<PreviewInfo, String> {
+/// no dev server pane behind it. With the Labs switch "Browser in the side panel" on, a new page goes in the dock
+/// (`owner` is the chat that asked, so the pane opens there) and falls back to a window when the dock is not there.
+/// The caller has checked `url` with `browser::guard::check_url`.
+pub fn open_for_browser(app: &AppHandle, url: &str, origin: PreviewOrigin, show: Show, owner: Option<String>) -> Result<PreviewInfo, String> {
     if let Some(info) = reuse(app, &origin, url, false, show, true) {
         return Ok(info);
     }
     // The person's own browser window (the globe button) is the one browser: an agent joins it.
     if let Some(rec) = PREVIEWS.lock().iter().find(|p| p.shared && !p.gone.load(Ordering::Relaxed)).cloned() {
-        if let Some(window) = app.get_webview_window(&rec.id) {
-            if matches!(show, Show::Beside) {
-                let _ = window.show();
+        if let Some(view) = view_of(app, &rec.id) {
+            if is_docked(&rec.id) {
+                crate::browser::dock::activate(app, &rec.id, owner.as_deref());
+            } else if matches!(show, Show::Beside) {
+                if let Some(window) = app.get_webview_window(view.label()) {
+                    let _ = window.show();
+                }
             }
             return Ok(PreviewInfo { preview_id: rec.id, url: url.to_string(), title: preview_title(&origin) });
         }
     }
+    let host = crate::browser::dock::host_for_open(app, owner.as_deref());
     // The page is loaded by the caller (DevTools `Page.navigate`), so the window starts empty.
-    create(app, "about:blank".to_string(), origin, String::new(), String::new(), false, show, Kind::Agent)
+    create(app, "about:blank".to_string(), origin, String::new(), String::new(), false, show, Kind::Agent, host)
 }
 
 /// What the person's browser window opens: the address it was given, else the app's own start page (never an empty page).
@@ -270,14 +310,19 @@ pub(crate) fn person_first_address(url: Option<&str>) -> String {
 
 /// The browser window of the person: the globe button opens it (or brings it forward). `url` is an address the caller
 /// has checked with `browser::guard::check_url`; without one the window starts empty, with its address box ready.
+/// With the Labs switch "Browser in the side panel" on, it is a tab of the dock instead.
 pub fn open_person_browser(app: &AppHandle, url: Option<&str>) -> Result<PreviewInfo, String> {
     let existing = PREVIEWS.lock().iter().find(|p| p.shared && !p.gone.load(Ordering::Relaxed)).cloned();
     if let Some(rec) = existing {
-        if let Some(window) = app.get_webview_window(&rec.id) {
+        if let Some(view) = view_of(app, &rec.id) {
             if let Some(target) = url.and_then(|u| tauri::Url::parse(u).ok()) {
-                let _ = window.navigate(target);
+                let _ = view.navigate(target);
             }
-            focus(&window);
+            if is_docked(&rec.id) {
+                crate::browser::dock::activate(app, &rec.id, None);
+            } else if let Some(window) = app.get_webview_window(view.label()) {
+                focus(&window);
+            }
             return Ok(PreviewInfo { preview_id: rec.id, url: url.unwrap_or("").to_string(), title: "Browser".to_string() });
         }
     }
@@ -285,7 +330,15 @@ pub fn open_person_browser(app: &AppHandle, url: Option<&str>) -> Result<Preview
     // Without an address the window opens on the app's own start page: WebView2 runs no page script on `about:blank`,
     // so the browser bar (an injected script) never drew there and the window was empty.
     let first = person_first_address(url);
-    create(app, first, origin, String::new(), String::new(), false, Show::Focus, Kind::Person)
+    let host = crate::browser::dock::host_for_open(app, None);
+    create(app, first, origin, String::new(), String::new(), false, Show::Focus, Kind::Person, host)
+}
+
+/// A new tab in the dock, on the start page (the plus of the browser pane). The pane must be showing.
+pub fn open_dock_tab(app: &AppHandle) -> Result<PreviewInfo, String> {
+    let host = crate::browser::dock::host_for_open(app, None).ok_or("The browser pane is not open.")?;
+    let origin = PreviewOrigin { scheme: "about".to_string(), host: "blank".to_string(), port: 0 };
+    create(app, person_first_address(None), origin, String::new(), String::new(), false, Show::Hidden, Kind::Person, Some(host))
 }
 
 /// The id of the window the person opened, if it is open.
@@ -293,31 +346,176 @@ pub fn shared_window_id() -> Option<String> {
     PREVIEWS.lock().iter().find(|p| p.shared && !p.gone.load(Ordering::Relaxed)).map(|p| p.id.clone())
 }
 
-/// The open window of `origin`, brought forward as `show` says. `go` leaves the navigation to the caller.
+/// The open page of `origin`, brought forward as `show` says. `go` leaves the navigation to the caller.
 fn reuse(app: &AppHandle, origin: &PreviewOrigin, url: &str, armed: bool, show: Show, go: bool) -> Option<PreviewInfo> {
     let rec = PREVIEWS.lock().iter().find(|p| p.origin == *origin && !p.gone.load(Ordering::Relaxed)).cloned()?;
-    let window = app.get_webview_window(&rec.id)?;
+    let view = view_of(app, &rec.id)?;
     // `go`: the agent browser goes there itself (through DevTools, so it knows when the page has loaded).
-    if !go && !window.url().map(|u| origin.matches(u.as_str())).unwrap_or(false) {
+    if !go && !view.url().map(|u| origin.matches(u.as_str())).unwrap_or(false) {
         if let Ok(target) = tauri::Url::parse(url) {
-            let _ = window.navigate(target);
+            let _ = view.navigate(target);
         }
     }
-    match show {
-        Show::Focus => focus(&window),
-        Show::Beside => {
-            let _ = window.show();
+    if is_docked(&rec.id) {
+        crate::browser::dock::activate(app, &rec.id, None);
+    } else if let Some(window) = app.get_webview_window(view.label()) {
+        match show {
+            Show::Focus => focus(&window),
+            Show::Beside => {
+                let _ = window.show();
+            }
+            Show::Hidden => {}
         }
-        Show::Hidden => {}
     }
     if armed {
-        arm(&rec, &window);
+        arm(&rec, &view);
     }
     Some(PreviewInfo { preview_id: rec.id, url: url.to_string(), title: preview_title(origin) })
 }
 
+/// What `build_view` made: a window of its own, or a child webview inside the cockpit window.
+enum Built {
+    Window(WebviewWindow),
+    Child(Webview),
+}
+
+/// The label of a preview's next view. The first window is `preview-3`; later views (a pop out, a dock back) carry a
+/// number, because the old view may still be closing. All of them start with `PREVIEW_PREFIX`, so no capability matches.
+fn next_label(rec: &Preview, docked: bool) -> String {
+    let n = rec.views.fetch_add(1, Ordering::Relaxed);
+    match (n, docked) {
+        (0, false) => rec.id.clone(),
+        (_, true) => format!("{}-d{n}", rec.id),
+        (_, false) => format!("{}-g{n}", rec.id),
+    }
+}
+
+/// Makes the page of `rec`: a window of its own, or (with `dock`) a child webview over the dock's page rectangle.
+/// Both get the same guards and scripts. A docked page has no browser bar of its own (the pane draws it), and its
+/// mark-up bar starts at the top of the page.
+fn build_view(app: &AppHandle, rec: &Preview, url: &str, label: &str, dock: Option<&crate::browser::dock::DockHost>) -> Result<Built, String> {
+    let parsed = tauri::Url::parse(url).map_err(|_| origin::Refusal::BadUrl.message().to_string())?;
+    let (kind, docked) = (rec.kind, dock.is_some());
+    let title = if kind == Kind::Person { "Browser".to_string() } else { preview_title(&rec.origin) };
+    let dev_port = app.config().build.dev_url.as_ref().and_then(|u| u.port());
+    let knob = std::env::var("PM_PREVIEW_CDP_PORT").ok().and_then(|v| v.trim().parse::<u16>().ok());
+    let process_args = std::env::var("WEBVIEW2_ADDITIONAL_BROWSER_ARGUMENTS").ok();
+    let cdp = preview_cdp(knob, process_args.as_deref());
+    let markup = markup_on(app);
+    let (nav_app, nav_origin, nav_id) = (app.clone(), rec.origin.clone(), rec.id.clone());
+    let (win_app, win_id) = (app.clone(), rec.id.clone());
+    macro_rules! configure {
+        ($builder:expr, $isolated:expr) => {{
+            let mut b = $builder
+                .initialization_script(picker_script(&rec.origin, &rec.key))
+                // The agent bar: only drawn while an agent uses the page (`crate::browser::bar`).
+                .initialization_script(crate::browser::bar::script(&rec.bar_key))
+                .on_navigation({
+                    let (nav_app, nav_origin, nav_id) = (nav_app.clone(), nav_origin.clone(), nav_id.clone());
+                    move |next| {
+                        let verdict = if kind == Kind::Point {
+                            origin::nav(&nav_origin, next.as_str())
+                        } else if crate::browser::guard::nav_allowed(next.as_str(), dev_port) {
+                            // Every navigation, redirects too, is judged again: a public name that now points at the router is refused.
+                            Nav::Allow
+                        } else {
+                            Nav::Block { host: next.host_str().unwrap_or("an unknown address").to_string() }
+                        };
+                        match verdict {
+                            Nav::Allow => true,
+                            Nav::Block { host } => {
+                                note_blocked(&nav_app, &nav_id, &host, next.as_str());
+                                false
+                            }
+                        }
+                    }
+                })
+                .on_new_window({
+                    let (win_app, win_id) = (win_app.clone(), win_id.clone());
+                    move |next, _features| {
+                        let host = next.host_str().unwrap_or("an unknown address").to_string();
+                        note_blocked(&win_app, &win_id, &host, next.as_str());
+                        NewWindowResponse::Deny
+                    }
+                })
+                .on_download(|_webview, _event| false);
+            if $isolated {
+                // Its own cookies and storage, apart from Potato Workspace's pages (S13).
+                b = b.data_directory(crate::app_paths::app_data_dir().join("preview-web"));
+            }
+            if kind != Kind::Point {
+                if !docked {
+                    b = b.initialization_script(crate::browser::chrome::script(&rec.chrome_key));
+                }
+                // The mark-up bar (Labs `markup_bar_enabled`): drawn only when the person opens it, in the top document.
+                if markup {
+                    b = b.initialization_script(crate::markup::bar::script(&rec.markup_key, if docked { 0 } else { crate::browser::chrome::HEIGHT }));
+                }
+            }
+            match cdp {
+                PreviewCdp::Off => {}
+                // Live checks only. Setting browser arguments replaces wry's defaults, so they are repeated.
+                PreviewCdp::Own(port) => {
+                    b = b.additional_browser_args(&format!("--remote-debugging-port={port} --disable-features=msWebOOUI,msPdfOOUI,msSmartScreenProtection"));
+                }
+                PreviewCdp::Shared(port) => tracing::warn!(
+                    "point: PM_PREVIEW_CDP_PORT is ignored. WEBVIEW2_ADDITIONAL_BROWSER_ARGUMENTS already sets \
+                     --remote-debugging-port={port}, and WebView2 applies that to every window, so the preview is on port {port}."
+                ),
+            }
+            b
+        }};
+    }
+    match dock {
+        Some(host) => {
+            let (x, y, w, h) = crate::browser::dock::child_bounds(Some(host.rect)).unwrap_or((0.0, 0.0, 400.0, 400.0));
+            let attempt = |isolated: bool| {
+                let builder = if isolated {
+                    configure!(WebviewBuilder::new(label, WebviewUrl::External(parsed.clone())), true)
+                } else {
+                    configure!(WebviewBuilder::new(label, WebviewUrl::External(parsed.clone())), false)
+                };
+                host.window.add_child(builder, LogicalPosition::new(x, y), LogicalSize::new(w, h))
+            };
+            // A child webview with its own data folder is what the page should have. If WebView2 will not share the
+            // window's process that way, the page still opens, in the app's folder (it has no capability either way).
+            match attempt(true) {
+                Ok(view) => Ok(Built::Child(view)),
+                Err(first) => {
+                    tracing::warn!("dock browser: a child webview with its own data folder did not open ({first}); using the app's folder");
+                    attempt(false).map(Built::Child).map_err(|e| format!("The docked browser did not open: {e}"))
+                }
+            }
+        }
+        None => {
+            let builder = configure!(WebviewWindowBuilder::new(app, label, WebviewUrl::External(parsed)).title(&title).visible(false), true);
+            builder.build().map(Built::Window).map_err(|e| format!("The preview window did not open: {e}"))
+        }
+    }
+}
+
+/// A window of a preview ends the preview, unless the page has moved to a newer view (a dock back closes the old window).
+fn watch_window(window: &WebviewWindow, rec: &Preview, label: &str) {
+    let (gone, id, label) = (rec.gone.clone(), rec.id.clone(), label.to_string());
+    let app = window.app_handle().clone();
+    window.on_window_event(move |event| {
+        if matches!(event, WindowEvent::Destroyed) {
+            let current = VIEWS.lock().get(&id).is_some_and(|v| v.label == label);
+            if current {
+                gone.store(true, Ordering::Relaxed);
+                PREVIEWS.lock().retain(|p| p.id != id);
+                VIEWS.lock().remove(&id);
+                // A popped-out tab closed with its X: the pane forgets it (no stale "Bring it back"), and with no tab
+                // left it opens a fresh start page by itself.
+                let app = app.clone();
+                std::thread::spawn(move || crate::browser::dock::changed(&app));
+            }
+        }
+    });
+}
+
 #[allow(clippy::too_many_arguments)]
-fn create(app: &AppHandle, url: String, origin: PreviewOrigin, opener: String, cwd: String, armed: bool, show: Show, kind: Kind) -> Result<PreviewInfo, String> {
+fn create(app: &AppHandle, url: String, origin: PreviewOrigin, opener: String, cwd: String, armed: bool, show: Show, kind: Kind, dock: Option<crate::browser::dock::DockHost>) -> Result<PreviewInfo, String> {
     let title = if kind == Kind::Person { "Browser".to_string() } else { preview_title(&origin) };
     let chrome_key = if kind == Kind::Point { String::new() } else { new_key() };
     let markup_key = if kind == Kind::Point { String::new() } else { new_key() };
@@ -326,67 +524,6 @@ fn create(app: &AppHandle, url: String, origin: PreviewOrigin, opener: String, c
     let id = preview_label(n);
     let key = new_key();
     let bar_key = new_key();
-    let parsed = tauri::Url::parse(&url).map_err(|_| origin::Refusal::BadUrl.message().to_string())?;
-
-    let nav_app = app.clone();
-    let nav_origin = origin.clone();
-    let nav_id = id.clone();
-    let win_app = app.clone();
-    let win_id = id.clone();
-    let mut builder = WebviewWindowBuilder::new(app, &id, WebviewUrl::External(parsed))
-        .title(&title)
-        .visible(false)
-        .initialization_script(picker_script(&origin, &key))
-        // The agent bar: only drawn while an agent uses the page (`crate::browser::bar`).
-        .initialization_script(crate::browser::bar::script(&bar_key))
-        // Its own cookies and storage, apart from Potato Workspace's pages (S13).
-        .data_directory(crate::app_paths::app_data_dir().join("preview-web"))
-        .on_navigation(move |next| {
-            let verdict = if kind == Kind::Point {
-                origin::nav(&nav_origin, next.as_str())
-            } else if crate::browser::guard::nav_allowed(next.as_str(), dev_port) {
-                // Every navigation, redirects too, is judged again: a public name that now points at the router is refused.
-                Nav::Allow
-            } else {
-                Nav::Block { host: next.host_str().unwrap_or("an unknown address").to_string() }
-            };
-            match verdict {
-                Nav::Allow => true,
-                Nav::Block { host } => {
-                    note_blocked(&nav_app, &nav_id, &host, next.as_str());
-                    false
-                }
-            }
-        })
-        .on_new_window(move |next, _features| {
-            let host = next.host_str().unwrap_or("an unknown address").to_string();
-            note_blocked(&win_app, &win_id, &host, next.as_str());
-            NewWindowResponse::Deny
-        })
-        .on_download(|_webview, _event| false);
-    if kind != Kind::Point {
-        builder = builder.initialization_script(crate::browser::chrome::script(&chrome_key));
-        // The mark-up bar (Labs `markup_bar_enabled`): drawn only when the person opens it, in the top document.
-        if markup_on(app) {
-            builder = builder.initialization_script(crate::markup::bar::script(&markup_key, crate::browser::chrome::HEIGHT));
-        }
-    }
-    let knob = std::env::var("PM_PREVIEW_CDP_PORT").ok().and_then(|v| v.trim().parse::<u16>().ok());
-    let process_args = std::env::var("WEBVIEW2_ADDITIONAL_BROWSER_ARGUMENTS").ok();
-    match preview_cdp(knob, process_args.as_deref()) {
-        PreviewCdp::Off => {}
-        // Live checks only. Setting browser arguments replaces wry's defaults, so they are repeated.
-        PreviewCdp::Own(port) => {
-            builder = builder.additional_browser_args(&format!(
-                "--remote-debugging-port={port} --disable-features=msWebOOUI,msPdfOOUI,msSmartScreenProtection"
-            ));
-        }
-        PreviewCdp::Shared(port) => tracing::warn!(
-            "point: PM_PREVIEW_CDP_PORT is ignored. WEBVIEW2_ADDITIONAL_BROWSER_ARGUMENTS already sets \
-             --remote-debugging-port={port}, and WebView2 applies that to every window, so the preview is on port {port}."
-        ),
-    }
-    let window = builder.build().map_err(|e| format!("The preview window did not open: {e}"))?;
 
     let rec = Preview {
         id: id.clone(),
@@ -402,32 +539,39 @@ fn create(app: &AppHandle, url: String, origin: PreviewOrigin, opener: String, c
         armed_until: Arc::new(AtomicU64::new(0)),
         gone: Arc::new(AtomicBool::new(false)),
         warned: Arc::new(AtomicBool::new(false)),
+        kind,
+        views: Arc::new(AtomicU32::new(0)),
     };
+    let docked = dock.is_some();
+    let label = next_label(&rec, docked);
+    let built = build_view(app, &rec, &url, &label, dock.as_ref())?;
+    VIEWS.lock().insert(id.clone(), ViewRef { label: label.clone(), docked });
     let slot = {
         let mut previews = PREVIEWS.lock();
         previews.push(rec.clone());
         previews.len() - 1
     };
-    let (gone, closed_id) = (rec.gone.clone(), id.clone());
-    window.on_window_event(move |event| {
-        if matches!(event, WindowEvent::Destroyed) {
-            gone.store(true, Ordering::Relaxed);
-            PREVIEWS.lock().retain(|p| p.id != closed_id);
+    match &built {
+        Built::Window(window) => {
+            watch_window(window, &rec, &label);
+            match show {
+                Show::Focus => {
+                    place(app, window, slot);
+                    focus(window);
+                }
+                Show::Beside => {
+                    place(app, window, slot);
+                    let _ = window.show();
+                }
+                Show::Hidden => {}
+            }
         }
-    });
-    match show {
-        Show::Focus => {
-            place(app, &window, slot);
-            focus(&window);
-        }
-        Show::Beside => {
-            place(app, &window, slot);
-            let _ = window.show();
-        }
-        Show::Hidden => {}
+        Built::Child(_) => crate::browser::dock::added(app, &id),
     }
     if armed {
-        arm(&rec, &window);
+        if let Some(view) = view_of(app, &id) {
+            arm(&rec, &view);
+        }
     }
     let pull_app = app.clone();
     let pull_rec = rec.clone();
@@ -439,11 +583,74 @@ fn create(app: &AppHandle, url: String, origin: PreviewOrigin, opener: String, c
     Ok(PreviewInfo { preview_id: id, url, title })
 }
 
+/// Where a page goes when it changes place.
+pub(crate) enum Move {
+    ToDock(crate::browser::dock::DockHost),
+    ToWindow,
+}
+
+/// Pop out or dock back. Windows hangs the app when a WebView2 that has had the mouse or keyboard focus is
+/// re-parented, so the view is not moved: a new view is made at the same address in the new place and the old one is
+/// closed (the lab ran 150 cycles with no hang). Cookies and local storage stay (same data folder); the scroll position
+/// and unsent form text of the page do not. The tools and the bars follow the new view (`browser::live::rebind`).
+pub(crate) fn move_view(app: &AppHandle, preview_id: &str, to: Move) -> Result<(), String> {
+    let rec = PREVIEWS.lock().iter().find(|p| p.id == preview_id && !p.gone.load(Ordering::Relaxed)).cloned().ok_or("That page is not open any more.")?;
+    let old = view_of(app, preview_id).ok_or("That page is not open any more.")?;
+    let was = VIEWS.lock().get(preview_id).cloned().ok_or("That page is not open any more.")?;
+    let dock = match to {
+        Move::ToDock(host) => Some(host),
+        Move::ToWindow => None,
+    };
+    let docked = dock.is_some();
+    if docked == was.docked {
+        return Ok(());
+    }
+    let url = old.url().map_err(|e| e.to_string())?.to_string();
+    let label = next_label(&rec, docked);
+    let built = build_view(app, &rec, &url, &label, dock.as_ref())?;
+    VIEWS.lock().insert(preview_id.to_string(), ViewRef { label: label.clone(), docked });
+    if let Built::Window(window) = &built {
+        watch_window(window, &rec, &label);
+        let slot = PREVIEWS.lock().iter().position(|p| p.id == preview_id).unwrap_or(0);
+        place_near(app, window, slot, Some(old.window()));
+        let _ = window.show();
+    }
+    if was.docked {
+        let _ = old.close();
+    } else if let Some(window) = app.get_webview_window(&was.label) {
+        let _ = window.destroy();
+    }
+    crate::browser::live::rebind(app, preview_id);
+    crate::browser::dock::changed(app);
+    tracing::info!(preview = preview_id, docked, "browser: the page moved to a new view");
+    Ok(())
+}
+
+/// Ends one preview (the x of a tab): its page closes and the tools forget it.
+pub(crate) fn close_preview(app: &AppHandle, preview_id: &str) {
+    let rec = PREVIEWS.lock().iter().find(|p| p.id == preview_id).cloned();
+    if let Some(rec) = &rec {
+        rec.gone.store(true, Ordering::Relaxed);
+    }
+    PREVIEWS.lock().retain(|p| p.id != preview_id);
+    let was = VIEWS.lock().remove(preview_id);
+    if let Some(was) = was {
+        if was.docked {
+            if let Some(view) = app.get_webview(&was.label) {
+                let _ = view.close();
+            }
+        } else if let Some(window) = app.get_webview_window(&was.label) {
+            let _ = window.destroy();
+        }
+    }
+    crate::browser::dock::changed(app);
+}
+
 /// Arms Point in an open preview window (the "Point" button on the agent bar). False when the window is gone.
 pub fn arm_preview(app: &AppHandle, preview_id: &str) -> bool {
     let Some(rec) = PREVIEWS.lock().iter().find(|p| p.id == preview_id && !p.gone.load(Ordering::Relaxed)).cloned() else { return false };
-    let Some(window) = app.get_webview_window(&rec.id) else { return false };
-    arm(&rec, &window);
+    let Some(view) = view_of(app, &rec.id) else { return false };
+    arm(&rec, &view);
     true
 }
 
@@ -456,10 +663,10 @@ pub struct BrowserWindow {
 }
 
 /// The open preview window of `preview_id`, if it is still there.
-pub fn browser_window(app: &AppHandle, preview_id: &str) -> Option<(BrowserWindow, WebviewWindow)> {
+pub fn browser_window(app: &AppHandle, preview_id: &str) -> Option<(BrowserWindow, Webview)> {
     let rec = PREVIEWS.lock().iter().find(|p| p.id == preview_id && !p.gone.load(Ordering::Relaxed)).cloned()?;
-    let window = app.get_webview_window(&rec.id)?;
-    Some((BrowserWindow { preview_id: rec.id, bar_key: rec.bar_key, markup_key: rec.markup_key }, window))
+    let view = view_of(app, &rec.id)?;
+    Some((BrowserWindow { preview_id: rec.id, bar_key: rec.bar_key, markup_key: rec.markup_key }, view))
 }
 
 /// The URL to open for `port` of this pane, and its checked origin.
@@ -469,7 +676,7 @@ fn resolve(app: &AppHandle, pane: &PaneInfo, port: u16) -> Result<(String, Previ
     let job_ports: Vec<u16> = if previews.iter().any(|p| p.port == port) {
         Vec::new()
     } else {
-        let refs = [crate::pane_jobs::PaneRef { id: pane.id.clone(), agent_type: pane.agent_type.clone(), pid: pane.pid }];
+        let refs = [crate::pane_jobs::PaneRef { id: pane.id.clone(), agent_type: pane.agent_type.clone(), pid: pane.pid, chat_pid: None }];
         crate::pane_jobs::jobs_for_panes(&refs).remove(&pane.id).unwrap_or_default().into_iter().flat_map(|j| j.ports).collect()
     };
     let url = origin::resolve_open(port, &previews, &job_ports).map_err(|r| r.message().to_string())?;
@@ -480,7 +687,12 @@ fn resolve(app: &AppHandle, pane: &PaneInfo, port: u16) -> Result<(String, Previ
 
 /// Size and position the new window on the cockpit's monitor, beside the cockpit, then show it.
 fn place(app: &AppHandle, window: &WebviewWindow, slot: usize) {
-    let cockpit = app.get_webview_window(crate::app_windows::COCKPIT_LABEL).or_else(|| app.get_webview_window("main"));
+    place_near(app, window, slot, None);
+}
+
+/// `place`, beside `near` (the window the page came from, when it is known) instead of the window labelled as the cockpit.
+fn place_near(app: &AppHandle, window: &WebviewWindow, slot: usize, near: Option<tauri::Window>) {
+    let cockpit = near.or_else(|| app.get_window(crate::app_windows::COCKPIT_LABEL)).or_else(|| app.get_window("main"));
     let monitor = cockpit
         .as_ref()
         .and_then(|w| w.current_monitor().ok().flatten())
@@ -514,17 +726,21 @@ fn focus(window: &WebviewWindow) {
     let _ = window.set_focus();
 }
 
-fn arm(rec: &Preview, window: &WebviewWindow) {
+fn arm(rec: &Preview, view: &Webview) {
     rec.armed_until.store(now_ms() + ARMED_FAST_MS, Ordering::Relaxed);
-    let _ = window.eval(call_script(&rec.key, "arm", ""));
+    let _ = view.eval(call_script(&rec.key, "arm", ""));
 }
 
 /// Focuses the newest preview window and arms the picker in it ("Point another", Alt+P from the box).
 pub fn arm_newest(app: &AppHandle) -> Result<(), String> {
     let rec = PREVIEWS.lock().iter().max_by_key(|p| p.n).cloned().ok_or("Open a preview first.")?;
-    let window = app.get_webview_window(&rec.id).ok_or("That preview is closed.")?;
-    focus(&window);
-    arm(&rec, &window);
+    let view = view_of(app, &rec.id).ok_or("That preview is closed.")?;
+    if is_docked(&rec.id) {
+        crate::browser::dock::activate(app, &rec.id, None);
+    } else if let Some(window) = app.get_webview_window(view.label()) {
+        focus(&window);
+    }
+    arm(&rec, &view);
     Ok(())
 }
 
@@ -540,9 +756,9 @@ pub fn toast(app: &AppHandle, preview_id: &str, text: &str) {
         }
     };
     let Some(rec) = rec else { return };
-    if let Some(window) = app.get_webview_window(&rec.id) {
+    if let Some(view) = view_of(app, &rec.id) {
         let arg = serde_json::to_string(text).unwrap_or_else(|_| "\"\"".to_string());
-        let _ = window.eval(call_script(&rec.key, "done", &arg));
+        let _ = view.eval(call_script(&rec.key, "done", &arg));
     }
 }
 
@@ -568,8 +784,8 @@ fn note_blocked(app: &AppHandle, preview_id: &str, host: &str, url: &str) {
 
 fn pull_loop(app: AppHandle, rec: Preview) {
     loop {
-        let Some(window) = app.get_webview_window(&rec.id) else { break };
-        let fast = now_ms() < rec.armed_until.load(Ordering::Relaxed) || window.is_focused().unwrap_or(false);
+        let Some(window) = view_of(&app, &rec.id) else { break };
+        let fast = now_ms() < rec.armed_until.load(Ordering::Relaxed) || window.window().is_focused().unwrap_or(false);
         std::thread::sleep(if fast { FAST_POLL } else { SLOW_POLL });
         if rec.gone.load(Ordering::Relaxed) {
             break;
@@ -596,7 +812,7 @@ fn chrome_loop(app: AppHandle, rec: Preview, dev_port: Option<u16>) {
     let mut marking = crate::markup::live::Loop::default();
     loop {
         std::thread::sleep(Duration::from_millis(300));
-        let Some(window) = app.get_webview_window(&rec.id) else { break };
+        let Some(window) = view_of(&app, &rec.id) else { break };
         if rec.gone.load(Ordering::Relaxed) {
             break;
         }
@@ -657,6 +873,12 @@ fn chrome_loop(app: AppHandle, rec: Preview, dev_port: Option<u16>) {
         // The start page keeps its reason for a refused address; the bar shows an empty box on it.
         let shown_error = if on_start && error.is_empty() { crate::browser::start::reason_of(&here).unwrap_or("") } else { error };
         let here = if here == "about:blank" || on_start { String::new() } else { here };
+        // The docked browser's pane draws the address and the tab's name itself: tell it when they change.
+        if crate::browser::dock::is_tab(&rec.id) {
+            let title = ask_text(&window, "document.title".to_string()).unwrap_or_default();
+            let shown = crate::artifacts::chip_of(&here).unwrap_or_else(|| here.clone());
+            crate::browser::dock::note_state(&app, &rec.id, &shown, &title, shown_error);
+        }
         // A tab's access ends when the tab leaves its page (the token is dropped, never kept for a later visit).
         let now_token = crate::artifacts::live_token(&here);
         if tab_token != now_token {
@@ -688,13 +910,13 @@ fn sweep(app: &AppHandle) {
 }
 
 /// Asks the page for one queued pick. None when there is none or the page does not answer.
-fn take(window: &WebviewWindow, key: &str) -> Option<String> {
+fn take(window: &Webview, key: &str) -> Option<String> {
     ask_text(window, take_script(key))
 }
 
 /// Runs a script that answers a JSON string and returns that text. None when it answers null, anything else, or
 /// nothing in time (`parse_take` rules).
-pub(crate) fn ask_text(window: &WebviewWindow, script: String) -> Option<String> {
+pub(crate) fn ask_text(window: &Webview, script: String) -> Option<String> {
     let (tx, rx) = mpsc::channel();
     window
         .eval_with_callback(script, move |answer| {
@@ -705,13 +927,13 @@ pub(crate) fn ask_text(window: &WebviewWindow, script: String) -> Option<String>
 }
 
 /// The window of an open preview.
-pub(super) fn preview_window(app: &AppHandle, preview_id: &str) -> Option<WebviewWindow> {
-    PREVIEWS.lock().iter().any(|p| p.id == preview_id).then(|| app.get_webview_window(preview_id)).flatten()
+pub(super) fn preview_window(app: &AppHandle, preview_id: &str) -> Option<Webview> {
+    PREVIEWS.lock().iter().any(|p| p.id == preview_id).then(|| view_of(app, preview_id)).flatten()
 }
 
 // ---------------------------------------------------------------- after a pick
 
-fn after_pick(app: &AppHandle, rec: &Preview, window: &WebviewWindow, raw: &str) {
+fn after_pick(app: &AppHandle, rec: &Preview, window: &Webview, raw: &str) {
     let facts = match serde_json::from_str::<PickInput>(raw) {
         Ok(input) => match pick::sanitize(input, &rec.origin) {
             Ok(facts) => facts,
@@ -733,10 +955,10 @@ fn after_pick(app: &AppHandle, rec: &Preview, window: &WebviewWindow, raw: &str)
     let source = facts.source_hint.as_ref().and_then(|hint| source::resolve(hint, &roots)).map(|(_, found)| found);
 
     let screen = {
-        let inner = window.inner_position().map(|p| (p.x, p.y)).unwrap_or((0, 0));
-        let scale = match (window.inner_size(), facts.viewport.w) {
+        let inner = view_box(window).map(|b| (b.0, b.1)).unwrap_or((0, 0));
+        let scale = match (window.size(), facts.viewport.w) {
             (Ok(size), w) if w > 0.0 => f64::from(size.width) / w,
-            _ => window.scale_factor().unwrap_or(1.0),
+            _ => window.window().scale_factor().unwrap_or(1.0),
         };
         screen_rect(inner, &facts.rect, scale)
     };
@@ -777,7 +999,7 @@ fn save_crop(png: &[u8], facts: &super::PickFacts, project: &Path, now: u64, seq
 }
 
 /// The native screenshot of the preview's viewport (PF-9). On other systems it is a plain sentence.
-pub(super) fn capture_png(window: &WebviewWindow) -> Result<Vec<u8>, &'static str> {
+pub(super) fn capture_png(window: &Webview) -> Result<Vec<u8>, &'static str> {
     super::capture::viewport_png(window, CAPTURE_TIMEOUT)
 }
 
@@ -896,8 +1118,8 @@ pub fn discard_all(app: &AppHandle) {
     let previews: Vec<Preview> = PREVIEWS.lock().clone();
     for rec in previews {
         rec.armed_until.store(0, Ordering::Relaxed);
-        if let Some(window) = app.get_webview_window(&rec.id) {
-            let _ = window.eval(call_script(&rec.key, "disarm", ""));
+        if let Some(view) = view_of(app, &rec.id) {
+            let _ = view.eval(call_script(&rec.key, "disarm", ""));
         }
     }
 }

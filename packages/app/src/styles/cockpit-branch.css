@@ -1,8 +1,8 @@
 /* Branch from here: the sheet a chat turn's Branch button or a History row opens (components/cockpit/BranchSheet.tsx).
    Grayscale tokens only. Dense, like the Keep going sheet. */
 .cockpit .ck-sheet.ck-branch-sheet {
-  width: min(460px, calc(100vw - 32px));
-  max-height: calc(100vh - 48px);
+  width: min(460px, calc(calc(100vw / var(--ui-scale, 1)) - 32px));
+  max-height: calc(calc(100vh / var(--ui-scale, 1)) - 48px);
   overflow-y: auto;
 }
 .cockpit .ck-branch-point {

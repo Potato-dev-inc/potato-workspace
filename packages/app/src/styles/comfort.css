@@ -1,7 +1,12 @@
 /* Comfort (Settings > Look and feel): text size, strong contrast, less motion. Set by lib/comfort/root.ts
    as data attributes and one variable on the root. Imported last, so it wins over the theme tokens. */
 
-/* Text size: the whole page is zoomed by --ui-scale (90% to 140%). Fixed px sizes scale with it. */
+/* Text size: the whole page is zoomed by --ui-scale (90% to 140%). Fixed px sizes scale with it. The default is 1; the
+   value the person chose is set inline on the root (lib/comfort/root.ts), which wins over this. Every viewport size
+   (100vw, 40vh ...) is divided by it, so a card sized to the window is not zoomed past the window edge. */
+:root {
+  --ui-scale: 1;
+}
 html {
   zoom: var(--ui-scale, 1);
 }

@@ -38,6 +38,8 @@ export const chatUx = {
   'chatUx.price.tipLong': 'This took much more than usual for this chat. A smaller request can finish faster.',
   'chatUx.price.details': 'Details of this answer',
   'chatUx.price.filesTitle': 'Files changed',
+  'chatUx.price.dontShow': "Don't show again",
+  'settings.row.usual-notes.label': "Show 'more than usual' notes",
   'chatUx.rail.label': 'Message rail. Up and down arrows jump between your messages.',
   'chatUx.rail.you': 'You',
   'chatUx.rail.agent': 'Agent',

@@ -21,7 +21,7 @@ use crate::point::target::{self, TargetFacts};
 use crate::point::window::{ask_text, target_facts};
 use serde_json::{json, Value};
 use std::time::Duration;
-use tauri::{AppHandle, Manager, WebviewWindow};
+use tauri::{AppHandle, Manager, Webview};
 
 const CAPTURE_WAIT: Duration = Duration::from_secs(8);
 /// A short wait after the bar hides itself, so the picture does not catch it.
@@ -39,7 +39,7 @@ pub struct Loop {
 }
 
 /// One tick: pull what the bar queued and act on it.
-pub fn tick(app: &AppHandle, preview_id: &str, key: &str, window: &WebviewWindow, st: &mut Loop) {
+pub fn tick(app: &AppHandle, preview_id: &str, key: &str, window: &Webview, st: &mut Loop) {
     let Some(raw) = ask_text(window, bar::call(key, "take", "")) else { return };
     for event in bar::parse_events(&raw) {
         match event {
@@ -52,11 +52,11 @@ pub fn tick(app: &AppHandle, preview_id: &str, key: &str, window: &WebviewWindow
     }
 }
 
-fn push(window: &WebviewWindow, key: &str, view: Value) {
+fn push(window: &Webview, key: &str, view: Value) {
     let _ = window.eval(bar::set_script(key, &view));
 }
 
-fn opened(app: &AppHandle, preview_id: &str, key: &str, window: &WebviewWindow, st: &mut Loop) {
+fn opened(app: &AppHandle, preview_id: &str, key: &str, window: &Webview, st: &mut Loop) {
     st.open = true;
     st.we_paused = crate::browser::live::pause_for_markup(preview_id, true, false) || st.we_paused;
     let theme = crate::settings_store::read_public_settings(app).get("theme").and_then(Value::as_str).map(str::to_string).unwrap_or_default();
@@ -106,7 +106,7 @@ fn closed(preview_id: &str, st: &mut Loop) {
 }
 
 /// The chat that owns the page: the one of the artifact it shows, else the one of the agent that opened it.
-fn owner_target(app: &AppHandle, preview_id: &str, window: &WebviewWindow) -> Option<TargetFacts> {
+fn owner_target(app: &AppHandle, preview_id: &str, window: &Webview) -> Option<TargetFacts> {
     let here = ask_text(window, "location.href".to_string()).unwrap_or_default();
     let pane = crate::artifacts::owner_of(&here).map(|(pane, _)| pane).or_else(|| crate::browser::live::owner_pane(preview_id))?;
     target_of(&app.state::<AppState>(), &pane).ok()
@@ -114,7 +114,7 @@ fn owner_target(app: &AppHandle, preview_id: &str, window: &WebviewWindow) -> Op
 
 /// The picture for the send row. The bar hides itself and blanks secret boxes, the window is captured, the bar comes back.
 #[allow(clippy::too_many_arguments)]
-fn prepare(app: &AppHandle, preview_id: &str, key: &str, window: &WebviewWindow, st: &mut Loop, _marks: &[MarkIn], height: f64, vw: f64) {
+fn prepare(app: &AppHandle, preview_id: &str, key: &str, window: &Webview, st: &mut Loop, _marks: &[MarkIn], height: f64, vw: f64) {
     let shown = |on: bool| {
         let _ = window.eval(bar::call(key, "shoot", if on { "true" } else { "false" }));
     };
@@ -162,7 +162,7 @@ fn default_target(app: &AppHandle) -> Option<TargetFacts> {
 }
 
 #[allow(clippy::too_many_arguments)]
-fn send(app: &AppHandle, preview_id: &str, key: &str, window: &WebviewWindow, st: &mut Loop, request: &str, marks: &[MarkIn], to: &str) {
+fn send(app: &AppHandle, preview_id: &str, key: &str, window: &Webview, st: &mut Loop, request: &str, marks: &[MarkIn], to: &str) {
     let fail = |why: String| push(window, key, json!({ "status": why }));
     let state = app.state::<AppState>();
     // The person's pick wins; with none, the chat that owns the page.

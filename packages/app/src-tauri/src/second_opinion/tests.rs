@@ -347,13 +347,13 @@ fn every_offered_reviewer_is_a_read_only_backend_and_the_authors_agent_is_marked
     let ids: Vec<String> = crate::tui::read_only_backends().iter().map(|s| s.to_string()).collect();
     let entries = ids
         .iter()
-        .map(|id| crate::askbar::AgentEntry { id: id.clone(), label: id.clone(), ready: false })
+        .map(|id| crate::askbar::AgentEntry { id: id.clone(), label: id.clone(), ready: false, quick: true })
         .collect::<Vec<_>>();
     let marked = entries_with_same(entries, Some(&ids[0].to_uppercase()));
     assert_eq!(marked.iter().filter(|e| e.same).count(), 1);
     assert!(marked[0].same);
     let none = entries_with_same(
-        vec![crate::askbar::AgentEntry { id: ids[0].clone(), label: "x".into(), ready: true }],
+        vec![crate::askbar::AgentEntry { id: ids[0].clone(), label: "x".into(), ready: true, quick: true }],
         None,
     );
     assert!(!none[0].same && none[0].ready);

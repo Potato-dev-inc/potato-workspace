@@ -72,4 +72,9 @@ describe('sent from, on the desktop chat', () => {
     await show(['phone-9']);
     expect(lines()).toEqual([]);
   });
+  it('marks a note from a spin-off, and a note from the agent that spun this chat off, and counts neither as a device', async () => {
+    await show(['spinoff:Fix flaky tests', undefined, 'parent:Claude 1']);
+    // Two notes from agents are named; the person's own message (this PC) stays quiet because no other device wrote.
+    expect(lines()).toEqual(['from the spin-off “Fix flaky tests”', 'from Claude 1']);
+  });
 });

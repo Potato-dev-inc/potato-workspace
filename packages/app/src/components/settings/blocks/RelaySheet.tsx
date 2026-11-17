@@ -154,7 +154,7 @@ export function RelaySheet({ api, onDone, onClose }: { api: TeamApi; onDone: (ur
         )}
         {error && <Note role="alert">{error}</Note>}
         {error && <p className="st-relay-hint">{t('relay.hint')}</p>}
-        <div className="st-sheet-actions">
+        <div className="st-sheet-actions flex flex-wrap justify-end gap-2 mt-4" data-testid="relay-actions">
           <Btn disabled={running} onClick={onClose}>
             {t('lend.cancel')}
           </Btn>

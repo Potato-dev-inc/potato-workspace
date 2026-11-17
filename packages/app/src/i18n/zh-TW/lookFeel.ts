@@ -24,6 +24,8 @@ export const lookFeel: Partial<Record<EnglishKey, string>> = {
   'lookFeel.usageBar.hint': '在側邊欄底部顯示每個已登入的 AI 助理用了多少方案額度。',
   'lookFeel.usageLogin.label': '用我的 Claude 帳號讀取 Claude 使用量',
   'lookFeel.usageLogin.hint': '會用你的 Claude 帳號向 Anthropic 查詢 Claude 使用量。',
+  'lookFeel.closeToTray.label': '關閉視窗後繼續在系統匣執行',
+  'lookFeel.closeToTray.hint': '關閉：右上角的 X 會結束 Potato；若有 agent 正在工作，會先詢問。開啟：App 會繼續在系統匣中執行。',
   'lookFeel.yourName.label': '你的名字',
   'lookFeel.yourName.hint': '用在「新增 AI 助理」頁面的問候語。留空就不顯示名字。',
   'lookFeel.yourName.placeholder': '選填',

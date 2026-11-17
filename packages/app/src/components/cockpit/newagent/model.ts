@@ -3,6 +3,7 @@
 import { signInLabel, type Account } from '../../../lib/accounts';
 import type { AgentDescriptor } from '../../../lib/agentRegistry';
 import { t } from '../../../i18n';
+import type { WorkflowPlanView } from './api';
 
 // ---------- greeting ----------
 
@@ -266,4 +267,22 @@ export function moveCard(cards: readonly HomeCard[], id: string, by: -1 | 1): Ho
   const next = [...cards];
   [next[at], next[to]] = [next[to], next[at]];
   return next;
+}
+
+/**
+ * The one read-only line a picked workflow shows in place of the agent and model pickers, like
+ * "Front: Haiku. Helpers: Sonnet (hard tasks, minion), DeepSeek (easy tasks, minion)." Pure.
+ */
+export function workflowSummary(
+  plan: Pick<WorkflowPlanView, 'front_agent' | 'front_model' | 'helpers'>,
+  names: { agent: (id: string) => string; model: (agent: string, model: string) => string },
+): string {
+  const who = (agent: string, model: string | null) => (model ? names.model(agent, model) : names.agent(agent));
+  const others =
+    plan.helpers.length === 0
+      ? t('newAgent.wf.noHelpers')
+      : plan.helpers
+          .map((h) => t('newAgent.wf.helper', { name: who(h.agent_type, h.model), when: h.when_to_use, kind: t(h.kind === 'spin_off' ? 'newAgent.wf.kind.spin_off' : 'newAgent.wf.kind.minion') }))
+          .join(', ');
+  return t('newAgent.wf.summary', { front: who(plan.front_agent, plan.front_model), others });
 }

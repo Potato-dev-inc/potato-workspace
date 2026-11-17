@@ -1,7 +1,8 @@
 // @vitest-environment jsdom
-// The message rail: one dash per message, the current one follows what the chat shows, hover shows the message in a
-// card, a click or a drag scrolls to the right message, Alt+Up / Alt+Down walk the person's own messages, and Find
-// matches brighten their dashes. The chat's boxes are drawn by the test; the browser's observers are faked.
+// The message rail: one dash per message, the current one follows the message at the top of the chat as it scrolls,
+// hover shows the message in a card, a click or a drag scrolls to the right message (and lights its dash at once),
+// Alt+Up / Alt+Down walk the person's own messages, and Find matches brighten their dashes. The test lays the chat out:
+// each message 100px tall, the box 300px tall, the content 1000px tall.
 import { act, useRef } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
@@ -15,7 +16,6 @@ import type { RailEntry } from './messageRailModel';
 let host: HTMLDivElement;
 let root: Root;
 let scrolled: string[];
-let observer: { callback: IntersectionObserverCallback; targets: Element[] } | null;
 
 const ENTRIES: RailEntry[] = [
   { id: 'u1', turnId: 't1', who: 'you', text: 'Fix the login page, please' },
@@ -30,20 +30,8 @@ beforeEach(() => {
   setLanguagePref('en', false);
   setMessageRail(true);
   scrolled = [];
-  observer = null;
   Element.prototype.scrollIntoView = function (this: HTMLElement) {
     scrolled.push(this.dataset.railId ?? '?');
-  };
-  (globalThis as { IntersectionObserver?: unknown }).IntersectionObserver = class {
-    targets: Element[] = [];
-    constructor(callback: IntersectionObserverCallback) {
-      observer = { callback, targets: this.targets };
-    }
-    observe(el: Element) {
-      this.targets.push(el);
-    }
-    disconnect() {}
-    unobserve() {}
   };
   host = document.createElement('div');
   document.body.appendChild(host);
@@ -52,7 +40,6 @@ beforeEach(() => {
 afterEach(() => {
   act(() => root.unmount());
   host.remove();
-  delete (globalThis as { IntersectionObserver?: unknown }).IntersectionObserver;
   localStorage.removeItem(MESSAGE_RAIL_KEY);
 });
 
@@ -76,15 +63,28 @@ function Harness({ entries = ENTRIES, findQuery = '' }: { entries?: RailEntry[];
 const dashes = () => [...host.querySelectorAll<HTMLElement>('[data-testid="message-rail-dash"]')];
 const rail = () => host.querySelector<HTMLElement>('[data-testid="message-rail"]')!;
 const card = () => host.querySelector<HTMLElement>('[data-testid="message-rail-card"]');
+const currentIndex = () => dashes().findIndex((d) => d.classList.contains('is-current'));
 const pointer = (type: string, y: number, init: MouseEventInit = {}) => act(() => void rail().dispatchEvent(new MouseEvent(type, { bubbles: true, clientY: y, ...init })));
 const at = (i: number, plus = 1) => parseFloat(dashes()[i].style.top) + plus;
-const intersect = (ids: string[], isIntersecting = true) =>
-  act(() =>
-    observer!.callback(
-      ids.map((id) => ({ target: host.querySelector(`[data-rail-id="${id}"]`)!, isIntersecting }) as unknown as IntersectionObserverEntry),
-      {} as IntersectionObserver,
-    ),
-  );
+
+const rectAt = (top: number) => ({ top, bottom: top + 100, left: 0, right: 0, width: 0, height: 100, x: 0, y: top, toJSON: () => ({}) }) as DOMRect;
+
+/** Scrolls the chat so that the message `id` is at the top of its box, and fires the scroll the browser would fire. */
+function scrollTo(id: string) {
+  const nodes = [...host.querySelectorAll<HTMLElement>('[data-rail-id]')];
+  const box = nodes[0].parentElement!;
+  const scrollTop = nodes.findIndex((n) => n.dataset.railId === id) * 100;
+  Object.defineProperty(box, 'scrollHeight', { configurable: true, value: 1000 });
+  Object.defineProperty(box, 'clientHeight', { configurable: true, value: 300 });
+  box.getBoundingClientRect = () => rectAt(0);
+  nodes.forEach((node, k) => {
+    node.getBoundingClientRect = () => rectAt(k * 100 - scrollTop);
+  });
+  act(() => {
+    box.scrollTop = scrollTop;
+    box.dispatchEvent(new Event('scroll'));
+  });
+}
 
 describe('MessageRail', () => {
   it('draws one dash per message', () => {
@@ -103,15 +103,32 @@ describe('MessageRail', () => {
     expect(host.querySelector('[data-testid="message-rail"]')).toBeNull();
   });
 
-  it('the current dash follows the message the chat shows', () => {
+  it('the current dash follows the message at the top of the chat as the chat scrolls', () => {
     act(() => root.render(<Harness />));
-    expect(observer!.targets).toHaveLength(ENTRIES.length);
-    intersect(['a1']);
-    expect(dashes().findIndex((d) => d.classList.contains('is-current'))).toBe(1);
-    intersect(['a1'], false);
-    intersect(['a3']);
-    expect(dashes().findIndex((d) => d.classList.contains('is-current'))).toBe(4);
+    scrollTo('a1');
+    expect(currentIndex()).toBe(1);
+    scrollTo('a3');
+    expect(currentIndex()).toBe(4);
     expect(dashes().filter((d) => d.classList.contains('is-current'))).toHaveLength(1);
+  });
+
+  it('a short message next to a long one does not move the mark one message ahead of the top message', () => {
+    act(() => root.render(<Harness />));
+    // a2 is at the top and u2 sits right under it: the mark must be on a2, not on u2.
+    scrollTo('a2');
+    expect(currentIndex()).toBe(2);
+  });
+
+  it('the last message is the one being read at the very end of the chat', () => {
+    act(() => root.render(<Harness />));
+    act(() => {
+      // The chat is shorter than its box and scrolled to the bottom of it.
+      const box = host.querySelector<HTMLElement>('[data-rail-id]')!.parentElement!;
+      Object.defineProperty(box, 'scrollHeight', { configurable: true, value: 300 });
+      Object.defineProperty(box, 'clientHeight', { configurable: true, value: 300 });
+      box.dispatchEvent(new Event('scroll'));
+    });
+    expect(currentIndex()).toBe(ENTRIES.length - 1);
   });
 
   it('hover brightens the dash and shows who wrote the message and its text', () => {
@@ -128,12 +145,43 @@ describe('MessageRail', () => {
     expect(card()).toBeNull();
   });
 
-  it('a click scrolls to the message of that dash and washes it', () => {
+  it('a click scrolls to the message of that dash, lights that dash at once and washes the message', () => {
     act(() => root.render(<Harness />));
     pointer('pointerdown', at(2));
     pointer('pointerup', 0);
     expect(scrolled[0]).toBe('a2');
+    expect(currentIndex()).toBe(2);
     expect(host.querySelector('[data-rail-id="a2"]')!.classList.contains('ck-mrail-flash')).toBe(true);
+  });
+
+  it('a click on a dash whose message lands at the very end keeps that dash marked, until the person scrolls', () => {
+    // A real layout: six 100px messages in a 300px box (600px of content). scrollIntoView scrolls like the browser:
+    // it moves the message to the top, clamped to the end, and fires the scroll event.
+    act(() => root.render(<Harness />));
+    const nodes = () => [...host.querySelectorAll<HTMLElement>('[data-rail-id]')];
+    const box = nodes()[0].parentElement!;
+    Object.defineProperty(box, 'scrollHeight', { configurable: true, value: 600 });
+    Object.defineProperty(box, 'clientHeight', { configurable: true, value: 300 });
+    box.getBoundingClientRect = () => rectAt(0);
+    Element.prototype.scrollIntoView = function (this: HTMLElement) {
+      scrolled.push(this.dataset.railId ?? '?');
+      const k = [...box.children].indexOf(this);
+      box.scrollTop = Math.min(k * 100, box.scrollHeight - box.clientHeight);
+      box.dispatchEvent(new Event('scroll'));
+    };
+    nodes().forEach((node, k) => {
+      node.getBoundingClientRect = () => rectAt(k * 100 - box.scrollTop);
+    });
+    // Message 3 (u2) lands at the end: the chat is now at its bottom, which alone would mark the last dash.
+    pointer('pointerdown', at(3));
+    pointer('pointerup', 0);
+    expect(scrolled).toEqual(['u2']);
+    expect(box.scrollTop).toBe(300);
+    expect(currentIndex()).toBe(3);
+    // The person scrolls up with the wheel: the mark follows the real position again.
+    box.scrollTop = 0;
+    act(() => void box.dispatchEvent(new Event('wheel')));
+    expect(currentIndex()).toBe(0);
   });
 
   it('dragging along the dashes scrubs through the messages, once per dash', () => {
@@ -148,7 +196,7 @@ describe('MessageRail', () => {
 
   it('Alt+Up and Alt+Down jump between the own messages of the person', () => {
     act(() => root.render(<Harness />));
-    intersect(['a2']);
+    scrollTo('a2');
     const chat = host.querySelector<HTMLElement>('[data-testid="chat-root"]')!;
     const key = (k: string) => act(() => void chat.dispatchEvent(new KeyboardEvent('keydown', { key: k, altKey: true, bubbles: true, cancelable: true })));
     key('ArrowUp');
@@ -162,7 +210,7 @@ describe('MessageRail', () => {
 
   it('the rail itself takes the arrow keys when it has the keyboard', () => {
     act(() => root.render(<Harness />));
-    intersect(['u3']);
+    scrollTo('u3');
     act(() => void rail().dispatchEvent(new KeyboardEvent('keydown', { key: 'ArrowUp', bubbles: true, cancelable: true })));
     expect(scrolled[0]).toBe('u2');
   });

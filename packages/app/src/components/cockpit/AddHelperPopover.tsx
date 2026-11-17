@@ -2,11 +2,11 @@
 // row menu, `standby.new` from What's new). Agent + Model + Enter makes one; "What it does" is optional and only gives it a
 // name (with none, the helper is named "<Agent> · <model>"). Replaces the old modal dialog. Mounted once in the cockpit.
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { useT, type MessageKey } from '../../i18n';
+import { twoTypesWording, useT, type MessageKey } from '../../i18n';
 import { errorSentence } from '../../lib/sayError';
 import { useAgentRegistry } from '../../lib/agentRegistry';
 import { tauriModelOptionsApi, useModelOptions, type ModelOptionsApi } from '../../lib/modelOptions';
-import { NEW_STANDBY_EVENT, tauriStandbyHelpersApi, useStandbyHelpers, type NewStandbyRequest, type StandbyHelpersApi, type StandbyHelpersView } from '../../lib/standbyHelpers';
+import { NEW_STANDBY_EVENT, tauriStandbyHelpersApi, useStandbyHelpers, type NewStandbyRequest, type StandbyHelpersApi, type StandbyHelpersView, type StandbyKind } from '../../lib/standbyHelpers';
 import { registerAction } from '../../whatsnew/registry';
 import '../../styles/standby-rows.css';
 import { AgentLogo } from '../common/AgentLogo';
@@ -75,6 +75,8 @@ export function AddHelperPopover({
   const [model, setModel] = useState('');
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
+  /** "Run as" picked here; `null`: the setting "A new standby is a" decides. */
+  const [kindPick, setKindPick] = useState<StandbyKind | null>(null);
   const addRef = useRef<HTMLButtonElement>(null);
   const frontRef = useRef(front);
   frontRef.current = front;
@@ -88,6 +90,7 @@ export function AddHelperPopover({
     setModel('');
     setError(null);
     setBusy(false);
+    setKindPick(null);
     setRecent(readRecentHelpers());
   }, []);
   useEffect(() => {
@@ -117,6 +120,8 @@ export function AddHelperPopover({
 
   if (!req) return null;
   const atLimit = view.helpers.length >= view.max;
+  const showKind = twoTypesWording();
+  const kind: StandbyKind = kindPick ?? view.default_kind ?? 'spin_off';
   const roleName = custom.trim() || (role ? t(`standby.role.${role}` as MessageKey) : '');
   const name = roleName || autoHelperName(agentLabel, model);
 
@@ -125,7 +130,7 @@ export function AddHelperPopover({
     setBusy(true);
     setError(null);
     try {
-      const next: StandbyHelpersView | null = await api.add({ name: input.name, agent: input.agent, model: input.model, project: req.project, after_task: 'wait', home: req.home });
+      const next: StandbyHelpersView | null = await api.add({ name: input.name, agent: input.agent, model: input.model, project: req.project, after_task: 'wait', home: req.home, ...(showKind ? { kind } : {}) });
       apply(next);
       rememberHelper(input.remember);
       setReq(null);
@@ -216,6 +221,19 @@ export function AddHelperPopover({
         <span className="text-xs ah-muted">{t('standby.model')}</span>
         {agentId && <ModelPicker testId="add-helper-model" label={t('standby.model')} state={options} value={model} onChange={setModel} defaultWord={t('models.agentDefault')} />}
       </div>
+      {showKind && (
+        <div className="grid gap-1" data-testid="add-helper-kind">
+          <span className="text-xs ah-muted">{t('standby.kind.label')}</span>
+          <div className="flex flex-wrap gap-1" role="radiogroup" aria-label={t('standby.kind.label')}>
+            {(['spin_off', 'minion'] as const).map((k) => (
+              <button key={k} type="button" role="radio" aria-checked={kind === k} className={`${chip} ${kind === k ? on : off}`} onClick={() => setKindPick(k)}>
+                {t(`standby.kind.${k}` as MessageKey)}
+              </button>
+            ))}
+          </div>
+          <span className="text-xs ah-muted">{t(`standby.kind.hint.${kind}` as MessageKey)}</span>
+        </div>
+      )}
       <div className="grid gap-1">
         <span className="text-xs ah-muted">{t('standby.role')}</span>
         <div className="flex flex-wrap gap-1" role="group" aria-label={t('standby.role')}>

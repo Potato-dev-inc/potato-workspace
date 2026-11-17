@@ -3,13 +3,16 @@
 //
 // ONE shape for every screen. Settings > Agents > Standby helpers and the top bar's "Ready" chips both read
 // `StandbyHelperEntry` (from `useStandbyHelpers()`), so a change made in one shows in the other at once.
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
+import { setTwoTypesWording } from '../i18n';
 import { setStandbys, type Standby } from './helper-standbys';
 import { tauri } from './tauri';
 
 /** `ready` waiting for a task; `busy` a task is running on it (its chat is `pane_id`); `starting`; `asleep` closed to save
  * memory, starts when a task asks or on "Start"; `problem` could not start (`note` says why). */
 export type StandbyState = 'ready' | 'busy' | 'starting' | 'asleep' | 'problem';
+/** What a task that takes a standby becomes: `spin_off` (a chat you can open and talk to; the default) or `minion` (no sidebar row; only its agent uses it). */
+export type StandbyKind = 'spin_off' | 'minion';
 /** What it does when its task is over: `wait` starts again and waits; `close` stays closed until it is needed. */
 export type AfterTask = 'wait' | 'close';
 /** Why an agent's task passed a standby by: a different model, another project, busy, or the person was using it. */
@@ -24,6 +27,8 @@ export interface StandbyHelperEntry {
   model: string | null;
   project: string;
   after_task: AfterTask;
+  /** Missing (an older app) means a spin-off. */
+  kind?: StandbyKind;
   state: StandbyState;
   note: StandbyNote | string | null;
   /** The chat doing the task while `state` is `busy`. The top bar moves the chip next to that chat's helpers. */
@@ -56,6 +61,12 @@ export interface StandbyHelpersView {
   max: number;
   /** A standby nobody used for this many minutes is closed to free memory. */
   idle_minutes: number;
+  /** "A new standby is a: Spin-off · Minion". Missing means a spin-off. */
+  default_kind?: StandbyKind;
+  /** "Never close": the idle time shuts no standby or warm agent down. Missing means off. */
+  never_close?: boolean;
+  /** The app runs two types of started agents: the kinds mean something. The screens follow this (an older app leaves it out). */
+  two_types?: boolean;
 }
 
 /** Standbys for one project (the top bar shows the ones for the project in front). Same folder in any spelling. */
@@ -75,17 +86,24 @@ export interface NewStandby {
   project: string;
   after_task: AfterTask;
   home?: string | null;
+  /** Left out: the setting "A new standby is a" decides. */
+  kind?: StandbyKind;
 }
+
+/** A standby's kind; an entry from before the kinds is a spin-off. */
+export const standbyKindOf = (h: Pick<StandbyHelperEntry, 'kind'>): StandbyKind => h.kind ?? 'spin_off';
 
 export interface StandbyHelpersApi {
   get: () => Promise<StandbyHelpersView | null>;
   add: (input: NewStandby) => Promise<StandbyHelpersView | null>;
-  update: (id: string, patch: { name?: string; model?: string | null; after_task?: AfterTask; home?: string | null }) => Promise<StandbyHelpersView | null>;
+  update: (id: string, patch: { name?: string; model?: string | null; after_task?: AfterTask; home?: string | null; kind?: StandbyKind }) => Promise<StandbyHelpersView | null>;
   remove: (id: string) => Promise<StandbyHelpersView | null>;
   /** "Remove from the agent": it keeps running as a free warm agent. */
   detach: (id: string) => Promise<StandbyHelpersView | null>;
   start: (id: string) => Promise<StandbyHelpersView | null>;
-  setLimits: (max: number, idleMinutes: number) => Promise<StandbyHelpersView | null>;
+  setLimits: (max: number, idleMinutes: number, defaultKind?: StandbyKind) => Promise<StandbyHelpersView | null>;
+  /** "Never close" on or off. */
+  setNeverClose?: (on: boolean) => Promise<StandbyHelpersView | null>;
   /** Opens the helper as a chat; resolves with that chat's pane id. */
   open: (id: string) => Promise<string | null>;
   /** "Stop the task and take it back". */
@@ -99,18 +117,26 @@ export const tauriStandbyHelpersApi: StandbyHelpersApi = {
   remove: (id) => tauri.standbyHelperRemove(id),
   detach: (id) => tauri.standbyHelperDetach(id),
   start: (id) => tauri.standbyHelperStart(id),
-  setLimits: (max, idleMinutes) => tauri.standbyHelpersSetLimits(max, idleMinutes),
+  setLimits: (max, idleMinutes, defaultKind) => (defaultKind ? tauri.standbyHelpersSetLimits(max, idleMinutes, defaultKind) : tauri.standbyHelpersSetLimits(max, idleMinutes)),
+  setNeverClose: (on) => tauri.standbyHelpersSetNeverClose(on),
   open: (id) => tauri.standbyHelperOpen(id),
   takeBack: (id) => tauri.standbyHelperTakeBack(id),
 };
 
-export const EMPTY_STANDBY_VIEW: StandbyHelpersView = { helpers: [], max: 4, idle_minutes: 30 };
+/** The chats the person has open on a standby (they are listed like any agent; other standby chats are not). */
+export function useOpenedStandbyPanes(api: StandbyHelpersApi = tauriStandbyHelpersApi): ReadonlySet<string> {
+  const { view } = useStandbyHelpers(api);
+  const key = view.helpers.flatMap((h) => (h.open_pane ? [h.open_pane] : [])).join('|');
+  return useMemo(() => new Set(key ? key.split('|') : []), [key]);
+}
 
-const POLL_MS = 3000;
-const FAST_POLL_MS = 1000;
+export const EMPTY_STANDBY_VIEW: StandbyHelpersView = { helpers: [], max: 4, idle_minutes: 30, default_kind: 'spin_off' };
+
+const POLL_MS = 1500;
+const FAST_POLL_MS = 500;
 
 // One shared copy of the list per api object: the sidebar, the popover, the chat banner and Settings all read it, and only one
-// timer asks the backend (3 s) while any of them is on screen.
+// timer asks the backend (1.5 s) while any of them is on screen.
 interface Shared {
   view: StandbyHelpersView | null;
   listeners: Set<() => void>;
@@ -131,11 +157,13 @@ function sharedFor(api: StandbyHelpersApi): Shared {
 const setShared = (s: Shared, next: StandbyHelpersView | null) => {
   if (!next) return;
   s.view = next;
+  // The backend says whether the kinds are on; the wording and the kind controls follow it in every window.
+  if (typeof next.two_types === 'boolean') setTwoTypesWording(next.two_types);
   for (const l of s.listeners) l();
 };
 
 /**
- * The standbys, kept fresh (every 3 s, and at once after a change made here). `apply` takes the view a change returned, so
+ * The standbys, kept fresh (every 1.5 s, and at once after a change made here). `apply` takes the view a change returned, so
  * the screen that made it does not wait for the next poll. The sidebar, the popover, the chat banner and Settings all call this.
  */
 export function useStandbyHelpers(api: StandbyHelpersApi = tauriStandbyHelpersApi): { view: StandbyHelpersView; loaded: boolean; apply: (next: StandbyHelpersView | null) => void } {

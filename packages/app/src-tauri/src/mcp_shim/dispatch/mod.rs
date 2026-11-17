@@ -10,6 +10,7 @@ mod opencode;
 mod operations;
 mod panes;
 mod team;
+mod terminals;
 
 #[cfg(test)]
 pub(crate) use team::team_wait_timeout_ms;
@@ -33,5 +34,6 @@ pub(super) fn dispatch(
         .or_else(|| browser::dispatch(name, args, cancel_rx))
         .or_else(|| guide::dispatch(name, args, cancel_rx))
         .or_else(|| config::dispatch(name, args, cancel_rx))
+        .or_else(|| terminals::dispatch(name, args, cancel_rx))
         .unwrap_or_else(|| Err(format!("unknown tool: {name}")))
 }

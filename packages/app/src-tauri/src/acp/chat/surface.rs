@@ -222,6 +222,7 @@ pub fn view(chat: &AcpChat) -> Value {
         read_only: chat.session().is_read_only(),
         read_only_enforcement,
         read_only_proof: read_only_proof.as_ref(),
+        read_only_cannot: Some(chat.agent_id()).filter(|agent| !crate::agent_runs::read_only_run_table(agent)),
         checks: &chat.run_checks(),
         facts: &facts,
     });
@@ -250,6 +251,8 @@ pub fn view(chat: &AcpChat) -> Value {
         "lane": LANE,
         "agent": chat.agent_id(),
         "name": chat.label(),
+        // A task the person handed to another agent: where it went and when ("now", "pending", "finished"), else null.
+        "handed_over": crate::handover::view_note(chat.pane_id()),
         "status": if in_terminal && !is_final(status) { "idle" } else if checks_failed { "failed" } else { status },
         "stage": state.get("phase"),
         "result": if status == "completed" { reply.clone().map(Value::String).unwrap_or(Value::Null) } else { Value::Null },
@@ -300,6 +303,7 @@ pub fn view(chat: &AcpChat) -> Value {
     if let (Some(started), Some(map)) = (chat.started(), shown.as_object_mut()) {
         map.insert("as_used".into(), json!(started.as_used));
         map.insert("as_reason".into(), json!(started.as_reason));
+        map.insert("as_note".into(), json!(started.note()));
         if let Some(kind) = &started.started_as {
             map.insert("started_as".into(), json!(kind));
         }
@@ -404,9 +408,11 @@ fn send_failure(error: SendError) -> OperationError {
 /// Waits until the chat's status is one of `until`, or `wait_ms` is over. Returns the status last seen.
 fn wait_status(chat: &AcpChat, until: &[String], wait_ms: u64) -> &'static str {
     let deadline = Instant::now() + Duration::from_millis(wait_ms);
+    // The person handing the task to another agent ends this wait: the agent that waits is not its owner any more.
+    let handed_at = crate::handover::generation(chat.pane_id());
     loop {
         let status = status_of(&chat.session().snapshot());
-        if until.iter().any(|u| u == status) || chat.is_closed() || Instant::now() >= deadline {
+        if until.iter().any(|u| u == status) || chat.is_closed() || crate::handover::generation(chat.pane_id()) != handed_at || Instant::now() >= deadline {
             return status;
         }
         std::thread::sleep(POLL);
@@ -518,21 +524,26 @@ pub fn intercept_noted_with(method: &str, segments: &[&str], query: &str, body: 
 
 fn intercept_rest(method: &str, segments: &[&str], query: &str, body: &[u8], deps: &StartDeps, session: Option<&str>) -> Option<Reply> {
     match (method, segments) {
-        ("POST", ["agents", "wait"]) => wait(body),
+        ("POST", ["agents", "wait"]) => wait(body, deps),
+        // A spin-off tells the agent that spun it off (its own pane, found from the connection's process, never a header).
+        ("POST", ["agents", "message-parent"]) => {
+            let value = body_json(body).unwrap_or(Value::Null);
+            Some(super::spin_off::message_parent(&deps.registry, caller_pane_of(session).as_deref(), &value))
+        }
         ("POST", ["agents", "followup" | "send"]) => {
             let value = body_json(body)?;
             let handle = text_of(&value, "handle")?;
             let next_turn = segments[1] == "followup";
             match chat_of(&handle) {
-                Some(chat) if !chat.is_closed() => Some(followup(&chat, &value, session, next_turn)),
+                Some(chat) if !chat.is_closed() => Some(followup(&chat, &value, session, next_turn, &deps.registry)),
                 // A closed chat (or one that is gone after close_agent): followup_task brings the same
                 // conversation back, loading the agent's own session, and sends the task as the next turn.
                 found if next_turn => match reopen(&handle, deps, session) {
-                    Some(Ok(chat)) => Some(followup(&chat, &value, session, true).map(|answer| with_reopened(answer, &handle))),
+                    Some(Ok(chat)) => Some(followup(&chat, &value, session, true, &deps.registry).map(|answer| with_reopened(answer, &handle))),
                     Some(Err(error)) => Some(Err(error)),
-                    None => found.map(|chat| followup(&chat, &value, session, next_turn)),
+                    None => found.map(|chat| followup(&chat, &value, session, next_turn, &deps.registry)),
                 },
-                found => found.map(|chat| followup(&chat, &value, session, next_turn)),
+                found => found.map(|chat| followup(&chat, &value, session, next_turn, &deps.registry)),
             }
         }
         ("POST", ["agents", "answer"]) => {
@@ -551,7 +562,7 @@ fn intercept_rest(method: &str, segments: &[&str], query: &str, body: &[u8], dep
         ("POST", ["agents", "close"]) => {
             let value = body_json(body)?;
             let chat = chat_of(&text_of(&value, "handle")?)?;
-            Some(owned(&chat, session).and_then(|()| {
+            Some(owned(&chat, session).and_then(|()| super::spin_off::refuse_close(&chat, session)).and_then(|()| {
                 let last = view(&chat);
                 crate::pty::registry_kill_pane_and_wait(&deps.registry, chat.pane_id(), Some("closed by an agent")).map_err(|e| err("CLOSE_FAILED", e, true))?;
                 deps.host.panes_changed();
@@ -734,8 +745,8 @@ fn run(body: &[u8], query: &str, deps: &StartDeps, session: Option<&str>, lookup
         if let Some(chat) = chat_of(&id) {
             return (
                 Some(match task {
-                    Some(_) => owned(&chat, session).and_then(|()| followup(&chat, &value, session, true)),
-                    None => Err(err("INVALID_TASK", "task is required", false)),
+                    Some(_) => owned(&chat, session).and_then(|()| followup(&chat, &value, session, true, &deps.registry)),
+                    None => Err(crate::agent_runs::task_required_error()),
                 }),
                 None,
             );
@@ -758,8 +769,7 @@ fn run(body: &[u8], query: &str, deps: &StartDeps, session: Option<&str>, lookup
     }
     // The caller's own standby seat of this agent type takes the task, whatever lane wording the caller used ("opencode",
     // "opencode_native", lane "terminal"): the seat is a chat, so the run is a chat on the seat's agent.
-    let standby_refused = value.get("started").and_then(|v| v.get("standby_refused")).and_then(Value::as_bool) == Some(true);
-    let (value, seat_note) = if standby_refused { (value, None) } else { seat_first(value, session, &deps.registry.lock().project_path.clone(), query) };
+    let (value, seat_note) = seat_first(value, session, &deps.registry.lock().project_path.clone(), query);
     // One resolver picks the way (`decide`): what the request needs decides, `lane` is a hint, and a refusal carries the call
     // that works.
     let account = text_of(&value, "account");
@@ -777,7 +787,7 @@ fn run(body: &[u8], query: &str, deps: &StartDeps, session: Option<&str>, lookup
     let Some(agent) = agent else {
         return (Some(Err(err("INVALID_ARGUMENT", "agent_type is required with lane: \"acp\"", false))), None);
     };
-    let Some(task) = task else { return (Some(Err(err("INVALID_TASK", "task is required", false))), None) };
+    let Some(task) = task else { return (Some(Err(crate::agent_runs::task_required_error())), None) };
     // Whether a failure to start gives the terminal a go (auto and the saved choice), or is the caller's error (lane: "acp").
     let chat_only = config.as_ref().is_some_and(|c| c.chat_only);
     let fallback = !explicit && !chat_only;
@@ -801,7 +811,7 @@ fn run(body: &[u8], query: &str, deps: &StartDeps, session: Option<&str>, lookup
     let started = match super::start::check_gate(labs_on, config.is_some(), crate::acp::lane::RunLane::Acp, true) {
         Err(gate) => Err(gate.into()),
         Ok(()) => match config {
-            Some(cfg) => super::start::start(deps, cfg, StartRequest { agent_id: agent, folder: folder.clone(), explicit: true, account: account.clone(), model: requested_model.clone(), is_helper: session.is_some() || model_from_helper, parent_pane: caller_pane_of(session), helper_name: text_of(&value, "helper"), no_standby: standby_refused, ..Default::default() }),
+            Some(cfg) => super::start::start(deps, cfg, StartRequest { agent_id: agent, folder: folder.clone(), explicit: true, account: account.clone(), model: requested_model.clone(), is_helper: session.is_some() || model_from_helper, parent_pane: caller_pane_of(session), helper_name: text_of(&value, "helper"), early_started: value.get("started").and_then(|v| serde_json::from_value::<crate::agent_run_mode::StartedRecord>(v.clone()).ok()).filter(|s| s.started_as.is_some()), ..Default::default() }),
             None => Err(super::start::GateError::NoDefinition.into()),
         },
     };
@@ -820,6 +830,9 @@ fn run(body: &[u8], query: &str, deps: &StartDeps, session: Option<&str>, lookup
         }
     };
     chat.set_started_by(session);
+    // `keep_pane: false` (said by the caller, or by the person's own "keep open" choice): the pane closes when the task is done.
+    // A spin-off is the person's own chat and a standby's own place stays; neither closes by itself.
+    chat.set_close_when_done(closes_when_done(&value, chat.seat().is_some()));
     // Read-only comes before anything else: the guards are on before the first message, and a chat that cannot be made read-only is
     // never started (and never falls back to a run that is not).
     if read_only_requested {
@@ -875,8 +888,8 @@ fn run(body: &[u8], query: &str, deps: &StartDeps, session: Option<&str>, lookup
     // What the agent made it (minion / spin-off; One type's helper): the route decided, the pane and the record keep it.
     if let Some(mut started) = value.get("started").and_then(|v| serde_json::from_value::<crate::agent_run_mode::StartedRecord>(v.clone()).ok()) {
         // A standby seat took the task: a spin-off standby is a spin-off (a named one whatever was asked).
-        if chat.seat().is_some() {
-            started.took_standby(text_of(&value, "helper").is_some());
+        if let Some(seat) = chat.seat() {
+            started.took_standby(text_of(&value, "helper").is_some(), crate::standby::helpers::file().snapshot().helpers.iter().find(|h| h.id == seat).map(|h| h.kind).unwrap_or_default());
         }
         if let Some(kind) = started.started_as.as_deref() {
             crate::pty::pane_parent::set_started_as(&deps.registry, chat.pane_id(), kind);
@@ -914,7 +927,35 @@ fn run(body: &[u8], query: &str, deps: &StartDeps, session: Option<&str>, lookup
         };
         wait_status(&chat, &default_until(), wait_ms);
     }
-    (Some(Ok(view(&chat))), None)
+    (Some(Ok(view_closing_when_done(&chat, deps))), None)
+}
+
+/// A new run closes its pane when done: the request says `keep_pane: false`, it is not a spin-off (the person's own chat) and it
+/// is not a standby's own place. A chat that is adopted (a followup on an existing handle) never comes through here.
+pub(crate) fn closes_when_done(value: &Value, on_a_standby_seat: bool) -> bool {
+    let is_spin_off = value.get("started").and_then(|v| v.get("started_as")).and_then(Value::as_str) == Some("spin_off");
+    value.get("keep_pane").and_then(Value::as_bool) == Some(false) && !is_spin_off && !on_a_standby_seat
+}
+
+/// [`view`], and a chat that was to close when done (`keep_pane: false`) and has finished its task is closed now: the
+/// answer says so (`pane_open: false`, `pane_policy: closed_when_done`). Nothing else closes a pane the caller did not ask about.
+fn view_closing_when_done(chat: &AcpChat, deps: &StartDeps) -> Value {
+    let mut shown = view(chat);
+    let done = shown.get("status").and_then(Value::as_str).is_some_and(|s| s == "completed" || s == "failed" || s == "cancelled");
+    let busy = shown.get("background_running").and_then(Value::as_bool) == Some(true);
+    if !chat.close_when_done() || chat.is_closed() || !done || busy {
+        return shown;
+    }
+    if crate::pty::registry_kill_pane_and_wait(&deps.registry, chat.pane_id(), Some("closed when done")).is_err() {
+        return shown;
+    }
+    deps.host.panes_changed();
+    if let Some(map) = shown.as_object_mut() {
+        map.insert("pane_open".into(), json!(false));
+        map.insert("pane_policy".into(), json!("closed_when_done"));
+        map.insert("pane_note".into(), json!("pane closed: the run said keep_pane false, so it closed when the task finished. Start a new run to continue."));
+    }
+    shown
 }
 
 /// The caller's own standby seat goes first. When the caller (a pane in this app) has a seat of the asked agent *type* that
@@ -927,7 +968,8 @@ fn seat_first(value: Value, session: Option<&str>, default_project: &str, query:
     let model = if value.get("model_from_helper_default").and_then(Value::as_bool) == Some(true) { None } else { text_of(&value, "model") };
     let account = text_of(&value, "account");
     let name = text_of(&value, "helper");
-    let claim = crate::acp::warm::HelperClaim { agent: &agent, folder: std::path::Path::new(&folder), account: account.as_deref(), model: model.as_deref(), caller: Some(&caller), name: name.as_deref() };
+    let kind = value.get("started").and_then(|v| serde_json::from_value::<crate::agent_run_mode::StartedRecord>(v.clone()).ok()).and_then(|s| s.standby_kind_wanted(name.is_some()));
+    let claim = crate::acp::warm::HelperClaim { agent: &agent, folder: std::path::Path::new(&folder), account: account.as_deref(), model: model.as_deref(), caller: Some(&caller), name: name.as_deref(), kind };
     let Some(seat) = crate::acp::warm::seat_for(&claim) else { return (value, None) };
     let needs_terminal = chat_cannot_do(&value);
     let headless = value.get("headless").and_then(Value::as_bool) == Some(true);
@@ -960,7 +1002,7 @@ fn caller_pane_of(session: Option<&str>) -> Option<String> {
     crate::pty::pane_parent::request_caller().or_else(|| session.and_then(crate::mcp_sessions::claimed_session_pane))
 }
 
-fn wait(body: &[u8]) -> Option<Reply> {
+fn wait(body: &[u8], deps: &StartDeps) -> Option<Reply> {
     let value = body_json(body)?;
     let handles: Vec<String> = value.get("handles")?.as_array()?.iter().filter_map(Value::as_str).map(str::to_string).collect();
     let chats: Vec<Option<std::sync::Arc<AcpChat>>> = handles.iter().map(|h| chat_of(h)).collect();
@@ -1006,6 +1048,7 @@ fn wait(body: &[u8]) -> Option<Reply> {
     // stuck while the caller waits does.
     let stuck_at_start: Vec<bool> = chats.iter().map(|c| crate::agent_runs::stall::minutes_of(c.pane_id()).is_some()).collect();
     let mut stalled_wake = false;
+    let handed_at: Vec<u64> = chats.iter().map(|c| crate::handover::generation(c.pane_id())).collect();
     let started = Instant::now();
     let deadline = started + Duration::from_millis(wait_ms);
     // Every exit from this loop is a `break` that sets `reason` first, so no initial value is needed.
@@ -1032,7 +1075,7 @@ fn wait(body: &[u8]) -> Option<Reply> {
             } else {
                 settle[i] = None;
             }
-            let mut hit = closed || until.iter().any(|u| u == status);
+            let mut hit = closed || until.iter().any(|u| u == status) || crate::handover::generation(chat.pane_id()) != handed_at[i];
             if hit && !closed && status == "waiting_input" && confirm_ms > 0 {
                 let key = snapshot.permission_waits.first().map(|p| (p.ask_id, p.since_ms));
                 match key {
@@ -1083,7 +1126,7 @@ fn wait(body: &[u8]) -> Option<Reply> {
         }
         std::thread::sleep(POLL);
     }
-    let agents: Vec<Value> = chats.iter().map(|c| view(c)).collect();
+    let agents: Vec<Value> = chats.iter().map(|c| view_closing_when_done(c, deps)).collect();
     Some(Ok(json!({
         "agents": agents,
         "reason": reason,
@@ -1095,11 +1138,23 @@ fn wait(body: &[u8]) -> Option<Reply> {
 
 /// `followup_task` (`next_turn`: a new turn, then waits like a first run) and `send_message` (steers the turn that
 /// runs).
-fn followup(chat: &AcpChat, value: &Value, session: Option<&str>, next_turn: bool) -> Reply {
+fn followup(chat: &std::sync::Arc<AcpChat>, value: &Value, session: Option<&str>, next_turn: bool, registry: &parking_lot::Mutex<crate::pty::PaneRegistry>) -> Reply {
     owned(chat, session)?;
     let task = text_of(value, "task").or_else(|| text_of(value, "message")).ok_or_else(|| err("INVALID_TASK", "task is required", false))?;
     if chat.is_closed() {
         return Err(err("AGENT_CLOSED", "That chat session was closed.", false));
+    }
+    // The person drives a spin-off: an agent cannot start its next turn. A message is a visible note "from <the agent>".
+    if next_turn {
+        super::spin_off::refuse_followup(chat, session)?;
+    } else if session.is_some() && chat.is_spin_off() {
+        let from = crate::pty::pane_parent::request_caller().or_else(|| chat.nested_under()).map(|pane| super::spin_off::pane_name(registry, &pane)).unwrap_or_else(|| "the agent that spun this chat off".to_string());
+        let note = super::spin_off::note_from_parent(chat, &from, &task)?;
+        let mut done = view(chat);
+        if let Some(map) = done.as_object_mut() {
+            map.insert("message".into(), note);
+        }
+        return Ok(done);
     }
     let model = text_of(value, "model");
     let reasoning = text_of(value, "reasoning");
@@ -1140,6 +1195,7 @@ fn followup(chat: &AcpChat, value: &Value, session: Option<&str>, next_turn: boo
 
 fn answer(chat: &AcpChat, value: &Value, session: Option<&str>) -> Reply {
     owned(chat, session)?;
+    super::spin_off::refuse_answer(chat, session)?;
     let prompt = text_of(value, "prompt_id").ok_or_else(|| err("INVALID_ARGUMENT", "answer_prompt needs prompt_id", false))?;
     let choice = text_of(value, "choice").ok_or_else(|| err("INVALID_ARGUMENT", "answer_prompt needs choice", false))?;
     match chat.answer_for_agent(&prompt, &choice, who(session)) {

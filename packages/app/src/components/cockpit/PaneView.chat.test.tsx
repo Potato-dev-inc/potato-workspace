@@ -95,11 +95,12 @@ describe('pane Chat tab', () => {
     expect(names.indexOf('Chat')).toBe(names.indexOf('Terminal') + 1);
   });
 
-  it('is not shown for a plain shell pane', async () => {
+  it('is not shown for a plain shell pane (one view left, so no tab row)', async () => {
     await act(async () => root.render(<PaneView c={cockpit('powershell')} paneId="p1" />));
     await flush();
     expect(tabs()).not.toContain('Chat');
-    expect(tabs()).toContain('Terminal');
+    expect(host.querySelector('[role="tablist"]')).toBeNull();
+    expect(host.querySelector('[data-testid="term"]')).not.toBeNull();
   });
 
   it('renders the chat panel when clicked, and reads the pane session file', async () => {
@@ -142,7 +143,8 @@ describe('pane Chat tab', () => {
     await act(async () => root.render(<PaneView c={shell} paneId="p1" />));
     await flush();
     expect(tabs()).not.toContain('Chat');
-    expect(tab('Terminal').getAttribute('aria-selected')).toBe('true');
+    expect(host.querySelector('[role="tablist"]')).toBeNull();
+    expect(host.querySelector('[data-testid="term"]')).not.toBeNull();
     expect(host.querySelector('[data-testid="session-chat"]')).toBeNull();
   });
 });

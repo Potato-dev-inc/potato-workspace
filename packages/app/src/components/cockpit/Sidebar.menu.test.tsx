@@ -104,7 +104,7 @@ describe('the sidebar ... menu: short labelled groups', () => {
       'Project',
       'Spaces',
     ]);
-    expect([...groups()[1].querySelectorAll('[role="menuitem"]')].map((b) => b.textContent?.trim())).toEqual(['Set up agents']);
+    expect([...groups()[1].querySelectorAll('[role="menuitem"]')].map((b) => b.textContent?.trim())).toEqual(['Review', 'Set up agents']);
     expect([...groups()[2].querySelectorAll('[role="radio"]')].map((b) => b.textContent?.trim())).toEqual(['One window', 'A window per agent']);
   });
 

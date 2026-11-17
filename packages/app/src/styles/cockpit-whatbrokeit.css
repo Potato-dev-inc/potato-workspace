@@ -1,7 +1,7 @@
 /* "What broke the tests?" sheet: set up, running, and the plain result slot. Monochrome: cockpit tokens only, no colour. */
 .cockpit .ck-sheet--wb {
   width: 480px;
-  max-width: calc(100vw - 32px);
+  max-width: calc(calc(100vw / var(--ui-scale, 1)) - 32px);
   display: flex;
   flex-direction: column;
   gap: 12px;

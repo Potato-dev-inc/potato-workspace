@@ -249,7 +249,9 @@ fn a_chats_receipt_says_what_was_not_checked() {
     assert_eq!(receipt["account_source"], "cli_login");
     assert!(receipt["build_id"].as_str().is_some_and(|b| !b.is_empty()));
     let unverified: Vec<&str> = receipt["not_verified"].as_array().unwrap().iter().filter_map(Value::as_str).collect();
-    assert_eq!(unverified, ["no checks configured"], "the confirmed model is not listed as unverified");
+    // The test agent has no read-only way, so the receipt also says so from the start.
+    assert_eq!(unverified[0], "no checks configured", "the confirmed model is not listed as unverified");
+    assert!(unverified[1..].iter().all(|line| line.starts_with("read-only cannot be enforced")), "{unverified:?}");
     assert!(receipt.get("standby_used").is_none(), "no warm chat was used");
 }
 
@@ -343,6 +345,7 @@ fn the_receipt_lists_a_requested_model_the_agent_did_not_confirm() {
         read_only: false,
         read_only_enforcement: "permission_reject",
         read_only_proof: None,
+        read_only_cannot: None,
         checks: &[],
         facts: &no_facts,
     };
@@ -372,6 +375,7 @@ fn the_structured_result_is_built_from_the_reply_and_the_facts() {
         read_only: false,
         read_only_enforcement: "permission_reject",
         read_only_proof: None,
+        read_only_cannot: None,
         checks: &[],
         facts: &facts,
     });
@@ -575,7 +579,7 @@ fn verified_is_true_only_when_a_check_passed_and_otherwise_says_why() {
     assert!(view["verified_reason"].as_str().unwrap().contains("No checks were configured"), "{view}");
     assert_eq!(view["verified_note"], view["verified_reason"]);
     assert_eq!(view["guarantees"]["checks"]["state"], "none");
-    assert_eq!(view["not_verified"], json!(["no checks configured"]));
+    assert_eq!(view["not_verified"][0], "no checks configured");
     let checked = answer(fx.run(json!({ "checks": [{ "type": "result_contains", "text": "w1" }] })));
     assert_eq!(checked["verified"], true, "{checked}");
     assert_eq!(checked["verified_reason"], Value::Null);
@@ -583,4 +587,59 @@ fn verified_is_true_only_when_a_check_passed_and_otherwise_says_why() {
     let failed = answer(fx.run(json!({ "checks": [{ "type": "result_contains", "text": "nope" }] })));
     assert_eq!(failed["verified"], false);
     assert!(failed["verified_reason"].as_str().unwrap().contains("did not pass"));
+}
+
+#[test]
+fn the_receipt_says_from_the_start_when_read_only_cannot_be_enforced_for_the_agent() {
+    use super::receipt::{build, ReceiptInputs};
+    let no_facts = super::receipt::ResultFacts::default();
+    let inputs = |read_only, cannot| ReceiptInputs {
+        status: "running",
+        final_turn: false,
+        checks_total: 0,
+        results: None,
+        reply: None,
+        requested_model: None,
+        model_in_use: None,
+        account: None,
+        account_source: None,
+        lane_note: None,
+        warm: false,
+        read_only,
+        read_only_enforcement: "permission_reject",
+        read_only_proof: None,
+        read_only_cannot: cannot,
+        checks: &[],
+        facts: &no_facts,
+    };
+    let said = |r: &crate::agent_runs::RunReceipt| r.not_verified.iter().any(|line| line.contains("read-only cannot be enforced for opencode"));
+    assert!(said(&build(&inputs(false, Some("opencode")))), "before anything finished");
+    assert!(!said(&build(&inputs(false, None))), "an agent that can enforce it says nothing");
+    assert!(!said(&build(&inputs(true, Some("opencode")))), "guards on: nothing to warn about");
+}
+
+#[test]
+fn a_minion_started_with_keep_pane_false_closes_when_finished_and_nothing_else_does() {
+    let minion = json!({ "started_as": "minion", "as_used": "minion", "as_reason": "requested" });
+    let spin_off = json!({ "started_as": "spin_off", "as_used": "spin_off", "as_reason": "requested" });
+    // A minion with keep_pane: false: the pane is closed when the answer comes back, and the answer says so.
+    let fx = Fx::new();
+    let view = answer(fx.run(json!({ "keep_pane": false, "started": minion })));
+    assert_eq!(view["status"], "completed");
+    assert_eq!(view["pane_open"], false, "{view}");
+    assert_eq!(view["pane_policy"], "closed_when_done");
+    // keep_pane: true (or left out, which the app turns into the setting's answer): it stays.
+    let view = answer(fx.run(json!({ "keep_pane": true, "started": minion })));
+    assert_eq!(view["pane_open"], true, "{view}");
+    assert_eq!(view["pane_policy"], "stays_open_until_you_close_it");
+    // A spin-off is the person's own chat: it never closes by itself.
+    let view = answer(fx.run(json!({ "keep_pane": false, "started": spin_off })));
+    assert_eq!(view["pane_open"], true, "{view}");
+    // Adopting an existing chat (a task for its handle) never closes it.
+    let handle = view["handle"].as_str().expect("a handle").to_string();
+    let view = answer(fx.run(json!({ "handle": handle, "keep_pane": false, "started": minion })));
+    assert_eq!(view["pane_open"], true, "{view}");
+    // A standby's own chat never closes (the rule on its own, since a seat needs a whole pool to set up).
+    assert!(!super::surface::closes_when_done(&json!({ "keep_pane": false, "started": minion }), true));
+    assert!(super::surface::closes_when_done(&json!({ "keep_pane": false, "started": minion }), false));
 }

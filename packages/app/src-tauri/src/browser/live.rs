@@ -34,6 +34,7 @@ struct LiveTab {
     tab: Arc<Tab>,
     preview_id: String,
     origin: crate::point::origin::PreviewOrigin,
+    cdp: Arc<WindowCdp>,
 }
 
 static TABS: Lazy<Mutex<HashMap<String, Arc<LiveTab>>>> = Lazy::new(|| Mutex::new(HashMap::new()));
@@ -161,7 +162,8 @@ fn open(app: &AppHandle, actor: &Actor, args: &Value, watch_sign_in: bool) -> Re
         }
     }
     let show = if std::env::var("PM_BROWSER_HIDDEN").map(|v| v == "1").unwrap_or(false) { Show::Hidden } else { Show::Beside };
-    let info = window::open_for_browser(app, &url, origin.clone(), show).map_err(|m| ToolError::new("WINDOW_FAILED", m))?;
+    let owner = crate::mcp_sessions::claimed_session_pane(&actor.session);
+    let info = window::open_for_browser(app, &url, origin.clone(), show, owner).map_err(|m| ToolError::new("WINDOW_FAILED", m))?;
     let live = tab_for(app, &info.preview_id, origin.clone())?;
     if let Some(pane) = crate::mcp_sessions::claimed_session_pane(&actor.session) {
         *live.owner.lock() = Some(pane);
@@ -213,7 +215,7 @@ fn tab_for(app: &AppHandle, preview_id: &str, origin: crate::point::origin::Prev
     let sink_log = log.clone();
     cdp.subscribe(console::EVENTS, Arc::new(move |event, params| sink_log.lock().ingest(event, &params))).map_err(ToolError::from)?;
     let tab = Arc::new(Tab::new(page, log, Arc::new(LiveEnv)));
-    let live = Arc::new(LiveTab { owner: Mutex::new(None), tab, preview_id: preview_id.to_string(), origin });
+    let live = Arc::new(LiveTab { owner: Mutex::new(None), tab, preview_id: preview_id.to_string(), origin, cdp });
     TABS.lock().insert(preview_id.to_string(), live.clone());
     let (loop_app, loop_live, bar_key, markup_key) = (app.clone(), live.clone(), win.bar_key, win.markup_key);
     std::thread::spawn(move || bar_loop(loop_app, loop_live, bar_key, markup_key));
@@ -269,6 +271,16 @@ fn bar_loop(app: AppHandle, live: Arc<LiveTab>, key: String, markup_key: String)
     if current.as_deref() == Some(live.preview_id.as_str()) {
         *current = None;
     }
+}
+
+/// The page of this preview moved to a new webview (pop out, dock back): the tools and the console follow it.
+pub fn rebind(app: &AppHandle, preview_id: &str) {
+    let Some(live) = TABS.lock().get(preview_id).cloned() else { return };
+    let Some((_, webview)) = window::browser_window(app, preview_id) else { return };
+    live.cdp.rebind(webview);
+    let sink_log = live.tab.log.clone();
+    let _ = live.tab.page.prepare();
+    let _ = live.cdp.subscribe(console::EVENTS, Arc::new(move |event, params| sink_log.lock().ingest(event, &params)));
 }
 
 // ---- the mark-up bar's hooks (see `markup::live`) ----

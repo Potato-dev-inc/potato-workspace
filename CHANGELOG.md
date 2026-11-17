@@ -1,5 +1,32 @@
 # Changelog
 
+## 1.1.9
+
+This is a beta.
+
+- Minions and spin-offs:
+  - Spin-offs are chats you can talk to. Minions run quick work for their agent and appear in Background tasks.
+  - Agents can start and stop terminal commands (start, read, wait and stop). Each one asks you first, and its output is shown read only.
+  - A minion can close its window when it is done. A clear note says which kind was started.
+  - Standbys can be spin-off or minion kinds. Minion standbys leave the sidebar and show as ready.
+- Dock and browser:
+  - The side panel is a stack of panes: view, command output and a browser, with splitters you can fold and resize.
+  - A browser pane in the dock (Labs, off by default). It pops out into its own window and docks back.
+  - The browser pane recovers when its own window is closed.
+- Drag a task to the sidebar to keep it as a row. You can hand a task to another agent now or when it finishes.
+- Phone:
+  - The bottom area grows from the message box. A risky ask is one card in plain words, and you hold to allow.
+  - A live line says what the agent is doing, and status words roll. Motion can be Full or Reduced.
+  - One Public address card, the QR follows the fixed link, and secrets are hidden until you press the eye.
+- Standbys: a Get standbys ready now button, a short card per warm-up, and a Never close switch. Standbys go to sleep when unused.
+- Force yes: it judges a command named only in the title, and never answers a command that was cut short or hides another command.
+- Chat: the model picker is grouped by maker, rows say what the agent does now, a scroll marker shows where you are, and you can dismiss the more-than-usual note for good.
+- Settings: add your own agent logo, choose whether the X button quits the app, and Aider, Cursor and OpenCode connections are opt in. Quitting counts live background agents and asks one question.
+- Look: thinner scrollbars, a sidebar that never overflows, and a ... menu that is never cut off at any zoom. Review now lives in that menu.
+- Crew canvas: drag to pan, and right-click a box for the app menu.
+- Sign-in: a link from the browser is read in every form Windows hands over. Only an installed release registers the potato-workspace link handler, never a test build.
+- Search no longer lists standby seats or minion runs as open agents.
+
 ## 1.1.8
 
 This is a beta.
@@ -546,6 +573,25 @@ This is a beta.
 - `wait_agents` replies also include how long a prompt has been open and the last prompt that ended.
 - Chat messages can now attach files: the + button (or dropping files on the message box) takes several at once, puts text and code file contents inline, and copies images, PDFs and other binary files into `.potato-workspace/attachments/` so both terminal and chat agents can open them.
 - `wait_agents` now recognises a finished chat helper and returns its final reply once, instead of asking again with no pause. It also waits a short quiet window after reported background work drains so a later reply is not missed, paces retries when a wait slice returns early, and reports a local connection failure as `bridge_unreachable` (“the bridge may still be running”) instead of `bridge_down`.
+
+### Field feedback from a delegated Haiku 5.5 run
+
+> “The MCP works, but it was rougher than it should have been.”
+>
+> **What worked well**
+> - `run_agent`, `wait_agents` and `followup_task` fit together simply. I got a handle back and could continue the same conversation on it.
+> - The visible run correctly picked Haiku 5.5 at low reasoning. It also reported model mismatches, which is how I caught that the headless run had actually used Sonnet.
+> - The receipts and the `not_verified` list are honest about what wasn't checked, and I like that.
+>
+> **Friction**
+> - **Silent model swap:** I asked for Haiku and the headless run came back as `resolved_model: claude-sonnet-5-5`. It did say `model_mismatch: true` and `model_verified: false`, but only at the end, in the wait result. If I hadn't read that carefully, I'd have believed I got Haiku.
+> - **Headless runs are hard to steer:** I wanted to switch to a visible pane partway through. The only option was to start a second run, and I didn't cancel the first. A “restart this run visibly” option would help.
+> - **Version-mismatch warning:** The `SCHEMA_DRIFT` warning is attached to every response and is very long. It adds a lot of noise to each reply.
+> - **Mixed handle formats:** One run gave me a UUID and the other gave an `acp-…` pane id. The handles looked different and behaved a bit differently, for example in whether a pane stays open.
+> - **Deferred tool schemas:** I had to load them with `ToolSearch` before I could call anything. That's the harness, not the MCP.
+> - **Blocked sleep:** The `sleep 60` block came from the subagent's harness, not the MCP. The agent handled it well by refusing to work around it and asking.
+>
+> **Overall:** It's a solid delegation layer, and I'd use it again. The main fix I'd want is a loud, up-front error or confirmation when the requested model can't be honored, instead of a flag you find later.
 
 ## 1.0.3
 

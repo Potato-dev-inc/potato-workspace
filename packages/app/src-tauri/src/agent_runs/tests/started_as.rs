@@ -55,24 +55,39 @@ fn one_type_ignores_as_and_never_sets_started_as() {
 }
 
 #[test]
-fn only_a_minion_left_to_the_default_may_be_handed_a_ready_standby() {
-    // Under "Let it choose" with no `as`: a ready spin-off standby takes the run and it becomes a spin-off.
+fn the_standby_kind_a_run_may_take_follows_the_table() {
+    use crate::agent_run_mode::StartedAs;
+    // Under "Let it choose" with no `as`: a standby of either kind may take the run, and its kind settles the run.
     let mut got = run(StartedAgentTypes::Two, Setting::AgentChooses, None);
-    assert!(got.standby_may_upgrade && !got.standby_refused);
-    got.took_standby(false);
+    assert!(got.standby_may_upgrade);
+    assert_eq!(got.standby_kind_wanted(false), None);
+    got.took_standby(false, StartedAs::SpinOff);
     assert_eq!((got.as_used.as_str(), got.as_reason.as_str(), got.started_as.as_deref()), ("spin_off", "standby", Some("spin_off")));
-    // `as: "minion"` and a forced Minion leave spin-off standbys alone.
-    for (setting, asked) in [(Setting::AgentChooses, Some("minion")), (Setting::Minion, None), (Setting::Minion, Some("spin_off"))] {
+    let mut minion = run(StartedAgentTypes::Two, Setting::AgentChooses, None);
+    minion.took_standby(false, StartedAs::Minion);
+    assert_eq!((minion.as_used.as_str(), minion.as_reason.as_str(), minion.started_as.as_deref()), ("minion", "standby", Some("minion")));
+    // `as: "minion"` and a forced Minion take only a minion standby; `as: "spin_off"` and a forced Spin-off only a spin-off one.
+    for (setting, asked, wanted) in [
+        (Setting::AgentChooses, Some("minion"), StartedAs::Minion),
+        (Setting::Minion, None, StartedAs::Minion),
+        (Setting::Minion, Some("spin_off"), StartedAs::Minion),
+        (Setting::AgentChooses, Some("spin_off"), StartedAs::SpinOff),
+        (Setting::SpinOff, None, StartedAs::SpinOff),
+    ] {
         let got = run(StartedAgentTypes::Two, setting, asked);
-        assert!(got.standby_refused && !got.standby_may_upgrade, "{setting:?} as {asked:?}");
+        assert!(!got.standby_may_upgrade, "{setting:?} as {asked:?}");
+        assert_eq!(got.standby_kind_wanted(false), Some(wanted), "{setting:?} as {asked:?}");
+        // A standby named by the agent is taken whatever its kind.
+        assert_eq!(got.standby_kind_wanted(true), None);
     }
-    // A standby named by the agent: the standby's own kind (spin-off) wins whatever was asked.
+    // A named standby's own kind wins whatever was asked.
     let mut named = run(StartedAgentTypes::Two, Setting::AgentChooses, Some("minion"));
-    named.took_standby(true);
+    named.took_standby(true, StartedAs::SpinOff);
     assert_eq!((named.as_used.as_str(), named.as_reason.as_str()), ("spin_off", "standby"));
-    // One type never changes.
+    // One type never changes and takes any standby.
     let mut helper = run(StartedAgentTypes::One, Setting::AgentChooses, None);
-    helper.took_standby(true);
+    assert_eq!(helper.standby_kind_wanted(false), None);
+    helper.took_standby(true, StartedAs::Minion);
     assert_eq!(helper.as_used, "helper");
 }
 
@@ -143,4 +158,42 @@ fn a_pane_without_started_as_is_a_spin_off_when_it_was_a_helper_and_listings_sho
         assert_eq!(listed_started_as(&pane(None, Some("pane-0"))), Some("spin_off"));
         assert_eq!(listed_started_as(&pane(None, None)), None);
     });
+}
+
+#[test]
+fn the_reply_says_up_front_which_kind_ran_and_why_when_it_is_not_the_kind_asked_for() {
+    // A minion that was asked for and ran: the plain sentence, nothing about a change.
+    let minion = run(StartedAgentTypes::Two, Setting::AgentChooses, Some("minion"));
+    assert!(minion.note().starts_with("This is a minion"), "{}", minion.note());
+    assert!(!minion.note().contains("You asked"));
+    // One type: a minion request is not used, and the note says so with the real page name (never "Helper agents").
+    let one = run(StartedAgentTypes::One, Setting::AgentChooses, Some("minion"));
+    assert_eq!(one.as_used, "helper");
+    let note = one.note();
+    assert!(note.contains("You asked for a minion") && note.contains("Two types is off"), "{note}");
+    assert!(note.contains("Settings > Agents that agents start"), "{note}");
+    assert!(!note.contains("Helper agents"));
+    // The person's setting wins: it says so.
+    let spin = run(StartedAgentTypes::Two, Setting::SpinOff, Some("minion"));
+    let note = spin.note();
+    assert!(note.contains("You asked for a minion, but this is a spin-off") && note.contains("setting"), "{note}");
+    // A named standby of the other kind: the note names that, so a minion request never turns into a spin-off silently.
+    let mut named = run(StartedAgentTypes::Two, Setting::AgentChooses, Some("minion"));
+    named.took_standby(true, crate::agent_run_mode::StartedAs::SpinOff);
+    assert_eq!(named.as_used, "spin_off");
+    assert!(named.note().contains("You asked for a minion, but this is a spin-off") && named.note().contains("standby"), "{}", named.note());
+}
+
+#[test]
+fn a_run_with_no_task_says_a_task_is_needed_and_points_at_standbys() {
+    let error = crate::agent_runs::task_required_error();
+    assert_eq!(error.code, "INVALID_TASK");
+    assert!(error.message.contains("A task is required") && error.message.contains("no placeholder"));
+    assert!(error.message.contains("standby") && error.message.contains("workspace_config"));
+}
+
+#[test]
+fn an_agent_that_cannot_be_made_read_only_says_so_in_the_receipt_line() {
+    let note = crate::agent_runs::read_only_cannot_note("opencode");
+    assert!(note.contains("read-only cannot be enforced for opencode") && note.contains("only a request"));
 }

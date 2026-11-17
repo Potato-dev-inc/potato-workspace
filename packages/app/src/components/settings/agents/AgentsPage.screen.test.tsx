@@ -8,6 +8,8 @@ import type { AgentRegistryListing } from '../../../lib/agentRegistry';
 import { SECTIONS } from '../catalog';
 import { click, mountRows, settle, type Mounted } from '../test-utils';
 import { openAgentPage, setOpenAgent } from './agentTarget';
+import { LS_ADDED_AGENTS, markAgentAdded } from '../../../lib/optInAgents';
+import { LS_CUSTOM_LOGOS } from '../../../lib/customAgentLogos';
 
 const cap = (value: Cap['value'] = 'unknown', source: Cap['source'] = 'unknown'): Cap => ({
   value,
@@ -74,8 +76,9 @@ vi.mock('../../../lib/agent-health', () => ({
 }));
 vi.mock('../../../lib/agentRegistry', async (importOriginal) => {
   const real = await importOriginal<typeof import('../../../lib/agentRegistry')>();
-  const agent = (id: string, label: string, kind = 'cli') => ({ id, label, icon: null, installed: true, kind }) as unknown as AgentRegistryListing['agents'][number];
-  const listing = { ...real.fallbackListing(), agents: [agent('claude', 'Claude'), agent('kimi', 'Kimi'), agent('powershell', 'PowerShell', 'shell')] };
+  const agent = (id: string, label: string, kind = 'cli', installed = true) => ({ id, label, icon: null, installed, kind }) as unknown as AgentRegistryListing['agents'][number];
+  // Aider is registered but not installed: it stays out of "Your agents" until the person adds it.
+  const listing = { ...real.fallbackListing(), agents: [agent('claude', 'Claude'), agent('kimi', 'Kimi'), agent('powershell', 'PowerShell', 'shell'), agent('aider', 'Aider', 'cli', false)] };
   return { ...real, useAgentRegistry: () => listing, handleDefinitionsChanged: vi.fn(async () => undefined) };
 });
 vi.mock('../../../lib/agentDefinitions', async (importOriginal) => {
@@ -124,6 +127,8 @@ beforeEach(() => {
   mocks.remove.mockClear();
 });
 afterEach(async () => {
+  localStorage.removeItem(LS_ADDED_AGENTS);
+  localStorage.removeItem(LS_CUSTOM_LOGOS);
   setOpenAgent(null);
   await m?.unmount();
 });
@@ -271,5 +276,47 @@ describe('Settings > Agents', () => {
     await settle(6);
     expect(mocks.remove).toHaveBeenCalledWith('C:/agents/claude.toml');
     expect(page()).toBeNull();
+  });
+});
+
+describe('Settings > Agents: opt-in agents and custom logos', () => {
+  it('Aider is registered but not listed until the person adds it', async () => {
+    await mount();
+    expect(q('[data-testid="agent-row-aider"]')).toBeNull();
+    await m.unmount();
+    markAgentAdded('aider');
+    await mount();
+    expect(q('[data-testid="agent-row-aider"]')).not.toBeNull();
+  });
+
+  it('a custom logo picked on an agent page shows in the list, and "Use the original" brings the built-in mark back', async () => {
+    await mount();
+    expect(q('[data-testid="agent-row-claude"] [data-mark="logo"]')).not.toBeNull();
+    await click(q('[data-testid="agent-row-claude"] .ag-open'));
+    const input = q('[data-testid="agent-logo-file"]') as HTMLInputElement;
+    const file = new File(['<svg xmlns="http://www.w3.org/2000/svg"/>'], 'mine.svg', { type: 'image/svg+xml' });
+    Object.defineProperty(input, 'files', { value: [file], configurable: true });
+    await act(async () => {
+      input.dispatchEvent(new Event('change', { bubbles: true }));
+    });
+    await settle(6);
+    expect(page()?.querySelector('[data-mark="custom"]')).not.toBeNull();
+    expect(JSON.parse(localStorage.getItem(LS_CUSTOM_LOGOS) ?? '{}').claude).toMatch(/^data:image\/svg\+xml/);
+    await click(page()!.querySelector('button[aria-label="Use the original logo for Claude"]'));
+    expect(page()?.querySelector('[data-mark="custom"]')).toBeNull();
+    expect(page()?.querySelector('[data-mark="logo"]')).not.toBeNull();
+  });
+
+  it('a file that is not a picture is refused with a plain sentence and nothing is saved', async () => {
+    await mount();
+    await click(q('[data-testid="agent-row-claude"] .ag-open'));
+    const input = q('[data-testid="agent-logo-file"]') as HTMLInputElement;
+    Object.defineProperty(input, 'files', { value: [new File(['x'], 'a.txt', { type: 'text/plain' })], configurable: true });
+    await act(async () => {
+      input.dispatchEvent(new Event('change', { bubbles: true }));
+    });
+    await settle(4);
+    expect(page()?.textContent).toContain('not a picture we can use');
+    expect(localStorage.getItem(LS_CUSTOM_LOGOS)).toBeNull();
   });
 });

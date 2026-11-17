@@ -2,12 +2,12 @@
 // wait with no tokens used, and the next task that fits one uses it. The same list feeds the top bar's "Ready" chips
 // (`useStandbyHelpers`). Backed by `standby::helpers` and the warm chat pool.
 import { useState } from 'react';
-import { useT, type MessageKey } from '../../../i18n';
+import { twoTypesWording, useT, type MessageKey } from '../../../i18n';
 import { useAgentRegistry } from '../../../lib/agentRegistry';
 import { errorSentence } from '../../../lib/sayError';
-import { tauriStandbyHelpersApi, useStandbyHelpers, type StandbyHelperEntry, type StandbyHelpersApi, type StandbyHelpersView } from '../../../lib/standbyHelpers';
+import { standbyKindOf, tauriStandbyHelpersApi, useStandbyHelpers, type StandbyHelperEntry, type StandbyKind, type StandbyHelpersApi, type StandbyHelpersView } from '../../../lib/standbyHelpers';
 import { NumberControl, TextControl } from '../controls';
-import { Btn, Note, SettingBlock } from '../settings-ui';
+import { Btn, Note, SettingBlock, SettingToggle } from '../settings-ui';
 
 type Change = () => Promise<StandbyHelpersView | null>;
 
@@ -42,6 +42,18 @@ export function StandbyHelpersSettings({ api = tauriStandbyHelpersApi, onSaved }
           {error && <Note role="alert">{error}</Note>}
         </div>
       </SettingBlock>
+      {twoTypesWording() && (
+        <SettingBlock label={t('standby.kind.defaultLabel')} description={t('standby.kind.defaultHint')}>
+          <div className="flex flex-wrap items-center gap-2 text-sm" role="radiogroup" aria-label={t('standby.kind.defaultLabel')} data-testid="standby-default-kind">
+            {(['spin_off', 'minion'] as const).map((k) => (
+              <Btn key={k} small role="radio" aria-checked={(view.default_kind ?? 'spin_off') === k} onClick={() => void run(() => api.setLimits(view.max, view.idle_minutes, k))}>
+                {(view.default_kind ?? 'spin_off') === k ? '✓ ' : ''}
+                {t(`standby.kind.${k}` as MessageKey)}
+              </Btn>
+            ))}
+          </div>
+        </SettingBlock>
+      )}
       <SettingBlock label={t('standby.limitsLabel')} description={t('standby.limitsHelp')}>
         <div className="flex flex-wrap items-center gap-x-6 gap-y-2 text-sm">
           <label className="flex items-center gap-2">
@@ -50,11 +62,15 @@ export function StandbyHelpersSettings({ api = tauriStandbyHelpersApi, onSaved }
           </label>
           <label className="flex items-center gap-2">
             {t('standby.idle')}
-            <NumberControl min={1} max={1440} aria-label={t('standby.idleAria')} value={view.idle_minutes} onCommit={(minutes) => run(() => api.setLimits(view.max, minutes))} />
+            <NumberControl min={1} max={1440} aria-label={t('standby.idleAria')} value={view.idle_minutes} onCommit={(minutes) => run(() => api.setLimits(view.max, minutes))} disabled={!!view.never_close} />
             {t('standby.minutes')}
           </label>
         </div>
+        <p className="mt-2 text-xs text-pm-muted">{t('standby.sleepNote')}</p>
       </SettingBlock>
+      {api.setNeverClose && (
+        <SettingToggle label={t('preload.neverClose')} description={t('preload.neverCloseHelp')} checked={!!view.never_close} onChange={(on) => void run(() => api.setNeverClose!(on))} />
+      )}
     </>
   );
 }
@@ -82,6 +98,16 @@ function StandbyRow({ helper, onChange, api }: { helper: StandbyHelperEntry; onC
       <span className="text-sm font-medium" data-testid={`standby-state-${helper.id}`}>
         {t(`standby.state.${helper.state}`)}
       </span>
+      {twoTypesWording() && (
+        <span className="flex items-center gap-1" role="radiogroup" aria-label={t('standby.kind.label')} data-testid={`standby-kind-${helper.id}`}>
+          {(['spin_off', 'minion'] as const).map((k) => (
+            <Btn key={k} small role="radio" aria-checked={standbyKindOf(helper) === k} onClick={() => standbyKindOf(helper) !== k && void onChange(() => api.update(helper.id, { kind: k as StandbyKind }))}>
+              {standbyKindOf(helper) === k ? '✓ ' : ''}
+              {t(`standby.kind.${k}` as MessageKey)}
+            </Btn>
+          ))}
+        </span>
+      )}
       <span className="font-mono text-xs text-pm-muted">{helper.project}</span>
       {note && <span className="text-xs text-pm-text">{note}</span>}
       {(helper.state === 'asleep' || helper.state === 'problem') && helper.note !== 'needs_chat' && helper.note !== 'folder_missing' && (

@@ -42,10 +42,10 @@ const mount = () =>
   );
 
 describe('SidebarFooter', () => {
-  it('is one row: Help, Settings, Review, and a More menu', () => {
+  it('is one row: Help, Settings, and a More menu (Review lives in the menu)', () => {
     mount();
     const buttons = [...host.querySelectorAll<HTMLButtonElement>('.ck-foot-icons > button, .ck-foot-icons .ck-menu-wrap > button')];
-    expect(buttons.map((b) => b.getAttribute('aria-label'))).toEqual(['Help', 'Settings', 'Review', 'More']);
+    expect(buttons.map((b) => b.getAttribute('aria-label'))).toEqual(['Help', 'Settings', 'More']);
     expect(host.querySelectorAll('.ck-foot-icons').length).toBe(1);
   });
 
@@ -59,7 +59,7 @@ describe('SidebarFooter', () => {
     expect(groups.map(caption)).toEqual(['Go to', 'Tools', 'Mode']);
     // Browser comes first (the globe had no home), then the pages that have one.
     expect([...groups[0].querySelectorAll('[role="menuitem"]')].map((i) => i.textContent?.trim())).toEqual(['Browser', 'Project']);
-    expect([...groups[1].querySelectorAll('[role="menuitem"]')].map((i) => i.textContent?.trim())).toEqual(['Set up agents']);
+    expect([...groups[1].querySelectorAll('[role="menuitem"]')].map((i) => i.textContent?.trim())).toEqual(['Review', 'Set up agents']);
     expect([...groups[2].querySelectorAll('[role="radio"]')].map((r) => r.textContent?.trim())).toEqual(['One window', 'A window per agent']);
   });
 
@@ -85,7 +85,7 @@ describe('SidebarFooter', () => {
   it('in a narrow window (icons only) every footer button still has a name and a tooltip', () => {
     mount();
     const buttons = [...host.querySelectorAll<HTMLButtonElement>('.ck-foot-icons button')];
-    expect(buttons.length).toBe(4);
+    expect(buttons.length).toBe(3);
     for (const b of buttons) {
       expect(b.getAttribute('aria-label') ?? '').not.toBe('');
       expect(b.getAttribute('title') ?? '').not.toBe('');
@@ -117,19 +117,25 @@ describe('SidebarFooter: the Review count as text', () => {
       ),
     );
 
-  it('names the count next to the Review icon when there is something to review', () => {
+  const openMore = () => act(() => host.querySelector<HTMLButtonElement>('button[aria-label="More"]')!.click());
+  const item = () => document.querySelector<HTMLButtonElement>('button.ck-menu-review')!;
+
+  it('is not in the bottom bar; the More menu has it with its count, and a dot shows on the button', () => {
     mountWith(3);
-    const btn = host.querySelector('button.ck-foot-review')!;
-    expect(btn.querySelector('.ck-foot-label')?.textContent).toBe('Review · 3');
-    expect(btn.getAttribute('aria-label')).toBe('Review, 3 waiting');
-    expect(btn.querySelector('.ck-foot-badge')?.textContent).toBe('3');
+    expect(host.querySelector('.ck-foot-icons button[aria-label^="Review"]')).toBeNull();
+    expect(host.querySelector('[data-testid="more-review-dot"]')).not.toBeNull();
+    openMore();
+    expect(item().getAttribute('aria-label')).toBe('Review, 3 waiting');
+    expect(item().querySelector('.ck-menu-count')?.textContent).toBe('3');
+    expect(item().getAttribute('role')).toBe('menuitem');
   });
 
-  it('shows just Review, and no badge, when there is nothing to review', () => {
+  it('shows just Review, no count and no dot, when there is nothing to review', () => {
     mountWith(0);
-    const btn = host.querySelector('button.ck-foot-review')!;
-    expect(btn.querySelector('.ck-foot-label')?.textContent).toBe('Review');
-    expect(btn.querySelector('.ck-foot-badge')).toBeNull();
+    expect(host.querySelector('[data-testid="more-review-dot"]')).toBeNull();
+    openMore();
+    expect(item().getAttribute('aria-label')).toBe('Review');
+    expect(item().querySelector('.ck-menu-count')).toBeNull();
   });
 
   it('Routines is a row of the More menu and opens the page', () => {

@@ -11,6 +11,7 @@ import { DotSpinner } from '../cockpit/DotSpinner';
 import { NotificationsToggle } from './NotificationsToggle';
 import { TelegramOffRow } from './TelegramOffRow';
 import { PhoneTextSizeRow } from './PhoneTextSizeRow';
+import { PhoneMotionRow } from './PhoneMotionRow';
 import { PhoneThemeRow } from './PhoneThemeRow';
 
 /** Past this drag distance (or this speed) a swipe down closes the sheet. */
@@ -324,6 +325,7 @@ export function MenuSheet({
         <h2 className="ph-sec">{t('phone.menu.display')}</h2>
         <PhoneThemeRow />
         <PhoneTextSizeRow />
+        <PhoneMotionRow />
 
         <h2 className="ph-sec">{t('phone.menu.notifications')}</h2>
         <NotificationsToggle baseUrl={bridgeUrl} bridgeReady={bridgeReady} />

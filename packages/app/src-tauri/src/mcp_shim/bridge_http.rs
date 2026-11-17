@@ -432,6 +432,13 @@ fn bridge_request_wait_agents_once(
 }
 
 pub(crate) fn bridge_read_timeout_secs(method: &str, path: &str, body: Option<&Value>) -> u64 {
+    // A background terminal's start (it may wait for a line and for the person's Allow) and its waits.
+    if method == "POST" && (path == "/terminals/start" || path == "/terminals/wait") {
+        let key = if path == "/terminals/start" { "wait_ms" } else { "timeout_ms" };
+        let ms = body.and_then(|v| v.get(key)).and_then(Value::as_u64).unwrap_or(30_000).min(330_000);
+        // The person's Allow is waited for up to a minute before the call comes back.
+        return (ms / 1000).saturating_add(if path == "/terminals/start" { 90 } else { 15 }).min(420);
+    }
     if method == "POST"
         && (path.contains("/panes/wait")
             || path.contains("/operations/") && path.ends_with("/wait")

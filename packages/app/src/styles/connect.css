@@ -1,6 +1,12 @@
 /* Connect: one page, four tabs (Phone, My PCs, Team, Lending). Colour tokens only; orange (--accent) shows up
    as the one primary button, the lit "connected" dot and focus. Everything else is grey. */
 
+.cockpit .ck-connect-scroll {
+  flex: 1;
+  min-height: 0;
+  min-width: 0;
+  overflow-y: auto;
+}
 .cn-page {
   display: flex;
   flex-direction: column;

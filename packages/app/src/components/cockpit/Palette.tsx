@@ -25,6 +25,8 @@ import { AgentLogo } from '../common/AgentLogo';
 import { IconChart, IconInbox, IconClose, IconCopy, IconGlobe, IconInfo, IconLayers, IconMoon, IconNote, IconPlus, IconReflow, IconRename, IconSearch, IconSettings, IconStop, IconSun, IconTerminal, IconTeam } from './Icons';
 import { t } from '../../i18n';
 import { isCompanionPaneId } from './companion/model';
+import { isListedAgentPane } from '../../lib/pane-helpers';
+import { useOpenedStandbyPanes } from '../../lib/standbyHelpers';
 import { requestPaneAction } from '../../lib/pane-actions';
 import { matchesQuery, stateText } from './model';
 import { settingsShortcuts } from './palette-shortcuts';
@@ -154,6 +156,7 @@ export function Palette({
   const needsYou = useContext(NeedsYouContext) ?? NO_ITEMS;
   const keysVersion = useKeybindingsVersion();
   const t = useT();
+  const openedStandbyPanes = useOpenedStandbyPanes();
   const items = useMemo<Item[]>(() => {
     const out: Item[] = [];
     const multiLogin = multiLoginAgents(c.registry.paneList.map((p) => p.info));
@@ -169,8 +172,10 @@ export function Palette({
       });
     }
     const waiting = new Set(needsYou.flatMap((item) => (item.paneId ? [item.paneId] : [])));
+    // A standby's own chat and a minion's run are not open agents: they never show as one here (closed ones stay under Closed chats).
+    const agentPanes = c.registry.paneList.filter((p) => isListedAgentPane(p.info, openedStandbyPanes));
     const ranked = rankPanes(
-      c.registry.paneList.map((p) => ({ id: p.info.id, p })),
+      agentPanes.map((p) => ({ id: p.info.id, p })),
       waiting,
       paneLastUsed(),
     ).map((x) => x.p);
@@ -220,7 +225,7 @@ export function Palette({
     }
     out.push(...shellRows);
     // Moving around: the same actions as the keys, with the keys you chose shown on the right.
-    const listed = c.registry.paneList.map((p) => p.info.id).filter((id) => !isCompanionPaneId(id));
+    const listed = agentPanes.map((p) => p.info.id).filter((id) => !isCompanionPaneId(id));
     if (onOpenInbox) {
       out.push({ id: 'act:inbox', group: 'Actions', title: 'Open the Inbox', desc: 'Everything that is waiting for you', keywords: 'inbox needs you waiting cards', icon: <IconInbox />, hint: bindingLabel('open-inbox') || undefined, run: onOpenInbox });
     }
@@ -574,8 +579,10 @@ export function Palette({
         run: () => void c.toggleTheme(),
       },
     );
-    return out;
-  }, [c, terminals, laneView, onOpenDoctor, onStopAll, onOpenMemory, onOpenPlans, onOpenScores, onOpenTeam, onOpenReview, onReviewRiskiest, onOpenStore, onUndoLastTurn, onWhatBroke, onOpenWelcome, onStartCrew, onOpenShortcuts, onOpenInbox, needsYou, keysVersion, missionsOn, nightOn, guideOn, onOpenMorning, companions, onOpenCompanion, onNewCompanion, liveStatus, liveOn, deskAway, deskStore, t]);
+    // One row per id: a repeated id makes React keep stale copies of the row while you type.
+    const seen = new Set<string>();
+    return out.filter((i) => (seen.has(i.id) ? false : (seen.add(i.id), true)));
+  }, [c, terminals, laneView, onOpenDoctor, onStopAll, onOpenMemory, onOpenPlans, onOpenScores, onOpenTeam, onOpenReview, onReviewRiskiest, onOpenStore, onUndoLastTurn, onWhatBroke, onOpenWelcome, onStartCrew, onOpenShortcuts, onOpenInbox, needsYou, openedStandbyPanes, keysVersion, missionsOn, nightOn, guideOn, onOpenMorning, companions, onOpenCompanion, onNewCompanion, liveStatus, liveOn, deskAway, deskStore, t]);
 
   const filtered = useMemo(
     () => items.filter((i) => matchesQuery(`${i.title} ${i.desc ?? ''} ${i.keywords ?? ''} ${i.group}`, query)),

@@ -5,6 +5,7 @@ import { useT } from '../../i18n';
 import type { PaneView } from '../../lib/mobile-pane-view';
 import type { PhoneStatus } from '../../lib/phone-status';
 import { PhoneAgentTile } from './PhoneAgentTile';
+import { RollText } from './RollText';
 import '../../styles/phone-shell.css';
 import { Menu } from '../common/Floating';
 
@@ -57,7 +58,7 @@ export function PhoneHeader({
         <span className="ph-head-name">{title}</span>
         {words && (
           <span className="ph-head-state" data-kind={status?.kind}>
-            {words}
+            <RollText text={words} />
           </span>
         )}
       </span>
@@ -82,7 +83,11 @@ export function PhoneHeader({
         <svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true">
           <path d="M4 7h16M4 12h10M4 17h16" />
         </svg>
-        {waiting > 0 && <span className="ph-badge" aria-hidden="true">{waiting}</span>}
+        {waiting > 0 && (
+          <span className="ph-badge" aria-hidden="true">
+            <RollText text={String(waiting)} />
+          </span>
+        )}
       </button>
       <div className="ph-head-mid" ref={rootRef}>
         {peek ? (

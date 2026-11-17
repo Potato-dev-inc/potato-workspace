@@ -61,10 +61,13 @@ fn helpers_show_the_folder_name_never_the_path() {
             note: None,
             pane_id: None,
             open_pane: None,
-            person_pane: None, warm: false, stage: None, stage_ms: None, used_today: 0, skip_reason: None,
+            person_pane: None, warm: false, kind: Default::default(), stage: None, stage_ms: None, used_today: 0, skip_reason: None,
         }],
         max: 4,
         idle_minutes: 30,
+        never_close: false,
+        default_kind: Default::default(),
+        two_types: false,
     };
     let body = helpers_body(view);
     assert_eq!(body["helpers"][0]["folder"], json!("app"));
@@ -112,4 +115,27 @@ fn both_routes_need_watch_and_a_device_without_it_is_refused() {
     assert_eq!(status(&watcher, &["phone", "helpers"]), 200);
     // A proxied request without a token is refused.
     assert_eq!(status("X-Potato-Workspace-Proxied: 1\r\n", &["phone", "done"]), 401);
+}
+
+#[test]
+fn the_tasks_route_lists_what_the_person_put_in_the_sidebar_and_skips_closed_panes() {
+    use crate::task_sidebar::{Placement, Store};
+    let row = |id: &str, kind: &str, owner: &str, under: Option<&str>| Placement { task_id: id.into(), kind: kind.into(), owner: owner.into(), under: under.map(str::to_string), name: format!("Name of {id}"), command: None };
+    let store = Store { rows: vec![row("minion:m1", "minion", "a1", Some("a1")), row("minion:gone", "minion", "a1", Some("a1")), row("job:a1:7:1", "command", "a1", None), row("minion:m2", "minion", "a2", Some("closed"))] };
+    let open = ["a1", "a2", "m1", "m2"];
+    let body = tasks_body(&store, |id| open.contains(&id).then(|| if id == "m1" { "running".to_string() } else { "idle".to_string() }));
+    let rows = body["rows"].as_array().unwrap();
+    // The minion of a closed pane is not drawn; the one nested under a closed agent is drawn on its own.
+    let ids: Vec<&str> = rows.iter().map(|r| r["taskId"].as_str().unwrap()).collect();
+    assert_eq!(ids, ["minion:m1", "job:a1:7:1", "minion:m2"]);
+    assert_eq!(rows[0]["under"], json!("a1"));
+    assert_eq!(rows[0]["status"], json!("running"));
+    assert_eq!(rows[1]["kind"], json!("command"));
+    assert_eq!(rows[2]["under"], json!(null));
+}
+
+#[test]
+fn the_tasks_route_needs_watch() {
+    assert_eq!(route_need("GET", &["phone", "tasks"]), Need::Cap(Cap::Watch));
+    assert_eq!(route_need("POST", &["phone", "tasks"]), Need::Cap(Cap::Control));
 }

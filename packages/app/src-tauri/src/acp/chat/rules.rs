@@ -101,6 +101,12 @@ impl AcpChat {
 
     /// What goes to the agent for `text`: the first message of the chat gets the rules in front of it, once.
     pub(super) fn wire_text(&self, text: &str) -> String {
+        // A note from another agent says who wrote it (and that it is not the person) in front of the words.
+        let text = match self.wire_prefix.lock().take() {
+            Some(prefix) => format!("{prefix}{text}"),
+            None => text.to_string(),
+        };
+        let text = text.as_str();
         let effective = agent_rules::store().effective(&self.agent_id, Some(&self.project()));
         let Some(preamble) = agent_rules::notes::preamble(&effective.fences, effective.notes.as_deref()) else { return text.to_string() };
         if self.rules.told.swap(true, Ordering::SeqCst) {
@@ -136,6 +142,7 @@ impl AcpChat {
             }
         }
         let roots = self.rule_roots();
+        let command = command_for_rules(kind, wait.command.as_deref(), title);
         let option_of = |kinds: &[&str]| kinds.iter().find_map(|k| wait.options.iter().find(|o| o.kind == *k)).map(|o| o.id.clone());
         let what: String = title.map(str::trim).filter(|t| !t.is_empty()).or(kind).unwrap_or("a tool").chars().take(160).collect();
         // A fence first: it holds whatever Force yes says.
@@ -157,16 +164,16 @@ impl AcpChat {
             return None;
         }
         // A command that names a fenced path may touch it: the person decides.
-        if kind == Some("execute") && wait.command.as_deref().is_some_and(|c| fence::mentioned_in(&fences, c).is_some()) {
+        if kind == Some("execute") && command.as_deref().is_some_and(|c| fence::mentioned_in(&fences, c).is_some()) {
             return None;
         }
-        let ask = force_yes::Ask { kind, title, paths: &paths, command: wait.command.as_deref(), roots: &roots };
+        let ask = force_yes::Ask { kind, title, paths: &paths, command: command.as_deref(), roots: &roots };
         let offered: Vec<(&str, &str)> = wait.options.iter().map(|o| (o.id.as_str(), o.kind.as_str())).collect();
         match force_yes::decide(&ask, &offered) {
             force_yes::Verdict::Allow { option_id } => {
                 self.rules.answered.lock().insert(wait.ask_id, format!("Auto-allowed: {what}"));
                 let mut detail = json!({ "event": "auto_allowed", "pane_id": self.pane_id, "agent": self.agent_id, "kind": kind });
-                if let Some(command) = wait.command.as_deref() {
+                if let Some(command) = command.as_deref() {
                     // The program and a short hash, never the text (the audit log keeps no command text).
                     detail["command"] = crate::audit::command_fingerprint(command);
                 }
@@ -189,6 +196,28 @@ impl AcpChat {
             self.rules.answered.lock().remove(&ask_id);
         }
     }
+}
+
+/// The command a rule judges. Some agents (Agy) put the command only in the question's title (`dir`, or `Run command: dir`)
+/// and send no `rawInput`; for a command question the title then is the command text. The risk rules judge it like any
+/// other: a title that is not a known low-risk command (`Run the tests`) still goes to the person.
+/// The longest title read as a command.
+const TITLE_COMMAND_MAX: usize = 2000;
+
+fn command_for_rules(kind: Option<&str>, raw: Option<&str>, title: Option<&str>) -> Option<String> {
+    if let Some(raw) = raw.map(str::trim).filter(|c| !c.is_empty()) {
+        return Some(raw.to_string());
+    }
+    if kind != Some("execute") {
+        return None;
+    }
+    let title = title?.trim();
+    let title = ["Run command:", "Run command", "Running command:"].iter().find_map(|p| title.strip_prefix(p)).unwrap_or(title).trim();
+    // A title that was cut (too long, or ending in an ellipsis) is not the whole command: the person decides.
+    if title.is_empty() || title.chars().count() > TITLE_COMMAND_MAX || title.ends_with('…') || title.ends_with("...") {
+        return None;
+    }
+    Some(title.to_string())
 }
 
 /// Right after a chat started: the pinned model and mode of its project (best effort: an agent that does not offer

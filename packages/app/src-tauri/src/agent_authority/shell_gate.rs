@@ -51,6 +51,8 @@ fn exempt(segments: &[&str]) -> bool {
             | ["pair", ..]
             // Showing the person a page is what this route is for.
             | ["artifacts", "show"]
+            // The agent background terminals ask the person themselves (`terminal_gate`), and only for an agent in a pane.
+            | ["terminals", _]
             | ["health"]
             // A plan changes nothing (the apply is the call that asks).
             | ["config", "plan"]

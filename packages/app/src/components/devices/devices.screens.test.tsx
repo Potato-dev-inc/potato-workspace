@@ -157,6 +157,17 @@ describe('Settings > Devices', () => {
     expect(document.querySelector('.dev-item')!.textContent).toContain('Your link');
   });
 
+  it('two PCs with the same name show a short id after the name; different names stay plain', async () => {
+    const twin = { ...MAC_MINI, node: 'ab12' + MAC_MINI.node.slice(4) };
+    const fake = new DevicesFake({ enabled: true, devices: [MAC_MINI, twin, WORK_LAPTOP] });
+    await mount(fake);
+    const names = [...document.querySelectorAll('.dev-item b')].map((b) => b.textContent);
+    expect(names).toEqual([`Mac mini · ${MAC_MINI.node.slice(0, 4)}`, 'Mac mini · ab12', 'Work laptop']);
+    await act(async () => click(document.querySelectorAll<HTMLElement>('.dev-item')[1]!));
+    await settle(4);
+    expect(q('[data-testid="device-page"] h3')!.textContent).toBe('Mac mini · ab12');
+  });
+
   it('a lend screen can open one device page straight away, from the list or while it is already open', async () => {
     const fake = new DevicesFake({ enabled: true, devices: [MAC_MINI, WORK_LAPTOP] });
     // Asked for before the page mounts (a borrow form's "Open the switch"): it lands on that device.

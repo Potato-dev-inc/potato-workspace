@@ -6,7 +6,7 @@ fn crew() -> Crew {
 }
 
 fn helper(name: &str, agent: &str, project: &str) -> StandbyHelper {
-    StandbyHelper { id: "sb-1".into(), name: name.into(), agent: agent.into(), model: None, project: project.into(), after_task: AfterTask::Wait, home: None, warm: false }
+    StandbyHelper { id: "sb-1".into(), name: name.into(), agent: agent.into(), model: None, project: project.into(), after_task: AfterTask::Wait, home: None, warm: false, kind: Default::default() }
 }
 
 #[test]

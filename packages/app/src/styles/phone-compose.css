@@ -158,7 +158,7 @@
 }
 .ph .ph-saved {
   display: flex;
-  max-height: 40vh;
+  max-height: calc(40vh / var(--ui-scale, 1));
   flex-direction: column;
   margin-bottom: 8px;
   padding: 6px;
@@ -563,4 +563,50 @@
   white-space: pre-wrap;
   overflow-wrap: anywhere;
   overflow-x: visible;
+}
+
+/* The bottom region: the dock grows out of the message box on one height spring (lib/phone-motion.ts); the chat above stays pinned. */
+.ph .ph-region {
+  flex: none;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  max-height: 100%;
+}
+.ph .ph-region-dock {
+  flex: none;
+  overflow: hidden;
+  max-height: calc(55vh / var(--ui-scale, 1));
+}
+.ph .ph-region-in {
+  max-height: calc(55vh / var(--ui-scale, 1));
+  overflow-y: auto;
+}
+.ph .ph-region-in[data-open='true'] {
+  animation: ph-region-in var(--t-fade) ease-out 60ms both;
+}
+.ph .ph-region-in[data-open='false'] {
+  opacity: 0;
+  transition: opacity 140ms var(--ease-exit);
+}
+@keyframes ph-region-in {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+.ph[data-motion='reduce'] .ph-region-in[data-open='true'] {
+  animation-name: ph-region-fade;
+}
+@keyframes ph-region-fade {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
 }

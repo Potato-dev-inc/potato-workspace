@@ -238,6 +238,8 @@ export const settings: Partial<Record<EnglishKey, string>> = {
   'settings.row.start-at-sign-in.label': '登入 Windows 時啟動 Potato Workspace',
   'settings.row.start-at-sign-in.hint': '會安靜地在系統匣啟動，你的夥伴也會一起醒來。',
   'settings.row.confirm-close.label': '關閉工作中的 AI 助理前先詢問',
+  'settings.row.close-to-tray.label': '關閉視窗後繼續在系統匣執行',
+  'settings.row.close-to-tray.hint': '關閉：右上角的 X 會結束 Potato。開啟：App 會繼續在系統匣中執行。',
   'settings.row.confirm-close.hint': 'AI 助理還在工作時，關閉視窗或從系統匣結束前會先問你。',
   'settings.row.keep-awake.label': 'AI 助理工作時不讓電腦睡眠',
   'settings.row.keep-awake.hint': '鎖定電腦（Win+L）後 AI 助理仍會繼續工作。螢幕還是可以關閉。',

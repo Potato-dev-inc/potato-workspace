@@ -27,7 +27,9 @@ export function isRailSectionClosed(id: string): boolean {
 }
 
 export function setRailSectionClosed(id: string, closed: boolean): void {
-  const next = new Set(current());
+  // Merge with what is stored NOW, not with this window's copy: another window of the app may have folded or opened
+  // a section since this copy was read, and writing the stale copy back would undo that choice.
+  const next = readStored();
   if (closed) next.add(id);
   else next.delete(id);
   state = next;
@@ -37,6 +39,17 @@ export function setRailSectionClosed(id: string, closed: boolean): void {
     // The choice just is not remembered.
   }
   for (const l of listeners) l();
+}
+
+/** Another window changed the list: take its copy. */
+function onStorage(event: StorageEvent): void {
+  if (event.key !== null && event.key !== RAIL_CLOSED_KEY) return;
+  state = readStored();
+  for (const l of listeners) l();
+}
+
+if (typeof window !== 'undefined' && typeof window.addEventListener === 'function') {
+  window.addEventListener('storage', onStorage);
 }
 
 /** Tests: forget the in-memory list so the next read comes from storage again. */

@@ -10,7 +10,7 @@ export interface QuestionChoice {
 
 /** What a consent card is about (Rust `questions::ConsentInfo`). Only Potato Workspace raises these. */
 export interface ConsentInfo {
-  action: 'take_over' | 'answer_prompt' | 'config_change';
+  action: 'take_over' | 'answer_prompt' | 'config_change' | 'background_command';
   /** Who is asking, as a name ("Claude", "Another agent"). */
   requester: string;
   /** What it wants to control, as a name ("Codex"). The card prefers the pane's own name. */

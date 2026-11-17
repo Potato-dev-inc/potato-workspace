@@ -74,3 +74,12 @@
     transition: none;
   }
 }
+
+/* A spin-off under its agent: a small "↳" before the title (a plain glyph, no coloured edge). */
+.cockpit .ck-row-nest {
+  flex: none;
+  margin-right: 5px;
+  color: var(--label);
+  font-size: var(--fs-caption, 11px);
+  line-height: 1;
+}

@@ -130,3 +130,32 @@ describe('remembered widths', () => {
     expect(window.localStorage.getItem(RAIL_WIDTH_KEY)).toBe(String(RAIL_DEFAULT));
   });
 });
+
+describe('the dock sizes', () => {
+  it('moveSplit keeps the shared height and the minimum pane height', async () => {
+    const { moveSplit, DOCK_PANE_MIN } = await import('./panel-widths');
+    expect(moveSplit({}, 'view', 'browser', 500, 800)).toEqual({ view: 1.25, browser: 0.75 });
+    const low = moveSplit({}, 'view', 'browser', 10, 800);
+    expect(low.view).toBeCloseTo((DOCK_PANE_MIN / 800) * 2, 3);
+    const high = moveSplit({}, 'view', 'browser', 9000, 800);
+    expect(high.browser).toBeCloseTo((DOCK_PANE_MIN / 800) * 2, 3);
+    // Too little room for two panes: nothing moves.
+    const same = { view: 1, browser: 1 };
+    expect(moveSplit(same, 'view', 'browser', 200, 300)).toBe(same);
+  });
+  it('remembers the dock width and the split, and ignores damaged values', async () => {
+    const m = await import('./panel-widths');
+    m.setDockWidth(9999);
+    m.setDockSplit({ view: 2, terminal: 1 });
+    m.saveWidths();
+    expect(window.localStorage.getItem(m.DOCK_WIDTH_KEY)).toBe(String(m.DOCK_MAX));
+    act(() => m.resetPanelWidthsForTests());
+    expect(JSON.parse(window.localStorage.getItem(m.DOCK_SPLIT_KEY)!)).toEqual({ view: 2, terminal: 1 });
+    window.localStorage.setItem(m.DOCK_WIDTH_KEY, 'wide');
+    window.localStorage.setItem(m.DOCK_SPLIT_KEY, '{"view":-3,"x":"a","browser":2}');
+    act(() => m.resetPanelWidthsForTests());
+    m.setDockWidth(m.DOCK_DEFAULT); // reads current
+    m.resetDockWidth();
+    expect(window.localStorage.getItem(m.DOCK_WIDTH_KEY)).toBe(String(m.DOCK_DEFAULT));
+  });
+});

@@ -44,22 +44,29 @@ export async function loadTunnelDevInfo(): Promise<PublicBridgeDevInfo | null> {
   return vite;
 }
 
-/** Poll until cloudflared publishes a public URL (startup is async). */
+/**
+ * Poll for the tunnel's public URL (startup is async), and keep checking afterwards, slowly: the address changes when the tunnel
+ * restarts or the person picks another way to connect, and a code made from an old address would open a dead page.
+ */
 export function watchTunnelDevInfo(
   onUpdate: (info: PublicBridgeDevInfo | null) => void,
-  options: { intervalMs?: number; timeoutMs?: number } = {},
+  options: { intervalMs?: number; timeoutMs?: number; settledMs?: number } = {},
 ): () => void {
   const intervalMs = options.intervalMs ?? 1500;
   const timeoutMs = options.timeoutMs ?? 60_000;
+  const settledMs = options.settledMs ?? 4000;
   let stopped = false;
+  let found = false;
 
   const poll = async () => {
     if (stopped) return;
     const info = await loadTunnelDevInfo();
+    if (stopped) return;
     onUpdate(info);
-    if (info?.tunnelUrl) return;
-    if (Date.now() - startedAt >= timeoutMs) return;
-    timer = window.setTimeout(() => void poll(), intervalMs);
+    if (info?.tunnelUrl) found = true;
+    // Before the first address: quick polls, for a minute. After one was seen: slow polls for as long as the page is open.
+    if (!found && Date.now() - startedAt >= timeoutMs) return;
+    timer = window.setTimeout(() => void poll(), found ? settledMs : intervalMs);
   };
 
   const startedAt = Date.now();

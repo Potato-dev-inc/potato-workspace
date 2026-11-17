@@ -210,7 +210,7 @@ pub fn route_need(method: &str, segments: &[&str]) -> Need {
         // they stay in the list; the ones about one agent also meet that agent's remote rule (`pane_of_route`).
         ("GET", ["phone", "new-chat"]) | ("GET", ["acp", "closed"]) => Need::Cap(Watch),
         // The phone home: what finished today and the standby helpers (`bridge/routes/phone_home.rs`). Reads, so `watch`; written out so they stay listed.
-        ("GET", ["phone", "done"] | ["phone", "helpers"]) => Need::Cap(Watch),
+        ("GET", ["phone", "done"] | ["phone", "helpers"] | ["phone", "tasks"]) => Need::Cap(Watch),
         // The agent's model list may start its program to read it, so it acts (`control`), like warming.
         ("GET", ["phone", "new-chat", "models"]) => Need::Cap(Control),
         ("POST", ["phone", "chats"]) | ("POST", ["phone", "warm"]) | ("POST", ["phone", "move-work"]) | ("POST", ["acp", "sessions", _, "config"]) | ("POST", ["acp", "closed", _, "reopen"]) => {

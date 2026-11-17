@@ -9,7 +9,7 @@ html.askbar-root #root {
 }
 
 html.askbar-root #root {
-  height: 100vh;
+  height: calc(100vh / var(--ui-scale, 1));
 }
 
 .askbar {

@@ -5,7 +5,7 @@ import { getCurrentWebviewWindow } from '@tauri-apps/api/webviewWindow';
 import { getCurrentWindow, LogicalSize } from '@tauri-apps/api/window';
 import type { ControlAsk, PaneRemote, PaneRemoteLevel } from './pane-remote';
 import { NOT_AWAY, type DeskAway, type DeskLength } from './desk-away-types';
-import type { AfterTask, NewStandby, StandbyHelpersView } from './standbyHelpers';
+import type { AfterTask, NewStandby, StandbyHelpersView, StandbyKind } from './standbyHelpers';
 import type {
   AgentContextProfile,
   AgentModelInspection,
@@ -351,7 +351,7 @@ export const tauri = {
 
   getTunnelStatus: () => safeInvoke<TunnelStatus | null>('get_tunnel_status', undefined, null, true),
   setTunnelConfig: (input: TunnelConfigInput) => safeInvoke<TunnelStatus>('set_tunnel_config', { input }),
-  restartTunnel: () => safeInvoke<TunnelStatus>('restart_tunnel'),
+  restartTunnel: (tryAnyway = false) => safeInvoke<TunnelStatus>('restart_tunnel', tryAnyway ? { tryAnyway: true } : undefined),
   /** Delete the fixed phone address (OpenTunnel) on the relay and on this computer, then go back to the automatic address. */
   forgetOpenTunnelAddress: () => safeInvoke<TunnelStatus>('forget_opentunnel_address'),
   testTunnelConnection: (url?: string) =>
@@ -363,7 +363,7 @@ export const tauri = {
     safeInvoke<StandbyStatus | null>('standby_set_config', { config }, null, true),
   standbyHelpersGet: () => safeInvoke<StandbyHelpersView | null>('standby_helpers_get', undefined, null, true),
   standbyHelperAdd: (input: NewStandby) => safeInvoke<StandbyHelpersView | null>('standby_helper_add', { input }),
-  standbyHelperUpdate: (id: string, patch: { name?: string; model?: string | null; after_task?: AfterTask; home?: string | null }) =>
+  standbyHelperUpdate: (id: string, patch: { name?: string; model?: string | null; after_task?: AfterTask; home?: string | null; kind?: StandbyKind }) =>
     safeInvoke<StandbyHelpersView | null>('standby_helper_update', {
       id,
       name: patch.name ?? null,
@@ -372,14 +372,16 @@ export const tauri = {
       afterTask: patch.after_task ?? null,
       home: patch.home ?? null,
       changeHome: 'home' in patch,
+      kind: patch.kind ?? null,
     }),
   standbyHelperRemove: (id: string) => safeInvoke<StandbyHelpersView | null>('standby_helper_remove', { id }),
   standbyHelperDetach: (id: string) => safeInvoke<StandbyHelpersView | null>('standby_helper_detach', { id }),
   standbyHelperOpen: (id: string) => safeInvoke<string | null>('standby_helper_open', { id }, null),
   standbyHelperTakeBack: (id: string) => safeInvoke<StandbyHelpersView | null>('standby_helper_take_back', { id }),
   standbyHelperStart: (id: string) => safeInvoke<StandbyHelpersView | null>('standby_helper_start', { id }, null, true),
-  standbyHelpersSetLimits: (max: number, idleMinutes: number) =>
-    safeInvoke<StandbyHelpersView | null>('standby_helpers_set_limits', { max, idleMinutes }),
+  standbyHelpersSetLimits: (max: number, idleMinutes: number, defaultKind?: StandbyKind) =>
+    safeInvoke<StandbyHelpersView | null>('standby_helpers_set_limits', { max, idleMinutes, defaultKind: defaultKind ?? null }),
+  standbyHelpersSetNeverClose: (on: boolean) => safeInvoke<StandbyHelpersView | null>('standby_helpers_set_never_close', { on }),
   diagnosticPreview: () => safeInvoke<DiagnosticPreview>('diagnostic_preview'),
   diagnosticShow: (path: string) => safeInvoke<string>('diagnostic_show', { path }),
   diagnosticSave: (path: string, exclude: string[]) =>

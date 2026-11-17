@@ -1,7 +1,9 @@
 // English messages: sidebar (the cockpit sidebar, project cards, footer and row menus). Keys are dotted (`sidebar.something`). Plural: `<key>_one` / `<key>_other`.
 export const sidebar = {
+  'sidebar.thinking': 'Thinking…',
   'sidebar.errorIn': 'Error · {where}',
   'sidebar.helperOf': 'Started by {name} · {detail}',
+  'sidebar.spinOffTip': 'Spin-off of {name} · started {ago} ago',
   'sidebar.rowNeedsYou': '{name}, needs you',
   'sidebar.hasPreviewAt': 'Has a preview · {address}',
   'sidebar.hasPreview': 'Has a preview',

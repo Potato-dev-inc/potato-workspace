@@ -8,6 +8,7 @@
 //! Standbys need Chat (ACP): an agent that only runs in a terminal cannot be one yet, and the view says so.
 
 use super::config::MAX_PRELOAD_TOTAL;
+use crate::agent_run_mode::StartedAs;
 use crate::acp::warm::{AgentProbe, HelperMeta, HelperState, HelperStatus, HelperWant, Policy};
 use once_cell::sync::Lazy;
 use parking_lot::Mutex;
@@ -50,6 +51,9 @@ pub struct StandbyHelper {
     /// any agent's task of its type may use, until the person makes it a standby again or closes it.
     #[serde(default)]
     pub warm: bool,
+    /// What a task that takes it becomes (plan 2.5). Old files have none: a spin-off.
+    #[serde(default)]
+    pub kind: StartedAs,
 }
 
 /// What the person typed in the form.
@@ -62,6 +66,8 @@ pub struct NewHelper {
     pub project: String,
     pub after_task: AfterTask,
     pub home: Option<String>,
+    /// `None`: the setting "A new standby is a" decides.
+    pub kind: Option<StartedAs>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -73,11 +79,15 @@ pub struct HelperSettings {
     pub idle_minutes: u64,
     /// The person chose `idle_minutes`. Until then it follows this PC's RAM (`acp::memory::default_idle_secs`).
     pub idle_explicit: bool,
+    /// "A new standby is a: Spin-off · Minion". Used when a standby is made without its own choice.
+    pub default_kind: StartedAs,
+    /// "Never close": the idle time never shuts a standby or a warm agent down. They stay ready (and keep using memory).
+    pub never_close: bool,
 }
 
 impl Default for HelperSettings {
     fn default() -> Self {
-        Self { max: DEFAULT_MAX, idle_minutes: DEFAULT_IDLE_MINUTES, idle_explicit: false }
+        Self { max: DEFAULT_MAX, idle_minutes: DEFAULT_IDLE_MINUTES, idle_explicit: false, default_kind: StartedAs::SpinOff, never_close: false }
     }
 }
 
@@ -142,7 +152,7 @@ impl HelperStore {
         if project.is_empty() {
             return Err("Pick a project folder.".into());
         }
-        let helper = StandbyHelper { id, name, agent, model: input.model.map(|m| m.trim().to_string()).filter(|m| !m.is_empty()), project, after_task: input.after_task, home: tidy_home(input.home), warm: false };
+        let helper = StandbyHelper { id, name, agent, model: input.model.map(|m| m.trim().to_string()).filter(|m| !m.is_empty()), project, after_task: input.after_task, home: tidy_home(input.home), warm: false, kind: input.kind.unwrap_or(self.settings.default_kind) };
         self.helpers.push(helper.clone());
         Ok(helper)
     }
@@ -185,6 +195,13 @@ impl HelperStore {
         Ok(())
     }
 
+    /// "Run as": what a task that takes this standby becomes.
+    pub fn set_kind(&mut self, id: &str, kind: StartedAs) -> Result<(), String> {
+        let helper = self.helpers.iter_mut().find(|h| h.id == id).ok_or("That standby is gone.")?;
+        helper.kind = kind;
+        Ok(())
+    }
+
     pub fn remove(&mut self, id: &str) -> bool {
         let before = self.helpers.len();
         self.helpers.retain(|h| h.id != id);
@@ -199,7 +216,7 @@ impl HelperStore {
         }
         let idle_minutes = idle_minutes.clamp(1, 24 * 60);
         let idle_explicit = self.settings.idle_explicit || idle_minutes != self.settings.idle_minutes;
-        self.settings = HelperSettings { max, idle_minutes, idle_explicit };
+        self.settings = HelperSettings { max, idle_minutes, idle_explicit, default_kind: self.settings.default_kind, never_close: self.settings.never_close };
         Ok(())
     }
 }
@@ -255,12 +272,13 @@ pub fn file() -> &'static HelperFile {
 /// whose folder exists. They count against the pool's cap on top of the plain warm sessions.
 pub fn extend_policy(policy: &mut Policy, store: &HelperStore, probe: &dyn AgentProbe) {
     policy.helper_idle_ms = store.settings.idle_minutes as i64 * 60_000;
+    policy.never_close = store.settings.never_close;
     for helper in store.helpers.iter().take(store.settings.max) {
         let folder = Path::new(&helper.project);
         if !folder.is_dir() || !probe.runs_as_chat(&helper.agent) {
             continue;
         }
-        let meta = HelperMeta { id: helper.id.clone(), name: helper.name.clone(), model: helper.model.clone(), close_after_use: helper.after_task == AfterTask::Close, home: helper.home.clone() };
+        let meta = HelperMeta { id: helper.id.clone(), name: helper.name.clone(), model: helper.model.clone(), close_after_use: helper.after_task == AfterTask::Close, home: helper.home.clone(), kind: helper.kind };
         policy.helpers.push(HelperWant::new(meta, &helper.agent, folder, None));
         policy.cap += 1;
     }
@@ -298,6 +316,8 @@ pub struct HelperEntry {
     pub person_pane: Option<String>,
     /// A free warm agent (it was removed from its agent and keeps running).
     pub warm: bool,
+    /// What a task that takes it becomes: `spin_off` (a chat the person can open) or `minion` (no sidebar row).
+    pub kind: StartedAs,
     /// While `starting`: where the start is (`starting program`, `connecting`, `opening session`, `setting model`).
     pub stage: Option<String>,
     /// How long the start has been at that stage, in milliseconds.
@@ -313,6 +333,12 @@ pub struct HelpersView {
     pub helpers: Vec<HelperEntry>,
     pub max: usize,
     pub idle_minutes: u64,
+    /// "A new standby is a".
+    pub default_kind: StartedAs,
+    /// "Never close" is on: the idle time shuts nothing down.
+    pub never_close: bool,
+    /// The app runs two types of started agents (Settings > Agents): the kinds mean something. Off: a standby's kind is ignored.
+    pub two_types: bool,
 }
 
 /// The list joined with what the pool says about each slot.
@@ -344,6 +370,7 @@ pub fn build_view(store: &HelperStore, statuses: &BTreeMap<String, HelperStatus>
                 open_pane: status.open_pane,
                 person_pane: None,
                 warm: h.warm,
+                kind: h.kind,
                 stage: status.stage,
                 stage_ms: status.stage_since_ms.map(|since| (crate::event_log::now_ms() - since).max(0)),
                 used_today: status.used_today,
@@ -351,13 +378,15 @@ pub fn build_view(store: &HelperStore, statuses: &BTreeMap<String, HelperStatus>
             }
         })
         .collect();
-    HelpersView { helpers, max: store.settings.max, idle_minutes: store.settings.idle_minutes }
+    HelpersView { helpers, max: store.settings.max, idle_minutes: store.settings.idle_minutes, default_kind: store.settings.default_kind, never_close: store.settings.never_close, two_types: false }
 }
 
 /// The view the app shows now.
 pub fn view() -> HelpersView {
     let statuses = crate::acp::warm::pool().map(|pool| pool.helper_statuses()).unwrap_or_default();
-    build_view(&file().snapshot(), &statuses, |agent| crate::acp::warm::LiveProbe.runs_as_chat(agent), |p| Path::new(p).is_dir())
+    let mut view = build_view(&file().snapshot(), &statuses, |agent| crate::acp::warm::LiveProbe.runs_as_chat(agent), |p| Path::new(p).is_dir());
+    view.two_types = crate::agent_run_mode::started_agent_types() == crate::agent_run_mode::StartedAgentTypes::Two;
+    view
 }
 
 #[cfg(test)]

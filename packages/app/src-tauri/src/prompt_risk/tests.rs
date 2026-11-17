@@ -345,3 +345,76 @@ fn an_option_that_downloads_and_runs_code_raises_the_risk() {
     let calm = ask("Update available", &["Update now (runs `npm test`)", "Skip"]);
     assert_eq!(calm.level, RiskLevel::Medium);
 }
+
+#[test]
+fn a_command_that_runs_another_inside_it_or_sets_git_options_is_never_low() {
+    for command in ["echo $(rm -rf ~)", "ls `rm -rf ~`", "cat <(rm -rf ~)", "tee >(sh)", "git -c core.pager='rm -rf ~' log", "git --config-env=a=B log", "git log --config x"] {
+        assert!(assess_in(command, NIX).level >= RiskLevel::Medium, "{command}");
+    }
+    assert_eq!(assess_in("git status --short", NIX).level, RiskLevel::Low);
+}
+
+#[test]
+fn a_command_that_was_cut_short_for_reading_is_never_low() {
+    let many = format!("{}rm -rf ~", "dir;".repeat(45));
+    assert!(assess_in(&many, WIN).level >= RiskLevel::Medium);
+    let long = format!("{}; rm -rf ~", "dir ".repeat(1200));
+    assert!(assess_in(&long, WIN).level >= RiskLevel::Medium);
+    assert_eq!(assess_in("dir", WIN).level, RiskLevel::Low);
+}
+
+#[test]
+fn git_config_env_assignments_here_documents_timeout_and_source_are_not_low() {
+    let not_low = [
+        "git config core.pager 'rm -rf ~'",
+        "git config alias.x '!rm -rf ~'",
+        "GIT_PAGER='rm -rf ~' git log",
+        "GIT_EXTERNAL_DIFF=x git diff",
+        "GIT_CONFIG_COUNT=1 git log",
+        "LD_PRELOAD=/tmp/x.so ls",
+        "PATH=/tmp:$PATH ls",
+        "GIT_SSH_COMMAND='x' git status",
+        "echo '<<'
+rm -rf ~",
+        "cat <<EOF
+EOF
+rm -rf ~",
+        "source ./setup.sh",
+        ". ./setup.sh",
+        "timeout 5 rm -rf ~",
+        "timeout -s KILL 5 source x",
+    ];
+    for command in not_low {
+        assert!(assess_in(command, NIX).level >= RiskLevel::Medium, "{command}");
+    }
+    // The inner command of `timeout` is judged like any other.
+    assert_eq!(assess_in("timeout 30 rm -rf ~", NIX).level, RiskLevel::High);
+    assert_eq!(assess_in("timeout 30 npm test", NIX).level, RiskLevel::Low);
+    assert_eq!(assess_in("NODE_ENV=test npm test", NIX).level, RiskLevel::Low);
+}
+
+#[test]
+fn read_only_programs_with_options_that_start_other_programs_are_not_low() {
+    let not_low = [
+        "echo (Remove-Item -Recurse ~)",
+        "Write-Output $(Remove-Item -Recurse ~)",
+        "awk 'BEGIN{system(\"rm -rf ~\")}'",
+        "fd -x rm",
+        "fd --exec rm {}",
+        "rg --pre ./x foo",
+        "sed 's/a/b/e' f",
+        "sed '1e rm -rf ~' f",
+        "man -P 'rm -rf ~' ls",
+        "git grep -O'rm -rf ~' x",
+    ];
+    for command in not_low {
+        assert!(assess_in(command, NIX).level >= RiskLevel::Medium, "{command}");
+    }
+}
+
+#[test]
+fn plain_read_only_commands_stay_low() {
+    for command in ["dir", "ls", "ls -la src", "git status --short", "git log", "git log --oneline -5", "git config --get user.name", "sed 's/a/b/' f", "awk '{print $1}' f", "fd foo", "rg foo", "echo hello", "man ls"] {
+        assert_eq!(assess_in(command, NIX).level, RiskLevel::Low, "{command}");
+    }
+}

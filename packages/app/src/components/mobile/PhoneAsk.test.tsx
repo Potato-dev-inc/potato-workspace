@@ -7,6 +7,7 @@ import { ITEM_HIGH, ITEM_LOW, ITEM_MEDIUM } from '../../dev/attention-fixtures';
 import type { AttentionAnswerOutcome, AttentionItem, AttentionSnapshot } from '../../lib/attention';
 import type { BridgeClient } from '../../lib/bridge-types';
 import { HOLD_MS } from './HoldButton';
+import { ApprovalCard } from './ApprovalCard';
 import { DockedCard } from './DockedCard';
 import { PhoneAskCard } from './PhoneAskCard';
 import { PhoneNeedsPill } from './PhoneNeedsPill';
@@ -189,5 +190,38 @@ describe('step 11: card layout', () => {
     await render(<PhoneAskCard item={ITEM_LOW} bridge={bridge} canAnswer />);
     const first = host.querySelector('.ph-ask-actions > .ph-ask-btn') as HTMLElement;
     expect(first.className).toContain('ph-ask-btn--primary');
+  });
+});
+
+describe('slice 4: the risky ask as a full card', () => {
+  it('the dock of a chat shows a risky ask as one line with no command, and a tap opens it', async () => {
+    const { bridge } = makeBridge();
+    const onOpenItem = vi.fn();
+    await render(<DockedCard snapshot={snap([ITEM_HIGH])} paneId={ITEM_HIGH.pane!.id} bridge={bridge} canAnswer onOpenPane={() => undefined} onOpenItem={onOpenItem} inChat />);
+    expect(host.querySelector('[data-testid="phone-ask-card"]')).toBeNull();
+    expect(host.textContent).not.toContain('rm -rf');
+    await act(async () => { (host.querySelector('[data-testid="risky-row"]') as HTMLButtonElement).click(); });
+    expect(onOpenItem).toHaveBeenCalledWith(ITEM_HIGH.id);
+  });
+
+  it('the full card holds to allow: a short press does nothing, one second sends the allow answer', async () => {
+    const { bridge, answerAttention } = makeBridge();
+    await render(<ApprovalCard item={ITEM_HIGH} bridge={bridge} canAnswer variant="full" />);
+    expect(host.textContent).not.toContain('rm -rf');
+    const allow = choice('allow_once');
+    expect(allow.textContent).toBe('Hold to allow once');
+    await act(async () => { allow.dispatchEvent(new Event('pointerdown', { bubbles: true })); vi.advanceTimersByTime(HOLD_MS - 200); allow.dispatchEvent(new Event('pointerup', { bubbles: true })); vi.advanceTimersByTime(500); });
+    expect(answerAttention).not.toHaveBeenCalled();
+    await act(async () => { allow.dispatchEvent(new Event('pointerdown', { bubbles: true })); vi.advanceTimersByTime(HOLD_MS + 50); await Promise.resolve(); });
+    expect(answerAttention).toHaveBeenCalledTimes(1);
+  });
+
+  it('"Do not allow" is the first button and answers the deny choice in one tap', async () => {
+    const { bridge, answerAttention } = makeBridge();
+    await render(<ApprovalCard item={ITEM_HIGH} bridge={bridge} canAnswer variant="full" />);
+    const first = host.querySelector('.ph-full-foot > button') as HTMLButtonElement;
+    expect(first.textContent).toBe('Do not allow');
+    await act(async () => { first.click(); await Promise.resolve(); });
+    expect((answerAttention.mock.calls[0] as unknown as [string, { choice: string }])[1].choice).toBe('deny');
   });
 });

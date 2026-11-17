@@ -1,6 +1,8 @@
 // Cockpit window (`index.html?cockpit=1`): one window that orchestrates every agent pane.
 import { useNudgeOnAction } from './lib/desktop-nudge';
 import { useFollowFocusedProject } from './hooks/useFollowFocusedProject';
+import { startDockBrowserBridge } from './lib/dock-browser';
+import { openBrowserPane } from './lib/task-view';
 import { useEffect, useMemo, useRef, useState, type CSSProperties } from 'react';
 import { AgentDoctor } from './components/cockpit/AgentDoctor';
 import { markSpawned } from './lib/agent-health';
@@ -26,6 +28,8 @@ import { WhatBrokeItSheet } from './components/cockpit/WhatBrokeItSheet';
 import { panesSharingFolder } from './components/cockpit/history-model';
 import { ProjectMemory } from './components/cockpit/ProjectMemory';
 import { Sidebar } from './components/cockpit/Sidebar';
+import { HandOverSheet } from './components/cockpit/HandOverSheet';
+import { TaskMainView } from './components/cockpit/TaskMainView';
 import type { WhereProps } from './components/devices/NewAgentWhere';
 import { remoteId, type Device } from './lib/devices';
 import { ConnectedBanner } from './components/devices/ConnectedBanner';
@@ -100,9 +104,11 @@ import { cockpitApi } from './lib/cockpit-api';
 import { useTabWindowRestore } from './lib/tab-windows';
 
 import { CompanionPage } from './components/cockpit/companion/CompanionPage';
+import { isListedAgentPane } from './lib/pane-helpers';
 import { COMPANION_PANE_PREFIX, defaultCompanion, isCompanionPaneId } from './components/cockpit/companion/model';
 import { CompanionSetupSheet } from './components/cockpit/companion/CompanionSetupSheet';
 import { NewAgentHost } from './components/cockpit/newagent/NewAgentHost';
+import { START_CREW_EVENT } from './lib/startCrewEvent';
 import { StartCrewSheet } from './components/cockpit/crews/StartCrewSheet';
 import { ShortcutsSheet } from './components/cockpit/ShortcutsSheet';
 import { ImportHost } from './components/history/ImportHost';
@@ -137,7 +143,7 @@ import { PassTaskHost } from './components/team-page/PassTaskHost';
 import { useTeamPresenceReport } from './components/team-page/useTeamPresenceReport';
 import { sidebarCount } from './components/team-page/team-page-model';
 import { useLendToasts } from './components/lend/Borrowed';
-import { useStandbyFeed } from './lib/standbyHelpers';
+import { useOpenedStandbyPanes, useStandbyFeed } from './lib/standbyHelpers';
 import { rootPaneId } from './components/cockpit/helpers-bar-model';
 import { AddHelperPopover } from './components/cockpit/AddHelperPopover';
 import './styles/night-morning.css';
@@ -162,6 +168,18 @@ export default function CockpitApp() {
   useKeybindingsVersion();
   // Warm agents (Settings > Preload) follow the folder of the focused pane, a moment after it is focused.
   useFollowFocusedProject(c.selectedId ? projectOfCwd(c.registry.panes.get(c.selectedId)?.info.cwd)?.path : null);
+  // The agent browser in the side panel (Labs): keeps Rust told where the pane's page is, and opens the pane (in the chat in
+  // front) when an agent opens a page.
+  const frontChat = useRef<string | null>(null);
+  frontChat.current = c.selectedId;
+  useEffect(
+    () =>
+      startDockBrowserBridge((pane) => {
+        const id = frontChat.current ?? pane;
+        if (id) openBrowserPane(id, { expand: true });
+      }),
+    [],
+  );
   const spacesOn = useSpacesEnabled();
   // The Today page (Labs `timeline_day_enabled`): one line for the whole day, and a way back to any point on it.
   const todayOn = useTimelineEnabled();
@@ -204,6 +222,8 @@ export default function CockpitApp() {
   // returns to the resting view. Done while rendering, so no frame shows a stale view.
   const [seen, setSeen] = useState({ spawn: c.spawn, selectedId: c.selectedId, chatStarting: c.chatStarting !== null });
   const [companionId, setCompanionId] = useState<string | null>(null);
+  // A background task the person put in the sidebar, opened in the main area (view 'task').
+  const [openTaskId, setOpenTaskId] = useState<string | null>(null);
   const [inboxVisit, setInboxVisit] = useState(0);
   // A chat starting (its skeleton) also returns the main area to its resting view, so an open overlay does not hide it.
   const chatStartingNow = c.chatStarting !== null;
@@ -230,7 +250,9 @@ export default function CockpitApp() {
   const t = useT();
   const focusMode = useFocusMode();
   const layout = useLayout();
-  const paneIds = c.registry.paneList.map((p) => p.info.id);
+  // The chats the keys and the split view step through: no minion runs and no standby chats, except one the person opened.
+  const openedStandbyPanes = useOpenedStandbyPanes();
+  const paneIds = c.registry.paneList.filter((p) => isListedAgentPane(p.info, openedStandbyPanes)).map((p) => p.info.id);
   // A routine or chain says something (a "tell me" step, a failure, a pause): show it as a notice.
   useRoutineNotices(c.notify);
   // The animated Orchestration <-> Individual switch: Rust asks for the proxies, this window fades around the overlay.
@@ -300,6 +322,12 @@ export default function CockpitApp() {
 
   // "Start crew…" (crews): pick a saved team and a folder.
   const [crewOpen, setCrewOpen] = useState(false);
+  // The crew canvas's "Start this crew…" asks for the same sheet.
+  useEffect(() => {
+    const open = () => setCrewOpen(true);
+    window.addEventListener(START_CREW_EVENT, open);
+    return () => window.removeEventListener(START_CREW_EVENT, open);
+  }, []);
   // The keyboard shortcuts sheet: `?`, Ctrl+/, or "Keyboard shortcuts" in the palette.
   const [shortcutsOpen, setShortcutsOpen] = useState(false);
   const agentListing = useAgentRegistry();
@@ -926,6 +954,11 @@ export default function CockpitApp() {
         companions={companions.companions}
         openCompanionId={view === 'companion' ? companionId : null}
         onOpenCompanion={openCompanion}
+        openTaskId={view === 'task' ? openTaskId : null}
+        onOpenTask={(id) => {
+          setOpenTaskId(id);
+          setView(id ? 'task' : homeView(c.spawn !== null, c.selectedId));
+        }}
         onNewCompanion={() => setSetupOpen(true)}
         onOpenNewAgent={(project) => {
           setNewAgentProject(project ?? null);
@@ -1000,7 +1033,10 @@ export default function CockpitApp() {
             <FeatureGuide notify={c.notify} />
           </div>
         ) : view === 'connect' ? (
-          <ConnectPage tab={connectTab} onTab={setConnectTab} team={team} lend={lend} paneNames={c.names} />
+          // The page is taller than a small window and .ck-main does not scroll, so this wrapper does (Settings did it before Connect moved here).
+          <div className="ck-connect-scroll" data-testid="connect-scroll">
+            <ConnectPage tab={connectTab} onTab={setConnectTab} team={team} lend={lend} paneNames={c.names} />
+          </div>
         ) : view === 'routines' ? (
           <RoutinesPage onClose={closeOverlay} defaultProject={c.selectedId ? projectOfCwd(c.registry.panes.get(c.selectedId)?.info.cwd)?.path : undefined} />
         ) : view === 'scores' ? (
@@ -1051,6 +1087,10 @@ export default function CockpitApp() {
           <ChatStartingView start={c.chatStarting} />
         ) : view === 'spawn' && c.spawn ? (
           <SpawnView spawn={c.spawn} onDismiss={c.dismissSpawn} />
+        ) : view === 'task' && openTaskId ? (
+          <ErrorBoundary where="Task" resetKeys={[openTaskId]}>
+            <TaskMainView c={c} taskId={openTaskId} onGone={() => (setOpenTaskId(null), setView(homeView(c.spawn !== null, c.selectedId)))} />
+          </ErrorBoundary>
         ) : view === 'companion' && companion ? (
           <CompanionPage
             key={companion.id}
@@ -1261,6 +1301,7 @@ export default function CockpitApp() {
         }
       />
       <UndoBar />
+      <HandOverSheet notify={c.notify} />
       <div className="ck-toasts" aria-live="polite">
         {c.toasts.map((t) => (
           <div className="ck-toast" key={t.id}>

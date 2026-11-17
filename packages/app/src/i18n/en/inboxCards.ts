@@ -49,6 +49,9 @@ export const inboxCards = {
   'inboxCards.consent.deny': 'Deny',
   'inboxCards.consent.allowOnce': 'Allow once',
   'inboxCards.consent.alwaysHere': 'Always allow here',
+  'inboxCards.consent.commandTitle': '{who} wants to run a command in the background: {target}',
+  'inboxCards.consent.allowChat': 'Allow for this chat',
+  'inboxCards.consent.no': 'No',
 
   // LimitCard
   'inboxCards.limit.otherAgent': 'Other agent…',

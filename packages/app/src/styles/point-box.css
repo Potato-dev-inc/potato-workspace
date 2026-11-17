@@ -9,7 +9,7 @@ html.point-box-root #root {
 }
 
 html.point-box-root #root {
-  height: 100vh;
+  height: calc(100vh / var(--ui-scale, 1));
 }
 
 .point-box {

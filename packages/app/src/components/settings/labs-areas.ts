@@ -9,6 +9,7 @@ export type LabsArea = (typeof LABS_AREAS)[number];
 const AREA_OF: Record<string, LabsArea> = {
   'live-updates': 'Chat',
   'markup-bar-labs': 'Chat',
+  'dock-browser-labs': 'Helpers',
   missions: 'Helpers',
   'assign-issue': 'Helpers',
   'night-shift': 'Helpers',
@@ -16,6 +17,8 @@ const AREA_OF: Record<string, LabsArea> = {
   'agent-browser-labs': 'Helpers',
   'project-guide-labs': 'Helpers',
   'crews-labs': 'Helpers',
+  'workflows-labs': 'Helpers',
+  'workflow-reply-labs': 'Helpers',
   'devices-labs': 'Devices',
   'account-labs': 'Devices',
   'lend-labs': 'Devices',
@@ -49,7 +52,9 @@ export const LABS_SWITCH_KEYS: Partial<Record<string, keyof Settings>> = {
   'timeline-labs': 'timeline_day_enabled',
   'project-guide-labs': 'project_guide_enabled',
   'markup-bar-labs': 'markup_bar_enabled',
+  'dock-browser-labs': 'dock_browser_enabled',
   'smaller-updates-labs': 'smaller_updates_enabled',
   'crews-labs': 'crews_enabled',
+  'workflows-labs': 'workflows_enabled',
   'opentunnel-labs': 'opentunnel_stable_link',
 };

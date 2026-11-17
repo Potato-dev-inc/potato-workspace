@@ -9,7 +9,6 @@ use crate::keys::crypto::{b64, random_bytes};
 use parking_lot::Mutex;
 use sha2::{Digest, Sha256};
 
-const PREFIX: &str = "potato-workspace://signin?";
 /// How long a started sign-in waits for its link.
 pub const PENDING_SECS: u64 = 600;
 
@@ -60,36 +59,120 @@ fn uuid_ok(s: &str) -> bool {
     uuid::Uuid::parse_str(s).is_ok() && s.len() == 36
 }
 
-/// A sign-in link in its one fixed form, or `None` for everything else (other paths, extra or repeated keys,
-/// a fragment, odd characters, an over-long link). Cheap and strict, like the invite link parser.
-pub fn parse_link(url: &str) -> Option<SignInLink> {
-    let url = url.trim();
-    if url.len() > 512 || url.len() <= PREFIX.len() {
-        return None;
+/// Why a link that looks like a sign-in link was refused (a reason only, never a value).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Refused {
+    /// Not a `potato-workspace://signin` link at all.
+    NotSignIn,
+    TooLong,
+    /// A path, fragment, unknown or repeated key, or a missing value.
+    Shape,
+    /// A value with odd characters or the wrong length.
+    Value,
+}
+
+impl Refused {
+    pub fn why(self) -> &'static str {
+        match self {
+            Refused::NotSignIn => "not a sign-in link",
+            Refused::TooLong => "too long",
+            Refused::Shape => "unexpected shape (path, fragment, key or missing value)",
+            Refused::Value => "a value has odd characters or the wrong length",
+        }
     }
-    let head = url.get(..PREFIX.len())?;
-    if !head.eq_ignore_ascii_case(PREFIX) {
-        return None;
+}
+
+/// `%XX` decoding of one value. `None` for a broken escape or a result that is not UTF-8. A `+` stays a `+`.
+fn percent_decode(s: &str) -> Option<String> {
+    let b = s.as_bytes();
+    let mut out = Vec::with_capacity(b.len());
+    let mut i = 0;
+    while i < b.len() {
+        if b[i] == b'%' {
+            let hex = s.get(i + 1..i + 3)?;
+            out.push(u8::from_str_radix(hex, 16).ok()?);
+            i += 3;
+        } else {
+            out.push(b[i]);
+            i += 1;
+        }
     }
+    String::from_utf8(out).ok()
+}
+
+/// A sign-in link in its fixed form, or why not. The canonical forms the browser, the OS and the `url` crate may
+/// hand over are all read: any letter case in the scheme and host, a `/` before the `?` (and after the last
+/// value), and `%XX` in the values. Everything else is refused: other paths, extra or repeated keys, a fragment,
+/// odd characters, an over-long link.
+pub fn check_link(url: &str) -> Result<SignInLink, Refused> {
+    let url = url.trim().trim_matches('"').trim();
+    if url.len() > 512 {
+        return Err(Refused::TooLong);
+    }
+    const HEAD: &str = "potato-workspace://signin";
+    let head = url.get(..HEAD.len()).ok_or(Refused::NotSignIn)?;
+    if !head.eq_ignore_ascii_case(HEAD) {
+        return Err(Refused::NotSignIn);
+    }
+    let rest = &url[HEAD.len()..];
+    let rest = rest.strip_prefix('/').unwrap_or(rest);
+    let query = rest.strip_prefix('?').ok_or(Refused::Shape)?;
+    let query = query.strip_suffix('/').unwrap_or(query);
     let (mut ticket, mut state, mut account) = (None, None, None);
-    for pair in url[PREFIX.len()..].split('&') {
-        let (key, value) = pair.split_once('=')?;
+    for pair in query.split('&') {
+        let (key, value) = pair.split_once('=').ok_or(Refused::Shape)?;
         let slot = match key {
             "ticket" => &mut ticket,
             "state" => &mut state,
             "acct" => &mut account,
-            _ => return None,
+            _ => return Err(Refused::Shape),
         };
         if slot.is_some() {
-            return None;
+            return Err(Refused::Shape);
         }
-        *slot = Some(value.to_string());
+        *slot = Some(percent_decode(value).ok_or(Refused::Value)?);
     }
-    let (ticket, state, account) = (ticket?, state?, account?);
+    let (Some(ticket), Some(state), Some(account)) = (ticket, state, account) else {
+        return Err(Refused::Shape);
+    };
     if !token_ok(&ticket, 16, 128) || !token_ok(&state, 16, 128) || !uuid_ok(&account) {
+        return Err(Refused::Value);
+    }
+    Ok(SignInLink { ticket, state, account })
+}
+
+/// What a link looks like, for the debug log: the part before `?` (scheme, host, path), whether it was quoted,
+/// and the query keys with the length of each value. Never a value. Only for links that start like ours.
+pub fn link_shape(url: &str) -> Option<String> {
+    let raw = url.trim();
+    let quoted = raw.starts_with('"');
+    let inner = raw.trim_matches('"');
+    if !inner.to_ascii_lowercase().starts_with("potato-workspace://signin") {
         return None;
     }
-    Some(SignInLink { ticket, state, account })
+    let (head, query) = inner.split_once('?').unwrap_or((inner, ""));
+    let keys: Vec<String> = query
+        .split('&')
+        .filter(|p| !p.is_empty())
+        .map(|p| match p.split_once('=') {
+            Some((k, v)) => format!("{}:{}", k.chars().take(12).collect::<String>(), v.len()),
+            None => format!("{}:-", p.chars().take(12).collect::<String>()),
+        })
+        .collect();
+    Some(format!(
+        "head={head} slash_before_query={} quoted={quoted} old_1_1_8_prefix_matches={} has_fragment={} total_len={} query=[{}]",
+        head.ends_with('/'),
+        raw.get(.."potato-workspace://signin?".len()).is_some_and(|h| h.eq_ignore_ascii_case("potato-workspace://signin?")),
+        inner.contains('#'),
+        inner.len(),
+        keys.join(",")
+    ))
+}
+
+/// A sign-in link, or `None` for everything else.
+#[cfg(test)]
+pub fn parse_link(url: &str) -> Option<SignInLink> {
+    check_link(url).ok()
 }
 
 fn same(a: &str, b: &str) -> bool {

@@ -51,6 +51,14 @@ export function isMinionPane(info: { started_as?: string | null }): boolean {
   return info.started_as === 'minion';
 }
 
+/**
+ * Whether a chat is listed as an open agent in Search and the next/previous/jump keys. A minion's run is not (it lives under Background
+ * tasks). A standby's own chat is not either, unless the person opened it (`openedIds`: the standbys' `open_pane`s).
+ */
+export function isListedAgentPane(info: { id: string; started_as?: string | null; standby_seat?: string | null }, openedIds: ReadonlySet<string>): boolean {
+  return !isMinionPane(info) && (!info.standby_seat || openedIds.has(info.id));
+}
+
 /** The first words of a task, for a row's name when the pane has no title yet (null when there is no task). */
 export function taskTitle(task: string | null | undefined, max = 40): string | null {
   const text = task?.replace(/\s+/g, ' ').trim();

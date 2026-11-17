@@ -261,7 +261,7 @@ export function FilesCard({ paneId, cwd, canMention = true, refreshKey = '', api
       />
       <div className="ck-fsearch-modes" role="group" aria-label={t('files.searchModeLabel')}>
         {(['names', 'inside'] as const).map((m) => (
-          <button key={m} type="button" className="ck-fsearch-mode" aria-pressed={mode === m} data-testid={`files-mode-${m}`} onClick={() => setMode(m)}>
+          <button key={m} type="button" className="ck-fsearch-mode" aria-pressed={mode === m} data-testid={`files-mode-${m}`} title={m === 'names' ? t('files.searchNamesTip') : t('files.searchInsideTip')} onClick={() => setMode(m)}>
             {m === 'names' ? t('files.searchNames') : t('files.searchInside')}
           </button>
         ))}

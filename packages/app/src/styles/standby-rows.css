@@ -6,9 +6,43 @@
   display: inline-flex;
   align-items: center;
   gap: 5px;
-  flex: none;
+  /* May shrink (a long word like "Opening session" in a thin sidebar) but never push out of the row. */
+  flex: 0 1 auto;
+  min-width: 0;
+  max-width: 100%;
+  margin-left: auto;
   font-size: 11px;
   color: var(--label-2);
+}
+.cockpit .ck-sb-state .ck-sb-dot,
+.cockpit .ck-sb-state .ck-sb-spin {
+  flex: none;
+}
+.cockpit .ck-sb-word {
+  min-width: 0;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+.cockpit .ck-rowwrap .ck-row.ck-row--slim.ck-sb-row {
+  /* One line when it fits; when the sidebar is thin or the text is big, the state word drops under the name (never cut off). */
+  flex-wrap: wrap;
+  height: auto;
+  min-height: 28px;
+  padding-top: 3px;
+  padding-bottom: 3px;
+  row-gap: 0;
+  overflow: hidden;
+}
+.cockpit .ck-sb-row .ck-row-main {
+  flex: 1 1 5em;
+  min-width: 4em;
+  overflow: hidden;
+}
+.cockpit .ck-sb-row .ck-row-title {
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
 }
 .cockpit .ck-sb-dot {
   width: 7px;

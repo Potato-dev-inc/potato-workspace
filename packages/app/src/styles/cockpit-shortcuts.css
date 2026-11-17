@@ -1,7 +1,7 @@
 /* Keyboard shortcuts sheet (components/cockpit/ShortcutsSheet.tsx). Grayscale tokens only. */
 .cockpit .ck-sheet--shortcuts {
   width: 560px;
-  max-height: calc(100vh - 64px);
+  max-height: calc(calc(100vh / var(--ui-scale, 1)) - 64px);
   overflow-y: auto;
 }
 .cockpit .ck-shortcuts-group {

@@ -42,7 +42,7 @@ pub struct MarkupShot {
 pub async fn markup_capture(window: tauri::WebviewWindow, state: State<'_, AppState>, pane_id: String, rect: StageRect, viewport_w: f64) -> Result<MarkupShot, String> {
     let project = project_of(&state, &pane_id)?;
     tauri::async_runtime::spawn_blocking(move || {
-        let png = capture::viewport_png(&window, CAPTURE_WAIT).map_err(str::to_string)?;
+        let png = capture::viewport_png(window.as_ref(), CAPTURE_WAIT).map_err(str::to_string)?;
         let area = shot::Area { x: rect.x, y: rect.y, w: rect.w, h: rect.h };
         let (cropped, _, _) = shot::crop_area(&png, area, viewport_w)?;
         let now = std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).map(|d| d.as_millis() as u64).unwrap_or(0);

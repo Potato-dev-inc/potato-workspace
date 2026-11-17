@@ -172,4 +172,32 @@ describe('model and effort pickers after a restart', () => {
     act(() => pickers()[0].querySelector('button')!.click());
     expect([...host.querySelectorAll('[role="option"]')].map((o) => o.textContent)).toEqual(['Y', 'Z']);
   });
+
+  it('the model list in the message box has a search box that filters, keeps the tick, and picks with Enter', async () => {
+    const names = ['opencode/Beam Free', 'opencode/Big Pickle', 'opencode/DeepSeek V4.1 Flash Free', 'opencode/Hy4 flash Free', 'openai/GPT 5'];
+    const model = { id: 'model', name: 'Model', category: 'model', type: 'select', currentValue: names[1], options: names.map((v) => ({ value: v, name: v })) };
+    const { api } = fakeBackend(backendState({ configOptions: [model] }));
+    (api.setConfig as ReturnType<typeof vi.fn>).mockResolvedValue(undefined);
+    await mount(api);
+    act(() => pickers()[0].querySelector('button')!.click());
+    const box = host.querySelector<HTMLInputElement>('input.ck-pop-search')!;
+    expect(box).not.toBeNull();
+    expect(document.activeElement).toBe(box);
+    const opts = () => [...host.querySelectorAll('[role="option"]')];
+    expect(opts()).toHaveLength(5);
+    expect(opts()[1].getAttribute('aria-selected')).toBe('true');
+    const type = (v: string) => act(() => {
+      Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value')!.set!.call(box, v);
+      box.dispatchEvent(new Event('input', { bubbles: true }));
+    });
+    type('FLASH');
+    expect(opts().map((o) => o.textContent)).toEqual(['opencode/DeepSeek V4.1 Flash Free', 'opencode/Hy4 flash Free']);
+    type('zzz');
+    expect(host.textContent).toContain('No models match');
+    type('big');
+    expect(opts()[0].getAttribute('aria-selected')).toBe('true');
+    type('hy4');
+    act(() => void box.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true, cancelable: true })));
+    expect(api.setConfig).toHaveBeenCalledWith('p1', 'model', 'opencode/Hy4 flash Free');
+  });
 });

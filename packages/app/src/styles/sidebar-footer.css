@@ -48,10 +48,6 @@
     font-size: 12px;
     white-space: nowrap;
   }
-  /* The count is part of the label here ("Review · 3"), so the round badge on the icon steps aside. */
-  .cockpit .ck-foot-icons .ck-foot-review .ck-foot-badge {
-    display: none;
-  }
   /* The spacer would force an empty line when the buttons wrap: let them flow instead. */
   .cockpit .ck-foot-spacer {
     flex: 0 0 0;

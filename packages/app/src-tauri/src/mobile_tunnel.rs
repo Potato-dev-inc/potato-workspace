@@ -21,6 +21,7 @@ use crate::app_paths;
 use crate::pwa_server::{self, DevInfoPayload};
 use crate::tunnel_config::{self, TunnelConfigInput, TunnelConfigView};
 
+pub(crate) mod limits;
 pub(crate) mod opentunnel;
 pub(crate) mod stable_link;
 use stable_link::LinkState;
@@ -53,6 +54,10 @@ struct TunnelState {
     last_error: Option<String>,
     /// Bumped on every (re)launch so a dead tunnel's log readers cannot overwrite the new state.
     generation: u64,
+    /// Why the quick address is not coming (a `limits::PROBLEM_*` code the screen turns into words).
+    problem: Option<&'static str>,
+    /// Failed quick-tunnel starts and when cloudflared was last started: no tight restart loops.
+    backoff: limits::Backoff,
 }
 
 struct StableInfo {
@@ -70,6 +75,8 @@ pub struct StableStatus {
     /// waiting | linking | linked | failed
     pub link: &'static str,
     pub error: Option<String>,
+    /// The Worker answered 403: it keeps another secret than the one saved here (the screen offers the way out).
+    pub secret_mismatch: bool,
 }
 
 impl StableInfo {
@@ -80,7 +87,8 @@ impl StableInfo {
             LinkState::Linked => ("linked", None),
             LinkState::Failed(why) => ("failed", Some(why.clone())),
         };
-        StableStatus { worker_url: self.worker_url.clone(), quick_url: self.quick_url.clone(), link, error }
+        let secret_mismatch = matches!(&self.link, LinkState::Failed(why) if Some(why) == stable_link::Outcome::SecretMismatch.problem().as_ref());
+        StableStatus { worker_url: self.worker_url.clone(), quick_url: self.quick_url.clone(), link, error, secret_mismatch }
     }
 }
 
@@ -108,6 +116,16 @@ pub struct TunnelStatus {
     /// Set only on the answer to a save that made the secret or asked to show it.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub secret_once: Option<RevealedSecret>,
+    /// Set when "Make a new secret" was NOT done because the Worker could not forget the old one: a code
+    /// (`rejected` | `too_old` | `unreachable`) the screen turns into words. Nothing was changed.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub secret_not_reset: Option<String>,
+    /// Why no quick address is coming: `rate_limited` | `slow_start` | `too_soon` (the screen has the words).
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub problem: Option<&'static str>,
+    /// With a `problem`: seconds until cloudflared may be started again (absent when it may start now).
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub retry_in_secs: Option<u64>,
 }
 
 /// Result of "Test connection".
@@ -134,13 +152,51 @@ impl TunnelState {
             phase: Phase::Stopped,
             last_error: None,
             generation: 0,
+            problem: None,
+            backoff: limits::Backoff::default(),
         }
+    }
+
+    /// A quick tunnel did not come up: say why (the screen's words and the CLI's sentence) and count it for the back-off.
+    fn start_failed(&mut self, generation: u64, problem: &'static str) {
+        if problem == limits::PROBLEM_RATE_LIMITED {
+            self.backoff.failed_rate_limited(generation);
+        } else {
+            self.backoff.failed(generation);
+        }
+        self.phase = Phase::Error;
+        self.problem = Some(problem);
+        self.last_error = Some(limits::problem_sentence(problem).into());
+    }
+
+    /// The start-up timeout fired: true when this launch is still on "starting" (and is now marked failed).
+    fn start_overdue(&mut self, generation: u64) -> bool {
+        if self.generation == generation && self.phase == Phase::Starting {
+            self.start_failed(generation, limits::PROBLEM_SLOW_START);
+            true
+        } else {
+            false
+        }
+    }
+
+    /// An address came up: forget the problem and the failures.
+    fn start_succeeded(&mut self) {
+        self.backoff.succeeded();
+        if self.problem.take().is_some() {
+            self.last_error = None;
+        }
+    }
+
+    /// The address other parts (the phone page, the CLI's pair link) may hand to a phone. A stable-link Worker is offered only
+    /// once this computer is linked to it: before that the Worker has no idea where this computer is and answers "PC offline".
+    fn advertised_url(&self) -> Option<String> {
+        advertised_url(self.tunnel_url.as_deref(), self.stable.as_ref().map(|s| &s.link))
     }
 
     fn dev_info_payload(&self) -> DevInfoPayload {
         // Empty while the phone server is not running: the page treats an empty address as "none".
         let local_url = local_phone_url().unwrap_or_default();
-        let tunnel_url = self.tunnel_url.clone();
+        let tunnel_url = self.advertised_url();
         let bridge_proxy_url = match (&tunnel_url, local_url.is_empty()) {
             (Some(url), _) => format!("{}/bridge", url.trim_end_matches('/')),
             (None, false) => format!("{local_url}/bridge"),
@@ -168,6 +224,14 @@ impl TunnelState {
         }
         // Stops the OpenTunnel client and its listener too.
         self.opentunnel = None;
+    }
+}
+
+/// `tunnel_url` as phones may use it: with a stable link, only while linked (see `TunnelState::advertised_url`).
+fn advertised_url(tunnel_url: Option<&str>, stable_link: Option<&LinkState>) -> Option<String> {
+    match stable_link {
+        Some(link) if *link != LinkState::Linked => None,
+        _ => tunnel_url.map(str::to_string),
     }
 }
 
@@ -309,6 +373,12 @@ pub fn tunnel_status() -> TunnelStatus {
         config: tunnel_config::load(&tunnel_config::tunnel_file()).view(),
         stable: guard.stable.as_ref().map(StableInfo::view),
         secret_once: None,
+        secret_not_reset: None,
+        problem: guard.problem,
+        retry_in_secs: guard
+            .problem
+            .and_then(|_| guard.backoff.check(std::time::Instant::now()).err())
+            .map(|wait| wait.as_secs().max(1)),
     }
 }
 
@@ -348,11 +418,20 @@ pub fn start_mobile_tunnel(app: &AppHandle, bridge_direct_url: String) -> Result
 /// Stop the current tunnel process (if any) and start whatever the saved setting asks for.
 /// The loopback PWA server keeps running; only the public side changes.
 pub fn restart_mobile_tunnel(app: &AppHandle) -> Result<TunnelStatus, String> {
+    restart_mobile_tunnel_with(app, false)
+}
+
+/// `try_anyway`: the person pressed "Try anyway" after a refused restart. The wait is skipped once, unless the
+/// failure was Cloudflare's own limit.
+pub fn restart_mobile_tunnel_with(app: &AppHandle, try_anyway: bool) -> Result<TunnelStatus, String> {
     if !is_tunnel_enabled() {
         return Err("The mobile tunnel is turned off (POTATO_WORKSPACE_TUNNEL=0).".into());
     }
     if tunnel_state().lock().pwa_server.is_none() {
         return Err("The tunnel only runs in the installed app, not in a dev build.".into());
+    }
+    if try_anyway {
+        tunnel_state().lock().backoff.skip_wait();
     }
     launch_tunnel(app)?;
     Ok(tunnel_status())
@@ -370,11 +449,13 @@ pub fn apply_tunnel_config(
     }
     let next = tunnel_config::config_from_input(input.clone(), &current)?;
     let reveal = secret_to_reveal(&input, &current, &next);
-    // A new secret replaces the old one: ask the Worker to forget the old one first (best effort).
-    if let (tunnel_config::TunnelConfig::Stable { worker_url, secret: old }, true) = (&current, replaces_secret(&current, &next)) {
-        if !old.is_empty() {
-            stable_link::reset_once(worker_url, old);
-        }
+    // A new secret replaces the old one: ask the Worker to forget the old one first.
+    if let Err(why) = retire_old_secret(&input, &current, &next, stable_link::reset) {
+        // "Make a new secret" would strand the link: change nothing and say so.
+        tracing::warn!("new secret not made: the Worker could not forget the old one");
+        let mut status = tunnel_status();
+        status.secret_not_reset = Some(why.into());
+        return Ok(status);
     }
     tunnel_config::save(&path, &next)?;
     // "Show secret" changes nothing: do not drop the tunnel (and its address) just to read a secret.
@@ -396,8 +477,21 @@ fn launch_tunnel(app: &AppHandle) -> Result<(), String> {
 
     let generation = {
         let mut guard = state.lock();
+        // A quick address that failed to start is not asked for again at once: Cloudflare counts every ask.
+        if plan.runs_cloudflared() && !matches!(plan, tunnel_config::TunnelPlan::Named { .. }) {
+            if let Err(wait) = guard.backoff.check(std::time::Instant::now()) {
+                if guard.problem != Some(limits::PROBLEM_RATE_LIMITED) {
+                    guard.problem = Some(limits::PROBLEM_TOO_SOON);
+                    guard.last_error = Some(limits::problem_sentence(limits::PROBLEM_TOO_SOON).into());
+                }
+                tracing::warn!(wait_secs = wait.as_secs(), "not starting cloudflared again yet (back-off after a failed start)");
+                return Ok(());
+            }
+            guard.backoff.started(std::time::Instant::now());
+        }
         guard.kill_child();
         guard.generation += 1;
+        guard.problem = None;
         guard.mode = plan.mode();
         guard.tunnel_url = plan.known_public_url();
         guard.last_error = None;
@@ -512,6 +606,16 @@ fn launch_tunnel(app: &AppHandle) -> Result<(), String> {
 
     state.lock().cloudflared_child = Some(child);
     tracing::info!(mode = plan.mode(), target = %local_target, "started cloudflared for the mobile PWA");
+    if !named {
+        // Never sit on "starting" silently: if no address comes in time, say so (it may still come; then this clears).
+        let watched = state.clone();
+        let _ = thread::Builder::new().name("tunnel-start-watch".into()).spawn(move || {
+            thread::sleep(limits::START_TIMEOUT);
+            if watched.lock().start_overdue(generation) {
+                tracing::warn!("cloudflared gave no quick address within the start-up time");
+            }
+        });
+    }
     Ok(())
 }
 
@@ -534,6 +638,14 @@ fn watch_cloudflared_stream(
         let mut guard = state.lock();
         if guard.generation != generation {
             return; // a newer launch owns the state
+        }
+        // Only while the tunnel is still coming up: a later line must never take down a healthy tunnel.
+        if !named && guard.phase == Phase::Starting && limits::is_rate_limited(&line) {
+            // Cloudflare refused a new quick address. Stop cloudflared (it would keep asking) and say why.
+            guard.start_failed(generation, limits::PROBLEM_RATE_LIMITED);
+            guard.kill_child();
+            tracing::warn!("Cloudflare is limiting new quick addresses from this network (HTTP 429 / error 1015)");
+            continue;
         }
         if named {
             match tunnel_config::classify_named_line(&line) {
@@ -558,12 +670,14 @@ fn watch_cloudflared_stream(
                         info.link = LinkState::Registering;
                     }
                     guard.phase = Phase::Running;
+                    guard.start_succeeded();
                     tracing::info!("cloudflared quick URL ready; registering it with the stable-link Worker");
                     spawn_registration(state.clone(), generation, ctx.clone(), url);
                 }
             } else if guard.tunnel_url.as_deref() != Some(url.as_str()) {
                 guard.tunnel_url = Some(url.clone());
                 guard.phase = Phase::Running;
+                guard.start_succeeded();
                 tracing::info!(%url, "cloudflared public URL ready");
             }
         }
@@ -571,6 +685,9 @@ fn watch_cloudflared_stream(
     // Stream closed: cloudflared exited. A restart bumps the generation first, so this is a crash.
     let mut guard = state.lock();
     if guard.generation == generation && guard.phase != Phase::Error {
+        if guard.phase == Phase::Starting && !named {
+            guard.backoff.failed(generation);
+        }
         guard.phase = Phase::Error;
         guard.last_error = Some("cloudflared stopped. Press Restart tunnel.".into());
     }
@@ -595,20 +712,23 @@ fn spawn_registration(state: Arc<Mutex<TunnelState>>, generation: u64, ctx: Stab
                 return;
             }
             if let Some(info) = guard.stable.as_mut().filter(|s| s.quick_url.as_deref() == Some(quick_url.as_str())) {
-                if link == LinkState::Linked {
-                    tracing::info!("stable link registered");
-                }
                 info.link = link;
             }
         }
     };
     let spawned = thread::Builder::new().name("stable-link-register".into()).spawn(move || {
-        stable_link::register_until_done(
+        let outcome = stable_link::register_until_done(
             || stable_link::register_once(&ctx.worker_url, &ctx.secret, &quick_url),
             thread::sleep,
             is_current,
             report,
         );
+        // The last word goes to app.log: no secret, no address.
+        match stable_link::final_log_line(&outcome) {
+            Some((true, line)) => tracing::info!("{line}"),
+            Some((false, line)) => tracing::warn!("{line}"),
+            None => {}
+        }
     });
     if let Err(err) = spawned {
         tracing::warn!(%err, "could not start the stable-link registration thread");
@@ -628,6 +748,37 @@ fn secret_to_reveal(
     let made_now = !typed_by_person && after.stable_secret() != before.stable_secret();
     let asked = *secret_action == tunnel_config::SecretAction::Show;
     (made_now || asked).then(|| after.stable_secret().map(str::to_string)).flatten()
+}
+
+/// Before a new secret replaces the old one, ask the Worker to forget the old one.
+/// Only "Make a new secret" is guarded: if the Worker cannot forget the old secret (it holds another one, or it is
+/// not reachable) the answer is `Err(plain words)` and nothing may be saved, unless the person already confirmed.
+/// A secret the person typed or pasted is the recovery path itself, so it is always best effort.
+fn retire_old_secret(
+    input: &TunnelConfigInput,
+    before: &tunnel_config::TunnelConfig,
+    after: &tunnel_config::TunnelConfig,
+    reset: impl FnOnce(&str, &str) -> stable_link::ResetOutcome,
+) -> Result<(), &'static str> {
+    use stable_link::ResetOutcome;
+    let (tunnel_config::TunnelConfig::Stable { worker_url, secret: old }, true) = (before, replaces_secret(before, after)) else {
+        return Ok(());
+    };
+    if old.is_empty() {
+        return Ok(());
+    }
+    let TunnelConfigInput::Stable { secret, secret_action, confirm_strand, .. } = input else {
+        let _ = reset(worker_url, old);
+        return Ok(());
+    };
+    let typed = secret.as_deref().is_some_and(|s| !s.trim().is_empty());
+    let guarded = *secret_action == tunnel_config::SecretAction::Regenerate && !typed && !*confirm_strand;
+    match (reset(worker_url, old), guarded) {
+        (ResetOutcome::Done, _) | (_, false) => Ok(()),
+        (ResetOutcome::Rejected, true) => Err("rejected"),
+        (ResetOutcome::TooOld, true) => Err("too_old"),
+        (ResetOutcome::Unreachable, true) => Err("unreachable"),
+    }
 }
 
 /// Whether saving `after` over `before` swaps one stable secret for another.
@@ -784,6 +935,18 @@ mod tests {
     use super::*;
 
     #[test]
+    fn a_stable_worker_is_offered_to_phones_only_once_linked() {
+        let worker = Some("https://pm-relay.example.workers.dev");
+        for link in [LinkState::Waiting, LinkState::Registering, LinkState::Failed("secret does not match".into())] {
+            assert_eq!(advertised_url(worker, Some(&link)), None, "{link:?}");
+        }
+        assert_eq!(advertised_url(worker, Some(&LinkState::Linked)).as_deref(), worker);
+        // No stable link: whatever address is known is offered, as before.
+        assert_eq!(advertised_url(Some("https://x.trycloudflare.com"), None).as_deref(), Some("https://x.trycloudflare.com"));
+        assert_eq!(advertised_url(None, None), None);
+    }
+
+    #[test]
     fn switching_the_fixed_address_off_and_on_starts_it_again_without_a_restart() {
         use SettingsAction::{Nothing, Start, Stop};
         // Running, switch goes off: stop.
@@ -804,6 +967,70 @@ mod tests {
     }
 
     #[test]
+    fn a_rate_limit_or_a_slow_start_is_a_named_problem_with_a_plain_sentence_and_counts_once() {
+        let mut st = TunnelState::new();
+        st.generation = 3;
+        st.phase = Phase::Starting;
+        st.start_failed(3, limits::PROBLEM_RATE_LIMITED);
+        assert_eq!(st.phase, Phase::Error);
+        assert_eq!(st.problem, Some("rate_limited"));
+        assert!(st.last_error.as_deref().unwrap().starts_with("Cloudflare is limiting new quick addresses from this network."));
+        // The start-up timer firing later in the same launch does not count a second failure.
+        assert!(!st.start_overdue(3));
+        assert_eq!(st.backoff.failures(), 1);
+        // An address coming up clears it all.
+        st.start_succeeded();
+        assert_eq!((st.problem, st.last_error.clone(), st.backoff.failures()), (None, None, 0));
+    }
+
+    #[test]
+    fn a_rate_limit_line_after_the_tunnel_is_up_does_not_touch_it() {
+        let state = Arc::new(Mutex::new(TunnelState::new()));
+        {
+            let mut g = state.lock();
+            g.generation = 1;
+            g.phase = Phase::Running;
+        }
+        let output = "ERR request failed: 429 Too Many Requests\nerror code: 1015\n";
+        watch_cloudflared_stream(BufReader::new(output.as_bytes()), state.clone(), 1, false, None);
+        let g = state.lock();
+        // The stream then closes (cloudflared "exited"): that is the only change, and no problem or failure was recorded.
+        assert_eq!(g.problem, None);
+        assert_eq!(g.backoff.failures(), 0);
+    }
+
+    #[test]
+    fn the_start_up_timeout_only_marks_a_launch_that_is_still_starting() {
+        let mut st = TunnelState::new();
+        st.generation = 5;
+        st.phase = Phase::Starting;
+        assert!(!st.start_overdue(4)); // an older launch's timer
+        assert!(st.start_overdue(5));
+        assert_eq!(st.problem, Some("slow_start"));
+        let mut running = TunnelState::new();
+        running.generation = 5;
+        running.phase = Phase::Running;
+        assert!(!running.start_overdue(5));
+        assert_eq!(running.problem, None);
+    }
+
+    #[test]
+    fn a_rate_limit_line_in_cloudflared_output_stops_the_tunnel_with_the_message() {
+        let state = Arc::new(Mutex::new(TunnelState::new()));
+        {
+            let mut g = state.lock();
+            g.generation = 1;
+            g.phase = Phase::Starting;
+        }
+        let output = "INF Requesting new quick Tunnel on trycloudflare.com...\nERR failed to request quick Tunnel: 429 Too Many Requests\n";
+        watch_cloudflared_stream(BufReader::new(output.as_bytes()), state.clone(), 1, false, None);
+        let g = state.lock();
+        assert_eq!(g.phase, Phase::Error);
+        assert_eq!(g.problem, Some("rate_limited"));
+        assert_eq!(g.backoff.failures(), 1);
+    }
+
+    #[test]
     fn custom_public_url_strips_bridge_suffix() {
         std::env::set_var("POTATO_WORKSPACE_PUBLIC_URL", "https://example.com/bridge/");
         assert_eq!(custom_public_url().as_deref(), Some("https://example.com"));
@@ -811,7 +1038,7 @@ mod tests {
     }
 
     fn stable_input(secret: Option<&str>, action: tunnel_config::SecretAction) -> TunnelConfigInput {
-        TunnelConfigInput::Stable { worker_url: "https://w.dev".into(), secret: secret.map(Into::into), secret_action: action }
+        TunnelConfigInput::Stable { worker_url: "https://w.dev".into(), secret: secret.map(Into::into), secret_action: action, confirm_strand: false }
     }
 
     fn stable_cfg(secret: &str) -> tunnel_config::TunnelConfig {
@@ -854,10 +1081,47 @@ mod tests {
         assert_eq!(info.view().link, "linking");
         info.link = LinkState::Linked;
         assert_eq!((info.view().link, info.view().error), ("linked", None));
-        info.link = LinkState::Failed("The secret does not match the one the Worker has.".into());
+        info.link = LinkState::Failed(stable_link::Outcome::SecretMismatch.problem().unwrap());
         let view = info.view();
         assert_eq!(view.link, "failed");
+        assert!(view.secret_mismatch);
         assert!(view.error.unwrap().contains("secret does not match"));
+        info.link = LinkState::Failed("Could not reach the Worker: dns".into());
+        assert!(!info.view().secret_mismatch);
+    }
+
+    fn regen_input(typed: Option<&str>, action: tunnel_config::SecretAction, confirm: bool) -> TunnelConfigInput {
+        TunnelConfigInput::Stable { worker_url: "https://w.dev".into(), secret: typed.map(Into::into), secret_action: action, confirm_strand: confirm }
+    }
+
+    #[test]
+    fn a_new_secret_is_not_made_when_the_worker_cannot_forget_the_old_one_unless_confirmed() {
+        use stable_link::ResetOutcome::*;
+        let old = stable_cfg("old-secret-0123456789");
+        let new = stable_cfg("new-secret-0123456789");
+        let regen = tunnel_config::SecretAction::Regenerate;
+        let ask = |input: &TunnelConfigInput, answer| {
+            let mut calls = 0;
+            let r = retire_old_secret(input, &old, &new, |_, _| { calls += 1; answer });
+            (r, calls)
+        };
+        // 403: warned in plain words, nothing saved.
+        let (r, calls) = ask(&regen_input(None, regen, false), Rejected);
+        assert_eq!(r.unwrap_err(), "rejected");
+        assert_eq!(calls, 1);
+        // Worker unreachable: warned too.
+        assert_eq!(ask(&regen_input(None, regen, false), Unreachable).0.unwrap_err(), "unreachable");
+        assert_eq!(ask(&regen_input(None, regen, false), TooOld).0.unwrap_err(), "too_old");
+        // The Worker forgot it: go ahead.
+        assert!(ask(&regen_input(None, regen, false), Done).0.is_ok());
+        // Confirmed by the person: go ahead even though the reset failed.
+        assert!(ask(&regen_input(None, regen, true), Rejected).0.is_ok());
+        // A pasted secret is the recovery path: never blocked by a failed reset.
+        let paste = regen_input(Some("first-secret-0123456789"), tunnel_config::SecretAction::Keep, false);
+        assert!(ask(&paste, Rejected).0.is_ok());
+        // The same secret again: nothing to retire.
+        let same = retire_old_secret(&regen_input(None, regen, false), &old, &old, |_, _| panic!("no reset"));
+        assert!(same.is_ok());
     }
 
     #[test]

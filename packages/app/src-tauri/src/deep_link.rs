@@ -57,6 +57,12 @@ impl PendingJoinLink {
 /// Check the links, and for the first valid invite keep it, bring the cockpit forward and tell the window.
 /// Returns whether one was accepted.
 pub fn deliver<S: AsRef<str>>(app: &AppHandle, urls: &[S]) -> bool {
+    // What the OS handed over, as a shape only (never a value), to see why a sign-in link would be refused.
+    for u in urls {
+        if let Some(shape) = crate::account::link_shape(u.as_ref()) {
+            tracing::debug!(%shape, "deep link: sign-in link received");
+        }
+    }
     // A button of a Windows notification (`desktop_toast`): answered or opened there, never an invite.
     if crate::desktop_toast::handle_links(app, urls) {
         return true;
@@ -95,13 +101,48 @@ pub fn setup(app: &AppHandle) {
         Ok(None) => {}
         Err(e) => tracing::warn!(error = %e, "deep link: could not read the start link"),
     }
-    // Development builds are not installed, so the OS does not know the scheme yet.
+    // Only an installed release copy may claim the scheme: a debug or test copy would steal sign-in callbacks
+    // from the person's real app.
     #[cfg(any(windows, target_os = "linux"))]
-    if cfg!(debug_assertions) {
-        if let Err(e) = app.deep_link().register_all() {
-            tracing::warn!(error = %e, "deep link: could not register the scheme");
+    {
+        let var = |k: &str| std::env::var(k).ok();
+        let exe = std::env::current_exe().ok();
+        if should_register_scheme(
+            cfg!(debug_assertions),
+            exe.as_deref(),
+            var("POTATO_WORKSPACE_PROFILE").as_deref(),
+            var("POTATO_WORKSPACE_NO_URL_HANDLER").as_deref(),
+            var("POTATO_WORKSPACE_URL_HANDLER").as_deref(),
+        ) {
+            if let Err(e) = app.deep_link().register_all() {
+                tracing::warn!(error = %e, "deep link: could not register the scheme");
+            }
         }
     }
+}
+
+fn env_on(v: Option<&str>) -> bool {
+    matches!(v.map(str::trim), Some(s) if !s.is_empty() && s != "0" && !s.eq_ignore_ascii_case("false"))
+}
+
+/// True when the exe sits inside a cargo `target` folder (a build output, not an install).
+fn in_cargo_target(exe: &std::path::Path) -> bool {
+    exe.components().any(|c| c.as_os_str().eq_ignore_ascii_case("target"))
+}
+
+/// Decide whether this copy writes the `potato-workspace://` handler into the OS.
+/// Opt-out wins over everything; a test profile never registers; a debug build registers only when asked.
+pub fn should_register_scheme(debug_build: bool, exe: Option<&std::path::Path>, profile: Option<&str>, opt_out: Option<&str>, opt_in: Option<&str>) -> bool {
+    if env_on(opt_out) {
+        return false;
+    }
+    if profile.map(str::trim).is_some_and(|p| !p.is_empty()) {
+        return false;
+    }
+    if debug_build {
+        return env_on(opt_in);
+    }
+    !exe.is_some_and(in_cargo_target)
 }
 
 /// The window asks for a link that arrived before it was ready (and clears the one it just heard).
@@ -115,6 +156,22 @@ mod tests {
     use super::*;
 
     const CODE: &str = "ABCDEFGHJKMNPQRS";
+
+    #[test]
+    fn only_an_installed_release_registers_the_scheme() {
+        use std::path::Path;
+        let installed = Some(Path::new("C:/Program Files/Potato Workspace/puppet_master_app.exe"));
+        let built = Some(Path::new("E:/pm-cargo/x/release/target/puppet_master_app.exe"));
+        assert!(should_register_scheme(false, installed, None, None, None));
+        assert!(!should_register_scheme(false, built, None, None, None));
+        assert!(!should_register_scheme(true, installed, None, None, None));
+        assert!(!should_register_scheme(false, installed, Some("e2e"), None, None));
+        assert!(!should_register_scheme(false, installed, None, Some("1"), None));
+        assert!(should_register_scheme(false, installed, None, Some("0"), None));
+        assert!(should_register_scheme(true, built, None, None, Some("1")));
+        assert!(!should_register_scheme(true, built, Some("e2e"), None, Some("1")));
+        assert!(!should_register_scheme(true, built, None, Some("1"), Some("1")));
+    }
 
     #[test]
     fn a_valid_invite_link_is_cleaned_into_one_form() {

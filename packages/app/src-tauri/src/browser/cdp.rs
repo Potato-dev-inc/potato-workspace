@@ -69,12 +69,21 @@ pub type EventSink = std::sync::Arc<dyn Fn(&str, Value) + Send + Sync>;
 
 /// The DevTools session of one Tauri webview window.
 pub struct WindowCdp {
-    window: tauri::WebviewWindow,
+    window: parking_lot::Mutex<tauri::Webview>,
 }
 
 impl WindowCdp {
-    pub fn new(window: tauri::WebviewWindow) -> Self {
-        WindowCdp { window }
+    pub fn new(window: tauri::Webview) -> Self {
+        WindowCdp { window: parking_lot::Mutex::new(window) }
+    }
+
+    /// The page moved to a new webview (pop out and dock back make a new one at the same address).
+    pub fn rebind(&self, window: tauri::Webview) {
+        *self.window.lock() = window;
+    }
+
+    fn current(&self) -> tauri::Webview {
+        self.window.lock().clone()
     }
 
     /// Sends each of `events` to `sink` (the domains are enabled by the caller). Call from a worker thread. The
@@ -82,13 +91,13 @@ impl WindowCdp {
     #[cfg(windows)]
     pub fn subscribe(&self, events: &'static [&'static str], sink: EventSink) -> Result<(), CdpError> {
         let (tx, rx) = mpsc::channel::<Result<String, CdpError>>();
-        self.window.with_webview(move |pv| live::subscribe(&pv, events, sink, tx)).map_err(|_| CdpError::Closed)?;
+        self.current().with_webview(move |pv| live::subscribe(&pv, events, sink, tx)).map_err(|_| CdpError::Closed)?;
         wait_answer(&rx, CALL_TIMEOUT).map(|_| ())
     }
 
     #[cfg(not(windows))]
     pub fn subscribe(&self, _events: &'static [&'static str], _sink: EventSink) -> Result<(), CdpError> {
-        let _ = &self.window;
+        let _ = self.current();
         Err(CdpError::Unsupported)
     }
 }
@@ -98,7 +107,7 @@ impl Cdp for WindowCdp {
     fn call(&self, method: &str, params: Value) -> Result<Value, CdpError> {
         let (tx, rx) = mpsc::channel::<Result<String, CdpError>>();
         let (method, params) = (method.to_string(), params.to_string());
-        self.window.with_webview(move |pv| live::start(&pv, &method, &params, tx)).map_err(|_| CdpError::Closed)?;
+        self.current().with_webview(move |pv| live::start(&pv, &method, &params, tx)).map_err(|_| CdpError::Closed)?;
         wait_answer(&rx, CALL_TIMEOUT)
     }
 }

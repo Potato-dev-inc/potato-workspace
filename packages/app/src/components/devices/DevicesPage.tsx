@@ -4,7 +4,7 @@
 // offers one button to its own rights choice, and the backend's "nothing is shared yet" line gives way to that next step.
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { useT } from '../../i18n';
-import { chipText, devicesApi, nextStepLine, stateSentence, stateWord, type DevicesApi } from '../../lib/devices';
+import { chipText, deviceLabel, devicesApi, nextStepLine, stateSentence, stateWord, type DevicesApi } from '../../lib/devices';
 import { EmptyState } from '../common/EmptyState';
 import { onOpenDevice, takePendingDevice } from '../../lib/openDevice';
 import { AddDeviceSheet } from './AddDeviceSheet';
@@ -134,7 +134,7 @@ export function DevicesPage({ api = devicesApi, ssh, onSaved, onOpenPhone, varia
                     <button type="button" className="dev-item" onClick={() => setSelected(d.node)} data-testid={`device-${d.node}`}>
                       <span className={`dev-dot${d.state === 'online' ? ' is-up' : ''}`} aria-hidden="true" />
                       <span className="dev-grow">
-                        <b>{d.name}</b>
+                        <b>{deviceLabel(d)}</b>
                         <small>{stateSentence(d)}</small>
                       </span>
                       {chip && <span className="dev-chip">{chip}</span>}

@@ -1,17 +1,21 @@
 // The right panel beside a chat: one flat column of plain sections (Environment, Context, Plan, Connectors,
 // Outputs, Changes, Background tasks, Files) under a sticky top line (the agent and its state). It reads the same
 // session file as the Chat tab (the backend shares one reader between the views; this one holds it under its own id).
+import { useMemo } from 'react';
 import '../../../styles/cockpit-rail.css';
 import { RAIL_MAX, RAIL_MIN, RAIL_SNAP, resetRailWidth, saveWidths, setRailWidth, useLayout } from '../../../lib/panel-widths';
 import { useT } from '../../../i18n';
 import { useToolsDrift } from '../../../hooks/useToolsDrift';
 import { ResizeHandle } from '../ResizeHandle';
 import { useSessionChat } from '../../../hooks/useSessionChat';
-import { usePaneJobs } from '../../../lib/pane-jobs';
+import { useFinishedCommands, usePaneJobs } from '../../../lib/pane-jobs';
 import { FilesCard } from '../../files/FilesCard';
 import { BackgroundSection, type HelperRow } from './BackgroundSection';
 import { TaskColumn } from './TaskColumn';
-import { openMinionView, openTasksPage, useClearedTasks } from '../../../lib/task-view';
+import { openMinionView, openTasksPage, openTerminalView, useClearedTasks } from '../../../lib/task-view';
+import { commandRows, finishedRows, type CommandRow, type FinishedRow } from './commandRows';
+import { commandName } from './commandName';
+import type { CommandOwner } from './helperRows';
 import type { WorktreeItem } from '../../../lib/cockpit-api';
 import { ChangesSection } from './ChangesSection';
 import { ConnectorsSection } from './ConnectorsSection';
@@ -20,7 +24,7 @@ import { EnvironmentSection } from './EnvironmentSection';
 import { OutputsSection } from './OutputsSection';
 import { PlanSection } from './PlanSection';
 import { RailTop, railState } from './RailTop';
-import { previewJobPort, stopJob } from './jobActions';
+import { previewJobPort, stopCommand, stopJob } from './jobActions';
 import { tauriJobsApi, type JobsApi } from '../../../lib/pane-jobs';
 import { usePaneConnectors } from './usePaneConnectors';
 import { usePaneUsage } from './usePaneUsage';
@@ -43,6 +47,10 @@ export interface SessionRailProps {
   /** "Helper of X" and the pane it opens, when this pane was started by another. */
   helperOf: { parentId: string; text: string } | null;
   helpers: readonly HelperRow[];
+  /** Standbys of this agent that are set to "minion" and ready: "N ready" in Background tasks (they have no sidebar row). */
+  readyMinions?: number;
+  /** The agents whose commands this chat lists: its own agent first, then every agent started under it (minions, spin-offs). */
+  owners?: readonly CommandOwner[];
   /** The chat works on a copy of its project ("Work on a copy"). */
   copy?: { kind: 'git' | 'plain' } | null;
   /** The chat works on a copy of a git project: a pull request can be made. */
@@ -58,6 +66,9 @@ export interface SessionRailProps {
   onOpenCopy?: () => void;
   onOpenPane: (id: string) => void;
   onStopHelper?: (id: string) => Promise<void> | void;
+  /** The other agents a minion can be handed to ("Hand to ..." in a Background tasks row's menu), and the choice. */
+  handTargets?: readonly { id: string; name: string }[];
+  onHandMinion?: (minion: HelperRow, toId: string) => void;
   /** "Save this team" (in the Background tasks section's right-click menu). */
   onSaveTeam?: () => void;
   /** Dragging the left edge under the snap width hides the panel. */
@@ -77,6 +88,8 @@ export function SessionRail({
   readsChat,
   helperOf,
   helpers,
+  readyMinions = 0,
+  owners,
   copy = null,
   canCreatePr = false,
   ask = null,
@@ -86,6 +99,8 @@ export function SessionRail({
   onOpenCopy,
   onOpenPane,
   onStopHelper,
+  handTargets,
+  onHandMinion,
   onSaveTeam,
   onClose,
   onNotify,
@@ -95,7 +110,11 @@ export function SessionRail({
   const { railPx } = useLayout();
   const chat = useSessionChat(paneId, readsChat);
   const branch = usePaneBranch(paneId, status, true);
-  const jobs = usePaneJobs()[paneId] ?? [];
+  const allJobs = usePaneJobs();
+  const allFinished = useFinishedCommands();
+  const commandOwners = useMemo<readonly CommandOwner[]>(() => owners ?? [{ id: paneId, name: '', agentType: null, status, self: true }], [owners, paneId, status]);
+  const commands = useMemo(() => commandRows(allJobs, commandOwners), [allJobs, commandOwners]);
+  const finishedCommands = useMemo(() => finishedRows(allFinished, commandOwners), [allFinished, commandOwners]);
   const connectors = usePaneConnectors(chat.turns);
   const drift = useToolsDrift();
   const cleared = useClearedTasks(paneId);
@@ -104,7 +123,19 @@ export function SessionRail({
   const canReconnect = drift.rows.some((r) => r.paneId === paneId && r.canReconnect);
   // Re-read the helpers' usage whenever a status changes: a turn ending is a status change.
   const usage = usePaneUsage(paneId, rows.length > 0, [status, ...rows.map((h) => `${h.id}:${h.status}`)].join('|'));
-  const stopOwnJob = (owner: string, pid: number, startedAtMs: number) => stopJob(jobsApi, owner, pid, startedAtMs);
+  const stopOwnJob = (owner: string, pid: number, startedAtMs: number, terminalId?: string) => stopCommand(jobsApi, owner, { pid, startedAtMs, terminalId });
+  const openCommand = (row: CommandRow) =>
+    openTerminalView(paneId, { owner: row.owner.id, pid: row.job.pid, startedAtMs: row.job.startedAtMs, name: commandName(row.job, t), command: row.job.command, terminalId: row.job.terminalId });
+  const openFinished = (row: FinishedRow) =>
+    openTerminalView(paneId, {
+      owner: row.owner.id,
+      pid: 0,
+      startedAtMs: row.done.startedAtMs,
+      name: commandName(row.done, t),
+      command: row.done.command,
+      terminalId: row.done.terminalId,
+      finished: { state: row.done.state, endedAtMs: row.done.endedAtMs },
+    });
   const fresh = chat.turns.length === 0;
   const tip = [agentName, chat.model, chat.cliVersion, accountLabel].filter(Boolean).join(' · ');
   return (
@@ -145,20 +176,28 @@ export function SessionRail({
         <ChangesSection paneId={paneId} status={status} cwd={cwd} outputs={chat.outputs} canCreatePr={canCreatePr} showDone={readsChat} onOpenChanges={onOpenChanges} onNotify={onNotify} worktree={worktree} />
         <BackgroundSection
           helpers={rows}
+          readyCount={readyMinions}
           usage={usage}
-          jobs={jobs}
+          commands={commands}
+          finishedCommands={finishedCommands}
+          onOpenCommand={openCommand}
+          onOpenFinishedCommand={openFinished}
           onOpenPane={onOpenPane}
           onOpenTask={(id) => openMinionView(paneId, id)}
           onOpenPage={() => openTasksPage(paneId)}
           onStopHelper={onStopHelper}
-          onStopJob={(pid, startedAtMs) => stopJob(jobsApi, paneId, pid, startedAtMs)}
+          onStopJob={(pid, startedAtMs, row) => stopCommand(jobsApi, row?.owner.id ?? paneId, { pid, startedAtMs, terminalId: row?.job.terminalId })}
           onPreview={(port, external) => previewJobPort(paneId, port, external)}
           onPointFix={(port) => previewJobPort(paneId, port, false, true)}
           onSaveTeam={onSaveTeam}
+          ownerId={paneId}
+          ownerName={agentName}
+          handTargets={handTargets}
+          onHand={onHandMinion}
         />
         <FilesCard paneId={paneId} cwd={cwd} canMention={readsChat} refreshKey={status} />
       </aside>
-      <TaskColumn paneId={paneId} agentName={agentName} agentType={agentType} rows={rows} usage={usage} onOpenPane={onOpenPane} onStopHelper={onStopHelper} onStopJob={stopOwnJob} />
+      <TaskColumn paneId={paneId} agentName={agentName} agentType={agentType} rows={rows} owners={commandOwners} usage={usage} onOpenPane={onOpenPane} onStopHelper={onStopHelper} onStopJob={stopOwnJob} jobsApi={jobsApi} />
     </>
   );
 }

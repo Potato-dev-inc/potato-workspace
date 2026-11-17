@@ -35,6 +35,8 @@ interface Item {
 export function LabsPage({ env, labs }: { env: SettingsEnv; labs: RowDef[] }) {
   const devLabs = useDevLabsOverride();
   const [query, setQuery] = useState('');
+  // Each area is a card that starts closed. A search opens every area that has a match.
+  const [openAreas, setOpenAreas] = useState<ReadonlySet<LabsArea>>(new Set());
   const items: Item[] = labs.map((row) => ({
     row,
     name: labsText(`labs.${row.id}.name`, row.labs?.name ?? row.label),
@@ -54,31 +56,47 @@ export function LabsPage({ env, labs }: { env: SettingsEnv; labs: RowDef[] }) {
       {LABS_AREAS.map((area) => {
         const group = shown.filter((item) => item.area === area);
         if (group.length === 0) return null;
+        const open = needle !== '' || openAreas.has(area);
+        const toggle = () =>
+          setOpenAreas((cur) => {
+            const next = new Set(cur);
+            if (next.has(area)) next.delete(area);
+            else next.add(area);
+            return next;
+          });
         return (
-          <section key={area} className="st-labs-area" data-area={area}>
-            <h4>{t(AREA_TITLE[area])}</h4>
-            <ul className="st-labs-list">
-              {group.map((item) => {
-                const key = LABS_SWITCH_KEYS[item.row.id];
-                return (
-                  <li key={item.row.id} className="st-labs-feature">
-                    {key ? (
-                      <LabsSwitch
-                        label={item.name}
-                        description={item.line}
-                        checked={env.settings[key] === true}
-                        onChange={(value) => void env.patch({ [key]: value } as SettingsPatch)}
-                      />
-                    ) : (
-                      <button type="button" className="st-labs-item" aria-label={t('labsPage.openNamed', { name: item.name })} onClick={() => env.openRow?.(item.row.id)}>
-                        <span className="st-labs-name">{item.name}</span>
-                        <span className="st-labs-about">{item.line}</span>
-                      </button>
-                    )}
-                  </li>
-                );
-              })}
-            </ul>
+          <section key={area} className="st-labs-area st-closed-group" data-area={area} data-open={open ? 'true' : 'false'}>
+            <div className="st-list">
+              <button type="button" className="st-adv-toggle" aria-expanded={open} onClick={toggle}>
+                <span aria-hidden="true">{open ? '⌄' : '›'}</span>
+                <span>{t(AREA_TITLE[area])}</span>
+                <span className="st-adv-count">{group.length}</span>
+              </button>
+              {open && (
+                <ul className="st-labs-list">
+                  {group.map((item) => {
+                    const key = LABS_SWITCH_KEYS[item.row.id];
+                    return (
+                      <li key={item.row.id} className="st-labs-feature">
+                        {key ? (
+                          <LabsSwitch
+                            label={item.name}
+                            description={item.line}
+                            checked={env.settings[key] === true}
+                            onChange={(value) => void env.patch({ [key]: value } as SettingsPatch)}
+                          />
+                        ) : (
+                          <button type="button" className="st-labs-item" aria-label={t('labsPage.openNamed', { name: item.name })} onClick={() => env.openRow?.(item.row.id)}>
+                            <span className="st-labs-name">{item.name}</span>
+                            <span className="st-labs-about">{item.line}</span>
+                          </button>
+                        )}
+                      </li>
+                    );
+                  })}
+                </ul>
+              )}
+            </div>
           </section>
         );
       })}

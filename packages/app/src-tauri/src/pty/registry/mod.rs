@@ -328,6 +328,8 @@ fn close_pane(
     wait: bool,
 ) -> Result<(), String> {
     let pane = registry.lock().take(pane_id);
+    // Background terminals the pane's agent started end with it (their whole tree), and so does its "allow for this chat".
+    crate::agent_terminals::stop_owned_by(pane_id);
     let cwd = pane.as_ref().map(|pane| pane.info.cwd.clone());
     let ticket = pane.map(|pane| {
         if wait {
@@ -375,6 +377,7 @@ pub fn kill_all_and_wait(registry: &Mutex<PaneRegistry>) {
 
 fn close_all(registry: &Mutex<PaneRegistry>, wait: bool) {
     let panes = registry.lock().take_all();
+    crate::agent_terminals::stop_all();
     for pane in panes {
         let pane_id = pane.info.id.clone();
         if wait {

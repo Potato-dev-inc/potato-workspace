@@ -96,11 +96,11 @@ describe('Advanced > Early features (Labs)', () => {
   const labsRows = () => section('labs').rows.filter((r) => r.group === LABS_GROUP);
 
   it('on the Labs page: the Labs index, then each feature that is more than a switch (its Open button lands there)', () => {
-    expect(labsRows().map((r) => r.id)).toEqual([LABS_INDEX_ID, 'ask-bar', 'live-updates', 'opencode-automation', 'assign-issue', 'red-to-green']);
+    expect(labsRows().map((r) => r.id)).toEqual([LABS_INDEX_ID, 'ask-bar', 'live-updates', 'opencode-automation', 'assign-issue', 'red-to-green', 'workflow-reply-labs']);
     expect(labsRows().filter((r) => LABS_SWITCH_KEYS[r.id])).toEqual([]);
     expect(collectLabs(BASE_SECTIONS).map((r) => r.id)).toEqual([
       'ask-bar', 'simple-mode', 'live-updates', 'opencode-automation', 'missions', 'assign-issue', 'night-shift',
-      'red-to-green', 'spaces-labs', 'lend-labs', 'devices-labs', 'account-labs', 'desktop-potato-labs', 'agent-browser-labs', 'companion-vault-labs', 'discord-bot-labs', 'timeline-labs', 'project-guide-labs', 'markup-bar-labs', 'smaller-updates-labs', 'opentunnel-labs', 'crews-labs',
+      'red-to-green', 'spaces-labs', 'lend-labs', 'devices-labs', 'account-labs', 'desktop-potato-labs', 'agent-browser-labs', 'companion-vault-labs', 'discord-bot-labs', 'timeline-labs', 'project-guide-labs', 'markup-bar-labs', 'dock-browser-labs', 'smaller-updates-labs', 'opentunnel-labs', 'crews-labs', 'workflows-labs', 'workflow-reply-labs',
     ]);
     // They were defined in different files: Agents, Keys, Phone, General, Models.
     const homes = new Set(BASE_SECTIONS.filter((s) => s.rows.some((r) => r.labs)).map((s) => s.id));
@@ -131,9 +131,9 @@ describe('Advanced > Early features (Labs)', () => {
     };
     const base: BaseSectionDef[] = BASE_SECTIONS.map((s) => (s.id === 'crews' ? { ...s, rows: [...s.rows, extra] } : s));
     const arranged = arrangeSections(base);
-    expect(arranged.find((s) => s.id === 'labs')!.rows.filter((r) => r.group === LABS_GROUP).map((r) => r.id)).toEqual([LABS_INDEX_ID, 'ask-bar', 'live-updates', 'opencode-automation', 'assign-issue', 'red-to-green', 'later-feature']);
+    expect(arranged.find((s) => s.id === 'labs')!.rows.filter((r) => r.group === LABS_GROUP).map((r) => r.id)).toEqual([LABS_INDEX_ID, 'ask-bar', 'live-updates', 'opencode-automation', 'assign-issue', 'red-to-green', 'workflow-reply-labs', 'later-feature']);
     const labs = collectLabs(base).map((r) => r.id);
-    expect(labs.slice(-16)).toEqual(['red-to-green', 'spaces-labs', 'lend-labs', 'devices-labs', 'account-labs', 'desktop-potato-labs', 'agent-browser-labs', 'companion-vault-labs', 'discord-bot-labs', 'timeline-labs', 'project-guide-labs', 'markup-bar-labs', 'smaller-updates-labs', 'opentunnel-labs', 'crews-labs', 'later-feature']);
+    expect(labs.slice(-19)).toEqual(['red-to-green', 'spaces-labs', 'lend-labs', 'devices-labs', 'account-labs', 'desktop-potato-labs', 'agent-browser-labs', 'companion-vault-labs', 'discord-bot-labs', 'timeline-labs', 'project-guide-labs', 'markup-bar-labs', 'dock-browser-labs', 'smaller-updates-labs', 'opentunnel-labs', 'crews-labs', 'workflows-labs', 'workflow-reply-labs', 'later-feature']);
     expect(arranged.find((s) => s.id === 'look')!.rows.some((r) => r.id === 'later-feature')).toBe(false);
   });
 
@@ -155,8 +155,12 @@ describe('the Advanced page', () => {
     expect(advanced.closedGroups).toEqual(ADVANCED_CLOSED_GROUPS);
     const withRows = ADVANCED_CLOSED_GROUPS.filter((g) => advanced.rows.some((r) => r.group === g));
     expect(withRows).toEqual(['Connections to other tools', 'Models', 'App and files']);
-    // No other page has closed groups: they use the one "Advanced" fold.
-    for (const s of SECTIONS.filter((x) => x.id !== 'advanced')) expect(s.closedGroups, s.id).toBeUndefined();
+    // Only Agents has cards besides (every group but Add an agent and Your agents); the rest use the one "Advanced" fold.
+    for (const s of SECTIONS.filter((x) => x.id !== 'advanced' && x.id !== 'agents')) expect(s.closedGroups, s.id).toBeUndefined();
+    const agents = section('agents');
+    expect(agents.leadGroups).toEqual(['Add an agent', 'Your agents']);
+    expect(agents.closedGroups).toContain('Sign in');
+    expect(agents.closedGroups).not.toContain('Your agents');
   });
 
   it('Developer and the danger list follow the closed groups', () => {

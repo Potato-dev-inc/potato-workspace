@@ -276,7 +276,7 @@ fn read_op(world: &dyn World, catalog: &Value, scratch: &mut HelperStore, raw: &
             if !world.folder_exists(&project) {
                 return refuse("INVALID_ARGUMENT", "That project folder does not exist.");
             }
-            let input = NewHelper { name: text(obj, "name").unwrap_or_default(), agent, model: text(obj, "model"), project, after_task: after_task_of(text(obj, "after_task"))?, home: None };
+            let input = NewHelper { name: text(obj, "name").unwrap_or_default(), agent, model: text(obj, "model"), project, after_task: after_task_of(text(obj, "after_task"))?, home: None, kind: None };
             let added = scratch.add(input.clone(), "plan".into()).map_err(|e| ("REFUSED", e))?;
             let model = added.model.clone().map(|m| format!(", {m}")).unwrap_or_default();
             let line = format!("standby: add \"{}\" ({}{model}; used once, then it is a normal helper)", added.name, added.agent);

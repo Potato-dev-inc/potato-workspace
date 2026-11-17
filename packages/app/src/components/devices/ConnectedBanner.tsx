@@ -2,7 +2,7 @@
 // Disconnect, which turns that device's switch off and closes its link at once. Draws nothing while nobody is connected
 // or the Labs switch is off. The name came from another device: text only.
 import { useT } from '../../i18n';
-import { clipText, devicesApi, type DevicesApi, type DevicesView } from '../../lib/devices';
+import { clipText, deviceLabel, devicesApi, type DevicesApi, type DevicesView } from '../../lib/devices';
 import { errorSentence } from '../../lib/sayError';
 import { useState } from 'react';
 import '../../styles/devices.css';
@@ -18,7 +18,7 @@ export function ConnectedBanner({ view, api = devicesApi, onDone }: { view: Devi
       {who.map((d) => (
         <div key={d.node} className="dev-connected" role="status">
           <span className="dev-dot is-up" aria-hidden="true" />
-          <span className="dev-grow">{t('devices.connected', { name: clipText(d.name, 40), level: d.level === 'full' ? t('devices.level.full') : t('devices.level.watch') })}</span>
+          <span className="dev-grow">{t('devices.connected', { name: clipText(deviceLabel(d), 40), level: d.level === 'full' ? t('devices.level.full') : t('devices.level.watch') })}</span>
           <button
             type="button"
             className="dev-btn"

@@ -7,7 +7,9 @@
 //!   as its folder name only.
 //!
 //! Team activity needs no route of its own: the phone reads `GET /team/cards` (`team::phone`) and builds the rows.
-//! Both routes are reads, so they need `watch` (`route_need`, written out). Not MCP tools.
+//! - `GET /phone/tasks`: the background tasks the person put in the sidebar on the PC (`task_sidebar`), so the phone's drawer shows
+//!   them in the same place (nested under their agent, or on their own).
+//! All three routes are reads, so they need `watch` (`route_need`, written out). Not MCP tools.
 
 use serde_json::{json, Value};
 
@@ -26,6 +28,10 @@ pub(super) fn handle(cx: &Ctx) -> Option<RouteResult> {
             Some(Ok((200, done_body(crate::turn_summary::tracker().since(since), since, now))))
         }
         ("GET", ["phone", "helpers"]) => Some(Ok((200, helpers_body(crate::standby::helpers::view())))),
+        ("GET", ["phone", "tasks"]) => {
+            let reg = cx.registry.lock();
+            Some(Ok((200, tasks_body(&crate::task_sidebar::file().snapshot(), |id| reg.panes.get(id).map(|p| p.info().status)))))
+        }
         _ => None,
     }
 }
@@ -67,6 +73,25 @@ pub fn helpers_body(view: crate::standby::helpers::HelpersView) -> Value {
         })
         .collect();
     json!({ "helpers": helpers, "max": view.max })
+}
+
+/// The tasks the person put in the sidebar on the PC (`task_sidebar`), as the phone's drawer shows them: nested under their agent
+/// (`under`) or on their own, with the tag (`minion` or `command`), the name and the state. Rows of a pane that is gone are left out.
+/// `status_of(pane)`: the pane's status, `None` when it is not open.
+pub fn tasks_body(store: &crate::task_sidebar::Store, status_of: impl Fn(&str) -> Option<String>) -> Value {
+    let rows: Vec<Value> = store
+        .rows
+        .iter()
+        .filter_map(|row| {
+            let status = match row.kind.as_str() {
+                "minion" => status_of(row.task_id.strip_prefix("minion:").unwrap_or(&row.task_id))?,
+                _ => status_of(&row.owner).map(|_| "running".to_string())?,
+            };
+            let under = row.under.clone().filter(|u| status_of(u).is_some());
+            Some(json!({ "taskId": row.task_id, "kind": row.kind, "owner": row.owner, "under": under, "name": crate::redact::text(&row.name).into_inner(), "status": status }))
+        })
+        .collect();
+    json!({ "rows": rows })
 }
 
 #[cfg(test)]

@@ -258,6 +258,9 @@ pub struct AgentEntry {
     pub label: String,
     /// A warm standby worker is waiting.
     pub ready: bool,
+    /// Can answer a quick read-only question inside the bar. An agent that cannot (OpenCode, Agy, ...) is still listed:
+    /// asking it opens it in a window with the question instead.
+    pub quick: bool,
 }
 
 /// The agents the bar offers: capable ones (given by the registry) that are installed.
@@ -273,8 +276,28 @@ pub fn list_agents(
             id: id.clone(),
             label: label.clone(),
             ready: ready.iter().any(|r| r.eq_ignore_ascii_case(id)),
+            quick: true,
         })
         .collect()
+}
+
+/// Every installed agent the person has set up: the ones that answer in the bar first (`quick`, registry order), then
+/// the rest, which open in a window when asked.
+pub fn list_every_agent(
+    every: &[(String, String)],
+    quick: &[String],
+    installed: &dyn Fn(&str) -> bool,
+    ready: &[String],
+) -> Vec<AgentEntry> {
+    let is_quick = |id: &str| quick.iter().any(|q| q.eq_ignore_ascii_case(id));
+    let entry = |(id, label): &(String, String)| AgentEntry {
+        id: id.clone(),
+        label: label.clone(),
+        ready: ready.iter().any(|r| r.eq_ignore_ascii_case(id)),
+        quick: is_quick(id),
+    };
+    let usable: Vec<&(String, String)> = every.iter().filter(|(id, _)| installed(id)).collect();
+    usable.iter().filter(|(id, _)| is_quick(id)).map(|e| entry(e)).chain(usable.iter().filter(|(id, _)| !is_quick(id)).map(|e| entry(e))).collect()
 }
 
 // ---------------------------------------------------------------- asking

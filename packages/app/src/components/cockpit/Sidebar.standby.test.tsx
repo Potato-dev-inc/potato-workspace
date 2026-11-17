@@ -150,10 +150,21 @@ describe('standby helpers in the sidebar', () => {
     expect(c2.notify).toHaveBeenCalledWith(expect.stringContaining('1 standby moved under'));
   });
 
-  it('no agent left in the project: a small group "Standbys waiting for an agent"', async () => {
+  it('standbys nobody started (no home) wait in the project group: never counted as helpers of the agent open there', async () => {
+    const { api } = fakeApi([helper({ home: null }), helper({ id: 'sb-2', name: 'Tester', home: null })]);
+    await show(cockpit([pane('a1', 'idle', 'Agy')]), api);
+    const loose = host.querySelector('[data-testid="standby-loose"]')!;
+    expect(loose.textContent).toContain('Standbys · waiting for a task');
+    expect(loose.querySelectorAll('[data-testid="standby-row"]').length).toBe(2);
+    expect(host.querySelector('[data-pane-row="a1"]')).not.toBeNull();
+    expect(host.querySelector('.ck-helper-chip')).toBeNull();
+    expect(host.textContent).not.toMatch(/\d+ (helpers?|minions?)/);
+  });
+
+  it('no agent left in the project: a small group "Standbys · waiting for a task"', async () => {
     const { api } = fakeApi([helper({ home: 'gone' })]);
     await show(cockpit([]), api);
-    expect(host.querySelector('[data-testid="standby-loose"]')!.textContent).toContain('Standbys waiting for an agent');
+    expect(host.querySelector('[data-testid="standby-loose"]')!.textContent).toContain('Standbys · waiting for a task');
     expect(names()).toEqual(['Reviewer']);
   });
 

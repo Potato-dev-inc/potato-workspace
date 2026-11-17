@@ -20,7 +20,8 @@ import { TryTask } from './TryTask';
 import { Follow, NO_TRACE, type Trace } from './Follow';
 import { TalkToCrew, type Shown } from './TalkToCrew';
 import { useModelNamer } from './modelNames';
-import { MAX_ROLES, addRole, isCalled, keyOf, moveRole, removeRole, type Spot } from './model';
+import { WorkflowPanel } from './WorkflowPanel';
+import { MAX_ROLES, addRole, afterAddInWorkflow, isCalled, isWorkflow, keyOf, moveRole, removeRole, type Spot } from './model';
 import '../../styles/crew-canvas.css';
 
 const CHECK_DELAY_MS = 350;
@@ -37,6 +38,7 @@ export function CrewCanvas({
   onSaved,
   focusRole,
   talkApi,
+  workflows = false,
 }: {
   slug: string;
   api?: CrewsApi;
@@ -49,6 +51,8 @@ export function CrewCanvas({
   focusRole?: string;
   /** The front desk's command (tests give a fake). */
   talkApi?: CrewTalkApi;
+  /** Labs "Workflows" is on: the lead may be marked the Front of a workflow. */
+  workflows?: boolean;
 }) {
   const t = useT();
   const [opened, setOpened] = useState<CrewOpened | null>(null);
@@ -192,7 +196,7 @@ export function CrewCanvas({
   const add = (parent: string) => {
     setMenu(false);
     if (!first) return;
-    const next = addRole(crew, parent, first, t('crewcanvas.role.jobStart'));
+    const next = afterAddInWorkflow(crew, addRole(crew, parent, first, t('crewcanvas.role.jobStart')), t('crewcanvas.wf.whenStart'));
     edit(next);
     setSelected(next.roles.length - 1);
     setTab('role');
@@ -285,6 +289,7 @@ export function CrewCanvas({
           readOnly={readOnly || showTalk}
           changed={showTalk && talkShown ? talkShown.changed : undefined}
           touched={showTalk && talkShown ? talkShown.touched : undefined}
+          onAddRole={readOnly || showTalk || full || !first ? undefined : () => add(keyOf(crew.roles.find((r) => !r.parent) ?? crew.roles[0]))}
         />
         <aside className="crewc-side" aria-label={t('crewcanvas.tabs')}>
           <div className="crewc-tabs" role="tablist">
@@ -294,6 +299,7 @@ export function CrewCanvas({
               </button>
             ))}
           </div>
+          {tab === 'role' && isWorkflow(crew) ? <WorkflowPanel crew={crew} disabled={readOnly} onChange={edit} /> : null}
           {tab === 'role' ? (
             selected !== null && crew.roles[selected] ? (
               <RoleEditor
@@ -302,6 +308,7 @@ export function CrewCanvas({
                 agents={agents}
                 disabled={readOnly}
                 modelName={modelName}
+                workflows={workflows}
                 onChange={edit}
                 onRemove={() => {
                   edit(removeRole(crew, selected));

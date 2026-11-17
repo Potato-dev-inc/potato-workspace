@@ -1,6 +1,7 @@
 // One calm conversation on the phone: the agent's text at full width, your messages in a soft bubble, and the tool steps
 // folded into one line per turn (one tap opens the list; a failed step is never folded). The dock (what waits on you), the
 // queued messages and the composer sit under it. This is the phone's own view: the desktop's chat view stays as it is.
+import { PhoneBottomRegion } from './PhoneBottomRegion';
 import { Fragment, useLayoutEffect, useMemo, useRef, type ReactNode } from 'react';
 import { useT } from '../../i18n';
 import type { ChatSource, ChatTurn, SessionChatState, TurnStep } from '../../lib/sessionChatModel';
@@ -22,12 +23,14 @@ import { ToolRow } from '../chat/ToolRow';
 import { clockOf } from '../../lib/phone-link';
 import { JumpToLatest, SinceLine } from '../chat/SinceLine';
 import { TurnPriceTag } from '../chat/TurnPriceTag';
+import { useUsualNotesOn } from '../../lib/usual-notes';
 import { useSinceLine } from '../chat/useSinceLine';
 import { hasPrice, turnPrices, type TurnPrice } from '../../lib/turnPrice';
 import { FoldedSteps } from './FoldedSteps';
 import { PhonePlanLine } from './PhonePlanLine';
 import { PhoneQuiet } from './PhoneQuiet';
 import { usePhoneTextSize } from '../../lib/phone-text-size';
+import { usePacedText } from '../../hooks/usePacedText';
 import { Pressable, type PressedMessage } from './MessageActions';
 import { MessageRail } from '../chat/MessageRail';
 import { buildRailEntries } from '../chat/messageRailModel';
@@ -39,17 +42,20 @@ import '../../styles/phone-link.css';
 /** Within this many pixels of the end counts as "at the bottom" (auto-scroll follows only then). */
 const AT_BOTTOM_PX = 24;
 
-function TextPiece({ step, markdown }: { step: Extract<TurnStep, { kind: 'text' }>; markdown: boolean }) {
+/** `paced`: the last agent message of a running turn. Its words come out on a short tick (hooks/usePacedText.ts); anything else shows whole. */
+function TextPiece({ step, markdown, paced }: { step: Extract<TurnStep, { kind: 'text' }>; markdown: boolean; paced: boolean }) {
+  const text = usePacedText(step.item.text, paced);
   return markdown ? (
-    <ChatMarkdown text={hideResultBlock(step.item.text)} />
+    <ChatMarkdown text={hideResultBlock(text)} />
   ) : (
-    <div className="ph-conv-plain">{step.item.text}</div>
+    <div className="ph-conv-plain">{text}</div>
   );
 }
 
 function TurnBlock({ turn, fromScreen, markdown, onPress, price, onOpenArtifact, sentFrom }: { sentFrom?: string; onOpenArtifact?: (ref: ArtifactRef, title: string) => void; price?: TurnPrice; turn: ChatTurn; fromScreen: boolean; markdown: boolean; onPress?: (message: PressedMessage) => void }) {
   const t = useT();
   const live = turn.end === null;
+  const usualOn = useUsualNotesOn();
   const lastStepId = turn.steps[turn.steps.length - 1]?.id;
   // No "Done · 4 s" under every answer: how long it took is said once, in the header and on the result card.
   const ending = turn.outcome === 'interrupted' ? t('phone.conv.stopped') : turn.outcome === 'failed' ? t('phone.conv.failed') : null;
@@ -93,12 +99,12 @@ function TurnBlock({ turn, fromScreen, markdown, onPress, price, onOpenArtifact,
         if (step.kind === 'thinking') return <ThinkingBlock key={step.id} text={step.item.text} durationMs={step.item.durationMs} streaming={live && step.id === lastStepId} folded />;
         return (
           <Pressable key={step.id} railId={step.id} className="ph-agent-text" message={{ text: step.item.text, mine: false }} onPress={onPress}>
-            <TextPiece step={step} markdown={markdown} />
+            <TextPiece step={step} markdown={markdown} paced={live && step.id === lastStepId} />
           </Pressable>
         );
       })}
       {turn.end && ending && <p className="ph-turn-end">{ending}</p>}
-      {turn.end && hasPrice(price) && price.heavy && <TurnPriceTag price={price} />}
+      {turn.end && hasPrice(price) && price.heavy && usualOn && <TurnPriceTag price={price} />}
     </section>
   );
 }
@@ -235,9 +241,7 @@ export function PhoneConversation({
       </div>
       {state !== 'unavailable' && <MessageRail entries={railEntries} scrollRef={scrollRef} rootRef={rootRef} findQuery="" />}
       </div>
-      {dock && <div className="ph-conv-dock">{dock}</div>}
-      {above}
-      {state !== 'unavailable' && composer}
+      <PhoneBottomRegion dock={dock} above={above} composer={state !== 'unavailable' ? composer : null} />
     </div>
     </PictureSourceContext.Provider>
   );

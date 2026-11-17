@@ -40,6 +40,12 @@ export interface CrewRole {
   /** A checker: its hand-back to the lead is the only loop a crew may have. */
   check?: boolean;
   position?: CrewPosition | null;
+  /** Workflow (Labs): this role is the Front. At most one, and it is the lead. */
+  front?: boolean;
+  /** Workflow helper: `minion` (default) or `spin_off`. */
+  kind?: 'minion' | 'spin_off' | null;
+  /** Workflow helper: one line, "hard coding tasks". */
+  when_to_use?: string | null;
 }
 
 export interface Crew {
@@ -50,6 +56,12 @@ export interface Crew {
   fix_loops?: number | null;
   /** A plain file name such as `difficulty.md`. */
   routing_file?: string | null;
+  /** Workflow: one shared note given to every role. */
+  how_i_work?: string | null;
+  /** Workflow: `front` (only the Front starts, the default) or `horde` (start everyone now). */
+  start_mode?: 'front' | 'horde' | null;
+  /** Workflow: most helper runs per message from the person (default 3). */
+  helper_cap?: number | null;
 }
 
 export interface CrewProblem {

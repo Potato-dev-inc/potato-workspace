@@ -4,7 +4,7 @@
 import { useEffect, useState } from 'react';
 import { useT } from '../../../i18n';
 import { openPreview } from '../../../lib/pane-preview';
-import { runTime, type PaneJob } from '../../../lib/pane-jobs';
+import { jobKey, runTime, type PaneJob } from '../../../lib/pane-jobs';
 import '../../../styles/cockpit-jobs.css';
 
 /** A clock that moves every `ms` so run times stay fresh between polls. */
@@ -121,7 +121,7 @@ export function BackgroundJobs({
   return (
     <ul className="ck-jobs">
       {jobs.map((job) => (
-        <JobRow key={job.pid} job={job} now={now} onStop={onStop} onPreview={onPreview} onPointFix={onPointFix} />
+        <JobRow key={jobKey(job)} job={job} now={now} onStop={onStop} onPreview={onPreview} onPointFix={onPointFix} />
       ))}
     </ul>
   );

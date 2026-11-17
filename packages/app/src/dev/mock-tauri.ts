@@ -99,6 +99,31 @@ const EXAMPLE_JOURNAL = {
   personaFiles: ['SOUL.md'],
 };
 
+const WORKFLOW_PLAN = {
+  name: 'Haiku router',
+  front_name: 'Front',
+  front_agent: 'claude',
+  front_model: 'haiku',
+  helpers: [
+    { name: 'Hard', agent_type: 'claude', model: 'sonnet', when_to_use: 'hard tasks', kind: 'minion' },
+    { name: 'Easy', agent_type: 'claude', model: 'opencode-go/deepseek-v4.1-flash', when_to_use: 'easy tasks', kind: 'minion' },
+  ],
+  start_mode: 'front',
+  helper_cap: 3,
+  reply_style: 'translator',
+  brief: '',
+  first_message: '',
+};
+const WORKFLOW_CREW = {
+  name: 'Haiku router',
+  how_i_work: 'Keep answers short. Say which helper did the work.',
+  roles: [
+    { name: 'Front', agent_type: 'claude', model: 'haiku', task: 'Answer short questions yourself. Send the rest to the right helper.', front: true },
+    { name: 'Hard', agent_type: 'claude', model: 'sonnet', task: 'Do the hard coding tasks.', parent: 'Front', when_to_use: 'hard coding tasks' },
+    { name: 'Easy', agent_type: 'claude', model: 'haiku', task: 'Do the easy tasks.', parent: 'Front', when_to_use: 'easy tasks', kind: 'spin_off' },
+  ],
+};
+
 export function installTauriMock(scenario: HarnessScenario): void {
   const lendMock = createLendMock(scenario.lend);
   const devicesMock = createDevicesMock(scenario.devices);
@@ -108,7 +133,7 @@ export function installTauriMock(scenario: HarnessScenario): void {
   // In-memory plugin-store (one store, rid 1), keyed as the app writes it.
   // The two agent-authority switches, at the shipped defaults unless the scenario says otherwise.
   let authority = scenario.authority ?? { ask_before_agent_control: true, agents_may_merge: false };
-  const store = new Map<string, unknown>([['settings', { theme: scenario.theme ?? 'dark', ...(scenario.simple ? { simple_mode: true } : {}), ...firstRunStore(scenario.firstRun), ...(scenario.missions?.enabled ? { missions_enabled: true } : {}), ...(scenario.lend ? { lend_enabled: true } : {}), ...(scenario.markup ? { markup_bar_enabled: true } : {}), ...(scenario.timeline ? { timeline_day_enabled: true } : {}), ...(scenario.devices && scenario.devices.enabled !== false ? { devices_enabled: true } : {}), show_terminals: !scenario.chatFirst }]]);
+  const store = new Map<string, unknown>([['settings', { theme: scenario.theme ?? 'dark', ...(scenario.simple ? { simple_mode: true } : {}), ...firstRunStore(scenario.firstRun), ...(scenario.missions?.enabled ? { missions_enabled: true } : {}), ...(scenario.lend ? { lend_enabled: true } : {}), ...(scenario.markup ? { markup_bar_enabled: true } : {}), ...(scenario.timeline ? { timeline_day_enabled: true } : {}), ...(scenario.workflows ? { workflows_enabled: true, crews_enabled: true } : {}), ...(scenario.devices && scenario.devices.enabled !== false ? { devices_enabled: true } : {}), show_terminals: !scenario.chatFirst }]]);
   // Settings > Phone > Devices: one phone with full control in daily use, one watch-and-answer.
   const now = Math.floor(Date.now() / 1000);
   const day = 24 * 60 * 60;
@@ -196,6 +221,21 @@ export function installTauriMock(scenario: HarnessScenario): void {
           return standbyHelpersView;
         case 'standby_get_status':
           return standbyStatus(scenario.standbyIdleSecs, scenario.standbyBlocked);
+        case 'workflows_list':
+          return scenario.workflows ? [{ slug: 'haiku-router', plan: WORKFLOW_PLAN }] : null;
+        case 'workflows_plan':
+          return { ...WORKFLOW_PLAN, brief: 'You are the front of the workflow.', first_message: 'You are the front of the workflow.' };
+        case 'crews_list':
+          return scenario.workflows ? [{ slug: 'haiku-router', name: 'Haiku router', roles: 3, agents: ['claude'], problem: null }] : [];
+        case 'crews_templates':
+        case 'crews_starters':
+          return [];
+        case 'crews_agents':
+          return { agents: [{ id: 'claude', label: 'Claude' }], default: 'claude' };
+        case 'crews_check':
+          return [];
+        case 'crews_open':
+          return { slug: 'haiku-router', kind: 'saved', crew: WORKFLOW_CREW, routing_text: '', problems: [] };
         case 'agents_list':
           return agentsListing(scenario.headlessOnlyAgent);
         case 'pane_run_info':
@@ -517,6 +557,17 @@ export function installTauriMock(scenario: HarnessScenario): void {
         // The model pickers: Claude starts a pane on a model; every other agent lists none in the preview.
         case 'agent_model_options':
           // `live` is what the agent's chats last reported (the chat picker's list).
+          // `window.__mixedModels`: a list that spans makers (the model picker's grouping).
+          if (a.agentId === 'claude' && (window as unknown as { __mixedModels?: boolean }).__mixedModels) return { terminal: false, default_model: null, models: [], live: { options: [
+            { value: 'default', name: 'Default', description: null },
+            { value: 'argon', name: 'Gemini 4 Argon', description: null },
+            { value: 'hydrogen', name: 'Gemini 4 Hydrogen', description: null },
+            { value: 'orch', name: 'Orchestrator (Argon)', description: null },
+            { value: 'flash', name: 'Gemini 3.8 Flash', description: null },
+            { value: 'opus', name: 'Claude Opus 5.5', description: null },
+            { value: 'sonnet', name: 'Claude Sonnet 5.5', description: null },
+            { value: 'oss', name: 'GPT-OSS 120B (Medium)', description: null },
+          ] } };
           if (a.agentId === 'claude') return { terminal: true, default_model: 'sonnet', models: ['opus', 'sonnet', 'haiku'], live: { options: [
             { value: 'default', name: 'Default (recommended) · Opus 5.5', description: 'Opus 5.5 with 1M context · Most capable for complex work' },
             { value: 'opus', name: 'Opus 5.5', description: 'Most capable for complex work' },

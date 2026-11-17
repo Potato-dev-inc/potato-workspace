@@ -3,6 +3,7 @@
 // It takes plain data and callbacks; `NewAgentHost` (next to it) wires them to the cockpit. Choices the app has no
 // backing for (a permission mode, a model, an effort) are not drawn: nothing here is a stand-in.
 import { useEffect, useMemo, useRef, useState, type KeyboardEvent, type ReactNode } from 'react';
+import { errorSentence } from '../../../lib/sayError';
 import type { Account } from '../../../lib/accounts';
 import type { AgentDescriptor } from '../../../lib/agentRegistry';
 import type { RecentProject } from '../../../lib/ship-api';
@@ -21,7 +22,9 @@ import { splitByChat } from '../../../lib/chatFirst';
 import { useShowTerminals } from '../../../lib/showTerminals';
 import { NeedTerminalsLine } from '../NeedTerminalsLine';
 import type { ProjectChoice } from '../NewAgentMenu';
-import { tauriNewAgentApi, type HomeSettings, type NewAgentApi } from './api';
+import { tauriNewAgentApi, type HomeSettings, type NewAgentApi, type WorkflowChoice } from './api';
+import { prettyModel } from '../../crews/modelNames';
+import { openSettingsAt } from '../../../lib/openSettingsAt';
 import { HomeCards, type CardData } from './HomeCards';
 import { GettingStarted } from './GettingStarted';
 import { ContinueCard, type ContinueYesterdayProps } from './ContinueCard';
@@ -45,6 +48,7 @@ import {
   type LaneView,
   type RunAs,
   type StartRequest,
+  workflowSummary,
 } from './model';
 import { AgentLogo } from '../../common/AgentLogo';
 import { DisabledReason } from '../../common/DisabledReason';
@@ -160,7 +164,7 @@ export interface NewAgentPageProps {
   leading?: ReactNode;
 }
 
-type Menu = 'plus' | 'folder' | 'agent' | null;
+type Menu = 'plus' | 'folder' | 'agent' | 'workflow' | null;
 
 export function NewAgentPage({ agents, panes, needs, selectedCwd = null, project = null, runningFolders = [], api = tauriNewAgentApi, addonApi = tauriAcpAddonApi, modelApi = tauriModelOptionsApi, defaultsApi = tauriAgentDefaultsApi, rulesApi = tauriAgentRulesApi, onSignIn, onStart, onOpenPane, onSetUp, continueYesterday, leading = null }: NewAgentPageProps) {
   const t = useT();
@@ -185,6 +189,9 @@ export function NewAgentPage({ agents, panes, needs, selectedCwd = null, project
   // The agent whose chat start said "sign in first"; the card shows until the person says they are signed in.
   const [signInFor, setSignInFor] = useState<string | null>(null);
   const addons = useAcpAddons(addonApi);
+  // Labs "Workflows": null while the switch is off (or on an older build).
+  const [workflows, setWorkflows] = useState<WorkflowChoice[] | null>(null);
+  const [wfSlug, setWfSlug] = useState<string | null>(null);
   const area = useRef<HTMLTextAreaElement>(null);
   const alive = useRef(true);
 
@@ -225,6 +232,7 @@ export function NewAgentPage({ agents, panes, needs, selectedCwd = null, project
     void ok(api.lanes(), setLanes);
     void ok(api.recent(), setRecent);
     void ok(api.defaultFolder(), setDefaultFolder);
+    if (api.workflows) void ok(api.workflows(), setWorkflows);
     let off: (() => void) | undefined;
     api
       .onHomeChanged((next) => live && setHome((h) => ({ ...h, ...next })))
@@ -300,7 +308,10 @@ export function NewAgentPage({ agents, panes, needs, selectedCwd = null, project
     return chatFirst && chatIds ? all.filter((c) => chatIds.has(c.agentId.toLowerCase()) && !c.noChat) : all;
   }, [agents, accounts, chatFirst, chatIds]);
   // The remembered agent and sign-in (the key holds both). A key that is gone, or not ready, falls back to the first ready one.
-  const choice: AgentChoice | null = (pickKey ? choices.find((c) => c.key === pickKey) : undefined) ?? defaultChoice(choices, remembered());
+  // A picked workflow decides the agent and the model: the front's. The pickers stay on the page, locked.
+  const wf = workflows?.find((w) => w.slug === wfSlug) ?? null;
+  const wfAgent = wf ? (choices.find((c) => c.agentId.toLowerCase() === wf.plan.front_agent.toLowerCase()) ?? null) : null;
+  const choice: AgentChoice | null = wf ? wfAgent : ((pickKey ? choices.find((c) => c.key === pickKey) : undefined) ?? defaultChoice(choices, remembered()));
   const chatLane = chatAvailable(lanes, choice?.agentId ?? null);
   // A lent sign-in of an agent with no chat on one: Chat is shown off, with the reason, instead of failing after the click.
   const lendNoChat = chatLane && !!choice?.noChat;
@@ -326,7 +337,7 @@ export function NewAgentPage({ agents, panes, needs, selectedCwd = null, project
   const pins = usePinnedRules(choice?.agentId ?? null, folder?.path ?? null, rulesApi);
   const storedModel = pins?.model || (choice ? readPickedModel(choice.agentId, choice.accountId) : '');
   const agentDefaults = useAgentDefaults(defaultsApi);
-  const model = modelPick?.slot === modelSlot ? modelPick.value : startingModel(storedModel, choice ? (agentDefaults[choice.agentId.toLowerCase()] ?? '') : '', modelList.status === 'ready' ? modelList.options : null);
+  const model = wf ? (wf.plan.front_model ?? '') : modelPick?.slot === modelSlot ? modelPick.value : startingModel(storedModel, choice ? (agentDefaults[choice.agentId.toLowerCase()] ?? '') : '', modelList.status === 'ready' ? modelList.options : null);
   // A chat sets its model once it starts, so it always can. A terminal pane needs the agent's own launch flag.
   const showModel = !!choice && (runAs === 'chat' || (modelList.status === 'ready' && modelList.options.terminal));
 
@@ -340,17 +351,31 @@ export function NewAgentPage({ agents, panes, needs, selectedCwd = null, project
     if (block || !choice) return;
     setError(null);
     setBusy(true);
-    remember(choice.key);
+    if (!wf) remember(choice.key);
     try {
+      // A workflow starts its front with the brief first, then what the person asked.
+      let first = prompt.trim();
+      if (wf) {
+        if (!folder?.path || !api.workflowPlan) throw new Error(t('newAgent.wf.planFailed'));
+        const plan = await api.workflowPlan(wf.slug, folder.path, first).catch((e: unknown) => {
+          throw new Error(errorSentence(e, t('newAgent.wf.planFailed')));
+        });
+        first = plan.first_message;
+      }
       const result = await onStart({
         agentId: choice.agentId,
         accountId: choice.accountId,
         folder: folder?.path,
         isolated,
         runAs,
-        prompt: prompt.trim(),
+        prompt: first,
         ...(showModel && model ? { model } : {}),
       });
+      // Whole-horde mode: the helpers start right after the front, under its chat.
+      if (wf && wf.plan.start_mode === 'horde' && folder?.path && typeof result === 'string' && api.workflowHelpers) {
+        const why = await api.workflowHelpers(wf.slug, folder.path, result).catch((e: unknown) => errorSentence(e, t('newAgent.wf.planFailed')));
+        if (why && alive.current) setError(t('newAgent.wf.hordeFailed', { why }));
+      }
       // Chat could not start for a reason a card answers: the add-on is gone, or a sign-in is needed.
       if (isStartBlock(result)) {
         if (alive.current) {
@@ -531,6 +556,32 @@ export function NewAgentPage({ agents, panes, needs, selectedCwd = null, project
 
               {leading}
 
+              {workflows && (
+                <Pop
+                  id="workflow"
+                  open={menu === 'workflow'}
+                  onToggle={() => setMenu(menu === 'workflow' ? null : 'workflow')}
+                  onClose={() => setMenu(null)}
+                  label={wf ? t('newAgent.wf.chip', { name: wf.plan.name }) : t('newAgent.wf.label')}
+                  trigger={
+                    <>
+                      <span className="ck-na-chip-text">{wf ? t('newAgent.wf.chip', { name: wf.plan.name }) : t('newAgent.wf.label')}</span>
+                      <IconChevronDown />
+                    </>
+                  }
+                >
+                  <button type="button" role="menuitemradio" aria-checked={!wf} className="ck-na-item" onClick={() => { setWfSlug(null); setMenu(null); area.current?.focus(); }}>
+                    <span>{t('newAgent.wf.none')}</span>
+                  </button>
+                  {workflows.map((w) => (
+                    <button key={w.slug} type="button" role="menuitemradio" aria-checked={wfSlug === w.slug} className="ck-na-item" onClick={() => { setWfSlug(w.slug); setMenu(null); area.current?.focus(); }}>
+                      <span>{w.plan.name}</span>
+                    </button>
+                  ))}
+                  {workflows.length === 0 && <p className="ck-na-note">{t('newAgent.wf.empty')}</p>}
+                </Pop>
+              )}
+
               <Pop
                 id="folder"
                 open={menu === 'folder'}
@@ -567,6 +618,12 @@ export function NewAgentPage({ agents, panes, needs, selectedCwd = null, project
                 </div>
               </Pop>
 
+              {wf ? (
+                <button type="button" className="ck-na-chip is-locked" disabled data-testid="na-agent-locked" title={t('newAgent.wf.locked')} aria-label={t('newAgent.agentLabel', { name: choice?.label ?? wf.plan.front_agent })}>
+                  <AgentLogo id={wf.plan.front_agent} name={choice?.label ?? wf.plan.front_agent} size={13} decorative className="ck-na-logo" />
+                  <span className="ck-na-chip-text">{choice?.label ?? wf.plan.front_agent}</span>
+                </button>
+              ) : (
               <Pop
                 id="agent"
                 open={menu === 'agent'}
@@ -623,6 +680,7 @@ export function NewAgentPage({ agents, panes, needs, selectedCwd = null, project
                   </button>
                 )}
               </Pop>
+              )}
 
               {chatLane && !chatFirst && (
                 <div className="ck-na-seg" role="radiogroup" aria-label={t('newAgent.runAs')}>
@@ -646,7 +704,12 @@ export function NewAgentPage({ agents, panes, needs, selectedCwd = null, project
                 </div>
               )}
 
-              {showModel && choice && (
+              {wf && (
+                <button type="button" className="ck-na-chip is-locked" disabled data-testid="na-model-locked" title={t('newAgent.wf.locked')}>
+                  <span className="ck-na-chip-text">{wf.plan.front_model ? prettyModel(wf.plan.front_model) : t('models.agentDefault')}</span>
+                </button>
+              )}
+              {!wf && showModel && choice && (
                 <ModelPicker
                   testId="na-model"
                   label={t('newAgent.modelFor', { name: choice.label })}
@@ -665,6 +728,19 @@ export function NewAgentPage({ agents, panes, needs, selectedCwd = null, project
               </button>
             </div>
           </div>
+          )}
+
+          {wf && (
+            <p className="ck-na-wf" data-testid="na-wf-summary">
+              <span>
+                {workflowSummary(wf.plan, { agent: (id) => agents.find((a) => a.id === id)?.label ?? id, model: (_agent, m) => prettyModel(m) })}{' '}
+                {wf.plan.start_mode === 'horde' ? `${t('newAgent.wf.horde')} ` : ''}
+                {t(wf.plan.reply_style === 'router' ? 'newAgent.wf.reply.router' : 'newAgent.wf.reply.translator')}
+              </span>{' '}
+              <button type="button" className="ck-na-link" onClick={() => openSettingsAt('crews')}>
+                {t('newAgent.wf.edit')}
+              </button>
+            </p>
           )}
 
           <PinnedLine pins={pins} />

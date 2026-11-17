@@ -7,7 +7,7 @@
   display: flex;
   align-items: center;
   gap: 10px;
-  max-width: min(440px, calc(100vw - 32px));
+  max-width: min(440px, calc(calc(100vw / var(--ui-scale, 1)) - 32px));
   padding: 8px 12px;
   border: 1px solid var(--sep, rgba(128, 128, 128, 0.3));
   border-radius: 10px;
@@ -54,6 +54,7 @@
 /* Inside Settings the notice is part of the row, not a floating card. */
 .app-update-row .app-update-notice {
   position: static;
+  flex-basis: 100%;
   margin-top: 8px;
   max-width: none;
 }
@@ -94,7 +95,7 @@
   display: flex;
   flex-direction: column;
   gap: 6px;
-  max-width: min(420px, calc(100vw - 32px));
+  max-width: min(420px, calc(calc(100vw / var(--ui-scale, 1)) - 32px));
   padding: 10px 12px;
   border: 1px solid var(--sep, rgba(128, 128, 128, 0.3));
   border-radius: 10px;
@@ -114,4 +115,17 @@
 /* The missing-tools line sits above the update notice, so the two never cover each other. */
 .app-update-notice[data-phase='tools-missing'] {
   bottom: 64px;
+}
+
+/* Settings > About: "Check for updates" and "Repair built-in tools" are one row with a gap between them, and the
+   "In place." hint sits after its label with a gap (it used to crowd the label). */
+.app-update-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px 12px;
+}
+.app-update-row .app-update-detail {
+  flex-basis: auto;
+  margin-left: 2px;
 }

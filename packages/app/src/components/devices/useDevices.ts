@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from 'react';
-import { devicesApi, type Device, type DevicesApi, type DevicesView, type HostingView } from '../../lib/devices';
+import { devicesApi, withShortIds, type Device, type DevicesApi, type DevicesView, type HostingView } from '../../lib/devices';
 
 /** How often the state is read again when no change event came (a link going down is only noticed by asking). */
 const REFRESH_MS = 15_000;
@@ -50,7 +50,7 @@ function sane(value: unknown): DevicesView | null {
     message: v.message ?? null,
     locked_until: v.locked_until ?? null,
     tampered: v.tampered === true,
-    devices: v.devices.map(saneDevice),
+    devices: withShortIds(v.devices.map(saneDevice), v.name ?? ''),
     transfers: Array.isArray(v.transfers) ? v.transfers.filter((x) => x && typeof x.id === 'number') : [],
   };
 }

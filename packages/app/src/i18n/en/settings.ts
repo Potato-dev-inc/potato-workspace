@@ -236,6 +236,8 @@ export const settings = {
   "settings.row.start-at-sign-in.label": "Start Potato Workspace when I sign in",
   "settings.row.start-at-sign-in.hint": "It starts quietly in the tray. Your companion wakes up too.",
   "settings.row.confirm-close.label": "Ask before closing a working agent",
+  "settings.row.close-to-tray.label": "Keep running in the tray when I close the window",
+  "settings.row.close-to-tray.hint": "Off: the X at the top right quits Potato. On: the app keeps running in the tray.",
   "settings.row.confirm-close.hint": "Asks first when you close a window or quit from the tray while an agent works.",
   "settings.row.keep-awake.label": "Keep this PC awake while agents work",
   "settings.row.keep-awake.hint": "Your agents keep going when you lock the PC (Win+L). The screen can still turn off.",

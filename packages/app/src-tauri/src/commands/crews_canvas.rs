@@ -127,19 +127,22 @@ pub async fn crews_apply(crew: Crew, folder: String, raise_limit: Option<bool>) 
             }
         }
         let mut added = Vec::new();
+        let mut skipped = plan.skipped;
         if needs_limit.is_none() {
             for input in plan.to_add {
                 let name = input.name.clone();
                 let id = format!("sb-{}", uuid::Uuid::new_v4().simple());
-                if file.edit(|s| s.add(input, id).map(|_| ())).is_ok() {
-                    added.push(name);
+                // A standby that could not be made is said so (it used to vanish from the answer).
+                match file.edit(|s| s.add(input, id).map(|_| ())) {
+                    Ok(()) => added.push(name),
+                    Err(why) => skipped.push(apply::Skipped { role: name, why }),
                 }
             }
             if !added.is_empty() {
                 crate::acp::warm::refresh_now();
             }
         }
-        Applied { added, already: plan.already, skipped: plan.skipped, needs_limit, problems: Vec::new() }
+        Applied { added, already: plan.already, skipped, needs_limit, problems: Vec::new() }
     })
     .await
     .map_err(internal)

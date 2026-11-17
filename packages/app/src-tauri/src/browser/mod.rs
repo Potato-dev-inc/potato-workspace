@@ -27,6 +27,7 @@ pub mod bar;
 pub mod chrome;
 pub mod cdp;
 pub mod console;
+pub mod dock;
 pub mod driver;
 pub mod guard;
 pub mod live;

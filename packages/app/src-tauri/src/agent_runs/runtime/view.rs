@@ -126,6 +126,9 @@ pub struct AgentRunView {
     /// `minion` | `spin_off`; absent in One type.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub started_as: Option<String>,
+    /// One plain sentence, up front: which kind this run is and, when it is not the kind `as` asked for, why.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub as_note: Option<String>,
     /// Present when the model is the person's helper default (same as `receipt.model_note`).
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub model_note: Option<String>,
@@ -370,6 +373,7 @@ impl From<OperationSnapshot> for AgentRunView {
             as_used: snapshot.worker.started.as_ref().map(|s| s.as_used.clone()),
             as_reason: snapshot.worker.started.as_ref().map(|s| s.as_reason.clone()),
             started_as: snapshot.worker.started.as_ref().and_then(|s| s.started_as.clone()),
+            as_note: snapshot.worker.started.as_ref().map(|s| s.note()),
             model_note: snapshot.worker.model_note.clone(),
             resumable: snapshot.worker.resumable,
             next: snapshot

@@ -17,11 +17,19 @@ export const RAIL_MAX = 520;
 export const RAIL_SNAP = 200;
 /** The right panel hides only when the chat beside it would get narrower than this. */
 export const CHAT_MIN = 480;
+/** The details column (the dock) to the right of the right panel. */
+export const DOCK_DEFAULT = 460;
+export const DOCK_MIN = 340;
+export const DOCK_MAX = 720;
+/** A stacked dock pane never gets shorter than this (its header and a line of body). */
+export const DOCK_PANE_MIN = 160;
 /** One arrow-key press moves a panel edge this far. */
 export const KEY_STEP = 16;
 
 export const SIDE_KEY = 'pm.sidebar.width';
 export const RAIL_WIDTH_KEY = 'pm.rail.width';
+export const DOCK_WIDTH_KEY = 'pm.dock.width';
+export const DOCK_SPLIT_KEY = 'pm.dock.split';
 /** What the sidebar key holds when the sidebar is the thin strip. */
 const STRIP_VALUE = 'strip';
 
@@ -47,6 +55,25 @@ export function sidePx(size: SideSize): number {
 
 export function railFromPx(px: number): number {
   return Number.isFinite(px) ? Math.round(clamp(px, RAIL_MIN, RAIL_MAX)) : RAIL_DEFAULT;
+}
+
+export function dockFromPx(px: number): number {
+  return Number.isFinite(px) ? Math.round(clamp(px, DOCK_MIN, DOCK_MAX)) : DOCK_DEFAULT;
+}
+
+/** The relative heights of the dock's stacked panes, by slot ("view", "terminal", "browser"). Only ratios matter. */
+export type DockWeights = Record<string, number>;
+
+/**
+ * A splitter between two neighbouring panes moved to `topPx` (the upper pane's new height) inside `pairPx` (both panes
+ * together). Their weights keep the same sum, and neither pane gets shorter than DOCK_PANE_MIN.
+ */
+export function moveSplit(weights: DockWeights, upper: string, lower: string, topPx: number, pairPx: number): DockWeights {
+  const sum = (weights[upper] ?? 1) + (weights[lower] ?? 1);
+  if (!Number.isFinite(topPx) || pairPx <= 2 * DOCK_PANE_MIN) return weights;
+  const top = clamp(topPx, DOCK_PANE_MIN, pairPx - DOCK_PANE_MIN);
+  const w = (top / pairPx) * sum;
+  return { ...weights, [upper]: Math.round(w * 1000) / 1000, [lower]: Math.round((sum - w) * 1000) / 1000 };
 }
 
 /** The room the right panel can have: the window, minus the sidebar, minus the chat's minimum. Never below RAIL_MIN. */
@@ -92,18 +119,37 @@ function readRail(): number {
   return read(RAIL_WIDTH_KEY) !== null && Number.isFinite(n) ? railFromPx(n) : RAIL_DEFAULT;
 }
 
+function readDock(): number {
+  const raw = read(DOCK_WIDTH_KEY);
+  const n = Number(raw);
+  return raw !== null && Number.isFinite(n) ? dockFromPx(n) : DOCK_DEFAULT;
+}
+function readWeights(): DockWeights {
+  try {
+    const parsed: unknown = JSON.parse(read(DOCK_SPLIT_KEY) ?? '{}');
+    if (!parsed || typeof parsed !== 'object') return {};
+    return Object.fromEntries(Object.entries(parsed as Record<string, unknown>).filter(([, v]) => typeof v === 'number' && Number.isFinite(v) && v > 0)) as DockWeights;
+  } catch {
+    return {};
+  }
+}
+
 // ---------------------------------------------------------------- the shared state
 
 export interface PanelWidths {
   side: SideSize;
   rail: number;
+  /** The details column's width. */
+  dock: number;
+  /** How the dock's stacked panes share its height. */
+  split: DockWeights;
 }
 
 let state: PanelWidths | null = null;
 const listeners = new Set<() => void>();
 
 function current(): PanelWidths {
-  if (!state) state = { side: readSide(), rail: readRail() };
+  if (!state) state = { side: readSide(), rail: readRail(), dock: readDock(), split: readWeights() };
   return state;
 }
 function emit(): void {
@@ -127,6 +173,23 @@ export function setRailWidth(px: number): void {
   state = { ...was, rail };
   emit();
 }
+export function setDockWidth(px: number): void {
+  const dock = dockFromPx(px);
+  const was = current();
+  if (dock === was.dock) return;
+  state = { ...was, dock };
+  emit();
+}
+export function resetDockWidth(): void {
+  state = { ...current(), dock: DOCK_DEFAULT };
+  emit();
+  saveWidths();
+}
+/** Moves the splitter between two dock panes. Not saved until `saveWidths`. */
+export function setDockSplit(split: DockWeights): void {
+  state = { ...current(), split };
+  emit();
+}
 export function resetSideWidth(): void {
   state = { ...current(), side: { width: SIDE_DEFAULT, strip: false } };
   emit();
@@ -139,9 +202,11 @@ export function resetRailWidth(): void {
 }
 /** Remembers the widths. */
 export function saveWidths(): void {
-  const { side, rail } = current();
+  const { side, rail, dock, split } = current();
   write(SIDE_KEY, side.strip ? STRIP_VALUE : String(side.width));
   write(RAIL_WIDTH_KEY, String(rail));
+  write(DOCK_WIDTH_KEY, String(dock));
+  write(DOCK_SPLIT_KEY, JSON.stringify(split));
 }
 /** Tests: forget the in-memory state so the next read comes from storage again. */
 export function resetPanelWidthsForTests(): void {

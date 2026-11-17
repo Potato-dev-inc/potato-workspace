@@ -507,7 +507,7 @@ describe('Agents: Standbys', () => {
     expect(byLabel<HTMLInputElement>(m.host, 'Name of standby Reviewer')!.value).toBe('Reviewer');
     expect(m.host.textContent).toContain('Codex CLI · gpt-5');
     expect(byLabel(m.host, 'Most standbys at once')).toBeTruthy();
-    expect(byLabel(m.host, 'Minutes before an unused standby closes')).toBeTruthy();
+    expect(byLabel(m.host, 'Minutes before an unused standby goes to sleep')).toBeTruthy();
     expect(m.host.textContent).toContain("Add standbys from an agent\'s row in the sidebar.");
     expect(m.host.querySelector('[data-testid="standby-form"]')).toBeNull();
   });

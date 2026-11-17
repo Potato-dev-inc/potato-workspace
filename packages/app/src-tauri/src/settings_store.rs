@@ -25,9 +25,11 @@ pub const DEV_LABS_KEYS: &[&str] = &[
     "discord_bot_enabled",
     "project_guide_enabled",
     "markup_bar_enabled",
+    "dock_browser_enabled",
     "timeline_day_enabled",
     "smaller_updates_enabled",
     "crews_enabled",
+    "workflows_enabled",
     "opentunnel_stable_link",
 ];
 
@@ -79,6 +81,7 @@ const PATCHABLE_KEYS: &[&str] = &[
     "developer_use_rust_mcp",
     "librarian_indexer_path",
     "confirm_close_running_pane",
+    "close_to_tray",
     "checkpoints_enabled",
     "checkpoints_keep",
     "away_minutes",
@@ -105,6 +108,7 @@ const PATCHABLE_KEYS: &[&str] = &[
     "discord_bot_enabled",
     "project_guide_enabled",
     "markup_bar_enabled",
+    "dock_browser_enabled",
     "timeline_day_enabled",
     "desktop_pet_size",
     "desktop_pet_quiet",
@@ -116,6 +120,8 @@ const PATCHABLE_KEYS: &[&str] = &[
     "early_versions_enabled",
     "smaller_updates_enabled",
     "crews_enabled",
+    "workflows_enabled",
+    "workflow_reply_style",
     "opentunnel_stable_link",
     "app_only_failed_for",
 ];
@@ -130,6 +136,8 @@ pub fn default_public_settings() -> Value {
         "developer_use_rust_mcp": false,
         "librarian_indexer_path": null,
         "confirm_close_running_pane": true,
+        // The main window X quits the app. On: it hides to the tray instead.
+        "close_to_tray": false,
         "checkpoints_enabled": true,
         "checkpoints_keep": 50,
         "away_minutes": 5,
@@ -177,6 +185,8 @@ pub fn default_public_settings() -> Value {
         "project_guide_enabled": false,
         // Mark up pages (Labs): the floating bar on a page an agent made, and "Open in agent browser". Off until chosen. Rust: markup.
         "markup_bar_enabled": false,
+        // Browser in the side panel (Labs): the agent browser's page shows in the details column instead of its own window. Off until chosen. Rust: browser::dock.
+        "dock_browser_enabled": false,
         // The Today page (Labs): one line for the whole day with a way back to any point on it. Off until chosen. Rust: timeline.
         "timeline_day_enabled": false,
         "desktop_pet_size": "medium",
@@ -186,7 +196,7 @@ pub fn default_public_settings() -> Value {
         "keep_awake_while_working": true,
         // The agent that started a helper may answer its safe questions (allow once, any no). Rust: acp::chat::helper_answers.
         "helper_answers_enabled": true,
-        // Settings > Agents > Helper agents: the model a helper runs on per agent id when the request names none.
+        // Settings > Agents that agents start: the model a helper runs on per agent id when the request names none.
         "helper_default_models": {},
         // Settings > Agents: the model each agent starts on when nothing names one (agent id -> model id).
         "agent_default_models": {},
@@ -196,6 +206,10 @@ pub fn default_public_settings() -> Value {
         "smaller_updates_enabled": false,
         // Crews (Labs): shows saved crews, read-only, and lets the command line check a crew file. Off until chosen. Rust: crews.
         "crews_enabled": false,
+        // Workflows (Labs): a crew with one Front role; the Front starts its helpers itself. Off until chosen. Rust: crews::workflow.
+        "workflows_enabled": false,
+        // How the Front answers (Labs): "translator" (default) retells in its own words; "router" shows the helper's own words.
+        "workflow_reply_style": "translator",
         // Fixed phone address (Labs): an address from the third-party OpenTunnel relay. Off until chosen. Rust: mobile_tunnel/opentunnel.
         "opentunnel_stable_link": false,
         // The version whose small update failed; it takes the full package from then on. Written by the app, empty when none.
@@ -623,11 +637,29 @@ mod early_versions_tests {
     }
 
     #[test]
+    fn the_side_panel_browser_is_a_dev_labs_key_patchable_and_off_by_default() {
+        assert_eq!(DEV_LABS_KEYS.iter().filter(|k| **k == "dock_browser_enabled").count(), 1);
+        assert!(PATCHABLE_KEYS.contains(&"dock_browser_enabled"));
+        assert_eq!(default_public_settings()["dock_browser_enabled"], serde_json::json!(false));
+    }
+
+    #[test]
     fn crews_is_a_dev_labs_key_patchable_and_off_by_default() {
         assert_eq!(DEV_LABS_KEYS.iter().filter(|k| **k == "crews_enabled").count(), 1);
         assert!(PATCHABLE_KEYS.contains(&"crews_enabled"));
         assert_eq!(default_public_settings()["crews_enabled"], json!(false));
         assert_eq!(with_dev_labs(&default_public_settings(), true)["crews_enabled"], json!(true));
+    }
+
+    #[test]
+    fn workflows_is_a_dev_labs_key_patchable_and_off_and_replies_as_translator_by_default() {
+        assert_eq!(DEV_LABS_KEYS.iter().filter(|k| **k == "workflows_enabled").count(), 1);
+        assert!(PATCHABLE_KEYS.contains(&"workflows_enabled") && PATCHABLE_KEYS.contains(&"workflow_reply_style"));
+        assert!(!DEV_LABS_KEYS.contains(&"workflow_reply_style"));
+        assert_eq!(default_public_settings()["workflows_enabled"], json!(false));
+        assert_eq!(default_public_settings()["workflow_reply_style"], json!("translator"));
+        assert_eq!(with_dev_labs(&default_public_settings(), true)["workflows_enabled"], json!(true));
+        assert_eq!(with_dev_labs(&default_public_settings(), true)["workflow_reply_style"], json!("translator"));
     }
 
     #[test]

@@ -46,6 +46,8 @@ export interface FloatPlace {
   maxHeight: number;
   /** True when the layer opened above its anchor. */
   up: boolean;
+  /** True when the content is taller than the room: the layer is cut to `maxHeight` and scrolls. */
+  capped: boolean;
 }
 
 /** Where the layer goes. Pure. `align` says which edge of the anchor it lines up with; `prefer` is the side it tries first. */
@@ -66,7 +68,18 @@ export function placeFloating(
   const top = up ? anchor.top - FLOAT_GAP - height : anchor.bottom + FLOAT_GAP;
   const raw = align === 'end' ? anchor.right - size.width : anchor.left;
   const left = Math.max(FLOAT_EDGE, Math.min(raw, view.width - FLOAT_EDGE - size.width));
-  return { left: Math.round(left), top: Math.round(Math.max(FLOAT_EDGE, top)), maxHeight: Math.round(room), up };
+  return { left: Math.round(left), top: Math.round(Math.max(FLOAT_EDGE, top)), maxHeight: Math.round(room), up, capped: size.height > room };
+}
+
+/**
+ * The page may be zoomed (Settings > Text size sets `html { zoom }`). Window pixels (rects, innerHeight) are then
+ * `zoom` times the pixels a `position: fixed` layer is placed in, so everything is divided by it first.
+ */
+export function pageZoom(): number {
+  if (typeof document === 'undefined') return 1;
+  const root = document.documentElement;
+  const z = parseFloat(getComputedStyle(root).zoom) || parseFloat(root.style.getPropertyValue('--ui-scale'));
+  return Number.isFinite(z) && z > 0 ? z : 1;
 }
 
 /** A layer open inside another: the parent counts the child's element as inside. */
@@ -150,10 +163,14 @@ function Float({ menu, role, as = 'div', ...p }: FloatProps & { menu: boolean })
     const el = ref.current;
     if (!el) return;
     const r = p.anchorRef?.current?.getBoundingClientRect();
-    const box: Box | null = r ?? (p.point ? { left: p.point.x, right: p.point.x, top: p.point.y, bottom: p.point.y } : null);
-    if (!box) return;
-    const size = { width: el.offsetWidth, height: el.scrollHeight };
-    setPlace(placeFloating(box, size, { width: window.innerWidth, height: window.innerHeight }, p.align ?? (menu ? 'end' : 'start'), p.prefer ?? 'down'));
+    const raw: Box | null = r ?? (p.point ? { left: p.point.x, right: p.point.x, top: p.point.y, bottom: p.point.y } : null);
+    if (!raw) return;
+    const z = pageZoom();
+    const box: Box = { left: raw.left / z, right: raw.right / z, top: raw.top / z, bottom: raw.bottom / z };
+    // A list capped by maxHeight is placed at its capped height: its full content height would put a menu opened above
+    // its button too high (the capped box then ends far above the button).
+    const size = { width: el.offsetWidth, height: p.maxHeight ? Math.min(el.scrollHeight, p.maxHeight) : el.scrollHeight };
+    setPlace(placeFloating(box, size, { width: window.innerWidth / z, height: window.innerHeight / z }, p.align ?? (menu ? 'end' : 'start'), p.prefer ?? 'down'));
   };
   useLayoutEffect(measure, [p.align, p.prefer, p.point?.x, p.point?.y, p.children]);
 
@@ -195,13 +212,16 @@ function Float({ menu, role, as = 'div', ...p }: FloatProps & { menu: boolean })
     if (items.length === 0) return;
     const at = items.indexOf(document.activeElement as HTMLElement);
     e.preventDefault();
-    items[(at + (e.key === 'ArrowDown' ? 1 : -1) + items.length) % items.length]?.focus();
+    const next = items[(at + (e.key === 'ArrowDown' ? 1 : -1) + items.length) % items.length];
+    next?.focus();
+    // A menu that scrolls keeps the item it moved to in view.
+    next?.scrollIntoView?.({ block: 'nearest' });
   };
 
   const style: CSSProperties = {
     ...p.style,
     ...(p.minWidth ? { minWidth: p.minWidth } : null),
-    ...(place ? { left: place.left, top: place.top, maxHeight: p.maxHeight ? Math.min(place.maxHeight, p.maxHeight) : place.maxHeight } : { left: 0, top: 0, visibility: 'hidden' }),
+    ...(place ? { left: place.left, top: place.top, maxHeight: p.maxHeight ? Math.min(place.maxHeight, p.maxHeight) : place.maxHeight, ...(place.capped ? { overflowY: 'auto' as const } : null) } : { left: 0, top: 0, visibility: 'hidden' }),
   };
   const cls = ['fl-layer', menu ? 'ck-menu ck-menu--float' : '', p.className ?? ''].filter(Boolean).join(' ');
   const node = createElement(

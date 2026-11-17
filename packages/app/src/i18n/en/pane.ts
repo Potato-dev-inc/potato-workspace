@@ -72,6 +72,7 @@ export const pane = {
   "pane.share": "Share",
   "pane.chipPermissions": "Permissions",
   "pane.chipModel": "Model",
+  "pane.noModelsMatch": "No models match",
   "pane.chipEffort": "Effort",
   "pane.shareLabel": "Save or share this chat",
   "pane.shareTip": "Save this chat as a page or Markdown, or go live",

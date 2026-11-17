@@ -1,0 +1,166 @@
+/* The crew chip at the top of a chat and its list. Colour tokens only, no edge stripes; every label shrinks with an ellipsis. */
+.cockpit .ck-crew-bar {
+  display: flex;
+  min-width: 0;
+  padding: 4px 8px 0;
+}
+.cockpit .ck-crew-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+  max-width: 100%;
+  min-height: 22px;
+  padding: 0 9px;
+  border: 0;
+  border-radius: 999px;
+  background: var(--fill);
+  color: var(--label-2);
+  font-size: 11px;
+  cursor: pointer;
+  transition:
+    background-color var(--dur-fast) var(--ease),
+    color var(--dur-fast) var(--ease);
+}
+.cockpit .ck-crew-chip:hover {
+  background: var(--fill-hover);
+  color: var(--label);
+}
+.cockpit .ck-crew-chip[data-tone='needs-you'] {
+  color: var(--label);
+}
+.cockpit .ck-crew-chip[data-tone='needs-you'] svg {
+  color: var(--accent);
+}
+.cockpit .ck-crew-chip svg {
+  flex: none;
+}
+.cockpit .ck-crew-text {
+  min-width: 0;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+.fl-layer.ck-crew-panel {
+  box-sizing: border-box;
+  width: 320px;
+  max-width: calc(calc(100vw / var(--ui-scale, 1)) - 16px);
+  padding: 6px;
+  font-size: 12px;
+  border-radius: 12px;
+  background: var(--bg-float);
+  border: 1px solid var(--sep);
+  box-shadow: var(--float-shadow);
+  overflow-y: auto;
+}
+.ck-crew-group + .ck-crew-group {
+  margin-top: 6px;
+}
+.ck-crew-head {
+  margin: 2px 6px 3px;
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--label-2);
+}
+.ck-crew-list {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.ck-crew-row {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  min-width: 0;
+  border-radius: 6px;
+}
+.ck-crew-row:hover,
+.ck-crew-row:focus-within {
+  background: var(--fill-hover);
+}
+.ck-crew-open {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex: 1 1 auto;
+  min-width: 0;
+  padding: 5px 6px;
+  border: 0;
+  background: none;
+  color: var(--label);
+  font-size: 12px;
+  text-align: left;
+  cursor: pointer;
+}
+.ck-crew-open > * {
+  flex: none;
+}
+.ck-crew-open > .ck-crew-title {
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+.ck-crew-kind {
+  width: 12px;
+  height: 12px;
+  fill: none;
+  stroke: var(--label-2);
+  stroke-width: 1.3;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+.ck-crew-open > .ck-crew-state,
+.ck-crew-open > .ck-crew-time {
+  flex: 0 1 auto;
+  min-width: 0;
+  max-width: 7em;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+  font-size: 11px;
+  color: var(--label-2);
+}
+.ck-crew-open > .ck-crew-state[data-state='needs-you'] {
+  color: var(--accent);
+}
+.ck-crew-open > .ck-crew-state[data-state='failed'] {
+  color: var(--danger);
+}
+.ck-crew-row[data-state='done'] .ck-crew-title {
+  color: var(--label-2);
+}
+/* Stop shows while the row is hovered or has the focus, and always on a touch screen (no hover there). */
+.ck-crew-stop {
+  display: none;
+  flex: none;
+  padding-right: 4px;
+}
+.ck-crew-row:hover .ck-crew-stop,
+.ck-crew-row:focus-within .ck-crew-stop {
+  display: inline-flex;
+}
+.ck-crew-fold {
+  display: block;
+  margin: 2px 6px;
+  padding: 3px 0;
+  border: 0;
+  background: none;
+  color: var(--label-2);
+  font-size: 11px;
+  cursor: pointer;
+}
+.ck-crew-fold:hover {
+  color: var(--label);
+}
+@media (hover: none), (pointer: coarse) {
+  .ck-crew-stop {
+    display: inline-flex;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .cockpit .ck-crew-chip {
+    transition: none;
+  }
+}

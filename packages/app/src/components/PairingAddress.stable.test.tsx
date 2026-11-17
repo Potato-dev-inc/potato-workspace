@@ -133,23 +133,29 @@ describe('Connect > Phone: keep one address', () => {
     await click(q('stable-link'));
     await settle(4);
     expect(api.save).toHaveBeenCalledWith({ mode: 'stable', worker_url: WORKER, secret: null, secret_action: 'keep' });
+    // The new secret is shown hidden; the eye button reveals it.
+    expect(q('stable-sheet')!.textContent).not.toContain('SECRET-ONCE-0123456789');
+    await click(q('stable-secret-eye'));
     expect(q('stable-sheet')!.textContent).toContain('SECRET-ONCE-0123456789');
     expect(q('stable-status')!.getAttribute('data-linked')).toBe('true');
     expect(q('stable-status')!.textContent).toContain('Linked ✓');
     // Behind the sheet the page now shows the stable address with a chip, and the automatic one only as "behind it".
     expect(q('pairing-origin')!.textContent).toContain('potato-stable-link.me.workers.dev');
     expect(q('stable-chip')!.textContent).toBe('Stable');
-    expect(q('pairing-behind')!.textContent).toContain('quiet-lake-1234.trycloudflare.com');
+    // The automatic address is not shown next to it: the QR code and the line say one thing, the Worker.
+    expect(q('pairing-behind')).toBeNull();
+    expect(q('pairing-origin')!.textContent).not.toContain('trycloudflare');
     expect(q('keep-one-address')).toBeNull();
   });
 
-  it('when linked it shows the stable address with a chip and keeps the mode picker', async () => {
+  it('when linked it shows the stable address with a chip and no second Public address card', async () => {
     const api = fakeApi(stable('linked'));
     await mount(api);
     expect(q('stable-chip')).not.toBeNull();
-    // Linked: no offer; the fold still has the mode picker so nothing is hidden.
     expect(q('keep-one-address')).toBeNull();
-    expect(host.querySelector('[data-testid="pairing-tunnel-modes"] select[aria-label]')).not.toBeNull();
+    // The one card (How your phone connects) lives on the Connect page; the pairing panel does not draw another.
+    expect(host.querySelector('section[aria-label="Public address"]')).toBeNull();
+    expect(host.querySelector('select')).toBeNull();
   });
 
   it('suggests a saved team relay address in the Worker field, only as a pre-fill with a note', async () => {
@@ -178,16 +184,19 @@ describe('Connect > Phone: keep one address', () => {
     mocks.tunnelUrl = WORKER;
     await mount(fakeApi(stable('failed')));
     expect(q('stable-chip')).toBeNull();
-    expect(q('stable-pending')).not.toBeNull();
+    // Not linked: no address line, the reason in its place, and no code can be made.
+    expect(q('pairing-origin')).toBeNull();
+    expect(q('pairing-not-ready')!.textContent).toContain('potato-stable-link.me.workers.dev is not ready');
+    expect(q('pairing-not-ready-why')!.textContent).toBe('The secret does not match.');
+    expect(q('pair-a-phone')!.hasAttribute('disabled')).toBe(true);
     await click(q('stable-fix'));
     expect(q('stable-status')!.textContent).toContain('Not linked yet');
     expect(q('stable-status')!.textContent).toContain('The secret does not match.');
   });
 
-  it('"Address (advanced)" holds the same mode picker as the tunnel section, with the stable choice', async () => {
+  it('"Address (advanced)" holds the page address and port only, not a second copy of the connection card', async () => {
     await mount(fakeApi(quick));
-    const select = host.querySelector<HTMLSelectElement>('[data-testid="pairing-address"] select')!;
-    expect([...select.options].map((o) => o.value)).toEqual(['quick', 'named', 'custom', 'stable']);
+    expect(q('pairing-address')!.querySelector('select')).toBeNull();
     expect(q('pairing-address')!.textContent).toContain('Phone page address');
   });
 });

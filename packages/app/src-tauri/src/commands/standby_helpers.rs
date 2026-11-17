@@ -27,9 +27,12 @@ pub fn standby_helper_add(input: NewHelper) -> Result<HelpersView, String> {
 
 /// Rename a standby, change its model, or change what it does after a task.
 #[tauri::command]
-pub fn standby_helper_update(id: String, name: Option<String>, model: Option<String>, change_model: bool, after_task: Option<AfterTask>, home: Option<String>, change_home: Option<bool>) -> Result<HelpersView, String> {
+pub fn standby_helper_update(id: String, name: Option<String>, model: Option<String>, change_model: bool, after_task: Option<AfterTask>, home: Option<String>, change_home: Option<bool>, kind: Option<crate::agent_run_mode::StartedAs>) -> Result<HelpersView, String> {
     helpers::file().edit(|store| {
         store.update(&id, name.as_deref(), change_model.then_some(model.as_deref()), after_task)?;
+        if let Some(kind) = kind {
+            store.set_kind(&id, kind)?;
+        }
         if change_home.unwrap_or(false) {
             store.set_home(&id, home)?;
         }
@@ -67,10 +70,27 @@ pub fn standby_helper_start(id: String) -> HelpersView {
     helpers::view()
 }
 
-/// "At most N standbys" and "close a standby nobody used for N minutes".
+/// "Never close": the idle time shuts no standby or warm agent down.
 #[tauri::command]
-pub fn standby_helpers_set_limits(max: usize, idle_minutes: u64) -> Result<HelpersView, String> {
-    helpers::file().edit(|store| store.set_settings(max, idle_minutes))?;
+pub fn standby_helpers_set_never_close(on: bool) -> Result<HelpersView, String> {
+    helpers::file().edit(|store| {
+        store.settings.never_close = on;
+        Ok(())
+    })?;
+    crate::acp::warm::refresh_now();
+    Ok(helpers::view())
+}
+
+/// "At most N standbys", "close a standby nobody used for N minutes" and "A new standby is a: Spin-off / Minion".
+#[tauri::command]
+pub fn standby_helpers_set_limits(max: usize, idle_minutes: u64, default_kind: Option<crate::agent_run_mode::StartedAs>) -> Result<HelpersView, String> {
+    helpers::file().edit(|store| {
+        store.set_settings(max, idle_minutes)?;
+        if let Some(kind) = default_kind {
+            store.settings.default_kind = kind;
+        }
+        Ok(())
+    })?;
     Ok(helpers::view())
 }
 

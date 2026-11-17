@@ -188,3 +188,28 @@ describe('ConsentCard: answering a risky prompt', () => {
     expect(host.querySelector('.ib-reason')?.textContent).toBe(reason);
   });
 });
+
+describe('background command card', () => {
+  const background: Question = {
+    ...takeOver,
+    id: 'c9',
+    question: 'Claude 1 wants to run a command in the background: Dev server',
+    context: 'Command: npm run dev',
+    choices: [
+      { id: 'allow_once', label: 'Allow once' },
+      { id: 'always', label: 'Allow for this chat' },
+      { id: 'deny', label: 'No' },
+    ],
+    consent: { action: 'background_command', requester: 'Claude 1', target: 'Dev server', pane_id: 'p1' },
+  };
+  it('says what it wants in the app\'s words, with No / Allow once / Allow for this chat', () => {
+    expect(consentTitle(background)).toBe('Claude 1 wants to run a command in the background: Dev server');
+    expect(consentReason(background)).toBe('Command: npm run dev');
+    const answers: unknown[] = [];
+    act(() => root.render(<ConsentCard q={background} now={1000} onAnswer={(a) => answers.push(a)} />));
+    const labels = [...host.querySelectorAll('button[data-choice]')].map((b) => b.textContent);
+    expect(labels).toEqual(['No', 'Allow once', 'Allow for this chat']);
+    act(() => void (host.querySelector('[data-choice="always"]') as HTMLElement).click());
+    expect(answers).toEqual([{ choice_id: 'always' }]);
+  });
+});

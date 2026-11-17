@@ -5,7 +5,8 @@
 use super::types::ToolCallUpdate;
 use serde_json::Value;
 
-const MAX_COMMAND_CHARS: usize = 2000;
+/// Above the length the risk rules read in full (4000), so a longer command is seen as too long to check, never silently cut to a safe-looking start.
+const MAX_COMMAND_CHARS: usize = 8000;
 const MAX_PATHS: usize = 20;
 
 /// The command text of a tool call (`command` or `cmd`, a string or a list of words).

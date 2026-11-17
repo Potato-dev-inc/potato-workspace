@@ -51,6 +51,9 @@ export const inboxCards: Partial<Record<EnglishKey, string>> = {
   'inboxCards.consent.deny': '拒絕',
   'inboxCards.consent.allowOnce': '允許一次',
   'inboxCards.consent.alwaysHere': '在這裡一律允許',
+  'inboxCards.consent.commandTitle': '{who}想在背景執行一個指令：{target}',
+  'inboxCards.consent.allowChat': '這個對話一律允許',
+  'inboxCards.consent.no': '不要',
 
   // LimitCard
   'inboxCards.limit.otherAgent': '其他 AI 助理…',

@@ -5,6 +5,7 @@ mod accounts;
 mod acp;
 mod actors;
 mod agent_authority;
+mod agent_terminals;
 mod agent_rules;
 mod agent_run_mode;
 mod audit;
@@ -33,6 +34,8 @@ mod crash;
 mod event_log;
 mod git_exclude;
 mod handoff;
+mod handover;
+mod task_sidebar;
 mod issue_intake;
 mod routines;
 mod ci_fix;
@@ -333,6 +336,13 @@ pub fn run() {
             commands::chat_export_markdown,
             commands::chat_export_save,
             commands::pane_set_helper_of,
+            commands::task_sidebar_get,
+            commands::task_sidebar_show,
+            commands::task_sidebar_place,
+            commands::task_sidebar_remove,
+            commands::task_sidebar_reorder,
+            commands::task_hand_over,
+            commands::task_hand_over_cancel,
             commands::chat_move_status,
             commands::chat_move_begin,
             commands::chat_move_history,
@@ -538,6 +548,9 @@ pub fn run() {
             commands::pane_jobs,
             commands::pane_jobs_all,
             commands::pane_job_stop,
+            commands::pane_jobs_finished,
+            commands::agent_terminal_stop,
+            commands::agent_terminal_output,
             commands::loop_status,
             commands::loop_signals,
             commands::loop_dismiss,
@@ -649,6 +662,17 @@ pub fn run() {
             commands::push_settings_event,
             commands::sync_public_settings,
             commands::dev_labs_override_active,
+            browser::dock::dock_browser_rect,
+            browser::dock::dock_browser_snapshot,
+            browser::dock::dock_browser_freeze,
+            browser::dock::dock_browser_tabs,
+            browser::dock::dock_browser_nav,
+            browser::dock::dock_browser_mark_up,
+            browser::dock::dock_browser_select,
+            browser::dock::dock_browser_close,
+            browser::dock::dock_browser_new_tab,
+            browser::dock::dock_browser_popout,
+            browser::dock::dock_browser_dockback,
             commands::create_mobile_pairing_session,
             commands::list_paired_mobile_devices,
             commands::phone_activity_list,
@@ -718,6 +742,7 @@ pub fn run() {
             commands::standby_helper_take_back,
             commands::standby_helper_start,
             commands::standby_helpers_set_limits,
+            commands::standby_helpers_set_never_close,
             commands::get_ui_mode,
             commands::set_ui_mode,
             commands::plan_mode_switch,
@@ -885,6 +910,9 @@ pub fn run() {
             commands::crews_import_read,
             commands::crews_talk,
             commands::crews_start,
+            commands::workflows_list,
+            commands::workflows_plan,
+            commands::workflows_start_helpers,
             commands::first_run_state,
             commands::first_run_start_task,
             commands::first_run_task_status,

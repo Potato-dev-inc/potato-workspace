@@ -6,7 +6,7 @@ import { useModelOptions } from '../../lib/modelOptions';
 import { ModelPicker } from '../common/ModelPicker';
 import { DEFAULT_AGENT, type Crew, type CrewAgents, type CrewPermissions, type CrewRole } from '../../lib/crews-api';
 import type { ModelNamer } from './modelNames';
-import { MAX_STANDBYS, keyOf, setPermissions, setRole, renameRole, toggleHandoff, isCalled } from './model';
+import { MAX_STANDBYS, keyOf, setPermissions, setRole, renameRole, toggleHandoff, isCalled, isWorkflow, kindOf, setFront } from './model';
 
 const WRITES = ['none', 'worktree', 'scoped'] as const;
 const RUNS = ['none', 'read-only', 'worktree', 'ask'] as const;
@@ -17,6 +17,7 @@ export function RoleEditor({
   agents,
   disabled,
   modelName,
+  workflows = false,
   onChange,
   onRemove,
 }: {
@@ -25,6 +26,8 @@ export function RoleEditor({
   agents: CrewAgents | null;
   disabled: boolean;
   modelName: ModelNamer;
+  /** Labs "Workflows" is on: the lead may be marked the Front of a workflow. */
+  workflows?: boolean;
   onChange: (next: Crew) => void;
   onRemove: () => void;
 }) {
@@ -39,6 +42,8 @@ export function RoleEditor({
   const known = choices.some((a) => a.id === role.agent_type);
   const others = crew.roles.filter((r) => r !== role);
   const isLead = !role.parent;
+  const inWorkflow = isWorkflow(crew);
+  const showFront = workflows || inWorkflow;
 
   return (
     <div className="crewc-editor" data-testid="role-editor">
@@ -73,6 +78,27 @@ export function RoleEditor({
           />
         )}
       </div>
+      {showFront && isLead ? (
+        <label className="crewc-check" data-testid="role-front">
+          <input type="checkbox" checked={!!role.front} disabled={disabled} onChange={(e) => onChange(setFront(crew, e.target.checked, t('crewcanvas.wf.whenStart')))} />
+          <span>{t('crewcanvas.wf.front')}</span>
+        </label>
+      ) : null}
+      {inWorkflow && !role.front ? (
+        <>
+          <label className="crewc-field">
+            <span>{t('crewcanvas.wf.when')}</span>
+            <input type="text" value={role.when_to_use ?? ''} maxLength={120} disabled={disabled} data-testid="role-when" placeholder={t('crewcanvas.wf.whenHint')} onChange={(e) => patch({ when_to_use: e.target.value })} />
+          </label>
+          <label className="crewc-field">
+            <span>{t('crewcanvas.wf.kind')}</span>
+            <select value={kindOf(role)} disabled={disabled} data-testid="role-kind" onChange={(e) => patch({ kind: e.target.value === 'spin_off' ? 'spin_off' : null })}>
+              <option value="minion">{t('crewcanvas.wf.kind.minion')}</option>
+              <option value="spin_off">{t('crewcanvas.wf.kind.spin_off')}</option>
+            </select>
+          </label>
+        </>
+      ) : null}
       <label className="crewc-field">
         <span>{t('crewcanvas.role.job')}</span>
         <textarea rows={5} value={role.task} disabled={disabled} onChange={(e) => patch({ task: e.target.value })} />

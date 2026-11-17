@@ -120,6 +120,7 @@ pub fn authorize(
         || (method == "GET" && clean_path == "/mcp/mode")
         || (method == "POST" && clean_path == "/mcp/mode")
         || (method == "GET" && clean_path == "/mcp/session")
+        || (method == "GET" && clean_path == "/mcp/spin-off")
     {
         return Ok(());
     }
@@ -192,6 +193,7 @@ pub fn authorize(
                     && rest != "answer"
                     && rest != "cancel"
                     && rest != "close"
+                    && rest != "message-parent"
                     && rest != "take-over"
                     && rest != "release"
                     && rest != "attach"

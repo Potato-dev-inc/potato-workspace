@@ -146,8 +146,8 @@
 }
 .cockpit .ck-att-overlay-img {
   display: block;
-  max-width: min(90vw, 1000px);
-  max-height: 80vh;
+  max-width: min(calc(90vw / var(--ui-scale, 1)), 1000px);
+  max-height: calc(80vh / var(--ui-scale, 1));
   object-fit: contain;
   border-radius: 12px;
 }

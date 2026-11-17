@@ -82,8 +82,10 @@ describe('placeHelpers', () => {
     const p = placeHelpers([helper({ home: 'gone' })], [pane('a1'), pane('a2'), pane('x', 'C:/other')]);
     expect(p.byAgent.get('a2')).toHaveLength(1);
   });
-  it('no home at all: the same rule', () => {
-    expect(placeHelpers([helper({ home: null })], panes).byAgent.get('a2')).toHaveLength(1);
+  it('no home at all (made from the crew sheet or Settings): never nested under an unrelated agent, it waits in the project group', () => {
+    const p = placeHelpers([helper({ home: null })], panes);
+    expect(p.byAgent.size).toBe(0);
+    expect(p.loose.get('c:/work/app')).toHaveLength(1);
   });
   it('no main agent in the project: the loose group', () => {
     const p = placeHelpers([helper({ home: 'gone' })], [pane('x', 'C:/other')]);

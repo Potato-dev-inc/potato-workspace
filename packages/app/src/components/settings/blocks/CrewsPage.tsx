@@ -12,7 +12,7 @@ import '../../../styles/crews.css';
 
 type State = { kind: 'loading' } | { kind: 'failed' } | { kind: 'ready'; crews: CrewSummary[]; templates: CrewSummary[] };
 
-export function CrewsPage({ api = liveCrewsApi }: { api?: Pick<CrewsApi, 'list' | 'templates'> & Partial<CrewsApi> }) {
+export function CrewsPage({ api = liveCrewsApi, workflows = false }: { api?: Pick<CrewsApi, 'list' | 'templates'> & Partial<CrewsApi>; workflows?: boolean }) {
   const t = useT();
   const [state, setState] = useState<State>({ kind: 'loading' });
   const [open, setOpen] = useState<string | null>(null);
@@ -90,7 +90,7 @@ export function CrewsPage({ api = liveCrewsApi }: { api?: Pick<CrewsApi, 'list' 
           }}
         />
       ) : null}
-      {open ? <CrewCanvas slug={open} api={api as CrewsApi} onClose={() => setOpen(null)} onSaved={() => load()} /> : null}
+      {open ? <CrewCanvas slug={open} api={api as CrewsApi} workflows={workflows} onClose={() => setOpen(null)} onSaved={() => load()} /> : null}
     </section>
   );
 }

@@ -984,3 +984,128 @@ fn an_agent_may_steer_a_chat_the_person_put_under_its_pane_and_loses_it_when_it_
     let result = call(&rig, "POST", "agents/interrupt", json!({ "handle": id }), Some("session-B")).unwrap();
     assert_eq!(result.unwrap_err().code, "NOT_YOUR_CHAT");
 }
+
+// ---- spin-offs: message_parent, notes from the agent that spun one off, and what that agent may not do ----------------
+
+fn two_types() -> crate::agent_run_mode::TestEnv {
+    crate::agent_run_mode::TestEnv { started_agent_types: crate::agent_run_mode::StartedAgentTypes::Two, ..Default::default() }
+}
+
+/// A second chat under `rig`'s chat, started by session-A as a spin-off.
+fn spin_off_of(rig: &Rig) -> Arc<AcpChat> {
+    let id = start_helper_of(rig, &rig.id());
+    let spin = get(&id).expect("the spin-off chat is open");
+    spin.set_nested_under(Some(&rig.id()));
+    spin.set_started_by(Some("session-A"));
+    spin.set_started(crate::agent_run_mode::StartedRecord { as_used: "spin_off".into(), as_reason: "requested".into(), started_as: Some("spin_off".into()), ..Default::default() });
+    spin
+}
+
+/// The messages of `chat` that came from another agent: `(text, from)`.
+fn notes_in(chat: &AcpChat) -> Vec<(String, String)> {
+    chat.items()
+        .iter()
+        .filter_map(|i| match i {
+            crate::session_chat::ChatItem::User { text, from: Some(from), .. } => Some((text.clone(), from.clone())),
+            _ => None,
+        })
+        .collect()
+}
+
+#[test]
+fn a_spin_off_writes_to_the_agent_that_spun_it_off_and_the_note_says_so() {
+    crate::agent_run_mode::with_test_env(two_types(), || {
+        let rig = Rig::new("");
+        let spin = spin_off_of(&rig);
+        let reply = super::spin_off::message_parent(&rig.deps.registry, Some(spin.pane_id()), &json!({ "message": "stream 2" })).unwrap();
+        assert_eq!(reply["delivered"], true);
+        assert_eq!(reply["state"], "started_turn", "an idle agent takes it as a turn");
+        assert!(wait_until(30, || notes_in(&rig.chat).iter().any(|(text, from)| text == "stream 2" && from.starts_with("spinoff:"))), "{:?}", notes_in(&rig.chat));
+        spin.retire();
+    });
+}
+
+#[test]
+fn a_note_to_a_busy_agent_waits_for_the_end_of_its_turn() {
+    crate::agent_run_mode::with_test_env(two_types(), || {
+        let rig = Rig::new("");
+        let spin = spin_off_of(&rig);
+        rig.chat.send("stream 12").expect("a long turn starts");
+        let reply = super::spin_off::message_parent(&rig.deps.registry, Some(spin.pane_id()), &json!({ "message": "stream 1" })).unwrap();
+        assert_eq!(reply["state"], "queued");
+        assert!(wait_until(60, || notes_in(&rig.chat).iter().any(|(text, from)| text == "stream 1" && from.starts_with("spinoff:"))), "it went in once the turn ended: {:?}", rig.texts());
+        spin.retire();
+    });
+}
+
+#[test]
+fn message_parent_has_limits_and_refuses_what_is_not_a_spin_off() {
+    crate::agent_run_mode::with_test_env(two_types(), || {
+        let rig = Rig::new("");
+        let spin = spin_off_of(&rig);
+        let first = super::spin_off::message_parent(&rig.deps.registry, Some(spin.pane_id()), &json!({ "message": "stream 1", "idempotency_key": "k1" })).unwrap();
+        assert_eq!(first["delivered"], true);
+        let again = super::spin_off::message_parent(&rig.deps.registry, Some(spin.pane_id()), &json!({ "message": "stream 1", "idempotency_key": "k1" })).unwrap();
+        assert_eq!(again["state"], "repeat");
+        let soon = super::spin_off::message_parent(&rig.deps.registry, Some(spin.pane_id()), &json!({ "message": "stream 1" })).unwrap();
+        assert_eq!(soon["state"], "deferred");
+        assert_eq!(soon["delivered"], false);
+        let long = "x".repeat(super::spin_off::MAX_CHARS + 1);
+        assert_eq!(super::spin_off::message_parent(&rig.deps.registry, Some(spin.pane_id()), &json!({ "message": long })).unwrap_err().code, "MESSAGE_TOO_LONG");
+        // The agent that spun it off cannot use it (it has no one above it), nor an agent in no chat.
+        assert_eq!(super::spin_off::message_parent(&rig.deps.registry, Some(&rig.id()), &json!({ "message": "hi" })).unwrap_err().code, "NOT_A_SPIN_OFF");
+        assert_eq!(super::spin_off::message_parent(&rig.deps.registry, None, &json!({ "message": "hi" })).unwrap_err().code, "NOT_A_SPIN_OFF");
+        spin.retire();
+    });
+}
+
+#[test]
+fn message_parent_after_the_parent_closed_says_so() {
+    crate::agent_run_mode::with_test_env(two_types(), || {
+        let rig = Rig::new("");
+        let spin = spin_off_of(&rig);
+        on_pane_closed(&rig.id());
+        let refused = super::spin_off::message_parent(&rig.deps.registry, Some(spin.pane_id()), &json!({ "message": "hello?" })).unwrap_err();
+        assert_eq!(refused.code, "PARENT_CLOSED");
+        assert!(!spin.is_closed(), "the spin-off itself lives on");
+        spin.retire();
+    });
+}
+
+#[test]
+fn the_agent_that_spun_a_chat_off_may_leave_it_a_note_but_not_answer_drive_or_close_it() {
+    crate::agent_run_mode::with_test_env(two_types(), || {
+        let rig = Rig::new("");
+        let spin = spin_off_of(&rig);
+        let id = spin.pane_id().to_string();
+        let followup = call(&rig, "POST", "agents/followup", json!({ "handle": id, "task": "stream 1" }), Some("session-A")).unwrap();
+        assert_eq!(followup.unwrap_err().code, "SPIN_OFF_PERSON_DRIVES");
+        let answer = call(&rig, "POST", "agents/answer", json!({ "handle": id, "prompt_id": "q1", "choice": "allow_once" }), Some("session-A")).unwrap();
+        assert_eq!(answer.unwrap_err().code, "SPIN_OFF_ASKS_PERSON");
+        let close = call(&rig, "POST", "agents/close", json!({ "handle": id }), Some("session-A")).unwrap();
+        assert_eq!(close.unwrap_err().code, "SPIN_OFF_PERSON_OWNS");
+        assert!(!spin.is_closed());
+        // send_message is a visible note "from <the agent>" in the spin-off.
+        let sent = call(&rig, "POST", "agents/send", json!({ "handle": id, "message": "stream 1" }), Some("session-A")).unwrap().unwrap();
+        assert_eq!(sent["message"]["delivery"], "started_turn");
+        assert!(wait_until(30, || notes_in(&spin).iter().any(|(text, from)| text == "stream 1" && from.starts_with("parent:"))), "{:?}", notes_in(&spin));
+        // The person (no agent session) still drives it, once the note's turn is over.
+        assert!(wait_until(30, || spin.readiness() == super::Readiness::Ready), "the note's turn ends");
+        let person = call(&rig, "POST", "agents/followup", json!({ "handle": id, "task": "stream 1", "wait_ms": crate::test_support::wait::slow_ms(20000) }), None).unwrap();
+        assert!(person.is_ok(), "{person:?}");
+        spin.retire();
+    });
+}
+
+#[test]
+fn in_one_type_a_helper_is_driven_by_its_agent_as_before() {
+    let rig = Rig::new("");
+    let helper = start_helper_of(&rig, &rig.id());
+    let chat = get(&helper).unwrap();
+    chat.set_nested_under(Some(&rig.id()));
+    chat.set_started_by(Some("session-A"));
+    assert!(!chat.is_spin_off());
+    let done = call(&rig, "POST", "agents/followup", json!({ "handle": helper, "task": "stream 1", "wait_ms": crate::test_support::wait::slow_ms(20000) }), Some("session-A")).unwrap().unwrap();
+    assert_eq!(done["status"], "completed");
+    chat.retire();
+}

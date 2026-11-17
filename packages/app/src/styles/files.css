@@ -740,13 +740,20 @@
 }
 .cockpit .ck-fsearch-mode {
   flex: 1 1 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 0;
   height: 22px;
+  padding: 0 6px;
   border: 1px solid var(--sep);
   border-radius: 6px;
   background: transparent;
   color: var(--label-2);
   font: inherit;
   font-size: 11px;
+  text-align: center;
+  white-space: nowrap;
   cursor: pointer;
 }
 .cockpit .ck-fsearch-mode[aria-pressed='true'] {

@@ -111,3 +111,20 @@ fn minions_are_left_to_the_app_while_it_ends() {
     close_with_helpers(&registry, "boss", Some("test"), true, true).unwrap();
     assert_eq!(ids(&registry), vec!["m1"], "quitting keeps chats restorable");
 }
+
+#[test]
+fn in_two_types_closing_the_orchestrator_keeps_its_spin_offs_and_stops_its_minions() {
+    use crate::agent_run_mode::{with_test_env, StartedAgentTypes, TestEnv};
+    let registry = registry_with(&[("boss", None), ("spin", Some("boss")), ("spin-minion", Some("spin")), ("minion", Some("boss")), ("plain", Some("boss"))]);
+    {
+        let mut reg = registry.lock();
+        reg.panes.get_mut("spin").unwrap().info.started_as = Some("spin_off".into());
+        reg.panes.get_mut("spin-minion").unwrap().info.started_as = Some("minion".into());
+        reg.panes.get_mut("minion").unwrap().info.started_as = Some("minion".into());
+    }
+    with_test_env(TestEnv { started_agent_types: StartedAgentTypes::Two, ..TestEnv::default() }, || {
+        close_with_helpers(&registry, "boss", Some("test"), true, false).unwrap();
+    });
+    // The spin-off stays with its own minion. So does the helper from before the kinds: it counts as a spin-off. The minion went.
+    assert_eq!(ids(&registry), vec!["plain", "spin", "spin-minion"]);
+}

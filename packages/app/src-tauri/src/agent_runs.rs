@@ -63,7 +63,7 @@ pub(crate) use runtime::{cancel_agent, send_agent};
 pub(crate) use runtime::RunReceipt;
 pub(crate) use runtime::guarantees;
 pub(crate) use runtime::timing::RunTiming;
-pub use capabilities::{read_only_run_table, read_only_supported, read_only_supported_for, read_only_unsupported_message};
+pub use capabilities::{read_only_run_table, read_only_supported, read_only_supported_for, read_only_unsupported_message, read_only_cannot_note, task_required_error};
 
 /// Seams for `handoff::tests` into private modules of this one.
 #[cfg(test)]

@@ -4,6 +4,8 @@
 import { useEffect, useId, useRef, useState, type KeyboardEvent } from 'react';
 import '../../styles/chat-input-card.css';
 import { useDismissable } from '../../hooks/useDismissable';
+import { useT } from '../../i18n';
+import { providerOf } from '../common/ModelPicker';
 
 export interface ChipChoice {
   value: string;
@@ -26,6 +28,18 @@ interface ControlProps {
   hint?: string;
   /** A small dim word before the value, for a setting whose value alone says little ("Default"). */
   caption?: string;
+  /** A search box at the top of the list (the model chip: the agent can offer dozens of models). */
+  searchable?: boolean;
+}
+
+/** The choices a search keeps: every word typed must appear in the name, id, note or maker, in any case. */
+export function filterChoices(choices: readonly ChipChoice[], query: string): ChipChoice[] {
+  const words = query.toLowerCase().split(/\s+/).filter(Boolean);
+  if (words.length === 0) return [...choices];
+  return choices.filter((c) => {
+    const hay = `${c.name} ${c.value} ${c.description ?? ''} ${providerOf(c) ?? ''}`.toLowerCase();
+    return words.every((w) => hay.includes(w));
+  });
 }
 
 function Chevron() {
@@ -53,15 +67,18 @@ function Check() {
 }
 
 /** A pill that opens a list above it. The pill shows the name of the current choice. */
-export function ChipMenu({ chipId, label, value, choices, disabled = false, onChange, tone, readOnly = false, hint, caption }: ControlProps & { chipId: string }) {
+export function ChipMenu({ chipId, label, value, choices: allChoices, disabled = false, onChange, tone, readOnly = false, hint, caption, searchable = false }: ControlProps & { chipId: string }) {
+  const t = useT();
   const uid = useId();
   const [open, setOpen] = useState(false);
   const [active, setActive] = useState(0);
   const root = useRef<HTMLDivElement>(null);
   const button = useRef<HTMLButtonElement>(null);
   const list = useRef<HTMLDivElement>(null);
-  const selected = Math.max(0, choices.findIndex((c) => c.value === value));
-  const current = choices.find((c) => c.value === value)?.name ?? value;
+  const box = useRef<HTMLInputElement>(null);
+  const [query, setQuery] = useState('');
+  const choices = searchable ? filterChoices(allChoices, query) : allChoices;
+  const current = allChoices.find((c) => c.value === value)?.name ?? value;
 
   const close = (returnFocus: boolean) => {
     setOpen(false);
@@ -69,12 +86,13 @@ export function ChipMenu({ chipId, label, value, choices, disabled = false, onCh
   };
   const openList = () => {
     if (disabled) return;
-    setActive(selected);
+    setQuery('');
+    setActive(Math.max(0, allChoices.findIndex((c) => c.value === value)));
     setOpen(true);
   };
   // The list takes the focus while it is open, so the arrows work at once.
   useEffect(() => {
-    if (open) list.current?.focus();
+    if (open) (searchable ? box.current : list.current)?.focus();
   }, [open]);
   // A click outside closes it (the focus stays where the person clicked). Escape is handled in onListKey (it keeps the composer's Esc away).
   useDismissable(open, { inside: [root], anchor: root, ignore: ['escape'], onDismiss: () => setOpen(false) });
@@ -90,6 +108,12 @@ export function ChipMenu({ chipId, label, value, choices, disabled = false, onCh
   };
 
   const onListKey = (event: KeyboardEvent<HTMLDivElement>) => {
+    // In the search box Space, Home and End belong to the typing.
+    if (searchable && (event.key === ' ' || event.key === 'Home' || event.key === 'End')) return;
+    if (choices.length === 0 && event.key !== 'Escape' && event.key !== 'Tab') {
+      if (event.key === 'Enter') event.preventDefault();
+      return;
+    }
     switch (event.key) {
       case 'ArrowDown':
         event.preventDefault();
@@ -162,26 +186,56 @@ export function ChipMenu({ chipId, label, value, choices, disabled = false, onCh
         <Chevron />
       </button>
       {open && (
-        <div ref={list} id={listId} className="ck-pop" role="listbox" tabIndex={-1} aria-label={label} aria-activedescendant={`${uid}-opt-${active}`} onKeyDown={onListKey}>
-          {choices.map((choice, i) => (
-            <div
-              key={choice.value}
-              id={`${uid}-opt-${i}`}
-              role="option"
-              aria-selected={choice.value === value}
-              className={i === active ? 'ck-opt ck-opt--active' : 'ck-opt'}
-              onMouseEnter={() => setActive(i)}
-              onClick={() => pick(i)}
-            >
-              <span className="ck-opt-text">
-                {choice.name}
-                {choice.description && <small>{choice.description}</small>}
-              </span>
-              <span className="ck-opt-check">
-                <Check />
-              </span>
-            </div>
-          ))}
+        <div
+          ref={list}
+          id={listId}
+          className={searchable ? 'ck-pop ck-pop--search' : 'ck-pop'}
+          role={searchable ? undefined : 'listbox'}
+          tabIndex={-1}
+          aria-label={label}
+          aria-activedescendant={searchable ? undefined : `${uid}-opt-${active}`}
+          onKeyDown={onListKey}
+        >
+          {searchable && (
+            <input
+              ref={box}
+              className="ck-pop-search"
+              type="text"
+              spellCheck={false}
+              autoComplete="off"
+              placeholder={t('state.model.search')}
+              aria-label={t('state.model.search')}
+              aria-controls={`${uid}-opts`}
+              aria-activedescendant={choices.length ? `${uid}-opt-${active}` : undefined}
+              value={query}
+              onChange={(e) => {
+                setQuery(e.target.value);
+                setActive(0);
+              }}
+            />
+          )}
+          <div id={`${uid}-opts`} className={searchable ? 'ck-pop-list' : undefined} role={searchable ? 'listbox' : undefined} aria-label={searchable ? label : undefined}>
+            {choices.map((choice, i) => (
+              <div
+                key={choice.value}
+                id={`${uid}-opt-${i}`}
+                role="option"
+                aria-selected={choice.value === value}
+                className={i === active ? 'ck-opt ck-opt--active' : 'ck-opt'}
+                onMouseEnter={() => setActive(i)}
+                onClick={() => pick(i)}
+              >
+                <span className="ck-opt-text">
+                  {choice.name}
+                  {choice.description && <small>{choice.description}</small>}
+                </span>
+                <span className="ck-opt-check">
+                  <Check />
+                </span>
+              </div>
+            ))}
+            {choices.length === 0 && <p className="ck-pop-empty">{t('pane.noModelsMatch')}</p>}
+          </div>
         </div>
       )}
     </div>

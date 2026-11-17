@@ -47,6 +47,12 @@ const show = async (initialTab: 'agents' | 'look' = 'agents') => {
     root.render(<SettingsPanel open api={api} initialTab={initialTab} />);
   });
   await settle(10);
+  // Moving work is a card on the Agents page and starts closed; the other cards stay closed.
+  const card = host.querySelector<HTMLElement>('.st-closed-group[data-group="Moving work"] .st-adv-toggle');
+  if (card) {
+    await act(async () => card.click());
+    await settle(4);
+  }
 };
 
 beforeEach(() => {
@@ -69,7 +75,7 @@ describe('Settings > Agents > Hand off does', () => {
   it('is on the Agents tab at the basic level, defaults to Handoff to new agent, and shows the notes box in both modes', async () => {
     await show();
     expect(row('handoff-mode')).not.toBeNull();
-    // Basic: shown at first. An advanced row of the same page is not drawn until Advanced is opened.
+    // A row of another card of the same page is not drawn until that card is opened.
     expect(row('preload')).toBeNull();
     expect(modeSelect()?.value).toBe('new_agent');
     expect([...modeSelect()!.options].map((o) => o.textContent)).toEqual(['Handoff to new agent', 'Quick handoff']);

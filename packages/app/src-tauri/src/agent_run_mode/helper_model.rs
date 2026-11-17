@@ -1,4 +1,4 @@
-//! "Default model for helpers" (Settings > Agents > Helper agents): the model a helper runs on when the agent that
+//! "Default model for helpers" (Settings > Agents that agents start): the model a helper runs on when the agent that
 //! started it named none. Stored as `helper_default_models` (agent id -> model) in the public settings.
 
 use serde_json::Value;

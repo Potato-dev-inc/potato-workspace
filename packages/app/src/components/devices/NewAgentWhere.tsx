@@ -56,6 +56,17 @@ function writePlace(key: string, id: string | null): void {
   }
 }
 
+/** On the full New agent page the Linux / SSH body sits in a column of its own, so the form has a margin and its Start button stays on screen. */
+function PlacePage({ inline, children }: { inline: boolean; children: ReactNode }) {
+  return inline ? (
+    <div className="dev-place-page" data-testid="place-page">
+      {children}
+    </div>
+  ) : (
+    <>{children}</>
+  );
+}
+
 /**
  * `children` is the usual body. As a function it receives the Where pill and draws it itself, inside its own row (the full New
  * agent page puts it before the project pill); as plain nodes the pill sits above them (the sidebar menu).
@@ -187,9 +198,13 @@ export function NewAgentWhere({ where, children, remember }: { where?: WhereProp
         />
         </div>
       ) : pickedWsl && pickedWsl.kind === 'wsl' ? (
-        <WslPanel key={pickedWsl.id} leading={inline ? pill : null} distro={pickedWsl.distro} api={wslLayer} onStarted={startedHere} />
+        <PlacePage inline={inline}>
+          <WslPanel key={pickedWsl.id} leading={inline ? pill : null} distro={pickedWsl.distro} api={wslLayer} onStarted={startedHere} />
+        </PlacePage>
       ) : pickedSsh && pickedSsh.kind === 'ssh' ? (
-        <SshPanel key={pickedSsh.id} leading={inline ? pill : null} host={pickedSsh.host} api={sshLayer} onStarted={startedHere} />
+        <PlacePage inline={inline}>
+          <SshPanel key={pickedSsh.id} leading={inline ? pill : null} host={pickedSsh.host} api={sshLayer} onStarted={startedHere} />
+        </PlacePage>
       ) : (
         body(pill)
       )}

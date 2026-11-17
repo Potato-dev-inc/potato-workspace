@@ -206,7 +206,11 @@ fn handle_json_rpc_line_cancellable(
             "instructions": instructions_with_notices()
             }))
         }
-        "tools/list" => Ok(json!({ "tools": mcp_tools() })),
+        "tools/list" => {
+            let tools = mcp_tools();
+            watch_for_spin_off(notifications.clone());
+            Ok(json!({ "tools": tools }))
+        }
         "resources/list" => Ok(json!({ "resources": tool_registry::resources() })),
         "prompts/list" => Ok(json!({ "prompts": tool_registry::prompts() })),
         "tools/call" => {
@@ -314,10 +318,19 @@ fn mcp_tools_for_pane(pane: Option<String>) -> Vec<Value> {
     if let Some(recall) = tool_registry::companion_recall_for_pane(pane.as_deref(), mode, &tools) {
         tools.push(recall);
     }
+    // A spin-off also gets `message_parent`, its one way to write to the agent that spun it off. The app says whether this pane is one.
+    let in_spin_off = pane.as_deref().is_some() && asked_app_is_spin_off(pane.as_deref());
+    LISTED_MESSAGE_PARENT.store(in_spin_off, Ordering::Release);
+    if let Some(write) = tool_registry::message_parent_for_pane(in_spin_off, mode, &tools) {
+        tools.push(write);
+    }
     // And `show_artifact`: an agent in one of our panes has a chat to show a page in.
     if let Some(show) = tool_registry::show_artifact_for_pane(pane.as_deref(), mode, &tools) {
         tools.push(show);
     }
+    // And the background terminals: the app hosts a command for the agent and shows it in Background tasks.
+    let terminal_tools = tool_registry::terminals_for_pane(pane.as_deref(), mode, &tools);
+    tools.extend(terminal_tools);
     tools
         .into_iter()
         .filter(|tool| tool.visibility.external_mcp)
@@ -335,6 +348,43 @@ fn mcp_tools_for_pane(pane: Option<String>) -> Vec<Value> {
             value
         })
         .collect()
+}
+
+/// Whether the last tool list this program gave held `message_parent` (the list is read once by most hosts).
+static LISTED_MESSAGE_PARENT: AtomicBool = AtomicBool::new(false);
+/// One watcher at a time.
+static WATCHING_SPIN_OFF: AtomicBool = AtomicBool::new(false);
+
+/// A chat that becomes a spin-off after its tool server started (a standby that took a task, a warm chat) was listed
+/// without `message_parent`. This watches for it for a couple of minutes and, when the app says the pane is one, tells the host the
+/// list changed so it reads it again.
+fn watch_for_spin_off(notify: Option<std::sync::mpsc::Sender<String>>) {
+    let Some(notify) = notify else { return };
+    let Some(pane) = pane_header(env::var(mcp_sessions::PANE_ID_ENV).ok()) else { return };
+    if LISTED_MESSAGE_PARENT.load(Ordering::Acquire) || WATCHING_SPIN_OFF.swap(true, Ordering::AcqRel) {
+        return;
+    }
+    std::thread::spawn(move || {
+        for _ in 0..60 {
+            std::thread::sleep(std::time::Duration::from_secs(2));
+            if asked_app_is_spin_off(Some(&pane)) {
+                LISTED_MESSAGE_PARENT.store(true, Ordering::Release);
+                let _ = notify.send(json!({"jsonrpc":"2.0","method":"notifications/tools/list_changed"}).to_string());
+                break;
+            }
+        }
+        WATCHING_SPIN_OFF.store(false, Ordering::Release);
+    });
+}
+
+/// Asks the app whether the agent's pane is a spin-off (a short call; any failure means no, so the tool is just not listed).
+fn asked_app_is_spin_off(pane: Option<&str>) -> bool {
+    let Some(pane) = pane else { return false };
+    bridge_request("GET", &format!("/mcp/spin-off?pane={pane}"), None)
+        .ok()
+        .and_then(|body| serde_json::from_str::<Value>(&body).ok())
+        .and_then(|value| value.get("spin_off").and_then(Value::as_bool))
+        .unwrap_or(false)
 }
 
 fn negotiate_protocol_version(requested: Option<&str>) -> &'static str {

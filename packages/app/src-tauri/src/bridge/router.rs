@@ -54,6 +54,12 @@ fn health_identity() -> (Option<String>, Option<String>, Option<&'static str>) {
     )
 }
 
+/// What `GET /health` says to a caller that is not on this computer: `ok` and the version, nothing about the
+/// profile folder, build, tools or standby pool. `None` for a local caller (the MCP, CLI and watch commands need all of it).
+fn public_health(remote: bool) -> Option<serde_json::Value> {
+    remote.then(|| json!({ "ok": true, "version": crate::app_lifecycle::app_version() }))
+}
+
 #[allow(clippy::too_many_arguments)]
 pub(super) fn route(
     method: &str,
@@ -103,6 +109,10 @@ pub(super) fn route_authorized(
     }
 
     if segments == ["health"] && method == "GET" {
+        // A caller that is not this computer (a public address, a phone, another PC) learns only that the bridge is up.
+        if let Some(short) = public_health(mobile_pairing::requires_pairing_token(headers, peer_loopback)) {
+            return Ok((200, short));
+        }
         crate::mcp_sessions::authorize(request_session(headers), method, "/health", &json!({}))
             .map_err(operation_http_error)?;
         let hashes = crate::tool_registry::tool_schema_hashes();
@@ -246,9 +256,10 @@ pub(super) fn route_authorized(
     })
 }
 
-/// The routes that start a new agent (a helper): `run_agent`, `quick_ask`, `followup_task`, `delegate_work`, `spawn_agent`.
+/// The routes that start a new agent (a helper): `run_agent`, `quick_ask`, `followup_task`, `delegate_work`, `spawn_agent`; and
+/// `message_parent`, whose caller (a spin-off) is found the same way.
 fn is_helper_start_route(method: &str, segments: &[&str]) -> bool {
-    method == "POST" && matches!(segments, ["agents", "run" | "quick" | "followup"] | ["operations", "delegate"] | ["panes"])
+    method == "POST" && matches!(segments, ["agents", "run" | "quick" | "followup" | "message-parent"] | ["operations", "delegate"] | ["panes"] | ["terminals", "start" | "read" | "wait" | "stop"])
 }
 
 /// `POST /panes/{id}/input` and `POST /panes/{id}/key`: typing into a pane.
@@ -266,6 +277,7 @@ mod tests {
         assert!(is_helper_start_route("POST", &["agents", "quick"]));
         assert!(is_helper_start_route("POST", &["operations", "delegate"]));
         assert!(is_helper_start_route("POST", &["panes"]));
+        assert!(is_helper_start_route("POST", &["agents", "message-parent"]));
         assert!(!is_helper_start_route("GET", &["panes"]));
         assert!(!is_helper_start_route("POST", &["panes", "p1", "input"]));
         assert!(!is_helper_start_route("POST", &["agents", "send"]));
@@ -307,5 +319,31 @@ mod tests {
         // Older shims keep parsing: unset fields are left out.
         let bare = serde_json::to_value(Health { profile: None, app_data_dir: None, build_kind: None, ..health }).unwrap();
         assert!(bare.get("profile").is_none() && bare.get("app_data_dir").is_none() && bare.get("build_kind").is_none());
+    }
+}
+
+#[cfg(test)]
+mod health_tests {
+    use super::public_health;
+
+    #[test]
+    fn a_public_caller_gets_only_ok_and_the_version() {
+        let body = public_health(true).expect("remote callers get the short answer");
+        let keys: Vec<_> = body.as_object().unwrap().keys().cloned().collect();
+        assert_eq!(keys, vec!["ok".to_string(), "version".to_string()]);
+        assert_eq!(body["ok"], true);
+    }
+
+    #[test]
+    fn a_caller_on_this_computer_gets_the_full_answer() {
+        assert!(public_health(false).is_none());
+    }
+
+    #[test]
+    fn a_forwarded_loopback_request_counts_as_public() {
+        let remote = |headers: &str, loopback: bool| crate::mobile_pairing::requires_pairing_token(headers, loopback);
+        assert!(public_health(remote("Cf-Connecting-Ip: 1.2.3.4\r\n", true)).is_some());
+        assert!(public_health(remote("Host: 127.0.0.1:17421\r\n", true)).is_none());
+        assert!(public_health(remote("", false)).is_some());
     }
 }

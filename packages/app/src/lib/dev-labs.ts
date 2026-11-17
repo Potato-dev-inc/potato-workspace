@@ -22,7 +22,9 @@ export const DEV_LABS_KEYS = [
   'timeline_day_enabled',
   'smaller_updates_enabled',
   'crews_enabled',
+  'workflows_enabled',
   'markup_bar_enabled',
+  'dock_browser_enabled',
   'opentunnel_stable_link',
 ] as const;
 

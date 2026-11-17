@@ -1,5 +1,5 @@
-// The bottom of the sidebar: one row (Settings, Review with its count, and a ... menu). The menu is three short
-// labelled groups, most used first: Go to (Browser, the pages), Tools (Set up agents) and Mode (Orchestration |
+// The bottom of the sidebar: one row (Settings and a ... menu; Review, with its count, is the first row of the menu). The menu is three short
+// labelled groups, most used first: Go to (Browser, the pages), Tools (Review, Set up agents) and Mode (Orchestration |
 // Individual). Theme is not here: it lives in Settings > Look and feel > Appearance, so the menu does not repeat it.
 // One status line sits above the row and only exists when there is something to say: the lost connection, else the
 // background jobs, else a Night Shift run (plan usage is the bottom bar, UsageBar.tsx).
@@ -96,13 +96,6 @@ export function SidebarFooter(p: SidebarFooterProps) {
           <GearIcon />
           <Label>{t('sidebar.settings')}</Label>
         </button>
-        {p.onOpenReview && (
-          <button type="button" className="ck-icon-btn ck-foot-review" aria-label={reviewLabel} title={reviewLabel} onClick={p.onOpenReview}>
-            <IconCheck />
-            <Label>{p.reviewCount > 0 ? t('sidebar.reviewCount', { n: p.reviewCount }) : t('sidebar.review')}</Label>
-            {p.reviewCount > 0 && <span className="ck-side-count ck-foot-badge">{p.reviewCount}</span>}
-          </button>
-        )}
         {p.onOpenToday && (
           <button type="button" className={`ck-icon-btn${p.todayOpen ? ' is-active' : ''}`} aria-label={t('sidebar.today')} title={t('sidebar.today')} aria-current={p.todayOpen ? 'page' : undefined} onClick={p.onOpenToday}>
             <IconClock />
@@ -117,11 +110,13 @@ export function SidebarFooter(p: SidebarFooterProps) {
             className="ck-icon-btn"
             aria-label={t('sidebar.more')}
             title={t('sidebar.more')}
+            style={{ position: 'relative' }}
             aria-haspopup="menu"
             aria-expanded={moreOpen}
             onClick={() => setMoreOpen((v) => !v)}
           >
             <IconMore />
+            {p.onOpenReview && p.reviewCount > 0 && <span className="ck-more-dot" data-testid="more-review-dot" aria-hidden="true" />}
           </button>
           {moreOpen && (
             <FloatingMenu anchorRef={moreBtn} prefer="up" align="start" label={t('sidebar.more')} onClose={(back) => { setMoreOpen(false); if (back) moreBtn.current?.focus(); }}>
@@ -178,17 +173,28 @@ export function SidebarFooter(p: SidebarFooterProps) {
                   </button>
                 )}
               </div>
-              {p.onOpenDoctor && (
+              {(p.onOpenDoctor || p.onOpenReview) && (
                 <div className="ck-menu-group" role="group" aria-label={t('sidebar.groupTools')} data-testid="more-group-tools">
                   <div className="ck-menu-cap" aria-hidden="true">
                     {t('sidebar.groupTools')}
                   </div>
-                  <button type="button" role="menuitem" className="ck-menu-item" onClick={pick(p.onOpenDoctor)}>
-                    <span className="ck-menu-ic">
-                      <IconTerminal />
-                    </span>
-                    {t('sidebar.setUpAgents')}
-                  </button>
+              {p.onOpenReview && (
+                <button type="button" role="menuitem" className="ck-menu-item ck-menu-review" aria-label={reviewLabel} onClick={pick(p.onOpenReview)}>
+                  <span className="ck-menu-ic">
+                    <IconCheck />
+                  </span>
+                  {t('sidebar.review')}
+                  {p.reviewCount > 0 && <span className="ck-side-count ck-menu-count">{p.reviewCount}</span>}
+                </button>
+              )}
+                  {p.onOpenDoctor && (
+                    <button type="button" role="menuitem" className="ck-menu-item" onClick={pick(p.onOpenDoctor)}>
+                      <span className="ck-menu-ic">
+                        <IconTerminal />
+                      </span>
+                      {t('sidebar.setUpAgents')}
+                    </button>
+                  )}
                 </div>
               )}
               <div className="ck-menu-group" role="group" aria-label={t('sidebar.mode')} data-testid="more-group-mode">

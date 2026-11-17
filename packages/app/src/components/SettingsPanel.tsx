@@ -777,11 +777,12 @@ export function SettingsPanel({
                   {section.id === 'overview' && (
                     <Overview settings={settings} bridgeUrl={bridgeUrl} openRow={openRow} openPage={goToPage} sources={overviewSources} />
                   )}
-                  {section.closedGroups ? (
+                  {section.closedGroups && !(openAgent && section.id === 'agents') ? (
                     <ClosedGroups
                       key={section.id}
                       rows={section.rows}
                       closed={section.closedGroups}
+                      lead={section.leadGroups}
                       envFor={envFor}
                       chrome={chrome}
                       isOpen={groupOpen}

@@ -78,11 +78,11 @@ const flush = () => act(async () => { await new Promise((r) => setImmediate(r));
 const tab = (name: string) => [...host.querySelectorAll<HTMLElement>('[role="tab"]')].find((t) => t.textContent === name)!;
 
 describe('pane view of a chat session over ACP', () => {
-  it('says "Chat" on the pane and opens on its Chat tab', async () => {
+  it('says "Chat" on the pane and opens on its Chat view (one view, so no tab row is drawn)', async () => {
     await act(async () => root.render(<PaneView c={cockpit('acp')} paneId="p1" />));
     await flush();
     expect(host.querySelector('[data-testid="pane-lane"]')?.textContent).toBe('Chat');
-    expect(tab('Chat').getAttribute('aria-selected')).toBe('true');
+    expect(host.querySelector('[role="tablist"]')).toBeNull();
     expect(host.textContent).toContain('Write notes.txt');
     expect(host.querySelector('[data-testid="term"]')).toBeNull();
   });
@@ -90,8 +90,8 @@ describe('pane view of a chat session over ACP', () => {
   it('has no Terminal view at all: Chat is the pane, with no "no terminal" placeholder', async () => {
     await act(async () => root.render(<PaneView c={cockpit('acp')} paneId="p1" />));
     await flush();
-    expect([...host.querySelectorAll('[aria-label="Agent view"] [role="tab"]')].map((t) => t.textContent)).not.toContain('Terminal');
-    expect(tab('Chat').getAttribute('aria-selected')).toBe('true');
+    expect([...host.querySelectorAll('[role="tab"]')].map((t) => t.textContent)).not.toContain('Terminal');
+    expect(host.querySelector('[role="tablist"]')).toBeNull();
     expect(host.textContent).not.toMatch(/no terminal|This is a chat session/i);
     expect(host.querySelector('textarea')).not.toBeNull();
     expect(host.querySelector('[data-testid="term"]')).toBeNull();

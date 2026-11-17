@@ -33,7 +33,7 @@
 
 .pm-boot-layout {
   position: relative;
-  width: min(920px, 92vw);
+  width: min(920px, calc(92vw / var(--ui-scale, 1)));
   padding: clamp(20px, 4vw, 40px);
   display: flex;
   flex-direction: column;

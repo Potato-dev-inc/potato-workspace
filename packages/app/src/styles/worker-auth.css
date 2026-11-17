@@ -5,8 +5,8 @@
   right: 8px;
   bottom: 30px;
   z-index: 35;
-  width: min(360px, calc(100vw - 16px));
-  max-height: min(72vh, 520px);
+  width: min(360px, calc(calc(100vw / var(--ui-scale, 1)) - 16px));
+  max-height: min(calc(72vh / var(--ui-scale, 1)), 520px);
   overflow: auto;
   border: 1px solid rgb(var(--pm-border));
   border-radius: 10px;

@@ -107,6 +107,8 @@ export interface SectionDef {
   rows: RowDef[];
   /** The Advanced page: these groups are closed disclosure headers (no "Advanced" fold on that page). */
   closedGroups?: string[];
+  /** With closedGroups: groups drawn open, above the cards. */
+  leadGroups?: string[];
 }
 
 /** The level of a row; a row without one is advanced. */

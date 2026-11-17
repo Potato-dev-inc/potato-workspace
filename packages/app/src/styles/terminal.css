@@ -297,7 +297,7 @@
 .terminal-mobile-special-panel {
   pointer-events: auto;
   box-sizing: border-box;
-  width: min(320px, calc(100vw - 24px));
+  width: min(320px, calc(calc(100vw / var(--ui-scale, 1)) - 24px));
   max-height: min(60dvh, 420px);
   overflow-y: auto;
   overscroll-behavior: contain;

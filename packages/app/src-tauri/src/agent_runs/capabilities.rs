@@ -215,3 +215,20 @@ mod read_only_tests {
         assert!(msg.contains("opencode_native (run-spawned pane only)"));
     }
 }
+
+/// `run_agent` with no task. Nothing starts and nothing is made up: the caller says what the agent should do, or sets up a
+/// standby (an agent kept ready with no task).
+pub fn task_required_error() -> crate::operations::OperationError {
+    let mut error = crate::operations::OperationError::new(
+        "INVALID_TASK",
+        "A task is required: say in `task` what the agent should do. Nothing was started, and no placeholder task is made up for you. To keep an agent ready with no task, set up a standby: call workspace_config (op=plan with standby_add; the person taps Allow), or the person adds one in Settings > Agents > Standbys.",
+        false,
+    );
+    error.context = serde_json::json!({ "fix": "Pass task, or set up a standby with workspace_config." });
+    error
+}
+
+/// The receipt line for a run whose agent cannot be made read-only here: "do not edit files" is then only a request.
+pub fn read_only_cannot_note(agent_type: &str) -> String {
+    format!("read-only cannot be enforced for {agent_type}: a \"do not edit files\" instruction is only a request, nothing stops it. Use an agent that can (list_agents read_only_supported) when edits must not happen.")
+}

@@ -177,9 +177,12 @@ export function ClosedGroups({
   onToggle,
   showDeveloper,
   lines,
+  lead,
 }: {
   rows: RowDef[];
   closed: string[];
+  /** Groups drawn open, as plain lists, above the cards (the Agents page: Add an agent and Your agents). */
+  lead?: string[];
   /** One plain line per card, shown in its header instead of the row count (the Connect page's cards). */
   lines?: Record<string, string>;
   envFor: (row: RowDef) => SettingsEnv;
@@ -191,10 +194,16 @@ export function ClosedGroups({
   const t = useT();
   const shown = rows.filter((r) => showDeveloper || rowLevel(r) !== 'developer');
   // The named groups are always drawn (closed, with the count of what they hold), so the page never reads as "the uninstall page".
-  const folded = closed.map((head) => ({ head, rows: shown.filter((r) => !r.danger && r.group === head) })).filter((g) => g.rows.length > 0 || ALWAYS_DRAWN.includes(g.head));
-  const rest = shown.filter((r) => r.danger || !closed.includes(r.group ?? ''));
+  // A row's group is the translated heading once the page is localized; the lists here name the English one.
+  const inGroups = (r: RowDef, heads: readonly string[]) => heads.some((h) => r.group === h || r.group === groupTitle(h));
+  const folded = closed
+    .map((head) => ({ head, rows: shown.filter((r) => !r.danger && (r.group === head || r.group === groupTitle(head))) }))
+    .filter((g) => g.rows.length > 0 || ALWAYS_DRAWN.includes(g.head));
+  const leadRows = lead ? shown.filter((r) => !r.danger && inGroups(r, lead)) : [];
+  const rest = shown.filter((r) => (r.danger || !inGroups(r, closed)) && !leadRows.includes(r));
   return (
     <>
+      {leadRows.length > 0 && <SectionRows rows={leadRows} envFor={envFor} chrome={chrome} />}
       {folded.map(({ head, rows: groupRowsList }) => {
         const open = isOpen(head);
         return (

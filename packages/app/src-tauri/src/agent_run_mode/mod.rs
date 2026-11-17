@@ -32,7 +32,7 @@ pub use agent_model::{agent_default_for, apply_agent_default_model, migrate_lega
 pub use helper_model::{apply_helper_model, helper_default_for, HELPER_MODEL_NOTE};
 pub use started_as::{decide as decide_started_as, legacy_kind, parse_asked, StartedAgentKind, StartedAgentTypes, StartedAs, StartedRecord};
 pub use store::{set_started_agent_kind, set_started_agent_types, started_agent_kind, started_agent_types};
-pub use store::{close_helpers_with_agent, helper_visibility, keep_helpers_open, most_helpers_at_once, set_close_helpers_with_agent, set_most_helpers_at_once, set_stall_minutes, stall_minutes, set_for_agent, set_helper_visibility, set_keep_helpers_open, setting_for};
+pub use store::{close_helpers_with_agent, helper_visibility, keep_helpers_open, keep_helpers_open_chosen, most_helpers_at_once, set_close_helpers_with_agent, set_most_helpers_at_once, set_stall_minutes, stall_minutes, set_for_agent, set_helper_visibility, set_keep_helpers_open, setting_for};
 #[cfg(test)]
 pub use store::{with_test_env, TestEnv};
 #[cfg(feature = "dev-fake-tui")]
@@ -199,13 +199,13 @@ pub fn listed_started_as(info: &crate::pty::PaneInfo) -> Option<&'static str> {
 }
 
 /// What a run result says when an agent's `headless: true` was not honoured.
-pub const HEADLESS_IGNORED_NOTE: &str = "shown: the user's setting keeps helpers visible (Settings > Agents > Helper agents), so headless: true was ignored and this helper runs in a visible pane. Leave headless out.";
+pub const HEADLESS_IGNORED_NOTE: &str = "shown: the user's setting keeps started agents (minions and spin-offs) visible (Settings > Agents that agents start), so headless: true was ignored and this agent runs in a visible pane. Leave headless out.";
 
 /// What a run result says when the setting made a helper run in the background.
-pub const HEADLESS_FORCED_NOTE: &str = "background: the user's setting runs helpers in the background (Settings > Agents > Helper agents), so this helper has no pane. It is listed in the person's Inbox.";
+pub const HEADLESS_FORCED_NOTE: &str = "background: the user's setting runs started agents in the background (Settings > Agents that agents start), so this agent has no pane. It is listed in the person's Inbox.";
 
 /// Added to a read-only refusal when the run could only have worked hidden.
-pub const HIDDEN_HELPERS_HINT: &str = " Hidden runs are off (Settings > Agents > Helper agents is \"Always show them\"), so a hidden run is not an option unless the person changes that.";
+pub const HIDDEN_HELPERS_HINT: &str = " Hidden runs are off (Settings > Agents that agents start > How started agents show is \"Always show them\"), so a hidden run is not an option unless the person changes that.";
 
 /// What "Helper agents" did to one run.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -260,13 +260,27 @@ pub(crate) fn apply_helper_visibility_with(
 }
 
 /// What a result says when "Keep helpers open when they finish" kept a pane the agent would have closed.
-pub const KEPT_OPEN_NOTE: &str = "kept open: the user's setting keeps finished helpers open (Settings > Agents > Helper agents), so this pane stays until close_agent; followup_task continues in it.";
+pub const KEPT_OPEN_NOTE: &str = "kept open: the user's setting keeps finished started agents open (Settings > Agents that agents start), so this pane stays until close_agent; followup_task continues in it.";
 
 /// "Keep helpers open when they finish", applied to a helper an agent starts (`run_agent`, `delegate_work`).
 /// While it is on (the default) a pane the run creates is not closed when the run ends, whatever
 /// `keep_pane` said. Returns true when `keep_pane` was set on by the setting.
 pub fn apply_keep_open(keep_pane: &mut bool) -> bool {
     apply_keep_open_with(keep_pane, keep_helpers_open())
+}
+
+/// Like [`apply_keep_open`] for a caller that said `keep_pane: false` out loud: while the person has made no choice of their
+/// own (the default), the caller's word is believed and the pane closes when the run is done. A choice the person made,
+/// on or off, always wins.
+pub fn apply_keep_open_for_caller(keep_pane: &mut bool, caller_said_close: bool) -> bool {
+    apply_keep_open_for_caller_with(keep_pane, caller_said_close, keep_helpers_open(), keep_helpers_open_chosen())
+}
+
+pub fn apply_keep_open_for_caller_with(keep_pane: &mut bool, caller_said_close: bool, setting_on: bool, person_chose: bool) -> bool {
+    if caller_said_close && !person_chose {
+        return false;
+    }
+    apply_keep_open_with(keep_pane, setting_on)
 }
 
 pub fn apply_keep_open_with(keep_pane: &mut bool, setting_on: bool) -> bool {

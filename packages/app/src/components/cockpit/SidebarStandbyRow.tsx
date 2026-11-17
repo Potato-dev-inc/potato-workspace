@@ -1,9 +1,9 @@
 // One standby helper in the sidebar, under its home agent. States: Ready, Working, With you, Starting, Resting, Can't start.
 // On hover the state word gives way to an X (remove, with Undo). Right-click or the "..." button: the row menu.
 import { useRef, useState, type KeyboardEvent } from 'react';
-import { useT, type MessageKey } from '../../i18n';
+import { twoTypesWording, useT, type MessageKey } from '../../i18n';
 import { tauriModelOptionsApi, useModelOptions, type ModelOptionsApi } from '../../lib/modelOptions';
-import type { SkipReason } from '../../lib/standbyHelpers';
+import { standbyKindOf, type SkipReason, type StandbyKind } from '../../lib/standbyHelpers';
 import { AgentLogo } from '../common/AgentLogo';
 import { Menu } from '../common/Floating';
 import { IconClose, IconMore } from './Icons';
@@ -18,6 +18,8 @@ export interface StandbyRowActions {
   close: (row: StandbyRow) => void;
   rename: (row: StandbyRow, name: string) => void;
   setModel: (row: StandbyRow, model: string | null) => void;
+  /** "Run as": what a task that takes this standby becomes. */
+  setKind: (row: StandbyRow, kind: StandbyKind) => void;
   moveUnder: (row: StandbyRow, agentId: string) => void;
   start: (row: StandbyRow) => void;
 }
@@ -131,7 +133,7 @@ export function SidebarStandbyRow({
         )}
         <span className={`ck-sb-state is-${row.state}`} data-testid="standby-state">
           {row.state === 'starting' ? <span className="ck-sb-spin" aria-hidden="true" /> : <span className="ck-sb-dot" aria-hidden="true" />}
-          <span className="ck-sb-word">{word}</span>
+          <span className="ck-sb-word" title={word}>{word}</span>
         </span>
       </button>
       {skipLine && (
@@ -222,6 +224,9 @@ function StandbyRowMenu({
       {plain(t('standby.menu.tryIt'), () => actions.open(row))}
       {plain(t('standby.menu.rename'), onRename)}
       {(row.state === 'resting' || row.state === 'problem') && plain(t('standby.menu.start'), () => actions.start(row))}
+      {twoTypesWording() && head(t('standby.kind.label'))}
+      {twoTypesWording() && item(t('standby.kind.spin_off'), () => actions.setKind(row, 'spin_off'), standbyKindOf(h) === 'spin_off')}
+      {twoTypesWording() && item(t('standby.kind.minion'), () => actions.setKind(row, 'minion'), standbyKindOf(h) === 'minion')}
       {models.length > 0 && head(t('standby.menu.model'))}
       {models.length > 0 && item(t('models.agentDefault'), () => actions.setModel(row, null), !h.model)}
       {models.map((m) => item(m, () => actions.setModel(row, m), h.model?.toLowerCase() === m.toLowerCase()))}

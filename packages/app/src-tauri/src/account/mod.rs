@@ -7,6 +7,7 @@
 //! - `store`: the session in the OS credential store.
 //! - `client`: the HTTP calls. `service`: the app-level operations. `commands/account.rs`: the window commands.
 
+pub use signin::link_shape;
 pub mod client;
 pub mod service;
 pub mod signin;
@@ -25,8 +26,24 @@ pub const CHANGED_EVENT: &str = "pm-account-changed";
 /// (valid or not), so the invite code does not look at it again. The ticket is redeemed here; the window never
 /// sees it.
 pub fn handle_link<S: AsRef<str>>(app: &AppHandle, urls: &[S]) -> bool {
-    let Some(link) = urls.iter().find_map(|u| signin::parse_link(u.as_ref())) else {
-        return false;
+    let mut looked_like_one = false;
+    let mut found = None;
+    for u in urls {
+        match signin::check_link(u.as_ref()) {
+            Ok(link) => {
+                found = Some(link);
+                break;
+            }
+            Err(signin::Refused::NotSignIn) => {}
+            Err(why) => {
+                looked_like_one = true;
+                tracing::debug!(reason = why.why(), "sign-in link refused");
+            }
+        }
+    }
+    let Some(link) = found else {
+        // A link that was meant as a sign-in (but is malformed) is still not an invite: say so and stop here.
+        return looked_like_one;
     };
     let app = app.clone();
     let spawned = std::thread::Builder::new().name("account-signin".into()).spawn(move || {

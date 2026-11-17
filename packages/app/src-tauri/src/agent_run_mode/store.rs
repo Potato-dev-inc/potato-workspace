@@ -284,6 +284,19 @@ pub fn keep_helpers_open() -> bool {
     }
 }
 
+/// The person has made a "Keep helpers open" choice (on or off). Until then the default is on, and a caller that says
+/// `keep_pane: false` out loud is believed.
+pub fn keep_helpers_open_chosen() -> bool {
+    #[cfg(test)]
+    {
+        TEST_ENV.with(|slot| slot.borrow().as_ref().is_some_and(|env| env.keep_helpers_open.is_some()))
+    }
+    #[cfg(not(test))]
+    {
+        loaded().keep_helpers_open.is_some()
+    }
+}
+
 /// Writes "Keep helpers open" into the file at `target`.
 pub(super) fn save_keep_open_at(target: &Path, on: bool) -> Result<StoreFile, String> {
     let mut file = read_file(target);

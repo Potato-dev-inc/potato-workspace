@@ -74,6 +74,7 @@ export const pane: Partial<Record<EnglishKey, string>> = {
   'pane.share': '分享',
   'pane.chipPermissions': '權限',
   'pane.chipModel': '模型',
+  'pane.noModelsMatch': '找不到符合的模型',
   'pane.chipEffort': '思考強度',
   'pane.shareLabel': '儲存或分享這段對話',
   'pane.shareTip': '將這段對話儲存為網頁或 Markdown，或開始直播',

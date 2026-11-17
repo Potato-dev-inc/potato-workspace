@@ -55,6 +55,8 @@ vi.mock('../../../lib/live-room', async (importOriginal) => {
   };
 });
 
+import { accountApi, type AccountView } from '../../../lib/account';
+import { LS_NAME_FILLED } from '../../../lib/discordName';
 import { liveRoomApi } from '../../../lib/live-room';
 import { tauri } from '../../../lib/tauri';
 import { tauriLoopApi } from '../../../lib/loop-guard';
@@ -354,5 +356,63 @@ describe('General: Your name', () => {
     await blur(field());
     await settle();
     expect(m.env.patches).toContainEqual({ display_name: null });
+  });
+});
+
+describe('General: Your name from the Discord login', () => {
+  const view = (provider: string, name: string, signedIn = true): AccountView => ({
+    configured: true,
+    signed_in: signedIn,
+    waiting: false,
+    message: null,
+    account: signedIn ? { id: 'acc-1', display_name: name, provider } : null,
+    device_id: null,
+  });
+  const asAccount = (v: AccountView) => {
+    vi.spyOn(accountApi, 'state').mockResolvedValue(v);
+    vi.spyOn(accountApi, 'onChanged').mockResolvedValue(() => undefined);
+  };
+  afterEach(() => {
+    vi.restoreAllMocks();
+    localStorage.removeItem(LS_NAME_FILLED);
+  });
+
+  it('fills an empty name with the Discord name, once', async () => {
+    asAccount(view('discord', '  Sam   Potato '));
+    await mount();
+    await settle(4);
+    expect(m.env.patches).toEqual([{ display_name: 'Sam Potato' }]);
+    // The name is now theirs: cleared and reopened, it stays empty.
+    await m.rerender();
+    await settle(4);
+    expect(m.env.patches).toHaveLength(1);
+  });
+
+  it('does not touch a name the person already has', async () => {
+    asAccount(view('discord', 'Sam'));
+    await mount({ settings: { ...makeEnv().settings, display_name: 'Mika' } });
+    await settle(4);
+    expect(m.env.patches).toEqual([]);
+  });
+
+  it('ignores other sign-ins and signed-out accounts', async () => {
+    asAccount(view('google', 'Sam'));
+    await mount();
+    await settle(4);
+    expect(m.env.patches).toEqual([]);
+    asAccount(view('discord', 'Sam', false));
+    await m.rerender();
+    await settle(4);
+    expect(m.env.patches).toEqual([]);
+  });
+});
+
+describe('General: the X at the top right', () => {
+  it('Keep running in the tray is off by default and saves only {close_to_tray}', async () => {
+    await mount();
+    const sw = switchFor('Keep running in the tray when I close the window')!;
+    expect(sw.getAttribute('aria-checked')).toBe('false');
+    await click(sw);
+    expect(m.env.patches).toEqual([{ close_to_tray: true }]);
   });
 });

@@ -19,8 +19,10 @@ function sources(dir: string): string[] {
 
 describe('every dropdown closes through useDismissable', () => {
   it('no component adds its own mousedown or pointerdown listener to close a menu', () => {
-    // dnd/dragStore clears a drag; it is not a menu.
-    const own = sources(components).filter((file) => !file.endsWith('dragStore.ts') &&  /addEventListener\(\s*['"](mousedown|pointerdown)['"]/.test(readFileSync(file, 'utf8')));
+    // Not menus: dnd/dragStore clears a drag; MessageRail un-pins its scroll marker when you press in the chat; useBrowserFreeze
+    // freezes the page picture while you press in the app.
+    const notMenus = ['dragStore.ts', 'MessageRail.tsx', 'useBrowserFreeze.ts'];
+    const own = sources(components).filter((file) => !notMenus.some((n) => file.endsWith(n)) &&  /addEventListener\(\s*['"](mousedown|pointerdown)['"]/.test(readFileSync(file, 'utf8')));
     expect(own.map((f) => path.relative(components, f))).toEqual([]);
   });
 

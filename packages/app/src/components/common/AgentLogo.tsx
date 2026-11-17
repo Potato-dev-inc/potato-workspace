@@ -3,6 +3,7 @@
 // published mark. Which logo an agent gets is data (lib/agentLogos.ts); nothing here names an agent.
 import type { CSSProperties } from 'react';
 import { agentLogoFor, logoColors } from '../../lib/agentLogos';
+import { useCustomLogo } from '../../lib/customAgentLogos';
 import '../../styles/agent-logo.css';
 
 export interface AgentLogoProps {
@@ -29,7 +30,21 @@ export function monogramFor(id: string, name?: string, fallback?: string | null)
 
 export function AgentLogo({ id, name, size = 13, fallback, decorative = false, brand = true, className }: AgentLogoProps) {
   const logo = agentLogoFor(id);
+  const custom = useCustomLogo(id);
   const cls = (base: string) => (className ? `${base} ${className}` : base);
+  if (custom) {
+    return (
+      <img
+        className={cls('pm-agent-logo-img')}
+        src={custom}
+        width={size}
+        height={size}
+        alt={decorative ? '' : (name ?? id)}
+        data-mark="custom"
+        {...(decorative ? { 'aria-hidden': true } : {})}
+      />
+    );
+  }
   if (logo) {
     const label = name ?? logo.title;
     const colors = brand ? logoColors(logo) : { light: null, dark: null };

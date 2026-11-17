@@ -109,6 +109,11 @@ pub(crate) fn serve_for_e2e(registry: Arc<Mutex<PaneRegistry>>, app: AppHandle) 
     Ok(port)
 }
 
+/// The pane registry the bridge serves (set once at startup). For code that runs on its own thread, with no command state.
+pub fn shared_registry() -> Option<std::sync::Arc<parking_lot::Mutex<crate::pty::PaneRegistry>>> {
+    BRIDGE_REGISTRY.get().cloned()
+}
+
 /// Tell the desktop windows to re-read pane info (`pty://panes-changed`) and the bridge viewers.
 pub fn notify_panes_changed() {
     if let Some(app) = BRIDGE_APP.get() {

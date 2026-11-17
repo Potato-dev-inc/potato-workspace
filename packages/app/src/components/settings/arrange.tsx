@@ -38,6 +38,9 @@ export const MOVED_TO_AGENT_PAGE: readonly string[] = ['agent-default-models', '
 const LABS_ORDER = ['ask-bar', 'simple-mode', 'live-updates', 'opencode-automation'];
 
 /** The closed groups of the Advanced page, in order (Developer and the danger list follow them, open). */
+/** The Agents page: every group but these two is a closed card. */
+export const AGENTS_LEAD_GROUPS = ['Add an agent', 'Your agents'];
+
 export const ADVANCED_CLOSED_GROUPS = ['Connections to other tools', 'Models', 'App and files', OTHER_GROUP];
 
 export interface PageMeta {
@@ -89,7 +92,7 @@ export const LAYOUT: Record<SectionId, LayoutGroup[]> = {
     { group: 'Comfort', rows: ['text-size', 'strong-contrast', 'less-motion', 'speak-results'] },
     { group: 'You', rows: ['your-name'] },
     { group: 'Startup', rows: ['start-at-sign-in'] },
-    { group: 'While agents work', rows: ['confirm-close', 'keep-awake', 'away-minutes', 'quiet-hours', 'pc-notifications', 'discord-alerts'] },
+    { group: 'While agents work', rows: ['confirm-close', 'close-to-tray', 'keep-awake', 'away-minutes', 'quiet-hours', 'pc-notifications', 'discord-alerts'] },
   ],
   keys: [
     { group: 'Provider keys', rows: ['key-anthropic', 'key-openai', 'key-openrouter'] },
@@ -219,7 +222,13 @@ export function arrangeSections(base: BaseSectionDef[], layout: Partial<Record<S
       }
     }
     if (page.id === 'advanced') for (const row of unplaced) rows.push({ ...row, group: OTHER_GROUP });
-    const closedGroups = page.id === 'advanced' ? ADVANCED_CLOSED_GROUPS : undefined;
-    return { id: page.id, title: page.title, blurb: page.blurb, rows, ...(closedGroups ? { closedGroups } : {}) };
+    let closedGroups: string[] | undefined;
+    let leadGroups: string[] | undefined;
+    if (page.id === 'advanced') closedGroups = ADVANCED_CLOSED_GROUPS;
+    if (page.id === 'agents') {
+      leadGroups = AGENTS_LEAD_GROUPS;
+      closedGroups = [...new Set(rows.map((r) => r.group).filter((g): g is string => Boolean(g) && !AGENTS_LEAD_GROUPS.includes(g as string)))];
+    }
+    return { id: page.id, title: page.title, blurb: page.blurb, rows, ...(closedGroups ? { closedGroups } : {}), ...(leadGroups ? { leadGroups } : {}) };
   });
 }

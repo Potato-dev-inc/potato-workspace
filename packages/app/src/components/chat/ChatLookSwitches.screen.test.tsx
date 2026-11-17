@@ -16,7 +16,9 @@ let host: HTMLDivElement;
 let root: Root;
 
 const pill = () => document.querySelector<HTMLButtonElement>('.ck-chat-mode-pill')!;
-const check = (label: string) => [...document.querySelectorAll<HTMLInputElement>('input[type="checkbox"]')].find((i) => i.closest('label')?.textContent?.includes(label));
+/** The app's own switch for a label: a role="switch" button, named by its label. */
+const check = (label: string) => document.querySelector<HTMLButtonElement>(`[role="switch"][aria-label="${label}"]`);
+const isOn = (label: string) => check(label)?.getAttribute('aria-checked') === 'true';
 
 async function openMenu() {
   await act(async () => pill().click());
@@ -44,21 +46,24 @@ describe('Chat View menu carries the chat-look switches', () => {
   it('the menu shows the two switches under the three views', async () => {
     await openMenu();
     expect(document.querySelector('[role="group"][aria-label="Chat look"]')).not.toBeNull();
+    // Drawn with the app's own switch, not a bare checkbox.
+    expect(document.querySelectorAll('[role="switch"].ck-switch')).toHaveLength(3);
+    expect(document.querySelector('input[type="checkbox"]')).toBeNull();
     expect(check('Jump marks beside the chat')).toBeTruthy();
     expect(check('Show if build and tests passed')).toBeTruthy();
   });
 
   it('ticking "Jump marks beside the chat" saves it on the same store Settings used', async () => {
     await openMenu();
-    expect(check('Jump marks beside the chat')!.checked).toBe(false);
+    expect(isOn('Jump marks beside the chat')).toBe(false);
     await act(async () => check('Jump marks beside the chat')!.click());
     expect(getMessageRail()).toBe(true);
-    expect(check('Jump marks beside the chat')!.checked).toBe(true);
+    expect(isOn('Jump marks beside the chat')).toBe(true);
   });
 
   it('"Show if build and tests passed" is on by default and unticking it saves off', async () => {
     await openMenu();
-    expect(check('Show if build and tests passed')!.checked).toBe(getDoneCardOn());
+    expect(isOn('Show if build and tests passed')).toBe(getDoneCardOn());
     await act(async () => check('Show if build and tests passed')!.click());
     expect(getDoneCardOn()).toBe(false);
   });

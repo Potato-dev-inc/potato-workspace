@@ -3,7 +3,7 @@
 import { errorSentence } from './lib/sayError';
 import { NudgeScheduler } from './lib/nudge-scheduler';
 import { newerSnapshot, type AttentionItem, type AttentionSnapshot } from './lib/attention';
-import { COPY } from './lib/attention-copy';
+import { COPY, isRiskyAsk } from './lib/attention-copy';
 import { PROMPT_KINDS } from './lib/needs-you-queue';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type { AgentType, PaneInfo } from '@potato-workspace/shared';
@@ -83,6 +83,7 @@ import { useNow } from './components/mobile/PhoneProgress';
 import { useProgressNote } from './lib/phone-progress';
 import { useChatLabels, useChatMeta } from './lib/phone-chatmeta';
 import { usePhoneTextSize } from './lib/phone-text-size';
+import { usePhoneMotion } from './lib/phone-motion';
 import { useInertWhile } from './lib/phone-inert';
 import { isAsking, phoneStatus } from './lib/phone-status';
 import { PhoneNeedsPill } from './components/mobile/PhoneNeedsPill';
@@ -209,6 +210,8 @@ export default function PwaApp() {
   const [intent, setIntent] = useState<{ itemId: string; paneId?: string | null } | null>(null);
   /** A card shown full screen (an item with no pane to open, or one that already left the list). */
   const [sheetItem, setSheetItem] = useState<AttentionItem | null>(null);
+  /** Risky asks already opened as a full card by themselves: one that was put away ("Decide later") stays a row. */
+  const autoOpened = useRef<Set<string>>(new Set());
   /** The card a push tap opened is docked: its focus choice takes the keyboard focus once. */
   const [deepLinked, setDeepLinked] = useState(false);
   /** The latest `companion` event's list (the bridge stream sets it); null until one comes. */
@@ -508,6 +511,11 @@ export default function PwaApp() {
         if (item.pane && PROMPT_KINDS.includes(item.kind)) {
           setActive(item.pane.id);
           setDeepLinked(true);
+          // A risky ask opens as its full card, at once (and is not opened a second time by the chat).
+          if (isRiskyAsk(item)) {
+            autoOpened.current.add(item.id);
+            setSheetItem(item);
+          }
         } else {
           setSheetItem(item);
         }
@@ -777,6 +785,15 @@ export default function PwaApp() {
     [bridge, applyPanes, selectTab, t],
   );
 
+  // A risky ask of the chat you are in opens as a full card by itself. An ask of another chat never pulls you out of what you are reading.
+  useEffect(() => {
+    if (!bridge || !attention || sheetItem || activeView !== 'chat' || !activePane || active === ALL_TAB) return;
+    const risky = attention.items.find((i) => i.pane?.id === active && isRiskyAsk(i) && !autoOpened.current.has(i.id));
+    if (!risky) return;
+    autoOpened.current.add(risky.id);
+    setSheetItem(risky);
+  }, [bridge, attention, sheetItem, activeView, activePane, active]);
+
   // The open agent's own card: floats over its terminal, or sits under its chat. In the chat, the questions its helpers ask sit under it too.
   const helperAskers = useMemo(() => {
     if (!attention || active === ALL_TAB) return [];
@@ -855,6 +872,7 @@ export default function PwaApp() {
   const headerChat = useAcpPhoneState(bridge, active, activePaneInfo?.lane === ACP_LANE);
   const shellRef = useRef<HTMLDivElement>(null);
   usePhoneTextSize(shellRef);
+  usePhoneMotion(shellRef);
   const behindRef = useRef<HTMLDivElement>(null);
   useInertWhile(behindRef, drawer || sheet !== null || searchOpen || sheetItem !== null || setupOpen);
   const headerNow = useNow(headerNote !== null);
@@ -950,6 +968,7 @@ export default function PwaApp() {
               attention={attention}
               canAnswer={canAnswer}
               onRefreshAttention={refreshAttentionNow}
+              onOpenCard={(item) => setSheetItem(item)}
               setup={{ done: setupDone, total: SETUP_STEPS, onOpen: () => setSetupOpen(true) }}
             />
           )}

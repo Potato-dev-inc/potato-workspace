@@ -123,3 +123,23 @@ export function sendingPhase(elapsedMs: number): SendingPhase {
 export function sendingText(phase: Exclude<SendingPhase, 'lost'>): string {
   return phase === 'sending' ? COPY.sending : phase === 'sending_pc' ? COPY.sendingToPc : COPY.stillSending;
 }
+
+/**
+ * A risky ask is a command or file approval the PC rated "Check first" or "High risk". It is read from the PC's own rating
+ * (`item.risk.level`), never worked out again here. A folder-trust question has no rating and stays a small card.
+ */
+export function isRiskyAsk(item: Pick<AttentionItem, 'kind' | 'state' | 'risk' | 'prompt'>): boolean {
+  return item.kind === 'approval' && item.state === 'open' && !!item.prompt && (item.risk?.level === 'medium' || item.risk?.level === 'high');
+}
+
+/** The three plain rows of the full card. The exact command is never part of them. */
+export function askFacts(item: Pick<AttentionItem, 'pane' | 'risk' | 'title'>): { what: string; where: string; undo: string } {
+  const level = item.risk?.level;
+  const what = item.risk?.reasons?.[0]?.trim() || item.risk?.headline?.trim() || item.title;
+  const project = item.pane?.project?.trim();
+  return {
+    what,
+    where: project ? t('phone.full.whereProject', { project }) : t('phone.full.wherePc'),
+    undo: level === 'high' ? t('phone.full.undoHigh') : t('phone.full.undoMedium'),
+  };
+}

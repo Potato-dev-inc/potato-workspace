@@ -110,7 +110,7 @@ fn failure(code: impl Into<String>, message: impl Into<String>) -> StartFailure 
 impl Starter for LiveStarter {
     fn start(&mut self, step: &Step) -> Result<String, StartFailure> {
         self.count += 1;
-        let request: AgentRunRequest = serde_json::from_value(serde_json::json!({
+        let mut value = serde_json::json!({
             "project_path": step.folder,
             "task": step.task,
             "agent_type": step.role.agent_type,
@@ -119,8 +119,16 @@ impl Starter for LiveStarter {
             "keep_pane": true,
             "wait_ms": 0,
             "idempotency_key": super::start_key(&self.run, self.count),
-        }))
-        .map_err(|e| failure("INTERNAL", e.to_string()))?;
+        });
+        // A workflow helper (it has a "when to use" line) also carries its model and its kind. A plain crew role
+        // starts exactly as before.
+        if step.workflow && !step.role.front {
+            if let Some(model) = step.role.model.as_deref() {
+                value["model"] = serde_json::json!(model);
+            }
+            value["as"] = serde_json::json!(super::workflow::kind_of(&step.role));
+        }
+        let request: AgentRunRequest = serde_json::from_value(value).map_err(|e| failure("INTERNAL", e.to_string()))?;
         let view = run_agent(request, self.registry.clone(), self.app.clone(), None).map_err(|e| failure(e.code, e.message))?;
         let pane_id = match view.pane_id {
             Some(id) => id,

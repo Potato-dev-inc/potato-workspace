@@ -88,6 +88,30 @@ describe('PhoneConversation redesign (chat part)', () => {
     expect(line.textContent).toBe('Read 2 files · Edited 1 file · Ran 1 command');
   });
 
+  it('shows a running shell step as "Running a command" and never its command text', () => {
+    render([{ kind: 'user', id: 'u1', at: null, text: 'go' }, call(1, 'Bash', 'rm -rf ../build-cache')]);
+    const line = host.querySelector('[data-testid="phone-fold"] button')!;
+    expect(line.textContent).toBe('Running a command');
+    expect(host.textContent).not.toContain('build-cache');
+    expect(host.textContent).not.toContain('rm -rf');
+  });
+
+  it('shows a running read as its file name, then the count label once the group is done', () => {
+    render([{ kind: 'user', id: 'u1', at: null, text: 'go' }, call(1, 'Read', 'src/login.ts')]);
+    expect(host.querySelector('[data-testid="phone-fold"] .ph-live-verb')?.textContent).toBe('Reading');
+    expect(host.querySelector('[data-testid="phone-fold"] .ph-live-thing')?.textContent).toBe('login.ts');
+    render([{ kind: 'user', id: 'u1', at: null, text: 'go' }, call(1, 'Read', 'src/login.ts'), ok(1)]);
+    expect(host.querySelector('[data-testid="phone-fold"] button')?.textContent).toBe('Read 1 file');
+  });
+
+  it('rolls the live line when the words change: the old text is drawn by the pseudo-element, the new one is the text', () => {
+    render([{ kind: 'user', id: 'u1', at: null, text: 'go' }, call(1, 'Read', 'src/a.ts')]);
+    render([{ kind: 'user', id: 'u1', at: null, text: 'go' }, call(1, 'Read', 'src/a.ts'), call(2, 'Edit', 'src/b.ts')]);
+    const roll = host.querySelector<HTMLElement>('[data-testid="phone-fold"] .ph-roll')!;
+    expect(roll.textContent).toBe('Editing b.ts');
+    expect(roll.dataset.prev).toBe('Reading a.ts');
+  });
+
   it('says the folded steps in Chinese for zh-TW', () => {
     setLanguagePref('zh-TW', false);
     render([{ kind: 'user', id: 'u1', at: null, text: 'go' }, call(1, 'Read', 'a.ts'), ok(1), call(3, 'Edit', 'a.ts'), ok(3)]);

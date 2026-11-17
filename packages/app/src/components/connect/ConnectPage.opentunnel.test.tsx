@@ -100,6 +100,8 @@ describe('Connect page: fixed phone address (OpenTunnel)', () => {
   it('is not offered while the Labs switch is off', async () => {
     const t = fakeTunnel(QUICK);
     await open(connectApi({ opentunnel_stable_link: false }, t.api));
+    // The Public address card loads lazily: wait for its select instead of counting on a fixed number of settles.
+    for (let i = 0; i < 100 && options().length === 0; i++) await act(async () => { await new Promise((r) => setTimeout(r, 20)); });
     expect(options()).toEqual(['quick', 'named', 'custom', 'stable']);
     expect(document.body.textContent).not.toContain('OpenTunnel');
   });

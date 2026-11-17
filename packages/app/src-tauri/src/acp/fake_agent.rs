@@ -30,7 +30,7 @@
 //! | `permkind K` | a tool of kind K (`edit`, `read`, ...) asks permission; says what the client answered (`asked:K outcome:selected option:reject_once`) |
 //! | `fswrite` | asks the client to write a file; says the error it got back |
 //! | `mode` | says the session mode (`modes=1`: a `mode` config option; `modes=2`: session modes set with `session/set_mode`) |
-//! | `permwith K cmd:TEXT` / `permwith K path:P` | a tool of kind K asks permission, carrying the command TEXT (`rawInput.command`) or the file P (`locations`, `rawInput.file_path`); says what the client answered (`asked:K outcome:selected option:reject_once`); with `writes=1` and an allowing answer it writes `permwith.txt` |
+//! | `permwith K cmd:TEXT` / `permwith K path:P` / `permwith K title:TEXT` (the command only as the title, like Agy) | a tool of kind K asks permission, carrying the command TEXT (`rawInput.command`) or the file P (`locations`, `rawInput.file_path`); says what the client answered (`asked:K outcome:selected option:reject_once`); with `writes=1` and an allowing answer it writes `permwith.txt` |
 //! | `permshape V` | a command that needs permission, with an odd option list: V = `long` (a label of 400 characters, like a long command pattern), `none` (no options), `blank` (options with no name and no kind); says what the client answered |
 //! | `badperm` | a malformed permission request (the app must refuse it, not park it) |
 //! | `empty` | `end_turn` with no output |
@@ -899,6 +899,8 @@ fn run_prompt_inner(shared: &Arc<Shared>, id: &Value, params: &Value) {
             let what = words.next().unwrap_or("").to_string();
             let (title, call_extra) = match (what.strip_prefix("cmd:"), what.strip_prefix("path:")) {
                 (Some(command), _) => (format!("Run {command}"), json!({"rawInput": {"command": command}})),
+                // Like Agy: the command is only the title, no rawInput.
+                _ if what.starts_with("title:") => (what["title:".len()..].to_string(), json!({})),
                 (_, Some(path)) => (format!("Touch {path}"), json!({"locations": [{"path": path}], "rawInput": {"file_path": path}})),
                 _ => ("A tool".to_string(), json!({})),
             };

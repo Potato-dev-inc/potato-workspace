@@ -102,12 +102,22 @@ describe('TunnelSection: stable link', () => {
     await act(async () => button('Save and restart')!.click());
     expect(api.save).toHaveBeenCalledWith({ mode: 'stable', worker_url: WORKER, secret: null, secret_action: 'keep' });
     await flush();
+    // Hidden by default: dots in the page, never the secret; the eye button shows it, and hides it again.
+    expect(host.querySelector('[data-testid="stable-secret"]')?.textContent).toMatch(/^•+$/);
+    expect(host.textContent).not.toContain('NEW-SECRET-VALUE');
+    const eye = () => host.querySelector<HTMLButtonElement>('[data-testid="stable-secret-eye"]')!;
+    expect(eye().getAttribute('aria-pressed')).toBe('false');
+    act(() => eye().click());
     expect(host.querySelector('[data-testid="stable-secret"]')?.textContent).toBe('NEW-SECRET-VALUE-0123456789');
+    expect(eye().getAttribute('aria-pressed')).toBe('true');
+    act(() => eye().click());
+    // Hiding forgets it: the value is gone from the page, and "Show secret" is the way back.
+    expect(host.textContent).not.toContain('NEW-SECRET-VALUE');
+    expect(host.querySelector('[data-testid="stable-secret"]')).toBeNull();
     expect(host.querySelector('[data-testid="tunnel-status"]')?.textContent).toContain('linking');
     expect(host.querySelector('[data-testid="tunnel-url"]')?.textContent).toBe(WORKER);
     expect(host.querySelector('[data-testid="tunnel-quick-url"]')?.textContent).toContain('https://abc.trycloudflare.com');
 
-    act(() => button('Hide')!.click());
     expect(host.textContent).not.toContain('NEW-SECRET-VALUE');
   });
 
@@ -137,6 +147,9 @@ describe('TunnelSection: stable link', () => {
     await act(async () => button('Show secret')!.click());
     expect(api.save).toHaveBeenLastCalledWith({ mode: 'stable', worker_url: WORKER, secret_action: 'show' });
     await flush();
+    // "Show secret" brings the secret to the page hidden; the eye button shows it.
+    expect(host.textContent).not.toContain('SHOWN-ON-REQUEST');
+    act(() => host.querySelector<HTMLButtonElement>('[data-testid="stable-secret-eye"]')!.click());
     expect(host.querySelector('[data-testid="stable-secret"]')?.textContent).toBe('SHOWN-ON-REQUEST-0123456789');
 
     await act(async () => button('Make a new secret')!.click());
@@ -148,5 +161,126 @@ describe('TunnelSection: stable link', () => {
     await act(async () => root.render(<TunnelSection api={mockApi(failed, failed)} />));
     await flush();
     expect(host.querySelector('[data-testid="tunnel-status"]')?.textContent).toContain('not linked yet (The secret does not match');
+  });
+
+  const mismatchStatus = (): TunnelStatus => ({
+    ...stable('failed', 'The secret does not match the one the Worker has.'),
+    stable: { worker_url: WORKER, quick_url: 'https://abc.trycloudflare.com', link: 'failed', error: 'The secret does not match the one the Worker has.', secret_mismatch: true },
+  });
+
+  it('shows a recovery card when the Worker has another secret: paste the first secret (hidden, eye) or start fresh', async () => {
+    const api = mockApi(mismatchStatus(), stable('linking'));
+    await act(async () => root.render(<TunnelSection api={api} />));
+    await flush();
+    const card = () => host.querySelector('[data-testid="secret-recovery"]');
+    expect(card()?.textContent).toContain('Paste the first secret you saved');
+    expect(card()?.textContent).toContain('Nothing is deleted on Cloudflare');
+    // Option 1: hidden by default, the eye shows it, a short one cannot be used.
+    const field = () => host.querySelector<HTMLInputElement>('[data-testid="recover-secret"]')!;
+    expect(field().type).toBe('password');
+    act(() => setValue(field(), 'short'));
+    expect(host.querySelector<HTMLButtonElement>('[data-testid="recover-use"]')!.disabled).toBe(true);
+    act(() => setValue(field(), 'the-first-secret-0123456789'));
+    act(() => host.querySelector<HTMLButtonElement>('[data-testid="recover-secret-eye"]')!.click());
+    expect(field().type).toBe('text');
+    await act(async () => host.querySelector<HTMLButtonElement>('[data-testid="recover-use"]')!.click());
+    expect(api.save).toHaveBeenLastCalledWith({ mode: 'stable', worker_url: WORKER, secret: 'the-first-secret-0123456789', secret_action: 'keep' });
+    await flush();
+    expect(host.textContent).not.toContain('the-first-secret');
+    expect(card()).toBeNull(); // linked again: the card goes away
+  });
+
+  it('"Start fresh" asks first, then forgets the saved link on this computer only and leaves a blank Worker address', async () => {
+    const api = mockApi(mismatchStatus(), quick);
+    await act(async () => root.render(<TunnelSection api={api} />));
+    await flush();
+    await act(async () => host.querySelector<HTMLButtonElement>('[data-testid="recover-fresh"]')!.click());
+    expect(api.save).not.toHaveBeenCalled(); // only a question so far
+    expect(host.querySelector('[data-testid="recover-fresh-confirm"]')?.textContent).toContain('Forget the saved link on this computer?');
+    await act(async () => host.querySelector<HTMLButtonElement>('[data-testid="recover-fresh-yes"]')!.click());
+    expect(api.save).toHaveBeenCalledWith({ mode: 'quick' });
+    await flush();
+    expect(host.querySelector('[data-testid="secret-recovery"]')).toBeNull();
+    expect((host.querySelector('input[aria-label="Link address"]') as HTMLInputElement).value).toBe('');
+  });
+
+  it('keeps the recovery card away while the link is fine', async () => {
+    await act(async () => root.render(<TunnelSection api={mockApi(stable('linked'), stable('linked'))} />));
+    await flush();
+    expect(host.querySelector('[data-testid="secret-recovery"]')).toBeNull();
+  });
+
+  it('"Make a new secret" that the Worker cannot honour is held back: warn in plain words, then confirm or keep the old secret', async () => {
+    const held: TunnelStatus = { ...stable('linked'), secret_not_reset: 'rejected' };
+    const api = mockApi(stable('linked'), held);
+    await act(async () => root.render(<TunnelSection api={api} />));
+    await flush();
+    await act(async () => button('Make a new secret')!.click());
+    expect(api.save).toHaveBeenLastCalledWith({ mode: 'stable', worker_url: WORKER, secret_action: 'regenerate' });
+    await flush();
+    expect(host.querySelector('[data-testid="strand-warning"]')?.textContent).toContain('different secret');
+    // Confirm: the same save, with the go-ahead.
+    api.save.mockResolvedValueOnce({ ...stable('linking'), secret_once: 'MADE-AFTER-CONFIRM-0123456789' });
+    await act(async () => host.querySelector<HTMLButtonElement>('[data-testid="strand-go"]')!.click());
+    expect(api.save).toHaveBeenLastCalledWith({ mode: 'stable', worker_url: WORKER, secret_action: 'regenerate', confirm_strand: true });
+    await flush();
+    expect(host.querySelector('[data-testid="strand-warning"]')).toBeNull();
+    expect(host.textContent).not.toContain('MADE-AFTER-CONFIRM');
+    // Keep: the warning closes and nothing is saved.
+    await act(async () => button('Make a new secret')!.click());
+    await flush();
+    const calls = api.save.mock.calls.length;
+    api.save.mockResolvedValue(held);
+    await act(async () => button('Make a new secret')!.click());
+    await flush();
+    await act(async () => host.querySelector<HTMLButtonElement>('[data-testid="strand-keep"]')!.click());
+    expect(host.querySelector('[data-testid="strand-warning"]')).toBeNull();
+    expect(api.save.mock.calls.length).toBeGreaterThan(calls);
+  });
+
+  it('after a paste it keeps polling: a wrong secret brings the recovery card back, a right one ends in linked', async () => {
+    vi.useFakeTimers();
+    try {
+      for (const right of [false, true]) {
+        const api = mockApi(mismatchStatus(), stable('linking'));
+        (api.getStatus as ReturnType<typeof vi.fn>)
+          .mockResolvedValueOnce(mismatchStatus()) // first load
+          .mockResolvedValueOnce(stable('linking'))
+          .mockResolvedValue(right ? stable('linked') : mismatchStatus());
+        await act(async () => root.render(<TunnelSection api={api} />));
+        await act(async () => { await Promise.resolve(); });
+        act(() => setValue(host.querySelector('[data-testid="recover-secret"]')!, 'a-pasted-secret-0123456789'));
+        await act(async () => host.querySelector<HTMLButtonElement>('[data-testid="recover-use"]')!.click());
+        expect(host.querySelector('[data-testid="secret-recovery"]')).toBeNull(); // linking now
+        await act(async () => { await vi.advanceTimersByTimeAsync(3200); });
+        if (right) {
+          expect(host.querySelector('[data-testid="tunnel-status"]')?.textContent).toContain('→ linked');
+          expect(host.querySelector('[data-testid="secret-recovery"]')).toBeNull();
+        } else {
+          expect(host.querySelector('[data-testid="secret-recovery"]')).not.toBeNull();
+          expect((host.querySelector('[data-testid="recover-secret"]') as HTMLInputElement).value).toBe('');
+        }
+        act(() => root.unmount());
+        root = createRoot(host);
+      }
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it('stops polling after about a minute and says it is still linking', async () => {
+    vi.useFakeTimers();
+    try {
+      const api = mockApi(stable('linking'), stable('linking'));
+      await act(async () => root.render(<TunnelSection api={api} />));
+      await act(async () => { await Promise.resolve(); });
+      await act(async () => { await vi.advanceTimersByTimeAsync(70000); });
+      expect(host.querySelector('[data-testid="tunnel-still-linking"]')?.textContent).toContain('Still linking');
+      const calls = (api.getStatus as ReturnType<typeof vi.fn>).mock.calls.length;
+      await act(async () => { await vi.advanceTimersByTimeAsync(10000); });
+      expect((api.getStatus as ReturnType<typeof vi.fn>).mock.calls.length).toBe(calls);
+    } finally {
+      vi.useRealTimers();
+    }
   });
 });

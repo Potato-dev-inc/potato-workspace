@@ -43,8 +43,8 @@ const select = (label: string) => host.querySelector<HTMLSelectElement>(`select[
 const button = (text: string) => [...host.querySelectorAll<HTMLButtonElement>('button')].find((b) => b.textContent?.trim() === text);
 /** Opens the Advanced fold of the current page (the rows below it are not on a first look). */
 async function openAdvanced() {
-  const toggle = host.querySelector<HTMLButtonElement>('.st-adv-toggle');
-  if (toggle && toggle.getAttribute('aria-expanded') === 'false') await click(toggle);
+  // The Agents page has a closed card per group instead of one fold: open every closed one.
+  for (const toggle of [...host.querySelectorAll<HTMLButtonElement>('.st-adv-toggle[aria-expanded="false"]')]) await click(toggle);
   await settle(3);
 }
 
