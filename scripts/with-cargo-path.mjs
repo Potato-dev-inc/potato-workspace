@@ -27,11 +27,15 @@ if (existsSync(cargoExe)) {
     env[pathKey] = `${cargoBin}${sep}${current}`;
   }
 } else {
-  console.error(
-    `[with-cargo-path] cargo not found at ${cargoExe}\n` +
-      'Install Rust from https://rustup.rs/ then reopen your terminal.',
-  );
-  process.exit(1);
+  // Rust may live elsewhere (CI runners, package managers): accept any cargo already on PATH.
+  const onPath = spawnSync('cargo', ['--version'], { env, stdio: 'ignore', shell: process.platform === 'win32' });
+  if (onPath.status !== 0) {
+    console.error(
+      `[with-cargo-path] cargo not found at ${cargoExe} or on PATH\n` +
+        'Install Rust from https://rustup.rs/ then reopen your terminal.',
+    );
+    process.exit(1);
+  }
 }
 
 const args = process.argv.slice(2);
