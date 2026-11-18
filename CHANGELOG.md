@@ -1,6 +1,6 @@
 # Changelog
 
-## 1.1.10
+## 1.1.9
 
 This is a beta.
 
@@ -12,11 +12,6 @@ This is a beta.
 - The relay Worker only points, and it can use your own domain with a permanent or temporary link.
 - Far-PC polling backs off when nothing changes.
 - MCP helpers start without a tap (a setting, off by default).
-
-## 1.1.9
-
-This is a beta.
-
 - Minions and spin-offs:
   - Spin-offs are chats you can talk to. Minions run quick work for their agent and appear in Background tasks.
   - Agents can start and stop terminal commands (start, read, wait and stop). Each one asks you first, and its output is shown read only.
