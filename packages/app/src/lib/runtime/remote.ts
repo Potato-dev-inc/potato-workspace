@@ -1,46 +1,18 @@
-// A bridge client for another device. It is the same `BridgeClient` the phone uses (so the phone's chat view and every
-// typed call work unchanged); only the transport differs: a call goes through `devices_request` (the PC link) instead
-// of `fetch`, and the live events arrive as the Tauri event `device://event` instead of an event stream.
+// The runtime of another PC: a client for its `/pclink/` routes, and a subscription to its live events. It is NOT the phone's
+// bridge client (`lib/bridge.ts`): another PC is spoken to through the PC link's own routes and levels (`./pclink.ts`), and its
+// events arrive as the PC link's own frames, as the Tauri event `device://event`.
 //
-// The far device enforces its rights. A refused call (403 `not_allowed`) comes back as an error whose text says so.
-import type { BridgeClient, BridgeEvent } from '../bridge-types';
-import { dispatchBridgeEvent } from '../bridge-sse';
-import { makeBridgeClient, type BridgeTransport } from '../bridge';
+// The far device enforces its rights. A refused call (403) comes back as an error whose text says so.
 import type { DevicesApi } from '../devices';
+import { makePcLinkClient, parsePcFrame, type PcEvent, type PcLinkClient } from './pclink';
 
-/** The transport of one device. */
-export function deviceTransport(node: string, api: Pick<DevicesApi, 'request'>): BridgeTransport {
-  return async (method, path, body) => {
-    const res = await api.request(node, method, path, body);
-    const text = typeof res.body === 'string' ? res.body : JSON.stringify(res.body ?? {});
-    return { status: res.status, text };
-  };
+/** A client for the device `node`: every call runs on its `/pclink/` routes. */
+export function makeRemoteClient(node: string, api: Pick<DevicesApi, 'request'>): PcLinkClient {
+  return makePcLinkClient(node, api);
 }
 
-/** A `BridgeClient` whose calls run on the device `node`. */
-export function makeRemoteClient(node: string, api: Pick<DevicesApi, 'request'>): BridgeClient {
-  return makeBridgeClient(`device:${node}`, deviceTransport(node, api));
-}
-
-/** One SSE frame (`event: x\ndata: {...}\n\n`) to the typed bridge event it carries; null for a comment or noise. */
-export function parseFrame(frame: string): BridgeEvent | null {
-  let name = 'message';
-  let data = '';
-  for (const line of frame.split('\n')) {
-    if (line.startsWith('event:')) name = line.slice(6).trim();
-    else if (line.startsWith('data:')) data += line.slice(5).trim();
-  }
-  if (!data) return null;
-  let out: BridgeEvent | null = null;
-  try {
-    dispatchBridgeEvent(name, data, (e) => {
-      out = e;
-    });
-  } catch {
-    return null;
-  }
-  return out;
-}
+/** One frame to the PC link's event it carries; null for a comment or noise. */
+export const parseFrame = parsePcFrame;
 
 type SubApi = Pick<DevicesApi, 'subscribe' | 'unsubscribe' | 'onEvent'>;
 
@@ -51,7 +23,7 @@ const holders = new Map<string, number>();
  * Subscribes to one device's live events. Returns the stop function. Events of other devices are ignored; the far
  * device only sends what its level for this PC allows. Several listeners share one stream (counted per device).
  */
-export async function subscribeRemote(node: string, api: SubApi, onEvent: (e: BridgeEvent) => void): Promise<() => void> {
+export async function subscribeRemote(node: string, api: SubApi, onEvent: (e: PcEvent) => void): Promise<() => void> {
   const stopListen = await api.onEvent((ev) => {
     if (ev.node !== node) return;
     const parsed = parseFrame(ev.frame);

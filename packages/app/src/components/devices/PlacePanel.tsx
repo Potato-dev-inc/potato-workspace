@@ -67,7 +67,7 @@ export function PlacePanel(p: PlacePanelProps) {
         <>
           <div className="dev-field">
             <span>{t('devices.place.agentLabel')}</span>
-            <div className="dev-pick" role="radiogroup" aria-label={t('devices.place.agentLabel')}>
+            <div className="dev-tabs" role="radiogroup" aria-label={t('devices.place.agentLabel')}>
               {p.agents.map((a) => (
                 <button key={a.id} type="button" role="radio" aria-checked={a.id === agent} className={`dev-tab${a.id === agent ? ' is-on' : ''}`} data-testid={`place-agent-${a.id}`} onClick={() => setPicked(a.id)}>
                   {a.label}

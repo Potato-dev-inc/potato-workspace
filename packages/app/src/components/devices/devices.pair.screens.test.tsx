@@ -55,10 +55,13 @@ describe('the wants-to-pair sheet: check mode (three numbers, no Allow)', () => 
     await act(async () => fake.simulateIncomingCheck('Desk-PC', '678901'));
     await settle(4);
     const sheet = q('[data-testid="pair-confirm"]')!;
-    expect(sheet.textContent).toContain('Desk-PC wants to pair');
+    expect(sheet.textContent).toContain('Desk-PC wants to connect');
     expect(sheet.textContent).toContain('Its key looks like');
     expect(q('[data-testid="pair-fingerprint"]')!.textContent).toBe('A1B2 C3D4');
-    expect(sheet.textContent).toContain('Check the 6 numbers match the other screen.');
+    expect(sheet.textContent).not.toContain('Check the 6 numbers match');
+    expect(sheet.querySelectorAll('.dev-note:not(details .dev-note)')).toHaveLength(1);
+    expect(sheet.textContent).toContain('Tap the number that is on both screens.');
+    expect(q<HTMLDetailsElement>('.dev-more')!.open).toBe(false);
     expect(q('[data-testid="pair-pick-012345"]')!.textContent).toBe('012 345');
     expect(q('[data-testid="pair-pick-678901"]')!.textContent).toBe('678 901');
     expect(q('[data-testid="pair-pick-234567"]')!.textContent).toBe('234 567');
@@ -120,16 +123,16 @@ describe('Far away: the relay note', () => {
   const openFar = async (fake: DevicesFake) => {
     await mount(fake);
     await click(q('[data-testid="add-device"]'));
-    await click(q('[data-testid="add-tab-far"]'));
   };
 
-  it('shows nothing extra for a link that does not go through the relay', async () => {
+  it('tells a link that does not go through a relay what that means, in one plain sentence', async () => {
     const fake = new DevicesFake({ enabled: true });
     await openFar(fake);
     await click(q('[data-testid="make-link"]'));
     await settle(4);
     expect(q('[data-testid="the-link"]')).not.toBeNull();
     expect(q('[data-testid="far-via-relay"]')).toBeNull();
+    expect(q('[data-testid="far-no-relay"]')!.textContent).toContain('You have no relay yet');
   });
 
   it('shows the one-line note when the link goes through my relay', async () => {
@@ -142,6 +145,7 @@ describe('Far away: the relay note', () => {
     await click(q('[data-testid="make-link"]'));
     await settle(4);
     expect(q('[data-testid="the-link"]')).not.toBeNull();
-    expect(q('[data-testid="far-via-relay"]')!.textContent).toBe('This link meets through your relay first.');
+    expect(q('[data-testid="far-via-relay"]')!.textContent).toBe('The two PCs meet through your relay, so this works from any network. Nobody types an address.');
+    expect(q('[data-testid="far-no-relay"]')).toBeNull();
   });
 });

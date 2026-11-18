@@ -90,7 +90,7 @@ import { deskReview } from './zh-TW/deskReview';
 import { devices } from './zh-TW/devices';
 import { crews } from './zh-TW/crews';
 import { workflows } from './zh-TW/workflows';
-import { workflowCard } from './zh-TW/workflowCard';
+import { workflowCard, markupCard } from './zh-TW/workflowCard';
 import { crewCanvas } from './zh-TW/crewCanvas';
 import { crewTalk } from './zh-TW/crewTalk';
 import { account } from './zh-TW/account';
@@ -172,6 +172,7 @@ export const zhTW: Partial<Record<EnglishKey, string>> = {
   ...crewCanvas,
   ...workflows,
   ...workflowCard,
+  ...markupCard,
   ...crewTalk,
   ...account,
   ...agentRules,

@@ -1,23 +1,18 @@
-// Connect > Phone, the default view: it should feel like pairing headphones. One line, one code, one status line.
-// The app makes every technical choice: it starts the quick address by itself, uses the fixed one when it is set up,
-// falls back to the quick one when the fixed one fails, and offers the fixed one only after something really hurt.
-// Nothing here asks for a choice, an account or a password. The technical controls live in "Advanced" (ConnectPage).
+// Connect > Devices > My phone, the hero when no phone is added yet (and the body of the "Add a phone" sheet): it should feel like pairing
+// headphones. One line, one giant code, nothing to choose. The app makes every technical choice: it starts the quick link by itself, uses
+// the fixed one when it is set up, falls back to the quick one when the fixed one fails. Nothing here asks for a choice, an account or a password.
 import { buildPairingInviteUrl, encodePairingQrContent, PairingQrPayloadSchema, type PairingSession } from '@potato-workspace/shared';
 import QRCode from 'qrcode';
 import { useEffect, useRef, useState } from 'react';
 import { useT } from '../../i18n';
-import { firstScanWorked, markFirstScan, offerSnoozed } from '../../lib/connect-offer';
+import { firstScanWorked, markFirstScan } from '../../lib/connect-offer';
 import { watchTunnelDevInfo } from '../../lib/load-tunnel-dev-info';
 import { resolvePhoneAddress } from '../../lib/phone-address';
 import { isLoopbackOrigin, parseDevServerPort, type PublicBridgeDevInfo } from '../../lib/public-bridge-url';
 import { errorSentence } from '../../lib/sayError';
 import { tauri } from '../../lib/tauri';
 import type { TunnelStatus } from '../../lib/tauri-types';
-import { problemText } from '../settings/tunnel-model';
 import type { TunnelApi } from '../settings/TunnelSection';
-import type { UpdateApi } from '../../lib/workerUpdate';
-import { RelaySetupSheet } from './RelaySetup';
-import { StableOffer } from './StableOffer';
 import { useTunnelStatus } from './useTunnelStatus';
 
 /** After this many "Fix it" presses the page stops retrying and asks the agent instead. */
@@ -33,15 +28,15 @@ export interface SimplePhoneProps {
   tunnel: TunnelApi;
   /** How many phones are paired right now (null while it is being read). */
   phones: number | null;
-  /** The saved address typed in Advanced (usually empty) and the phone server's port. */
+  /** The saved link (usually empty) and the phone server's port. */
   publicPwaUrl: string;
   devServerPort: unknown;
   /** The settings are loaded: a code is made only after that. */
   ready: boolean;
-  /** The Advanced pairing panel is open: it keeps the one pending code, so this view makes none and hides its own. */
+  /** Not on screen (another tab is open): no code is made and none is shown. */
   paused?: boolean;
-  /** The relay setup's step commands (tests give fakes). */
-  updateApi?: UpdateApi;
+  /** The hero: the giant code in the middle of the page. Off: the smaller code inside the "Add a phone" sheet. */
+  giant?: boolean;
 }
 
 /** True while this window is visible and not blurred (codes are made and renewed only then). */
@@ -63,7 +58,7 @@ function useLooking(): [boolean, (v: boolean) => void] {
   return [on, setOn];
 }
 
-export function SimplePhone({ tunnel, phones, publicPwaUrl, devServerPort, ready, paused = false, updateApi }: SimplePhoneProps) {
+export function SimplePhone({ tunnel, phones, publicPwaUrl, devServerPort, ready, paused = false, giant = false }: SimplePhoneProps) {
   const t = useT();
   const [looking, setLooking] = useLooking();
   const canvasRef = useRef<HTMLCanvasElement>(null);
@@ -75,11 +70,9 @@ export function SimplePhone({ tunnel, phones, publicPwaUrl, devServerPort, ready
   const [nonce, setNonce] = useState(0);
   const [copied, setCopied] = useState(false);
   const [rescan, setRescan] = useState(false);
-  const [gone, setGone] = useState(false);
   const [tries, setTries] = useState(0);
   const [fixing, setFixing] = useState(false);
-  const [fixErr, setFixErr] = useState<string | null>(null);
-  const [setup, setSetup] = useState(false);
+  const [, setFixErr] = useState<string | null>(null);
 
   useEffect(() => watchTunnelDevInfo(setDevInfo), []);
 
@@ -122,7 +115,7 @@ export function SimplePhone({ tunnel, phones, publicPwaUrl, devServerPort, ready
         const text = encodePairingQrContent(payload, addr.origin);
         if (canvasRef.current) {
           // A phone camera reads dark on light best, so the code is always black on white, in both themes.
-          await QRCode.toCanvas(canvasRef.current, text, { width: 280, margin: 2, color: { dark: '#000000', light: '#ffffff' } });
+          await QRCode.toCanvas(canvasRef.current, text, { width: giant ? 320 : 260, margin: 2, color: { dark: '#000000', light: '#ffffff' } });
         }
         if (!alive) return;
         setOrigin(addr.origin);
@@ -145,7 +138,7 @@ export function SimplePhone({ tunnel, phones, publicPwaUrl, devServerPort, ready
     return () => window.clearTimeout(id);
   }, [session]);
 
-  // A phone that connected: remember that the first scan worked (the offer may show from now on).
+  // A phone that connected: remember that the first scan worked.
   const count = phones ?? 0;
   useEffect(() => {
     if (count > 0) markFirstScan();
@@ -203,9 +196,6 @@ export function SimplePhone({ tunnel, phones, publicPwaUrl, devServerPort, ready
     }
   };
 
-  const hasFixed = status?.mode === 'stable' && Boolean(status.stable);
-  const showOffer = !gone && rescan && !hasFixed && firstScanWorked() && !offerSnoozed();
-
   const line =
     phones === null || !ready
       ? '…'
@@ -219,12 +209,9 @@ export function SimplePhone({ tunnel, phones, publicPwaUrl, devServerPort, ready
               ? t('connect.simple.connected')
               : t('connect.simple.ready');
   const back = backoffLine(status, t);
-  const details = [status?.error, primary.blocked && !temporary ? primary.blocked.reason : null, codeErr, fixErr, status && status.problem ? problemText(status) : null].filter(
-    (s, i, a): s is string => Boolean(s) && a.indexOf(s) === i,
-  );
 
   return (
-    <div className="cn-simple" data-testid="connect-simple" data-state={problem ? 'problem' : waiting ? 'starting' : rescan ? 'rescan' : count > 0 ? 'connected' : 'ready'}>
+    <div className={`cn-simple${giant ? ' cn-simple--giant' : ''}`} data-testid="connect-simple" data-state={problem ? 'problem' : waiting ? 'starting' : rescan ? 'rescan' : count > 0 ? 'connected' : 'ready'}>
       {!problem && (
         <p className="cn-simple-lead" data-testid="connect-simple-lead">
           {t('connect.simple.lead')}
@@ -233,11 +220,6 @@ export function SimplePhone({ tunnel, phones, publicPwaUrl, devServerPort, ready
       <div className="cn-qr" hidden={!session || problem || paused || !looking}>
         <canvas ref={canvasRef} className="cn-qr-canvas" aria-label={t('connect.simple.qrAria')} data-testid="connect-qr" />
       </div>
-      {!problem && paused && (
-        <p className="cn-simple-note" data-testid="connect-simple-paused">
-          {t('connect.simple.paused')}
-        </p>
-      )}
       {!problem && !paused && !looking && reachable && (
         <button type="button" className="cn-qr cn-qr-away" data-testid="connect-qr-away" onClick={() => setLooking(true)}>
           {t('connect.simple.show')}
@@ -248,10 +230,12 @@ export function SimplePhone({ tunnel, phones, publicPwaUrl, devServerPort, ready
           {t('connect.simple.caps')}
         </p>
       )}
-      <p className="cn-simple-status" role="status" data-testid="connect-simple-status">
-        <span className="cn-dot" aria-hidden="true" data-on={!problem && count > 0 && !rescan ? 'true' : 'false'} />
-        {line}
-      </p>
+      {(problem || waiting || rescan) && (
+        <p className="cn-simple-status" role="status" data-testid="connect-simple-status">
+          <span className="cn-dot" aria-hidden="true" data-on="false" />
+          {line}
+        </p>
+      )}
       {temporary && !problem && (
         <p className="cn-simple-note" data-testid="connect-simple-temp">
           {t('connect.simple.temp')}
@@ -276,27 +260,13 @@ export function SimplePhone({ tunnel, phones, publicPwaUrl, devServerPort, ready
               {back}
             </p>
           )}
-          <details className="cn-problem-details" data-testid="connect-problem-details">
-            <summary>{t('connect.simple.details')}</summary>
-            {details.length > 0 ? (
-              details.map((d) => (
-                <p key={d} className="cn-detail-line">
-                  {d}
-                </p>
-              ))
-            ) : (
-              <p className="cn-detail-line">{t('connect.simple.noDetails')}</p>
-            )}
-          </details>
         </div>
       )}
-      {showOffer && <StableOffer onSet={() => setSetup(true)} onGone={() => setGone(true)} />}
-      {setup && <RelaySetupSheet api={tunnel} updateApi={updateApi} onStatus={setStatus} onClose={() => setSetup(false)} />}
     </div>
   );
 }
 
-/** The plain wait time after a restart was refused (the technical sentence is in "Show details"). */
+/** The plain wait time after a restart was refused. */
 function backoffLine(status: TunnelStatus | null | undefined, t: ReturnType<typeof useT>): string | null {
   if (!status || !status.problem || status.state !== 'error') return null;
   if (status.problem === 'too_soon') return t('connect.simple.retryIn', { minutes: Math.max(1, Math.ceil((status.retry_in_secs ?? 120) / 60)) });

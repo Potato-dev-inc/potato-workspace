@@ -322,75 +322,37 @@ async fn web_pair(url: &str) -> Web {
 }
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 4)]
-async fn when_the_link_cannot_connect_the_devices_own_web_address_carries_the_request_and_the_chip_says_so() {
+async fn the_web_route_between_pcs_is_off_no_pc_is_ever_handed_a_phone_token() {
     let w = web_pair("https://far.test/bridge").await;
     let (a_node, b_node) = (w.a.node(), w.b.node());
-    assert_eq!(w.b.link.view()["own_route_ready"], true, "this PC has a web address");
-    // The far device allows it only after the run switch is on.
-    assert!(w.b.link.set_web(&a_node, true).is_err());
+    // The person cannot turn it on, whatever the level.
     w.b.link.set_permission(&a_node, true, Some("full")).unwrap();
-    assert_eq!(w.b.link.set_web(&a_node, true).unwrap()["devices"][0]["lets_web"], true);
-    // A reaches B by the link; the hello also fetches the web address and token and keeps them.
+    let err = w.b.link.set_web(&a_node, true).unwrap_err();
+    assert!(err.contains("not available yet"), "{err}");
+    assert_eq!(w.b.link.view()["devices"][0]["lets_web"], false);
+    // Even a stored old "web" right (from an older version) hands out nothing: asking for the address is refused, nothing is minted or kept.
+    w.b.link.mgr.set_permission(&crate::device_link::node_of(&a_node).unwrap(), crate::p2p::capability::AGENTS_REMOTE_WEB, true).unwrap();
     w.now.fetch_add(61, Ordering::SeqCst);
     w.a.link.probe_all().await;
-    let d = w.a.link.view()["devices"][0].clone();
-    assert_eq!((d["state"].as_str(), d["web_ready"].as_bool()), (Some("online"), Some(true)));
-    assert_eq!(w.grant.minted.lock().as_slice(), &[(a_node.clone(), true)], "minted at the level the person set");
-    assert_ne!(d["path"], "own", "the link works: the chip says Direct");
-
-    // The link is gone for good (the far app is closed and cannot be dialed): the web address answers instead.
+    assert!(w.grant.minted.lock().is_empty(), "no token was minted");
+    assert_eq!(w.a.link.view()["devices"][0]["web_ready"], false);
+    assert!(w.call.seen.lock().is_empty());
+    // The link going away does not fall back to a web address.
     w.b.link.shutdown();
     until("the link notices", || state_of(&w.a) == "closed").await;
-    let (status, body) = w.a.link.request(&b_node, "GET", "/panes", None).await.unwrap();
-    assert_eq!((status, body["panes"].as_array().map(Vec::len)), (200, Some(0)));
-    assert_eq!(w.call.seen.lock().last().cloned(), Some(("https://far.test/bridge".into(), "tok-1".into(), "GET /panes".into())));
-    let d = w.a.link.view()["devices"][0].clone();
-    assert_eq!((d["state"].as_str(), d["path"].as_str()), (Some("online"), Some("own")), "{d}");
-
-    // Public relay only never uses it.
-    w.a.link.set_device_route(&b_node, Some("public")).await.unwrap();
-    let before = w.call.seen.lock().len();
-    assert!(w.a.link.request(&b_node, "GET", "/panes", None).await.is_err());
-    assert_eq!(w.call.seen.lock().len(), before, "no web request was made");
+    assert!(w.a.link.request(&b_node, "GET", "/pclink/sessions", None).await.is_err());
+    assert!(w.call.seen.lock().is_empty(), "no web request was made");
 }
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 4)]
-async fn the_web_token_is_asked_for_only_when_allowed_and_is_forgotten_when_it_is_taken_away() {
+async fn tokens_an_older_version_gave_a_pc_are_revoked_at_every_level_change() {
     let w = web_pair("https://far.test/bridge").await;
-    let (a_node, b_node) = (w.a.node(), w.b.node());
-    w.b.link.set_permission(&a_node, true, Some("watch")).unwrap();
-    // Not allowed: nothing minted, nothing kept.
-    w.a.link.probe_all().await;
-    assert!(w.grant.minted.lock().is_empty());
-    assert_eq!(w.a.link.view()["devices"][0]["web_ready"], false);
-    // Allowed: after the minute that must pass between two asks, it is kept.
-    w.b.link.set_web(&a_node, true).unwrap();
-    w.now.fetch_add(61, Ordering::SeqCst);
-    w.a.link.probe_all().await;
-    assert_eq!(w.grant.minted.lock().as_slice(), &[(a_node.clone(), false)], "Watch and answer: the token has no more rights");
-    assert_eq!(w.a.link.view()["devices"][0]["web_ready"], true);
-    // Taken away: the far side revokes it, and the next ask forgets it here.
-    w.b.link.set_web(&a_node, false).unwrap();
-    assert!(w.grant.revoked.lock().contains(&a_node));
-    w.now.fetch_add(61, Ordering::SeqCst);
-    w.a.link.probe_all().await;
-    assert_eq!(w.a.link.view()["devices"][0]["web_ready"], false);
-    // Removing the device also revokes it.
-    w.b.link.set_web(&a_node, true).unwrap();
-    w.b.link.remove(&a_node).await.unwrap();
-    assert!(w.grant.revoked.lock().iter().filter(|n| **n == a_node).count() >= 2);
-    let _ = b_node;
-}
-
-#[tokio::test(flavor = "multi_thread", worker_threads = 4)]
-async fn a_web_address_that_is_not_plain_https_is_never_kept() {
-    let w = web_pair("http://far.test/bridge").await;
     let a_node = w.a.node();
     w.b.link.set_permission(&a_node, true, Some("full")).unwrap();
-    w.b.link.set_web(&a_node, true).unwrap();
-    w.a.link.probe_all().await;
-    assert_eq!(w.a.link.view()["devices"][0]["web_ready"], false, "a token must never be sent in the clear");
-    assert!(w.call.seen.lock().is_empty());
+    assert!(w.grant.revoked.lock().contains(&a_node), "revoked when the right was set");
+    w.grant.revoked.lock().clear();
+    w.b.link.set_permission(&a_node, true, Some("watch")).unwrap();
+    assert!(w.grant.revoked.lock().contains(&a_node), "revoked when Full was lowered to Watch");
 }
 
 // ----- the live terminal -----
@@ -413,7 +375,7 @@ async fn a_terminal_is_pushed_the_moment_it_changes_and_stops_when_asked() {
     let frames = got.lock().len();
     tokio::time::sleep(Duration::from_millis(800)).await;
     assert_eq!(got.lock().len(), frames, "an unchanged screen sends nothing");
-    assert!(b.bridge.calls.lock().iter().filter(|c| c.as_str() == "GET /panes/p1/snapshot").count() >= 2);
+    assert!(b.bridge.calls.lock().iter().filter(|c| c.as_str() == "GET /pclink/sessions/p1/screen").count() >= 2);
     // Stop: no more frames, and the far side stops reading.
     a.link.screen_stop(&b_node, "p1").unwrap();
     tokio::time::sleep(Duration::from_millis(300)).await;

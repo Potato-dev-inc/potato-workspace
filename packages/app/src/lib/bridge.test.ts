@@ -104,6 +104,16 @@ describe('makeBridgeClient session routes', () => {
     const bridge = makeBridgeClient('http://127.0.0.1:1');
     await expect(bridge.listPanes()).rejects.toThrow(`bridge GET /panes -> 502: ${message}`);
   });
+
+  it('a Worker that no longer carries the bridge (not_proxied) is "retrying", never the out-of-date sentence', async () => {
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue({
+      ok: false,
+      status: 502,
+      text: async () => JSON.stringify({ code: 'BRIDGE_UNREACHABLE', reason: 'not_proxied', message: 'This phone page is out of date. Update Potato Workspace on your PC.' }),
+    }));
+    const bridge = makeBridgeClient('https://pm.me.workers.dev/bridge');
+    await expect(bridge.listPanes()).rejects.toThrow("Can't reach your PC right now. Trying again…");
+  });
 });
 
 describe('makeBridgeClient without Focus', () => {

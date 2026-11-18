@@ -62,6 +62,9 @@ pub fn strings() -> Value {
             "noAgents": "No agent is running.",
             "startAgent": "Start an agent",
             "toOwner": "This picture goes to {agent}",
+            "askAbout": "Ask about it",
+            "fixIt": "Fix it in this project",
+            "intent": "What to do with this page",
             "sent": "Sent to the chat.",
             "shotOf": "Picture of the page with your marks",
             "taking": "Taking the picture\u{2026}",
@@ -112,6 +115,9 @@ pub fn strings() -> Value {
             "noAgents": "目前沒有執行中的 AI 助理。",
             "startAgent": "啟動 AI 助理",
             "toOwner": "這張圖片會傳給 {agent}",
+            "askAbout": "問問看",
+            "fixIt": "在這個專案裡修改",
+            "intent": "要怎麼處理這個頁面",
             "sent": "已傳到聊天。",
             "shotOf": "附有你的標記的頁面圖片",
             "taking": "正在拍下圖片\u{2026}",
@@ -187,7 +193,7 @@ pub enum Event {
     #[serde(rename = "newagent")]
     NewAgent,
     Prepare { marks: Vec<WireMark>, area: WireArea, vw: f64 },
-    Send { request: String, marks: Vec<WireMark>, #[serde(default)] to: String },
+    Send { request: String, marks: Vec<WireMark>, #[serde(default)] to: String, #[serde(default)] fix: bool },
 }
 
 /// At most 30 events, and nothing at all for text that is not the bar's own.

@@ -654,7 +654,7 @@ export const generalRows: RowDef[] = [
       <SettingToggle
         label={t('settings.row.far-pcs-labs.label')}
         description={t('settings.row.far-pcs-labs.hint')}
-        checked={env.settings.far_pcs_enabled ?? false}
+        checked={env.settings.far_pcs_enabled ?? true}
         onChange={(value) => void env.patch({ far_pcs_enabled: value })}
       />
     ),

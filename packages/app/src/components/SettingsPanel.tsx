@@ -178,7 +178,7 @@ export function SettingsPanel({
   onPageChange,
   inline = false,
   withConnect = false,
-  initialConnectTab = 'phone',
+  initialConnectTab = 'devices',
   onSaved,
   projectPath = null,
   onProjectPathChange,
@@ -548,7 +548,7 @@ export function SettingsPanel({
   const section = connectOn ? undefined : (shown.find((s) => s.id === page) ?? (settings ? shown[0] : undefined));
   // Settings has no Connect page of its own: a search for the phone, the team or lending ends in one "Open Connect" button.
   const connectHit = CONNECT_WORDS.test(trimmed) && (withConnect || connectPageAvailable());
-  const openConnectPage = () => (withConnect ? goToPage('connect') : openConnect('phone'));
+  const openConnectPage = () => (withConnect ? goToPage('connect') : openConnect('devices'));
   const navPages: Array<{ id: SettingsPageId; title: string }> = shown.flatMap((item) => [
     { id: item.id as SettingsPageId, title: item.title },
     ...(withConnect && item.id === 'look' ? [{ id: 'connect' as SettingsPageId, title: t('settings.page.connect.title') }] : []),

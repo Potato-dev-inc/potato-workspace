@@ -54,10 +54,10 @@ describe('Settings > Devices', () => {
     expect(q('[data-testid="devices-empty"]')!.textContent).toContain('No other PC yet');
     await click(q('[data-testid="add-device"]'));
     expect(q('[data-testid="add-device-sheet"]')).not.toBeNull();
-    // Nearby has nothing to show; far away works; SSH is not available yet.
-    await click(q('[data-testid="add-tab-nearby"]'));
-    expect(q('[data-testid="nearby-none"]')!.textContent).toBe('Nothing found nearby. Use a code.');
-    expect(q<HTMLButtonElement>('[data-testid="add-tab-far"]')!.disabled).toBe(false);
+    // The first thing is the link; the older ways are one step away, folded.
+    expect(q('[data-testid="far-tab"]')).not.toBeNull();
+    expect(q<HTMLDetailsElement>('[data-testid="add-more"]')!.open).toBe(false);
+    expect(q('[data-testid="join-address"]')).toBeNull();
     expect(q<HTMLButtonElement>('[data-testid="add-tab-ssh"]')!.disabled).toBe(false);
     await click(q('[data-testid="add-tab-code"]'));
     await typeInto(q<HTMLInputElement>('[data-testid="join-address"]')!, 'pm1:' + 'f6'.repeat(32) + '@192.168.1.20:47111');
@@ -72,7 +72,7 @@ describe('Settings > Devices', () => {
     expect(q('[data-testid="pair-confirm"]')).toBeNull();
     expect(q('[data-testid="add-device-sheet"]')).toBeNull();
     // The pairing line is ours now: a confirmation, then the device's own next step with the button to its rights.
-    expect(q('[data-testid="devices-message"]')!.textContent).toBe('Paired with Studio PC.');
+    expect(q('[data-testid="devices-message"]')!.textContent).toBe('Connected to Studio PC.');
     expect(document.body.textContent).not.toContain('Nothing is shared yet');
     const item = document.querySelector<HTMLElement>('.dev-item')!;
     expect(item.textContent).toContain('Studio PC');
@@ -182,16 +182,16 @@ describe('Settings > Devices', () => {
     expect(q('[data-testid="device-page"]')!.getAttribute('aria-label')).toBe('Work laptop');
   });
 
-  it('How far-away devices connect: three choices, one chosen, saved through the command', async () => {
+  it('How my PCs reach each other: three choices in plain words, one chosen, saved through the command', async () => {
     const fake = new DevicesFake({ enabled: true });
     await mount(fake);
     const radios = [...document.querySelectorAll<HTMLInputElement>('[data-testid="route-setting"] input[type="radio"]')];
     expect(radios.map((r) => r.checked)).toEqual([true, false, false]);
-    expect(q('[data-testid="route-setting"]')!.textContent).toContain('How far-away devices connect');
+    expect(q('[data-testid="route-setting"]')!.textContent).toContain('How my PCs reach each other');
     await click(q('[data-testid="route-own"]'));
     await settle(4);
     expect(fake.view.route_pref).toBe('own');
-    expect(q('[data-testid="route-setting"]')!.textContent).toContain('Your own web address is not set up yet');
+    expect(q('[data-testid="route-setting"]')!.textContent).toContain('You have no relay yet. Set one up at the top of Connect.');
   });
 
   it('Remove device asks first, then both PCs forget each other', async () => {
@@ -205,6 +205,41 @@ describe('Settings > Devices', () => {
     await settle(6);
     expect(fake.view.devices).toHaveLength(0);
     expect(q('[data-testid="devices-empty"]')).not.toBeNull();
+  });
+
+  it('removing a device also forgets its kept transcripts and drafts here, and only its own', async () => {
+    const fake = new DevicesFake({ enabled: true, devices: [MAC_MINI] });
+    const node = MAC_MINI.node;
+    window.localStorage.setItem(`pm.remoteChat.device:${node}:p1`, '[]');
+    window.localStorage.setItem('pm.remoteChat.device:other:p1', '[]');
+    window.localStorage.setItem('pm.composerDrafts', JSON.stringify({ [`device:${node}:p1`]: { text: 'a', at: Date.now() }, 'device:other:p1': { text: 'b', at: Date.now() } }));
+    await mount(fake);
+    await click(document.querySelector('.dev-item'));
+    await click(q('[data-testid="remove-device"]'));
+    await click(q('[data-testid="remove-yes"]'));
+    await settle(6);
+    expect(window.localStorage.getItem(`pm.remoteChat.device:${node}:p1`)).toBeNull();
+    expect(window.localStorage.getItem('pm.remoteChat.device:other:p1')).not.toBeNull();
+    expect(Object.keys(JSON.parse(window.localStorage.getItem('pm.composerDrafts')!))).toEqual(['device:other:p1']);
+  });
+
+  it('a PC that vanishes from the list (the other side unlinked it) takes its kept local state with it', async () => {
+    const fake = new DevicesFake({ enabled: true, devices: [MAC_MINI] });
+    const node = MAC_MINI.node;
+    window.localStorage.setItem(`pm.remoteChat.device:${node}:p1`, '[]');
+    window.localStorage.setItem(`pm.view.dev:${node}:p1`, 'chat');
+    window.localStorage.setItem('pm.remoteChat.device:other:p1', '[]');
+    await mount(fake);
+    await settle(3);
+    expect(window.localStorage.getItem(`pm.remoteChat.device:${node}:p1`)).not.toBeNull();
+    await act(async () => {
+      fake.view.devices = [];
+      (fake as unknown as { emit(): void }).emit();
+    });
+    await settle(3);
+    expect(window.localStorage.getItem(`pm.remoteChat.device:${node}:p1`)).toBeNull();
+    expect(window.localStorage.getItem(`pm.view.dev:${node}:p1`)).toBeNull();
+    expect(window.localStorage.getItem('pm.remoteChat.device:other:p1')).not.toBeNull();
   });
 
   it('with the Labs switch off nothing renders', async () => {

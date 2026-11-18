@@ -221,6 +221,66 @@ pub fn check_worker(worker_url: &str) -> Result<(), String> {
     }
 }
 
+// ------------------------------------------------------------------------------------------ where is the PC (point, do not proxy)
+
+pub fn where_url(worker_url: &str) -> String {
+    format!("{}/_pm/where", worker_url.trim_end_matches('/'))
+}
+
+/// A quick-tunnel origin and nothing else: `https://<name>.trycloudflare.com`.
+pub fn is_quick_origin(origin: &str) -> bool {
+    let Some(host) = origin.strip_prefix("https://").and_then(|r| r.strip_suffix(".trycloudflare.com")) else { return false };
+    !host.is_empty() && host.bytes().all(|b| b.is_ascii_lowercase() || b.is_ascii_digit() || b == b'-')
+}
+
+/// What `GET /_pm/where` said.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum Where {
+    /// The PC is at this tunnel origin.
+    Tunnel(String),
+    /// This address has no such route (an older Worker, a PC's own address, a LAN address): call it as it is.
+    NoRoute,
+    /// It should have answered and did not (down, not linked yet, busy, a bad address): the PC cannot be reached through it now.
+    Failed,
+}
+
+/// Read a `/_pm/where` answer. `accept` says which tunnel addresses may be used. Pure, so every case is a unit test.
+pub fn interpret_where(http_status: Option<u16>, body: &str, accept: &dyn Fn(&str) -> bool) -> Where {
+    match http_status {
+        None => Where::Failed,
+        Some(429) => Where::Failed,
+        Some(s) if s >= 500 => Where::Failed,
+        Some(200) => {
+            let Some(v) = serde_json::from_str::<serde_json::Value>(body).ok().filter(|v| v.get("ok").is_some()) else { return Where::NoRoute };
+            match (v.get("ok").and_then(serde_json::Value::as_bool), v.get("url").and_then(serde_json::Value::as_str)) {
+                (Some(true), Some(url)) if accept(url) => Where::Tunnel(url.to_string()),
+                _ => Where::Failed,
+            }
+        }
+        Some(_) => Where::NoRoute,
+    }
+}
+
+/// Ask a permanent address where the PC is (blocking). The Worker no longer carries `/bridge` calls, so anything that wants the
+/// bridge behind a Worker asks this first.
+pub fn resolve_tunnel(origin: &str, accept: &dyn Fn(&str) -> bool) -> Where {
+    match agent().get(&where_url(origin)).set("Accept-Encoding", "identity").call() {
+        Ok(resp) => {
+            let status = resp.status();
+            interpret_where(Some(status), &resp.into_string().unwrap_or_default(), accept)
+        }
+        Err(ureq::Error::Status(code, resp)) => interpret_where(Some(code), &resp.into_string().unwrap_or_default(), accept),
+        Err(_) => Where::Failed,
+    }
+}
+
+/// `url` with its origin replaced by `tunnel` (`https://w.dev/bridge/x` + `https://t.trycloudflare.com` -> `https://t.trycloudflare.com/bridge/x`).
+pub fn repoint(url: &str, tunnel: &str) -> String {
+    let rest = url.split_once("://").map_or(url, |(_, r)| r);
+    let path = rest.find('/').map_or("", |i| &rest[i..]);
+    format!("{}{}", tunnel.trim_end_matches('/'), path)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -453,5 +513,42 @@ mod tests {
         assert_eq!(register_url("https://w.dev/"), "https://w.dev/_pm/link/register");
         assert_eq!(health_url("https://w.dev"), "https://w.dev/_pm/link/health");
         assert_eq!(reset_url("https://w.dev"), "https://w.dev/_pm/link/reset");
+    }
+
+    #[test]
+    fn where_answers_are_read_strictly() {
+        let quick = |u: &str| is_quick_origin(u);
+        let ok = r#"{"ok":true,"url":"https://rapid-able-wolf-3.trycloudflare.com"}"#;
+        assert_eq!(interpret_where(Some(200), ok, &quick), Where::Tunnel("https://rapid-able-wolf-3.trycloudflare.com".into()));
+        // no such route: the address is not a Worker (or an older one): call it as it is
+        for (status, body) in [(Some(404), ok), (Some(200), "<html>"), (Some(200), "{}"), (Some(403), "")] {
+            assert_eq!(interpret_where(status, body, &quick), Where::NoRoute, "{status:?} {body}");
+        }
+        // it should have answered and did not: never fall back to the Worker
+        for (status, body) in [(Some(503), r#"{"ok":false}"#), (Some(429), ""), (Some(500), ok), (None, ok), (Some(200), r#"{"ok":true,"url":"https://evil.example.com"}"#), (Some(200), r#"{"ok":true,"url":"https://a.trycloudflare.com.evil.io"}"#), (Some(200), r#"{"ok":false,"url":"https://a.trycloudflare.com"}"#)] {
+            assert_eq!(interpret_where(status, body, &quick), Where::Failed, "{status:?} {body}");
+        }
+        assert!(!is_quick_origin("https://a.b.trycloudflare.com") && is_quick_origin("https://a-b.trycloudflare.com"));
+        assert!(!is_quick_origin("http://a.trycloudflare.com") && !is_quick_origin("https://.trycloudflare.com"));
+    }
+
+    #[test]
+    fn repoint_keeps_the_path_and_query() {
+        assert_eq!(repoint("https://pm.me.workers.dev/bridge/panes?x=1", "https://t-1.trycloudflare.com"), "https://t-1.trycloudflare.com/bridge/panes?x=1");
+        assert_eq!(repoint("https://pm.me.workers.dev", "https://t-1.trycloudflare.com/"), "https://t-1.trycloudflare.com");
+    }
+
+    #[test]
+    fn resolve_asks_where_on_the_worker_and_never_the_bridge() {
+        let (url, seen, handle) = fake_worker(vec![(200, r#"{"ok":true,"url":"http://127.0.0.1:9"}"#)]);
+        let got = resolve_tunnel(&url, &|u| u.starts_with("http://127.0.0.1:"));
+        handle.join().unwrap();
+        assert_eq!(got, Where::Tunnel("http://127.0.0.1:9".into()));
+        let first = seen.lock().unwrap()[0].clone();
+        assert!(first.starts_with("GET /_pm/where "), "{first}");
+        // the real rule refuses that loopback address
+        let (url, _s, h2) = fake_worker(vec![(200, r#"{"ok":true,"url":"http://127.0.0.1:9"}"#)]);
+        assert_eq!(resolve_tunnel(&url, &|u| is_quick_origin(u)), Where::Failed);
+        h2.join().unwrap();
     }
 }

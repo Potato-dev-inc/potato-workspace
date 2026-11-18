@@ -96,9 +96,11 @@ impl TrustStorage for MemoryTrustStorage {
 /// How much a paired computer may do when it runs agents here.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum RemoteLevel {
-    /// Watch and answer.
+    /// Read live transcripts and lists. Nothing else.
     Watch,
-    /// Full control.
+    /// Watch, plus answer an agent's question, message a running agent, stop and continue it.
+    Answer,
+    /// Answer, plus work on this PC: start agents, use the terminal, change files. One switch, off by default.
     Full,
 }
 
@@ -112,8 +114,16 @@ pub struct TrustedDevice {
     pub allowed: BTreeSet<String>,
 }
 
+/// Characters that draw nothing or change how the text around them reads: zero-width and joiner characters, direction marks and
+/// overrides (a name can be made to read backwards), soft hyphen, word joiner, the byte-order mark, variation selectors, tags.
+pub fn is_invisible(c: char) -> bool {
+    matches!(c as u32,
+        0x00AD | 0x034F | 0x061C | 0x115F | 0x1160 | 0x17B4 | 0x17B5 | 0x180B..=0x180E | 0x200B..=0x200F | 0x202A..=0x202E | 0x2060..=0x206F
+        | 0x3164 | 0xFE00..=0xFE0F | 0xFEFF | 0xFFA0 | 0xFFF9..=0xFFFB | 0xE0000..=0xE0FFF)
+}
+
 pub fn clean_name(raw: &str) -> String {
-    let s: String = raw.chars().filter(|c| !c.is_control()).collect();
+    let s: String = raw.chars().filter(|c| !c.is_control() && !is_invisible(*c)).collect();
     let s = s.trim();
     let s: String = s.chars().take(NAME_MAX).collect();
     if s.is_empty() {
@@ -215,6 +225,7 @@ pub struct TrustList {
     tampered: AtomicBool,
     pairing_open: AtomicBool,
     link_open: AtomicBool,
+    account_open: AtomicBool,
 }
 
 impl TrustList {
@@ -236,6 +247,7 @@ impl TrustList {
             tampered: AtomicBool::new(tampered),
             pairing_open: AtomicBool::new(false),
             link_open: AtomicBool::new(false),
+            account_open: AtomicBool::new(false),
         })
     }
 
@@ -286,6 +298,16 @@ impl TrustList {
         self.link_open.load(Ordering::SeqCst)
     }
 
+    /// The same, for the person's own account PCs: open while this PC's tick "Let my other PCs open this PC" is on.
+    /// Strangers are still refused by the pairing manager before any sheet appears.
+    pub fn set_account_pairing_open(&self, open: bool) {
+        self.account_open.store(open, Ordering::SeqCst);
+    }
+
+    pub fn account_pairing_open(&self) -> bool {
+        self.account_open.load(Ordering::SeqCst)
+    }
+
     /// Adds (or refreshes the name of) a computer both people confirmed. A new entry has nothing turned on. The
     /// same node with another device key is refused: that is not the computer that was paired.
     pub fn add(&self, node: NodeId, device_pub: [u8; 32], name: &str, now_secs: u64) -> Result<(), TrustError> {
@@ -321,7 +343,10 @@ impl TrustList {
         self.change(|entries| {
             let e = entries.iter_mut().find(|e| e.node == *node).ok_or(TrustError::Unknown)?;
             // "Full control" is a level of running agents here: it cannot exist without the switch it belongs to.
-            if on && (capability == capability::AGENTS_REMOTE_FULL || capability == capability::AGENTS_REMOTE_WEB) && !e.allowed.contains(capability::AGENTS_REMOTE) {
+            if on
+                && (capability == capability::AGENTS_REMOTE_ANSWER || capability == capability::AGENTS_REMOTE_FULL || capability == capability::AGENTS_REMOTE_WEB)
+                && !e.allowed.contains(capability::AGENTS_REMOTE)
+            {
                 return Err(TrustError::NotPermissionable);
             }
             if on {
@@ -329,6 +354,7 @@ impl TrustList {
             } else {
                 e.allowed.remove(capability);
                 if capability == capability::AGENTS_REMOTE {
+                    e.allowed.remove(capability::AGENTS_REMOTE_ANSWER);
                     e.allowed.remove(capability::AGENTS_REMOTE_FULL);
                     e.allowed.remove(capability::AGENTS_REMOTE_WEB);
                 }
@@ -343,7 +369,13 @@ impl TrustList {
         if !e.allowed.contains(capability::AGENTS_REMOTE) {
             return None;
         }
-        Some(if e.allowed.contains(capability::AGENTS_REMOTE_FULL) { RemoteLevel::Full } else { RemoteLevel::Watch })
+        Some(if e.allowed.contains(capability::AGENTS_REMOTE_FULL) {
+            RemoteLevel::Full
+        } else if e.allowed.contains(capability::AGENTS_REMOTE_ANSWER) {
+            RemoteLevel::Answer
+        } else {
+            RemoteLevel::Watch
+        })
     }
 
     /// Whether this computer lets `node` ask to borrow its agent sign-ins.
@@ -386,6 +418,9 @@ impl Permissions for TrustList {
         }
         if capability == capability::PAIR_LINK {
             return self.link_pairing_open();
+        }
+        if capability == capability::PAIR_ACCOUNT {
+            return self.account_pairing_open();
         }
         self.entries.lock().unwrap_or_else(|p| p.into_inner()).iter().any(|e| {
             e.node == *peer

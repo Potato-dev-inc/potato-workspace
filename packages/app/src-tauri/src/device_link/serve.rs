@@ -348,7 +348,7 @@ impl Stream {
         let _ = stream.send.shutdown().await;
     }
 
-    /// One terminal's screen, live: the snapshot route is read a few times a second on this PC (a local call) and sent
+    /// One terminal's screen, live: the screen route is read a few times a second on this PC (a local call) and sent
     /// only when it changed. The bridge answers each read as that device, so its rights decide; a refusal or a pane
     /// that is gone ends the stream with that status.
     async fn screen(self, mut stream: BiStream, head: Head) {

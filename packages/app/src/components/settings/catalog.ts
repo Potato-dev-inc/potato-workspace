@@ -11,6 +11,7 @@ import { bridgeRows } from './sections/BridgeSection';
 import { generalRows } from './sections/GeneralSection';
 import { keysRows } from './sections/KeysSection';
 import { modelBridgeRows } from './sections/ModelBridgeSection';
+import { phoneDevicesRow } from './sections/PhoneSection';
 import { modelsRows } from './sections/ModelsSection';
 import { crewsRows } from './sections/CrewsSection';
 import { shortcutsRows } from './sections/ShortcutsSection';
@@ -22,6 +23,7 @@ const RAW_SECTIONS: BaseSectionDef[] = [
   { id: 'models', title: 'Orchestrator & Models', blurb: 'The project index, OpenCode defaults and Model Bridge.', rows: [...modelsRows, ...modelBridgeRows] },
   { id: 'keys', title: 'Keys', blurb: 'API keys. They are kept in your system keychain when there is one.', rows: keysRows },
   { id: 'bridge', title: 'Bridge & MCP', blurb: 'How other tools and agents connect to Potato Workspace.', rows: bridgeRows },
+  { id: 'phone', title: 'Phone', blurb: 'Phone alerts and keyboard, sign out every phone, Telegram, and how the phone reaches this PC.', rows: [phoneDevicesRow] },
   { id: 'crews', title: 'Crews', blurb: 'Crews of agents, shown as boxes. Early feature.', rows: crewsRows },
   { id: 'shortcuts', title: 'Shortcuts', blurb: 'Change the keys, or turn a shortcut off. Terminals keep their own keys.', rows: shortcutsRows },
 ];

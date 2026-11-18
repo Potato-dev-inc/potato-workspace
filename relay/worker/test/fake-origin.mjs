@@ -66,6 +66,11 @@ export function startFakeOrigin() {
     } else if (url.pathname === "/redirect") {
       res.writeHead(302, { location: `http://${req.headers.host}/hello` });
       res.end();
+    } else if (url.pathname === "/assets/app-abc123.js" || url.pathname === "/sw.js" || url.pathname === "/index.html" || url.pathname === "/deep/link") {
+      // like the phone server: every file says no-store
+      const html = url.pathname === "/index.html" || url.pathname === "/deep/link";
+      res.writeHead(200, { "content-type": html ? "text/html" : "text/javascript", "cache-control": "no-store" });
+      res.end(html ? "<html></html>" : "console.log(1)");
     } else if (url.pathname === "/down") {
       res.writeHead(502);
       res.end("bad gateway");

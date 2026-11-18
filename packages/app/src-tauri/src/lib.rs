@@ -52,6 +52,7 @@ mod mobile_pairing;
 mod mobile_tunnel;
 pub mod night_shift;
 mod tunnel_config;
+mod worker_origins;
 mod tools_home;
 mod uninstall;
 mod one_brain;
@@ -377,9 +378,15 @@ pub fn run() {
             commands::devices_join,
             commands::devices_pair_answer,
             commands::devices_pair_pick,
+            commands::devices_account_pcs,
+            commands::devices_set_open_from_account,
+            commands::devices_dismiss_removed_pc,
+            commands::devices_open_account_pc,
             commands::devices_rename,
             commands::devices_set_permission,
             commands::devices_remove,
+            commands::devices_full_asks,
+            commands::devices_full_ask_answer,
             commands::devices_set_route,
             commands::devices_make_link,
             commands::devices_join_link,
@@ -688,6 +695,7 @@ pub fn run() {
             commands::get_mobile_tunnel_info,
             commands::profile_bridge_url,
             commands::get_tunnel_status,
+            commands::set_link_temporary,
             commands::set_tunnel_config,
             commands::restart_tunnel,
             commands::test_tunnel_connection,

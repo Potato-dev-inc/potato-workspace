@@ -12,6 +12,14 @@
 //! Nothing here opens a window or a socket on its own, and the real network call (`WebCall`) is a seam: tests pass a
 //! fake, so no test calls a real relay or worker.
 
+/// The web route between PCs (a PC reaching another through its stable link / tunnel with a device token) is OFF. The token it
+/// minted was a PHONE device token: phone rights, phone routes, consent cards a PC must not answer, and it outlived a lowered level.
+/// PCs connect through the paired link and the relay only, under `pclink` levels. Turn it on again only with a PC-link web route
+/// of its own (own token kind, own levels).
+pub const PC_WEB_ROUTE: bool = false;
+/// What the person is told.
+pub const OFF_SENTENCE: &str = "The PC-link web route is not available yet. PCs connect through the paired link and the relay.";
+
 use std::collections::HashMap;
 use std::sync::{Arc, Mutex};
 

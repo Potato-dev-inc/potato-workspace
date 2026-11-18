@@ -128,7 +128,7 @@ export interface HarnessScenario {
   /** Pending `ask_user` questions the mocked `questions_list` returns. */
   questions?: Question[];
   /** Settings > Security: the two agent-authority switches the mocked backend reports. */
-  authority?: { ask_before_agent_control: boolean; agents_may_merge: boolean };
+  authority?: { ask_before_agent_control: boolean; agents_may_merge: boolean; ask_before_helpers_start: boolean };
   /** Settings > Security: lines of the audit log the mocked backend returns (newest first). */
   audit?: { seq: number; ts_ms: number; kind: string; who: string; summary: string }[];
   /** Turn summaries the mocked `turn_summaries` returns per pane id (Inbox > Done today). Absent: the example ones. */
@@ -195,6 +195,10 @@ export interface HarnessScenario {
   guide?: import('./guide-fixtures').GuideScenario;
   /** Devices (Labs `devices_enabled`): the state the mocked `devices_*` commands start from. Absent = the switch is off and nothing shows. */
   devices?: import('./devices-fixtures').DevicesScenario;
+  /** Connect > My phone: `none` = no phone is added yet (the giant code shows); `basic` = one phone that can watch, answer and send messages. Absent: one phone with full control. */
+  phones?: 'none' | 'basic';
+  /** Connect > My PCs from the account (Labs `account_enabled`): signed in, with these other PCs. Absent = no account on the page. */
+  account?: import('./account-pcs-fixtures').AccountScenario;
   /** Settings > Labs > Team: overrides on top of the example config (on a team as admin) the mocked `team_config_get` returns. */
   teamConfig?: Partial<import('../lib/team').TeamConfigView>;
   /** Potato Worker: what the mocked invite and worker commands answer (one-time invite link, what the Worker lists). */

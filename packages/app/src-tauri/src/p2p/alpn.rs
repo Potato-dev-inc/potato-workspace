@@ -45,3 +45,7 @@ pub const PAIR: &[u8] = b"pm/pair/1";
 /// Pairing a far-away device with a single-use pairing link (Devices). Open only while a link is shown; a relay may carry
 /// it, because the link (not an announcement on the network) names the device it is for.
 pub const PAIR_LINK: &[u8] = b"pm/pair-link/1";
+
+/// Pairing two PCs of one account. The account only introduces them; the two people confirm on their own screens.
+/// Open only while the PC being opened has its tick "Let my other PCs open this PC" on; a relay may carry it.
+pub const PAIR_ACCOUNT: &[u8] = b"pm/pair-acct/1";

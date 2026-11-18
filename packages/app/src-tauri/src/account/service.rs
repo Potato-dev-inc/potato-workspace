@@ -4,7 +4,8 @@
 
 use super::client::{configured_base, ApiError, Client};
 use super::signin::{PendingSignIn, SignInLink};
-use super::statement::{device_statement, revoke_statement};
+use super::directory::{book, Book, NOT_PUBLISHED};
+use super::statement::{device_statement, device_statement_published, device_statement_with_node, revoke_statement};
 use super::store::{SessionStore, StoredSession};
 use crate::keys::crypto::SigningKey;
 use parking_lot::Mutex;
@@ -223,14 +224,77 @@ impl AccountService {
         self.devices()
     }
 
-    /// Sign this device out: tell the server (best effort) and forget the session here.
+    /// Sign this device out: take this PC out of the address book first (so the other PCs stop listing it), tell the
+    /// server (best effort) and forget the session here.
     pub fn sign_out_here(&self) -> AccountView {
-        if self.session().is_some() {
-            let _ = self.signed("DELETE", "/v1/session", None);
+        if let Some(session) = self.session() {
+            let _ = self.unpublish_pc();
+            // Marks this device signed out on the account, which also drops it from the other PCs' lists. Signing in again
+            // on this PC brings the row back (the same device id).
+            let revoked = (self.parts.key)().ok().map(|key| revoke_statement(&key, "sign_out", &session.device_id, &session.device_id, now()));
+            let done = revoked.is_some_and(|signed| {
+                let body = serde_json::json!({ "statement": signed.statement, "signature": signed.signature });
+                self.signed("POST", &format!("/v1/devices/{}/sign-out", session.device_id), Some(&body)).is_ok()
+            });
+            if !done {
+                let _ = self.signed("DELETE", "/v1/session", None);
+            }
         }
         self.parts.store.clear();
         self.say(None);
         self.view()
+    }
+
+    /// My PCs in the address book (own statements checked, signed-out and stale ones left out). `Err` carries a plain
+    /// sentence; `Ok(None)` means this PC is not signed in.
+    pub fn pcs(&self) -> Result<Option<Book>, String> {
+        let Some(session) = self.session() else { return Ok(None) };
+        match self.signed("GET", "/v1/devices", None) {
+            Ok(v) => Ok(Some(book(&v, &session.account_id, now()))),
+            Err(ApiError::Unauthorized) => Ok(None),
+            Err(e) => Err(e.sentence()),
+        }
+    }
+
+    /// "This node is mine": a fresh device statement naming `node_hex`, signed by this device's account key, for the PC this one
+    /// knocks on (it is never sent to the account). It proves to a PC of the same account that the node that dials it belongs to a
+    /// device that is signed in on the account, without this PC having published anything. Returns `(statement, signature)`.
+    pub fn introduction(&self, node_hex: &str) -> Result<Option<(String, String)>, String> {
+        let Some(session) = self.session() else { return Ok(None) };
+        let key = (self.parts.key)().map_err(|_| "This computer's key store is not available.".to_string())?;
+        let signed = device_statement_with_node(&key, &session.account_id, &session.device_id, "pc", &(self.parts.name)(), Some(node_hex));
+        Ok(Some((signed.statement, signed.signature)))
+    }
+
+    fn patch_self(&self, node: Option<&str>, binding: Option<&str>, relay: Option<&str>) -> Result<(), String> {
+        let session = self.session().ok_or("You are not signed in.")?;
+        let key = (self.parts.key)().map_err(|_| "This computer's key store is not available.".to_string())?;
+        let name = (self.parts.name)();
+        let signed = match node {
+            Some(n) => device_statement_published(&key, &session.account_id, &session.device_id, &name, n, relay, now()),
+            None => device_statement_with_node(&key, &session.account_id, &session.device_id, "pc", &name, Some(NOT_PUBLISHED)),
+        };
+        let mut body = serde_json::json!({
+            "statement": signed.statement,
+            "signature": signed.signature,
+            "node_binding": binding.unwrap_or(NOT_PUBLISHED),
+        });
+        body["home_relay"] = relay.map(Value::from).unwrap_or(Value::Null);
+        match self.signed("PATCH", "/v1/devices/self", Some(&body)) {
+            Ok(_) => Ok(()),
+            Err(e) => Err(e.sentence()),
+        }
+    }
+
+    /// Tell the account which link id this PC answers on and which relay reaches it. Only the caller that holds the
+    /// tick "Let my other PCs open this PC" may call this. The statement is signed by this device's key.
+    pub fn publish_pc(&self, node_hex: &str, binding: &str, relay: Option<&str>) -> Result<(), String> {
+        self.patch_self(Some(node_hex), Some(binding), relay)
+    }
+
+    /// Take this PC out of the address book (the tick went off): the row stays, but names no link id.
+    pub fn unpublish_pc(&self) -> Result<(), String> {
+        self.patch_self(None, None, None)
     }
 }
 

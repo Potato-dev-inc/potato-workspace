@@ -1,11 +1,13 @@
 import type { PaneInfo } from '@potato-workspace/shared';
+import { pcModeOf, pcNameOf, type PcMode, type PcSession } from '../../lib/runtime/pclink';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { devicesApi, remoteId, type Device, type DevicesApi, type DevicesView } from '../../lib/devices';
 import { makeRemoteClient, subscribeRemote } from '../../lib/runtime/remote';
+import { pollWithBackoff } from '../../lib/runtime/pollWithBackoff';
 import { useDevices } from './useDevices';
 
 /** How often each online device's pane list is read again when no event came. */
-export const GROUP_POLL_MS = 5000;
+export const GROUP_POLL_MS = 15_000;
 
 /** One pane or chat of another device, as this PC lists it. Texts come from the other device: show them as text only. */
 export interface RemoteRow {
@@ -16,9 +18,18 @@ export interface RemoteRow {
   title: string;
   agent: string;
   status: PaneInfo['status'];
+  /** The folder's name on that PC (never its path). */
   cwd: string;
+  /** The folder's opaque id on that PC: what groups the rows. */
+  project: string;
   /** A chat session (no terminal behind it). */
   chat: boolean;
+  /** The pane that started this one (a minion or a helper sits under it, like on this PC), if the far PC says. */
+  parent?: string;
+  /** What the far PC says about the chat (a newer far PC only): its git branch name, model name and permission mode. */
+  branch?: string;
+  model?: string;
+  mode?: PcMode;
 }
 
 export interface DeviceGroup {
@@ -36,17 +47,22 @@ export interface DeviceGroups {
 
 const clip = (s: unknown, max: number): string => (typeof s === 'string' ? s.slice(0, max) : '');
 
-export function rowOf(node: string, p: PaneInfo): RemoteRow {
-  // A device only serves its own local panes: an id that already names a device is never listed.
+export function rowOf(node: string, p: PcSession): RemoteRow {
+  // A device only serves its own local sessions: an id that already names a device is never listed.
   return {
     key: remoteId(node, p.id),
     node,
     paneId: p.id,
-    title: clip(p.title, 80) || clip(p.agent_type, 40),
-    agent: clip(p.agent_type, 40),
-    status: p.status,
-    cwd: clip(p.cwd, 300),
-    chat: p.lane === 'acp',
+    title: clip(p.title, 80) || clip(p.agent, 40),
+    agent: clip(p.agent, 40),
+    status: p.status as PaneInfo['status'],
+    cwd: clip(p.folder, 120),
+    project: clip(p.project, 40),
+    chat: p.chat === true,
+    ...(typeof p.parent === 'string' && p.parent ? { parent: p.parent.slice(0, 200) } : {}),
+    ...(pcNameOf(p.branch) ? { branch: pcNameOf(p.branch) } : {}),
+    ...(pcNameOf(p.model) ? { model: pcNameOf(p.model) } : {}),
+    ...(pcModeOf(p.mode) ? { mode: pcModeOf(p.mode) } : {}),
   };
 }
 
@@ -70,13 +86,10 @@ export function useDeviceGroups(api: DevicesApi = devicesApi): DeviceGroups {
 
   const read = useCallback(
     async (node: string) => {
-      try {
-        const panes = await makeRemoteClient(node, api).listPanes();
-        if (!alive.current) return;
-        setRows((prev) => ({ ...prev, [node]: panes.filter((p) => typeof p?.id === 'string' && !p.id.startsWith('dev:')).map((p) => rowOf(node, p)) }));
-      } catch {
-        /* the link dropped or the device refused: the state says so, the last rows stay */
-      }
+      // A failure throws to the poller (it backs off); the state says the link dropped and the last rows stay.
+      const sessions = await makeRemoteClient(node, api).sessions();
+      if (!alive.current) return;
+      setRows((prev) => ({ ...prev, [node]: sessions.filter((p) => typeof p?.id === 'string' && !p.id.startsWith('dev:')).map((p) => rowOf(node, p)) }));
     },
     [api],
   );
@@ -87,18 +100,17 @@ export function useDeviceGroups(api: DevicesApi = devicesApi): DeviceGroups {
     const stops: (() => void)[] = [];
     let live = true;
     for (const node of nodes) {
-      void read(node);
       subscribeRemote(node, api, (e) => {
-        if (e.type === 'panes') void read(node);
-        else if (e.type === 'pane-status') setRows((prev) => ({ ...prev, [node]: (prev[node] ?? []).map((r) => (r.paneId === e.pane_id ? { ...r, status: e.status } : r)) }));
+        if (e.type === 'sessions') void read(node).catch(() => undefined);
+        else if (e.type === 'session-status') setRows((prev) => ({ ...prev, [node]: (prev[node] ?? []).map((r) => (r.paneId === e.id ? { ...r, status: e.status as PaneInfo['status'] } : r)) }));
       })
         .then((stop) => (live ? stops.push(stop) : stop()))
         .catch(() => undefined);
     }
-    const poll = window.setInterval(() => nodes.forEach((n) => void read(n)), GROUP_POLL_MS);
+    const polls = nodes.map((node) => pollWithBackoff({ node, route: 'sessions', normalMs: GROUP_POLL_MS, run: () => read(node) }));
     return () => {
       live = false;
-      window.clearInterval(poll);
+      polls.forEach((stop) => stop());
       stops.forEach((s) => s());
     };
   }, [enabled, onlineKey, api, read]);

@@ -54,7 +54,7 @@ describe('Settings in the cockpit has no Connect page', () => {
     await settle(6);
     expect(main().querySelectorAll('[data-testid="settings-open-connect"]')).toHaveLength(1);
     await click(main().querySelector('[data-testid="settings-open-connect"] button'));
-    expect(opened).toEqual(['phone']);
+    expect(opened).toEqual(['devices']);
   });
 
   it('Overview shows four cards, none of them a Phone card', async () => {
@@ -72,9 +72,9 @@ describe('Settings in the cockpit has no Connect page', () => {
   });
 
   it('the old names still stand for a Connect tab', () => {
-    expect(connectTabFor('phone')).toBe('phone');
-    expect(connectTabFor('connect')).toBe('phone');
-    expect(connectTabFor('devices')).toBe('pcs');
+    expect(connectTabFor('phone')).toBe('devices');
+    expect(connectTabFor('connect')).toBe('devices');
+    expect(connectTabFor('devices')).toBe('devices');
     expect(connectTabFor('team')).toBe('team');
     expect(connectTabFor('lend')).toBe('lending');
   });

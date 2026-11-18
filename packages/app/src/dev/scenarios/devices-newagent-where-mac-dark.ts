@@ -17,8 +17,8 @@ const s: HarnessScenario = {
     await dom.click('[data-testid="where-pill"]');
     await dom.waitFor('.dev-where-menu');
     await dom.click(`[data-testid="where-${NODE_MAC}"]`);
-    await dom.waitFor('[data-testid="phone-new-chat"]');
-    await dom.waitFor('[data-testid="nc-agent-tile"]');
+    await dom.waitFor('[data-testid="na-on-device"]');
+    await dom.waitFor('[data-testid="na-agent"]');
     await dom.sleep(400);
   },
 };

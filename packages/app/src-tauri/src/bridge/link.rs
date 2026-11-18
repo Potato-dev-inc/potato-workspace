@@ -90,3 +90,34 @@ pub fn poll_events(node: &str, cursor: Option<u64>, wait: std::time::Duration) -
     mobile_pairing::link_caps(node)?;
     Some((poll.cursor, poll.data))
 }
+
+// ----- the PC link's own door (`device_link::pclink`) -----
+
+/// The app and the pane registry, for the PC link's own routes (`None` while the app is still starting).
+pub fn app_handles() -> Option<(tauri::AppHandle, std::sync::Arc<parking_lot::Mutex<crate::pty::PaneRegistry>>)> {
+    Some((super::live_app()?, super::live_registry()?))
+}
+
+/// Runs one of the app's own general routes (a terminal's start and keys) for a PC-link request that `device_link::pclink` has
+/// already allowed under ITS levels. No phone right is looked at here and none is needed: the caller is the same
+/// link caller as in `call` (a remote one, never `Local`), and the paths a PC link may reach are the few that module lists.
+pub fn run_after_pclink(node: &str, method: &str, target: &str, body: &[u8]) -> (u16, Value) {
+    let (path, query) = split_target(target);
+    let raw: Vec<&str> = path.split('/').filter(|part| !part.is_empty()).collect();
+    let segments = mobile_pairing::normalize_bridge_segments(&raw).to_vec();
+    let (Some(app), Some(registry)) = (super::live_app(), super::live_registry()) else {
+        return (503, json!({ "error": "The app is not ready yet.", "code": "BRIDGE_NOT_READY" }));
+    };
+    CURRENT_NODE.with(|n| *n.borrow_mut() = Some(node.to_string()));
+    let _reset = NodeGuard;
+    match route_authorized(method, &segments, query, body, &registry, &app, LINK_HEADERS, false, None) {
+        Ok(ok) | Err(ok) => ok,
+    }
+}
+
+/// The event log after `cursor`, each payload cut down by `view` (the PC link's own filter: it names the events a level may see,
+/// and rewrites them to the PC link's own shapes).
+pub fn poll_events_with(cursor: Option<u64>, wait: std::time::Duration, view: &super::event_log::View<'_>) -> (u64, String) {
+    let poll = super::event_log::poll_for(cursor, wait, view);
+    (poll.cursor, poll.data)
+}

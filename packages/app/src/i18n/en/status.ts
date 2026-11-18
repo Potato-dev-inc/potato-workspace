@@ -28,4 +28,12 @@ export const status = {
   'status.room.stale': 'last known {time} ago',
   'status.room.suggest': 'More room on {place}',
   'status.room.use': 'Use it',
+  'status.far.title': 'Usage on {name}',
+  'status.far.tip': '{agent} on {name}: {pct}% of its limit',
+  'status.far.tipReset': '{agent} on {name}: {pct}% of its limit, resets in {time}',
+  'status.far.tag': '{name}',
+  'status.far.lastKnown': 'last known {time} ago',
+  'status.far.waiting': 'Asking {name}…',
+  'status.far.none': '{name} has not shared its usage.',
+  'status.far.its': '{name}\'s own limits, not yours.',
 } as const;

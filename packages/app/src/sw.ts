@@ -28,6 +28,7 @@ import {
 import { handleNotificationClick, type ClickedNotification } from './pwa/notification-click';
 import { writeIntent } from './pwa/push-intent';
 import { handleShareRequest, isShareRequest } from './pwa/share-target';
+import { actUrl } from './pwa/where';
 
 declare const self: ServiceWorkerGlobalScope;
 
@@ -79,7 +80,10 @@ self.addEventListener('push', (event) => {
 
 async function answer(url: string, token: string, choice: 'allow' | 'deny'): Promise<boolean> {
   try {
-    const res = await fetch(new URL(url, self.registration.scope).href, {
+    // From a permanent address (a Worker) the tap goes to the tunnel it names; the Worker no longer carries /bridge calls.
+    const target = await actUrl(url, self.registration.scope);
+    if (!target) return false;
+    const res = await fetch(target, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ token, choice }),
@@ -120,7 +124,14 @@ self.addEventListener('notificationclick', (event) => {
   notification.close();
   event.waitUntil(
     handleNotificationClick(event.action, { tag: notification.tag, data }, {
-      fetch: (url, init) => fetch(url, init),
+      fetch: async (url, init) => {
+        // The Allow / Deny tap goes to the tunnel the Worker names (the Worker no longer carries /bridge calls).
+        const at = new URL(url);
+        const own = at.origin === new URL(self.registration.scope).origin;
+        const target = own ? await actUrl(`${at.pathname}${at.search}`, self.registration.scope) : url;
+        // The Worker cannot name the PC right now: the tap is not sent (the notification says it did not work).
+        return target ? fetch(target, init) : { ok: false };
+      },
       scope: self.registration.scope,
       open: openTarget,
       notify: (title, options) => self.registration.showNotification(title, options),

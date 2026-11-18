@@ -28,4 +28,6 @@ export const DEFAULT_SETTINGS: Settings = {
   close_to_tray: false,
   // Terminals are hidden until the person turns them on (Settings > General). Rust: show_terminals.
   show_terminals: false,
+  // PCs meet through the person's relay unless they turn it off. Rust: settings_store (same default).
+  far_pcs_enabled: true,
 };

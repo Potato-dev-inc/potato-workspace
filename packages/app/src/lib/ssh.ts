@@ -81,14 +81,14 @@ export const sshApi: SshApi = {
 };
 
 /** Plain words for a failed check. Null when it worked. */
-export function sshStateSentence(c: Pick<SshCheck, 'state' | 'line'>): string | null {
+export function sshStateSentence(c: Pick<SshCheck, 'state' | 'line'>, plain = false): string | null {
   switch (c.state) {
     case 'ok':
       return null;
     case 'cannot_reach':
       return t('devices.ssh.cannotReach');
     case 'wrong_key':
-      return t('devices.ssh.wrongKey');
+      return t(plain ? 'devices.ssh.wrongKeyPlain' : 'devices.ssh.wrongKey');
     case 'host_key_unknown':
       return t('devices.ssh.hostKeyUnknown');
     case 'host_key_changed':

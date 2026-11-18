@@ -99,11 +99,11 @@ describe('lend rules', () => {
   });
 
   it('says what a lend used, its limits, and the one sentence for an expired lender sign-in', () => {
-    expect(usageText({ requests: 14, input_tokens: 52_300, output_tokens: 9_800 })).toBe('14 requests · 62.1k tokens');
-    expect(usageText({ requests: 1, input_tokens: 5, output_tokens: 7 })).toBe('1 request · 12 tokens');
+    expect(usageText({ requests: 14, input_tokens: 52_300, output_tokens: 9_800 })).toBe('14 requests');
+    expect(usageText({ requests: 1, input_tokens: 5, output_tokens: 7 })).toBe('1 request');
     expect(usageText({ requests: 0, input_tokens: 0, output_tokens: 0 })).toBeNull();
     expect(usageText({})).toBeNull();
-    expect(limitsText({ max_requests: 200, max_tokens: 500_000 })).toBe('Up to 200 requests and 500,000 tokens');
+    expect(limitsText({ max_requests: 200, max_tokens: 500_000 })).toBe('Up to 200 requests');
     expect(limitsText({ max_requests: null })).toBeNull();
     expect(problemText({ problem: 'sign-in expired' })).toBe("The lender's sign-in expired. Ask them to sign in again.");
     expect(problemText({ problem: null })).toBeNull();

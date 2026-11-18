@@ -7,11 +7,11 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { useDismissable } from '../../hooks/useDismissable';
 import { useT } from '../../i18n';
-import { classifyProblem, PROBLEM_FIX, relayAddress, scrubDetails, stopsRetrying, type RelayProblem } from '../../lib/relaySetup';
+import { classifyProblem, ownRelayName, PROBLEM_FIX, relayAddress, scrubDetails, stopsRetrying, type RelayProblem } from '../../lib/relaySetup';
 import { errorSentence } from '../../lib/sayError';
 import { tauri } from '../../lib/tauri';
 import type { TunnelStatus } from '../../lib/tauri-types';
-import { FRESH_STEPS, runWorkerUpdate, tauriUpdateApi, UPDATE_STEPS, type UpdateApi, type UpdateStep, type UpdateStepId } from '../../lib/workerUpdate';
+import { FRESH_STEPS, LOOK_STEPS, runWorkerUpdate, tauriUpdateApi, type UpdateApi, type UpdateStep, type UpdateStepId } from '../../lib/workerUpdate';
 import { SecretValue } from '../settings/SecretValue';
 import type { TunnelApi } from '../settings/TunnelSection';
 import '../../styles/setup-step.css';
@@ -33,7 +33,7 @@ const LINK_WAIT_MS = 45_000;
 let inFlight: Promise<unknown> | null = null;
 const hostName = (address: string) => address.replace(/^https:\/\//, '').split('.')[0] ?? '';
 const rowsFor = (fresh: boolean): Row[] =>
-  [...(fresh ? FRESH_STEPS : UPDATE_STEPS), 'link' as const].map((id) => ({
+  [...(fresh ? FRESH_STEPS : LOOK_STEPS), 'link' as const].map((id) => ({
     id,
     status: 'waiting',
     tries: 0,
@@ -77,6 +77,11 @@ export function RelaySetupSheet({
   // The wait between reads follows the step runner's pause (tests give 0).
   const pollMs = linkPollMs ?? pauseMs ?? updateApi.pauseMs ?? 1500;
   const [rows, setRows] = useState<Row[]>(rowsFor(false));
+  // The name of a relay this PC adds next to another PC's (kept for a retry, so no second relay is made).
+  const ownName = useRef<string | null>(null);
+  // A name that just turned out to be taken or to hold another key: Add this PC must pick a different one.
+  const badName = useRef<string | null>(null);
+  const [typed, setTyped] = useState('');
   const [phase, setPhase] = useState<Phase>('running');
   const phaseRef = useRef<Phase>('running');
   phaseRef.current = phase;
@@ -86,7 +91,7 @@ export function RelaySetupSheet({
   const [problem, setProblem] = useState<RelayProblem | null>(null);
   const [secret, setSecret] = useState<string | null>(null);
   const [keyOpen, setKeyOpen] = useState(false);
-  const [detailsOpen, setDetailsOpen] = useState(false);
+  const [reportCopied, setReportCopied] = useState(false);
   const [asking, setAsking] = useState(false);
   const [linkedHost, setLinkedHost] = useState('');
   const sheetRef = useRef<HTMLDivElement>(null);
@@ -126,6 +131,7 @@ export function RelaySetupSheet({
           return;
         }
         if (s?.stable?.link === 'failed' && s.stable.secret_mismatch) {
+          badName.current = hostName(address);
           patchRow('link', { status: 'failed', output: s.stable.error ?? '' });
           fail('mismatch');
           return;
@@ -140,13 +146,14 @@ export function RelaySetupSheet({
 
   /** The whole setup. `old`: the relay that is in the way (start fresh), else a new relay is made. */
   const start = useCallback(
-    async (old: string | null) => {
+    async (old: string | null, name: string | null = ownName.current) => {
       const mine = ++runId.current;
       cancelled.current = false;
       setAsking(false);
       setProblem(null);
       setPhase('running');
       setSecret(null);
+      setTyped('');
       setRows(rowsFor(old !== null));
       // An earlier run (cancelled a moment ago) may still be stopping its tool: wait for it, never overlap.
       while (inFlight && !stale(mine)) await inFlight.catch(() => undefined);
@@ -156,6 +163,8 @@ export function RelaySetupSheet({
         api: updateApi,
         pauseMs,
         fresh: old !== null,
+        look: old === null,
+        name: old === null ? (name ?? undefined) : undefined,
         noRetry: stopsRetrying,
         isCancelled: () => stale(mine),
         onChange: (steps) => !stale(mine) && setRows((rs) => rs.map((r) => steps.find((s) => s.id === r.id) ?? r)),
@@ -165,13 +174,19 @@ export function RelaySetupSheet({
         if (inFlight === job) inFlight = null;
       });
       if (stale(mine)) return;
+      if (run.taken) {
+        badName.current = name;
+        // A relay of another PC has this name and this PC has no key for it: nothing was put online.
+        fail('taken');
+        return;
+      }
       if (!run.ok || !run.address) {
         const step = run.steps.find((s) => s.id === run.failed);
         fail(classifyProblem(run.failed ?? 'deploy', step?.output ?? ''));
         return;
       }
       // Only this relay's own address is ever saved and linked: exactly https://<name>.<you>.workers.dev, and for "start fresh" the same name.
-      const address = relayAddress(run.address, old !== null ? hostName(old) : undefined);
+      const address = relayAddress(run.address, old !== null ? hostName(old) : (name ?? undefined));
       if (!address) {
         patchRow('deploy', { status: 'failed', output: 'The tool printed an address that is not your relay, so nothing was saved.' });
         fail('other');
@@ -268,6 +283,9 @@ export function RelaySetupSheet({
       .join('\n\n'),
   );
   const fix = problem ? PROBLEM_FIX[problem] : null;
+  // "Start fresh" deletes a relay: the person types its name first.
+  const freshName = hostName(saved.current ?? '');
+  const freshOk = freshName !== '' && typed.trim().toLowerCase() === freshName;
 
   return (
     <div className="stable-overlay" role="presentation">
@@ -315,7 +333,7 @@ export function RelaySetupSheet({
                 {linkedHost}
               </span>
               <span className="cn-relay-status" data-testid="relay-done-status">
-                {t('connect.relay.status.linked')}
+                {t('connect.thisPc.works')}
               </span>
             </p>
             {secret && (
@@ -339,11 +357,34 @@ export function RelaySetupSheet({
             <p className="ss-fail-line" role="alert">
               {t(`relaySetup.problem.${problem}` as 'relaySetup.problem.other')}
             </p>
+            {problem === 'taken' && (
+              <p className="rs-help" data-testid="relay-taken-note">
+                {t('relaySetup.taken.note')}
+              </p>
+            )}
             {asking ? (
               <div role="alertdialog" aria-label={t('wu.fresh')} data-testid="relay-fresh-confirm">
-                <p>{t('relaySetup.freshSure')}</p>
+                <p data-testid="relay-fresh-warning">{t('relaySetup.freshSure', { name: freshName })}</p>
+                <label className="rs-help" htmlFor="relay-fresh-type">
+                  {t('relaySetup.freshType', { name: freshName })}
+                </label>
+                <input
+                  id="relay-fresh-type"
+                  className="rs-input"
+                  data-testid="relay-fresh-type"
+                  value={typed}
+                  autoComplete="off"
+                  spellCheck={false}
+                  onChange={(e) => setTyped(e.target.value)}
+                />
                 <div className="ss-fail-actions">
-                  <button type="button" className="ss-btn ss-btn--primary" data-testid="relay-fresh-yes" onClick={() => void start(saved.current)}>
+                  <button
+                    type="button"
+                    className="ss-btn ss-btn--primary"
+                    data-testid="relay-fresh-yes"
+                    disabled={!freshOk}
+                    onClick={() => void start(saved.current)}
+                  >
                     {t('wu.freshYes')}
                   </button>
                   <button type="button" className="ss-btn" data-testid="relay-fresh-no" onClick={() => setAsking(false)}>
@@ -353,8 +394,21 @@ export function RelaySetupSheet({
               </div>
             ) : (
               <div className="ss-fail-actions">
+                {(fix === 'add' || fix === 'fresh') && (
+                  <button
+                    type="button"
+                    className="ss-btn ss-btn--primary"
+                    data-testid="relay-fix"
+                    onClick={() => {
+                      if (!ownName.current || ownName.current === badName.current) ownName.current = ownRelayName();
+                      void start(null);
+                    }}
+                  >
+                    {t('relaySetup.addPc')}
+                  </button>
+                )}
                 {fix === 'fresh' && (
-                  <button type="button" className="ss-btn ss-btn--primary" data-testid="relay-fix" onClick={() => setAsking(true)}>
+                  <button type="button" className="ss-btn" data-testid="relay-fresh-open" onClick={() => setAsking(true)}>
                     {t('wu.fresh')}
                   </button>
                 )}
@@ -383,16 +437,22 @@ export function RelaySetupSheet({
           </div>
         )}
 
-        {details && (
+        {details && phase === 'problem' && (
           <div className="rs-details">
-            <button type="button" className="rs-link" data-testid="relay-details-toggle" aria-expanded={detailsOpen} onClick={() => setDetailsOpen((v) => !v)}>
-              {t('relaySetup.details')}
+            <button
+              type="button"
+              className="ss-btn"
+              data-testid="relay-copy-report"
+              onClick={() => {
+                try {
+                  void navigator.clipboard?.writeText(details).then(() => setReportCopied(true), () => undefined);
+                } catch {
+                  /* no clipboard here */
+                }
+              }}
+            >
+              {reportCopied ? t('relaySetup.reportCopied') : t('relaySetup.report')}
             </button>
-            {detailsOpen && (
-              <pre className="rs-pre" data-testid="relay-details">
-                {details}
-              </pre>
-            )}
           </div>
         )}
 

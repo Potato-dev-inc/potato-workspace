@@ -15,6 +15,12 @@ export function openDeviceAt(node: string): void {
   openSettingsAt('devices');
 }
 
+/** Shows `node`'s page in the Devices page that is already open (Connect > My PCs). Nothing else opens or moves. */
+export function selectDevice(node: string): void {
+  pending = node;
+  if (typeof window !== 'undefined') window.dispatchEvent(new CustomEvent(EVENT, { detail: { node } }));
+}
+
 /** The device the last call asked for, once (the Devices page takes it as it opens). */
 export function takePendingDevice(): string | null {
   const node = pending;
@@ -31,4 +37,22 @@ export function onOpenDevice(cb: (node: string) => void): () => void {
   };
   window.addEventListener(EVENT, handler);
   return () => window.removeEventListener(EVENT, handler);
+}
+
+const FOCUS_EVENT = 'pm:focus-device-group';
+
+/** Connect > Devices > Open: unfold that PC's section of the sidebar and scroll to it. */
+export function focusDeviceGroup(node: string): void {
+  if (typeof window !== 'undefined') window.dispatchEvent(new CustomEvent(FOCUS_EVENT, { detail: { node } }));
+}
+
+/** A PC's section was asked for (Open on Connect). Returns the stop function. */
+export function onFocusDeviceGroup(cb: (node: string) => void): () => void {
+  if (typeof window === 'undefined') return () => {};
+  const handler = (e: Event) => {
+    const node = (e as CustomEvent<{ node?: unknown }>).detail?.node;
+    if (typeof node === 'string' && node !== '') cb(node);
+  };
+  window.addEventListener(FOCUS_EVENT, handler);
+  return () => window.removeEventListener(FOCUS_EVENT, handler);
 }

@@ -719,3 +719,39 @@
   font-size: var(--fs-meta);
   color: var(--label-2);
 }
+
+/* Another PC lets this PC only watch: in place of Start, one small plain line and the real Ask button. */
+.cockpit .ck-na-off {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  margin: 6px 4px 0;
+}
+.cockpit .ck-na-ask-line {
+  font-size: var(--fs-meta);
+  font-weight: 400;
+  color: var(--label-2);
+}
+.cockpit .ck-na-ask-line[role="alert"] {
+  color: var(--label-3);
+}
+
+/* Grouped project picker: Add project ends each group, and the divider is BELOW it (between groups), never above it. */
+.cockpit .ck-na-group .ck-na-foot {
+  margin-top: 0;
+  padding-top: 0;
+  box-shadow: none;
+}
+.cockpit .ck-na-group:not(:last-child) {
+  margin-bottom: 4px;
+  padding-bottom: 4px;
+  box-shadow: inset 0 -1px 0 var(--sep);
+}
+
+.cockpit .ck-na-ask-btn:disabled {
+  opacity: 0.6;
+}
+
+.cockpit .ck-na-ask-line-main + .ck-na-ask-line {
+  margin-left: 4px;
+}

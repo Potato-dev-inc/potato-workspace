@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
-// 1.1.3 bug: a chat running on a paired PC drew unstyled (giant black triangles, a bare box, the result bar run together). The remote
-// chat is the phone's view, whose styles all live under `.ph`; the desktop pane did not have that class. Through the real remote pane
-// (inside `.cockpit`, like CockpitApp) with a device fixture whose far chat has a permission line, page cards and a final answer.
+// WP4: a chat running on a paired PC is the NORMAL chat screen (the same conversation view and message box as a chat on this PC),
+// not the phone's view in a phone-styled box. Through the real remote pane with a device fixture whose far chat has tool lines,
+// page cards and a final answer.
 import { act } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
@@ -31,34 +31,75 @@ afterEach(async () => {
   host.remove();
 });
 
-describe('a chat on another PC is styled like a chat', () => {
-  it('sits inside the phone scope, and the box, the result bar and every icon have a class and a size', async () => {
+const row = { paneId: 'p1', chat: true, title: 'Build the .dmg', agent: 'claude' } as const;
+
+async function mount(device: ReturnType<typeof deviceOf>, fake: DevicesFake) {
+  await act(async () => root.render(<RemotePaneView device={device} row={row} api={fake} />));
+  await settle(10);
+}
+const deviceOf = (fake: DevicesFake) => fake.view.devices[0]!;
+
+describe('a chat on another PC is the normal chat', () => {
+  it('draws the normal conversation and message box, with no phone scope and no phone chat', async () => {
     const fake = new DevicesFake({ enabled: true, devices: [MAC_MINI], panes: { [NODE_MAC]: MAC_PANES }, chats: { p1: phoneRenderReply(Date.now()).items } });
-    const device = fake.view.devices[0]!;
-    await act(async () => root.render(<RemotePaneView device={device} row={{ paneId: 'p1', chat: true, title: 'Build the .dmg', agent: 'claude' }} api={fake} />));
-    await settle(10);
-    const scope = host.querySelector('[data-testid="remote-chat-scope"]')!;
-    expect(scope.classList.contains('ph')).toBe(true);
-    const chat = host.querySelector('[data-testid="phone-chat"]')!;
-    expect(chat.closest('.ph')).toBe(scope);
-    expect(chat.className).toBe('ph-chat');
-    const composer = host.querySelector('[data-testid="phone-composer"]');
-    expect(composer).not.toBeNull();
-    expect(composer!.className).toMatch(/ph-/);
-    expect(composer!.querySelector('textarea')?.closest('.ph-comp-box')).not.toBeNull();
-    await settle(10);
-    const bar = host.querySelector('[data-testid="phone-result-card"]');
-    expect(bar).not.toBeNull();
-    expect(bar!.className).toBe('ph-result');
-    expect(bar!.querySelector('.ph-result-head')).not.toBeNull();
-    expect(bar!.querySelector('.ph-result-actions')).not.toBeNull();
-    const svgs = Array.from(scope.querySelectorAll('svg'));
-    expect(svgs.length).toBeGreaterThan(3);
-    const unsized = svgs.filter((svg) => {
-      const w = Number(svg.getAttribute('width'));
-      const h = Number(svg.getAttribute('height'));
-      return !(w >= 8 && w <= 48 && h >= 8 && h <= 48);
+    await mount(deviceOf(fake), fake);
+    expect(host.querySelector('[data-testid="session-chat"]')).not.toBeNull();
+    expect(host.querySelector('[data-testid="chat-composer"]')).not.toBeNull();
+    expect(host.querySelector('.ph')).toBeNull();
+    expect(host.querySelector('[data-testid="phone-chat"]')).toBeNull();
+    expect(host.querySelector('[data-testid="phone-composer"]')).toBeNull();
+    // The old "Chat on <device>" title bar is gone: the chip in the sidebar names the PC.
+    expect(host.textContent).not.toContain('Chat on Mac mini');
+    expect(fake.requests.some((r) => r.path.startsWith('/pclink/sessions/p1/transcript'))).toBe(true);
+  });
+
+  it('a message goes to the far PC through its own message route', async () => {
+    const fake = new DevicesFake({ enabled: true, devices: [MAC_MINI], panes: { [NODE_MAC]: MAC_PANES }, chats: { p1: [] } });
+    await mount(deviceOf(fake), fake);
+    const box = host.querySelector<HTMLTextAreaElement>('[data-testid="chat-composer"] textarea')!;
+    expect(box).not.toBeNull();
+    await act(async () => {
+      Object.getOwnPropertyDescriptor(HTMLTextAreaElement.prototype, 'value')!.set!.call(box, 'hello there');
+      box.dispatchEvent(new Event('input', { bubbles: true }));
     });
-    expect(unsized.map((svg) => svg.outerHTML.slice(0, 90))).toEqual([]);
+    await act(async () => {
+      box.form!.requestSubmit();
+    });
+    await settle(10);
+    expect(fake.requests.some((r) => r.method === 'POST' && /^\/pclink\/sessions\/p1\/messages/.test(r.path))).toBe(true);
+  });
+
+  it('a PC that lets this one only watch says plainly what works in place of the message box', async () => {
+    const fake = new DevicesFake({ enabled: true, devices: [{ ...MAC_MINI, level: 'watch' }], panes: { [NODE_MAC]: MAC_PANES }, chats: { p1: phoneRenderReply(Date.now()).items } });
+    await mount(deviceOf(fake), fake);
+    expect(host.querySelector('[data-testid="chat-composer"]')).toBeNull();
+    expect(host.querySelector('[data-testid="remote-watch-only"]')!.textContent).toBe('You can watch here. Sending a message to Mac mini needs Answer there.');
+    expect(host.querySelector('[data-testid="session-chat"]')).not.toBeNull();
+  });
+  it('has the normal pane header: the agent name, a small tag with the PC, the project; no Model-not-known line and no Open folder button in the corner', async () => {
+    const fake = new DevicesFake({ enabled: true, devices: [MAC_MINI], panes: { [NODE_MAC]: MAC_PANES }, chats: { p1: phoneRenderReply(Date.now()).items } });
+    await act(async () => root.render(<RemotePaneView device={deviceOf(fake)} row={{ ...row, cwd: '/Users/me/app' }} api={fake} />));
+    await settle(10);
+    const head = host.querySelector('[data-testid="remote-head"]')!;
+    expect(head.querySelector('[data-testid="remote-name"]')!.textContent).toBe('Build the .dmg');
+    expect(head.querySelector('[data-testid="remote-tag"]')!.textContent).toBe('Mac mini');
+    expect(head.querySelector('[data-testid="open-remote-folder"]')!.textContent).toBe('app');
+    // No Summary/Normal/Verbose switch in a chat on another PC.
+    expect(head.querySelector('.dev-remote-slot')!.textContent).not.toContain('Summary');
+    expect(host.textContent).not.toContain('Model not known yet');
+    expect(host.textContent).not.toContain('Open folder on');
+    expect(host.textContent).not.toContain('on Mac mini');
+  });
+
+  it('is drawn by the same chat view as a chat on this PC, with the device tag and no View switch', async () => {
+    const fake = new DevicesFake({ enabled: true, devices: [MAC_MINI], panes: { [NODE_MAC]: MAC_PANES }, chats: { p1: phoneRenderReply(Date.now()).items } });
+    await mount(deviceOf(fake), fake);
+    const chat = host.querySelector('[data-testid="session-chat"]')!;
+    expect(chat).not.toBeNull();
+    expect(chat.className).toContain('ck-chat');
+    expect(chat.getAttribute('data-view')).toBe('normal');
+    expect(host.querySelector('[data-testid="remote-tag"]')!.textContent).toBe('Mac mini');
+    expect(host.querySelector('.ck-chat-mode-pill')).toBeNull();
+    expect(host.textContent).not.toContain('View:');
   });
 });

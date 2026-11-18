@@ -9,7 +9,7 @@ import { DevicesFake } from '../../../dev/devices-fixtures';
 import { SshFake } from '../../../dev/ssh-fixtures';
 import type { CockpitApi } from '../../../hooks/useCockpit';
 import type { WslApi } from '../../../lib/wsl';
-import { click, settle } from '../../settings/test-utils';
+import { click, settle, type as typeInto } from '../../settings/test-utils';
 import { NewAgentHost } from './NewAgentHost';
 
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
@@ -83,7 +83,7 @@ function fakeWsl(spawned: unknown[][]): WslApi {
 }
 
 describe('New agent page: the sandbox on this PC', () => {
-  it('names the sandbox in the pill, keeps the form in its own column, and starts the agent in the sandbox', async () => {
+  it('names the sandbox in the pill, keeps the normal composer, and starts the agent in the sandbox', async () => {
     const spawned: unknown[][] = [];
     const started: string[] = [];
     const devices = new DevicesFake({ enabled: true, devices: [] });
@@ -94,22 +94,21 @@ describe('New agent page: the sandbox on this PC', () => {
     await click(q('[data-testid="where-pill"]'));
     await settle(4);
     const rows = [...q('.dev-where-menu')!.querySelectorAll('.dev-where-row > span')].map((s) => s.textContent);
-    expect(rows).toEqual(['This PC', 'Ubuntu', 'pm-sbx-main', 'Add a device…']);
+    expect(rows).toEqual(['Desk-PC · This PC', 'Ubuntu', 'Sandbox']);
     await click(q('[data-testid="where-wsl:pm-sbx-main"]'));
     await settle(6);
 
     // The device name is the one that was picked (not "Ubuntu", not "This PC").
     const pill = q('[data-testid="where-pill"]')!;
-    expect(pill.textContent).toContain('pm-sbx-main');
+    expect(pill.textContent).toContain('Sandbox');
     expect(pill.textContent).not.toContain('Ubuntu');
-    // The form sits in the page's own column (padding, a maximum width), so Start can never be pushed to the window edge.
-    const page = q('[data-testid="place-page"]')!;
-    expect(page).not.toBeNull();
-    expect(page.contains(q('[data-testid="place-start"]'))).toBe(true);
-    expect(page.contains(pill)).toBe(true);
-
-    await click(q('[data-testid="place-start"]'));
-    await settle(4);
+    // The normal composer stays (no old form); the project chip is the folder, and Start starts the agent in the sandbox.
+    expect(q('[data-testid="wsl-panel"]')).toBeNull();
+    expect(q('[data-testid="place-start"]')).toBeNull();
+    expect(q('textarea.ck-na-input')).not.toBeNull();
+    await typeInto(q<HTMLTextAreaElement>('textarea.ck-na-input')!, 'hello');
+    await click(q('button.ck-na-send'));
+    await settle(6);
     expect(spawned).toEqual([[{ agent_type: 'claude' }, 'pm-sbx-main']]);
     expect(started).toEqual(['wsl-pane-1']);
   });

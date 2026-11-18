@@ -37,7 +37,7 @@ export const teamPage: Partial<Record<EnglishKey, string>> = {
   'teamHub.empty.body': '看看誰在線、互相借用量、交付任務，讓每台電腦都有相同的技能和工具。',
   'teamHub.empty.start': '建立團隊',
   'teamHub.empty.join': '我有邀請',
-  'teamHub.empty.solo': '只有你一個人？你仍然可以在「我的電腦」連結自己的電腦。',
+  'teamHub.empty.solo': '只有你一個人？你仍然可以在「連結」的「裝置」分頁連結自己的電腦。',
   'teamHub.empty.waiting': '正在等團隊擁有者讓你加入。',
 
   'teamHub.presence.here': '在線',

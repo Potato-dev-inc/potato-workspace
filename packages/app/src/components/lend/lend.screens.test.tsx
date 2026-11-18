@@ -287,44 +287,6 @@ describe('Connect > Lending (the Connect page of the separate Settings window)',
     }
   };
 
-  /** Waits until the Lend page's status row is drawn. */
-  const waitStatus = async () => {
-    for (let i = 0; i < 200 && !main().querySelector('[data-testid="lend-status"]'); i++) {
-      await act(async () => void (await new Promise((r) => setTimeout(r, 25))));
-    }
-    return main().querySelector<HTMLElement>('[data-testid="lend-status"]')!;
-  };
-
-  it('puts the switch at the top: "Lending from this PC: On · Change", and Change opens that switch', async () => {
-    await mount(true, { initialTab: 'connect', initialConnectTab: 'lending' });
-    const row = await waitStatus();
-    expect(row.getAttribute('data-state')).toBe('on');
-    expect(row.textContent).toContain('Lending from this PC: On');
-    const opened: string[] = [];
-    const listen = (e: Event) => opened.push((e as CustomEvent<{ tab: string }>).detail.tab);
-    window.addEventListener('pm:open-settings', listen);
-    await click(buttonByText(row, 'Change'));
-    window.removeEventListener('pm:open-settings', listen);
-    expect(opened).toEqual(['lend-labs']);
-  });
-
-  it('says Off, with the same way to the switch, when the backend reports lending off', async () => {
-    lendIs(null);
-    const settings: SettingsApi = {
-      load: async () => ({ ...BASE_SETTINGS, lend_enabled: true }),
-      patch: async () => ({ ...BASE_SETTINGS }),
-      findBridgeUrl: async () => null,
-      subscribe: () => () => {},
-    };
-    await act(async () => root.render(<SettingsPanel open withConnect api={settings} initialTab="connect" initialConnectTab="lending" />));
-    await settle(6);
-    const row = await waitStatus();
-    expect(row.getAttribute('data-state')).toBe('off');
-    expect(row.textContent).toContain('Lending from this PC: Off');
-    expect(buttonByText(row, 'Change')).toBeTruthy();
-    // No profiles to set up while it is off: one line says what turning it on gives.
-    expect(main().textContent).toContain('Turn it on to lend, and to borrow from another PC.');
-  });
   const sheetEl = () => main().querySelector<HTMLElement>('.lend-sheet') ?? document.querySelector<HTMLElement>('.lend-sheet')!;
   const sheetInput = (label: string) => sheetEl().querySelector<HTMLInputElement>(`input[aria-label="${label}"]`)!;
   const pickClaude = async () => {
@@ -532,7 +494,7 @@ describe('Pane header: time-left chip', () => {
     const chip = host.querySelector<HTMLButtonElement>('[data-testid="lend-chip"]')!;
     expect(chip.dataset.problem).toBe('true');
     await click(chip);
-    expect(host.querySelector('[data-testid="lend-usage"]')!.textContent).toBe('Used so far: 3 requests · 5.3k tokens');
+    expect(host.querySelector('[data-testid="lend-usage"]')!.textContent).toBe('Used so far: 3 requests');
     expect(host.querySelector('[data-testid="lend-problem"]')!.textContent).toBe("The lender's sign-in expired. Ask them to sign in again.");
   });
 

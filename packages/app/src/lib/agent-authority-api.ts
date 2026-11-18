@@ -8,6 +8,8 @@ export interface AgentAuthority {
   ask_before_agent_control: boolean;
   /** B: agents may merge a separate copy. */
   agents_may_merge: boolean;
+  /** C: ask before an agent on another harness starts helpers (default off). */
+  ask_before_helpers_start: boolean;
 }
 
 export type AuditKind = 'approval' | 'take_over' | 'consent' | 'pairing' | 'shell_exec' | 'gate_dismissal' | 'merge' | 'setting' | 'team.sent' | 'team.received' | 'team.action' | 'team.joined' | 'team.role_changed' | 'team.key_rotated';
@@ -37,7 +39,7 @@ async function call<T>(command: string, args?: Record<string, unknown>): Promise
 
 export const agentAuthorityApi = {
   get: () => call<AgentAuthority>('agent_authority_get'),
-  set: (patch: Partial<AgentAuthority>) => call<AgentAuthority>('agent_authority_set', { askBeforeAgentControl: patch.ask_before_agent_control, agentsMayMerge: patch.agents_may_merge }),
+  set: (patch: Partial<AgentAuthority>) => call<AgentAuthority>('agent_authority_set', { askBeforeAgentControl: patch.ask_before_agent_control, agentsMayMerge: patch.agents_may_merge, askBeforeHelpersStart: patch.ask_before_helpers_start }),
   auditRecent: (limit = 50) => call<AuditEntry[]>('audit_recent', { limit }),
   auditVerify: () => call<AuditVerify>('audit_verify'),
 };

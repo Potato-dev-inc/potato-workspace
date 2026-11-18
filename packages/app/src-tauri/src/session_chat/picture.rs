@@ -144,8 +144,17 @@ fn plain_path(text: &str) -> Result<String, Refused> {
     }
     let lower = text.to_lowercase();
     if lower.starts_with("file:") {
-        let rest = text[5..].trim_start_matches('/');
+        let after = &text[5..];
+        // `file://host/share/x.png` and `file:////host/share/x.png` name a network share: refused before anything is decoded or opened.
+        if (after.starts_with("//") && !after.starts_with("///")) || after.starts_with("////") {
+            return Err(NOT_HERE);
+        }
+        let rest = after.trim_start_matches('/');
         let decoded = percent_decode(rest).ok_or(NOT_HERE)?;
+        // `file:%5C%5Chost%5Cshare%5Cx.png` decodes to a share by another spelling.
+        if is_network_path(&decoded) {
+            return Err(NOT_HERE);
+        }
         // `file:///C:/x` is `C:/x`; on a system that has no drive letters the leading slash is put back.
         return Ok(if cfg!(windows) { decoded } else { format!("/{decoded}") });
     }
@@ -153,7 +162,47 @@ fn plain_path(text: &str) -> Result<String, Refused> {
     if web.iter().any(|prefix| lower.starts_with(prefix)) {
         return Err(NOT_HERE);
     }
+    if is_network_path(text) {
+        return Err(NOT_HERE);
+    }
     Ok(text.to_string())
+}
+
+/// A network share or a Windows device path in either slash (two slashes or backslashes in a row, `\\?\`, `\\.\`), also after a
+/// percent-decode.
+fn is_network_path(text: &str) -> bool {
+    let t = text.trim_start();
+    let mut chars = t.chars();
+    let (a, b) = (chars.next(), chars.next());
+    let slash = |c: Option<char>| matches!(c, Some('/') | Some('\\'));
+    (slash(a) && slash(b)) || percent_decode(t).is_some_and(|d| d != t && is_network_path(&d))
+}
+
+/// The path with `.` and `..` resolved by its words alone: no disk is touched.
+fn lexical(path: &Path) -> Vec<String> {
+    let mut out: Vec<String> = Vec::new();
+    for part in path.components() {
+        match part {
+            std::path::Component::ParentDir => {
+                out.pop();
+            }
+            std::path::Component::CurDir => {}
+            other => {
+                let word = other.as_os_str().to_string_lossy().replace('\\', "/");
+                out.push(if cfg!(windows) { word.to_lowercase() } else { word });
+            }
+        }
+    }
+    out
+}
+
+/// Whether the path lies under one of the roots by its words alone (a root as given, and as the disk names it).
+fn lexically_inside(path: &Path, roots: &[PathBuf]) -> bool {
+    let target = lexical(path);
+    roots.iter().flat_map(|root| [Some(root.clone()), std::fs::canonicalize(root).ok()]).flatten().any(|root| {
+        let base = lexical(&root);
+        !base.is_empty() && target.starts_with(&base)
+    })
 }
 
 /// Reads the picture at `path_text` for a chat whose project folder is `cwd`, if it is inside one of `roots`.
@@ -162,6 +211,10 @@ pub fn read(path_text: &str, cwd: &str, roots: &[PathBuf], max_bytes: u64) -> Re
     let given = PathBuf::from(&plain);
     let absolute = if given.is_absolute() { given } else { Path::new(cwd).join(given) };
     mime_of(&absolute).ok_or(BAD_TYPE)?;
+    // First by words alone, before the disk is asked anything about the file: not under the project folder is not here.
+    if !lexically_inside(&absolute, roots) {
+        return Err(NOT_HERE);
+    }
     // Through every link and `..`: what is left is where the file really is.
     let real = std::fs::canonicalize(&absolute).map_err(|_| NOT_HERE)?;
     let inside = roots.iter().filter_map(|root| std::fs::canonicalize(root).ok()).any(|root| real.starts_with(&root));

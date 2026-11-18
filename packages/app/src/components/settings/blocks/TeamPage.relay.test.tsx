@@ -102,7 +102,7 @@ describe('Start a team with one relay', () => {
     expect(hasText(host, 'Use my relay (pm-relay.maya.workers.dev)')).toBe(true);
     expect(hasText(host, 'Recommended')).toBe(true);
     expect(hasText(host, 'No Cloudflare token needed')).toBe(true);
-    expect(buttons()).not.toContain('Set up my relay');
+    expect(buttons()).not.toContain('Make it work anywhere');
     expect(buttons()).not.toContain('Create team relay'); // the token way is folded away
     const create = host.querySelector<HTMLButtonElement>('[data-testid="relay-use"] > button')!;
     expect(create.disabled).toBe(true); // no team name yet
@@ -141,7 +141,7 @@ describe('Start a team with one relay', () => {
     expect(hasText(host, 'Recommended')).toBe(true);
     expect(hasText(host, 'you only do this once')).toBe(true);
     expect(buttons()).not.toContain('Create team relay');
-    await click(buttonByText(host, 'Set up my relay'));
+    await click(buttonByText(host, 'Make it work anywhere'));
     await settle(5);
     // The same one-button setup as the phone's.
     expect(document.querySelector('[data-testid="relay-sheet"]')).not.toBeNull();
@@ -214,6 +214,6 @@ describe('Start a team with one relay', () => {
     root = createRoot(host);
     await openStart({ relay: null });
     expect(hasText(host, '設定我的中繼站')).toBe(true);
-    expect(hasText(host, 'Set up my relay')).toBe(false);
+    expect(hasText(host, 'Make it work anywhere')).toBe(false);
   });
 });

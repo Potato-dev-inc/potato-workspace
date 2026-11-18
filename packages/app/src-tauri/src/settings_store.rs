@@ -214,8 +214,9 @@ pub fn default_public_settings() -> Value {
         "workflow_reply_style": "translator",
         // Fixed phone address (Labs): an address from the third-party OpenTunnel relay. Off until chosen. Rust: mobile_tunnel/opentunnel.
         "opentunnel_stable_link": false,
-        // Far-away PCs (Labs): pair a PC that is not on your network through your own relay. Off until chosen. Rust: p2p.
-        "far_pcs_enabled": false,
+        // PCs meet through your own relay (Connect > My PCs). On by default since Connect v2 (WP5); it only acts when the person has a
+        // relay and PC pairing (devices_enabled) is on. A profile that saved an explicit off keeps it. Rust: p2p.
+        "far_pcs_enabled": true,
         // The version whose small update failed; it takes the full package from then on. Written by the app, empty when none.
         "app_only_failed_for": "",
     })
@@ -431,6 +432,17 @@ mod tests {
         assert!(crate::acp::labs_on(&off), "chat stays on");
         assert!(crate::acp::chat_enabled());
         assert!(crate::acp::labs_on(&untouched));
+    }
+
+    #[test]
+    fn pcs_meet_through_my_relay_by_default_and_a_saved_off_stays_off_and_it_is_a_dev_labs_key() {
+        assert_eq!(default_public_settings()["far_pcs_enabled"], true);
+        let untouched = public_settings_from_store_file(&json!({"settings": {"theme": "dark"}}));
+        assert_eq!(untouched["far_pcs_enabled"], true);
+        let off = public_settings_from_store_file(&json!({"settings": {"far_pcs_enabled": false}}));
+        assert_eq!(off["far_pcs_enabled"], false);
+        assert!(DEV_LABS_KEYS.contains(&"far_pcs_enabled"), "a development build shows it as on");
+        assert!(PATCHABLE_KEYS.contains(&"far_pcs_enabled"));
     }
 
     #[test]
@@ -710,5 +722,38 @@ mod agent_default_models_tests {
         assert_eq!(merge_public_settings(&json!({ "orchestrator_backend": "api" }), &json!({}))["agent_default_models"], json!({}));
         let merged = merge_public_settings(&json!({}), &json!({ "agent_default_models": { "claude": "sonnet" } }));
         assert_eq!(merged["agent_default_models"]["claude"], json!("sonnet"));
+    }
+}
+
+#[cfg(test)]
+mod my_pcs_open_tests {
+    use super::{default_public_settings, merge_public_settings, with_dev_labs, DEV_LABS_KEYS, PATCHABLE_KEYS};
+    use serde_json::json;
+
+    /// "Let my other PCs open this PC" is a per-PC security choice. It is NOT one of the settings a paired phone (`PATCH /settings` on the
+    /// bridge), a local program or an agent's config plan can patch (like the agent-authority switches): the app window sets it through
+    /// a guarded command into its own file. It is not a Labs switch either, so a development build never turns it on.
+    #[test]
+    fn the_tick_cannot_be_patched_over_the_bridge_or_by_a_config_plan_and_is_not_a_labs_switch() {
+        assert!(!PATCHABLE_KEYS.contains(&"pcs_open_from_account"));
+        assert!(!DEV_LABS_KEYS.contains(&"pcs_open_from_account"));
+        assert!(default_public_settings().get("pcs_open_from_account").is_none());
+        // The merge the bridge's PATCH uses drops it, whether it is true or any other value.
+        let merged = merge_public_settings(&default_public_settings(), &json!({ "pcs_open_from_account": true, "far_pcs_enabled": false }));
+        assert!(merged.get("pcs_open_from_account").is_none(), "{merged}");
+        assert_eq!(merged["far_pcs_enabled"], json!(false), "the rest of the patch still applies");
+        assert!(with_dev_labs(&default_public_settings(), true).get("pcs_open_from_account").is_none());
+    }
+
+    /// The Labs switches the feature stands on are registered (a development build shows them on) and start off in a release.
+    #[test]
+    fn the_labs_switches_it_stands_on_are_registered() {
+        for key in ["devices_enabled", "account_enabled", "far_pcs_enabled"] {
+            assert!(DEV_LABS_KEYS.contains(&key), "{key}");
+            assert!(PATCHABLE_KEYS.contains(&key), "{key}");
+            assert_eq!(with_dev_labs(&default_public_settings(), true)[key], json!(true), "{key}");
+        }
+        assert_eq!(default_public_settings()["devices_enabled"], json!(false));
+        assert_eq!(default_public_settings()["account_enabled"], json!(false));
     }
 }

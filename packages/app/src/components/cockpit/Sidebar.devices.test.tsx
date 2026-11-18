@@ -7,11 +7,13 @@ import { act } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { DevicesFake, MAC_MINI, MAC_PANES, NODE_MAC, WORK_LAPTOP } from '../../dev/devices-fixtures';
+import { phoneRenderReply } from '../../dev/phone-render-fixture';
 import type { CockpitApi } from '../../hooks/useCockpit';
 import type { ShipApi } from '../../lib/ship-api';
 import { RemotePaneView } from '../devices/RemotePaneView';
 import { useDeviceGroups, type RemoteRow } from '../devices/useDeviceGroups';
 import { Sidebar } from './Sidebar';
+import { FAR_LEVEL_POLL_MS } from '../../lib/runtime/farLevel';
 
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 (globalThis as { ResizeObserver?: unknown }).ResizeObserver ??= class {
@@ -89,12 +91,17 @@ async function mount(fake: DevicesFake) {
 const seeded = () => new DevicesFake({ enabled: true, devices: [MAC_MINI, WORK_LAPTOP], panes: { [NODE_MAC]: MAC_PANES } });
 
 describe('sidebar: device groups', () => {
-  it('shows a Mac mini group with its rows, a device mark, and This PC above the local rows', async () => {
+  it('shows a Mac mini group with its rows, a device mark', async () => {
     await mount(seeded());
-    expect(group()!.textContent).toContain('Mac mini · 2');
+    expect(group()!.textContent).toContain('Mac mini');
     expect(rows().map((r) => r.textContent)).toEqual([expect.stringContaining('Build the .dmg'), expect.stringContaining('Terminal')]);
-    expect(rows()[0]!.querySelector('.dev-mark')!.textContent).toBe('Mac mini');
     expect(host.querySelector('[data-testid="this-pc-head"]')!.textContent).toBe('This PC');
+    expect(group()!.querySelector('.dev-group-head')!.textContent).toBe('Mac mini');
+    expect(group()!.querySelector('.ck-caption')!.textContent).toBe('Projects');
+    // One tag only: the section heading names the PC. The rows are the normal row components, grouped under a project header like this PC's.
+    expect(rows()[0]!.querySelector('.dev-mark')).toBeNull();
+    expect(rows()[0]!.classList.contains('ck-row')).toBe(true);
+    expect(group()!.querySelector('.ck-proj .ck-proj-head')).not.toBeNull();
     // A device that is offline and never showed anything has no group.
     expect(host.querySelector(`[data-testid="device-group-${WORK_LAPTOP.node}"]`)).toBeNull();
     // Remote rows use the namespaced id.
@@ -112,7 +119,8 @@ describe('sidebar: device groups', () => {
     expect(g.querySelector('.dev-word')!.textContent).toBe('offline');
     expect(g.textContent).toContain('Last seen 14:02');
     expect(rows()).toHaveLength(2);
-    expect(rows().every((r) => r.disabled)).toBe(true);
+    // The last rows stay openable (the last transcript is read-only).
+    expect(rows().every((r) => !r.disabled)).toBe(true);
     // The link comes back: the rows are live again.
     await act(async () => fake.setDevice(NODE_MAC, { state: 'online', path: 'direct' }));
     await flush();
@@ -141,32 +149,43 @@ describe('sidebar: device groups', () => {
   });
 
   it('opens the terminal of the other device from its row, and types into it when the device allows', async () => {
+    vi.useFakeTimers({ toFake: ['setInterval', 'clearInterval', 'setTimeout', 'clearTimeout'] });
+    try {
+      await terminalStory();
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  async function terminalStory() {
     const fake = seeded();
     await mount(fake);
     await act(async () => rows()[1]!.click());
     await flush();
-    expect(host.querySelector('[data-testid="remote-pane"]')!.textContent).toContain('Terminal on Mac mini');
+    expect(host.querySelector('[data-testid="remote-pane"]')).not.toBeNull();
     // The screen is live: the far side pushes it, nothing is polled.
     expect(fake.screenStarts).toEqual([`${NODE_MAC}:p2`]);
     await act(async () => fake.emitScreen({ node: NODE_MAC, pane_id: 'p2', content: '$ make dmg' }));
     expect(host.querySelector('[data-testid="remote-screen"]')!.textContent).toContain('make dmg');
-    expect(fake.requests.some((r) => r.path.endsWith('/snapshot'))).toBe(false);
+    expect(fake.requests.some((r) => r.path.endsWith('/screen'))).toBe(false);
     const input = host.querySelector<HTMLInputElement>('[data-testid="remote-input"]')!;
     expect(input).not.toBeNull();
-    // A device that lets this PC only watch and answer gets no typing line.
-    await act(async () => fake.setDevice(NODE_MAC, { level: 'watch' }));
+    // The far PC takes the right away (it is its to say: asked again every few seconds): no typing line any more.
+    fake.farLevels[NODE_MAC] = 'answer';
+    await act(async () => vi.advanceTimersByTimeAsync(FAR_LEVEL_POLL_MS * 1.3 + 100));
     await flush();
     expect(host.querySelector('[data-testid="remote-input"]')).toBeNull();
-    expect(host.querySelector('[data-testid="remote-pane"]')!.textContent).toContain('lets this PC watch and answer only');
-  });
+    expect(host.querySelector('[data-testid="remote-pane"]')).not.toBeNull();
+  }
 
-  it('opens the chat of the other device in the chat view, with the device named in the header', async () => {
+  it('opens the chat of the other device in the normal chat view', async () => {
     const fake = seeded();
     await mount(fake);
     await act(async () => rows()[0]!.click());
     await flush();
-    expect(host.querySelector('[data-testid="remote-pane"]')!.textContent).toContain('Chat on Mac mini');
-    expect(fake.requests.some((r) => r.path.startsWith('/panes/p1/chat'))).toBe(true);
+    expect(host.querySelector('[data-testid="session-chat"]')).not.toBeNull();
+    expect(host.querySelector('.ph')).toBeNull();
+    expect(fake.requests.some((r) => r.path.startsWith('/pclink/sessions/p1/transcript'))).toBe(true);
   });
 
   it('says asleep, closed and offline in the group, each with its exact words, and Try again asks again', async () => {
@@ -176,7 +195,8 @@ describe('sidebar: device groups', () => {
     await flush();
     expect(group()!.querySelector('.dev-word')!.textContent).toBe('asleep');
     expect(group()!.querySelector('[data-notice="state"]')!.textContent).toContain('Asleep or off.');
-    expect(rows().every((r) => r.disabled)).toBe(true);
+    // The last rows stay openable (the last transcript is read-only).
+    expect(rows().every((r) => !r.disabled)).toBe(true);
     const before = fake.stateCalls;
     await act(async () => group()!.querySelector<HTMLButtonElement>('[data-testid="try-again"]')!.click());
     await flush();
@@ -218,5 +238,95 @@ describe('sidebar: device groups', () => {
     await mount(new DevicesFake({ enabled: false, devices: [MAC_MINI], panes: { [NODE_MAC]: MAC_PANES } }));
     expect(host.querySelector('[data-testid^="device-group-"]')).toBeNull();
     expect(host.querySelector('[data-testid="this-pc-head"]')).toBeNull();
+  });
+});
+
+describe('sidebar: another PC is a section like This PC', () => {
+  const kids = () =>
+    new DevicesFake({
+      enabled: true,
+      devices: [MAC_MINI],
+      panes: { [NODE_MAC]: [...MAC_PANES, { id: 'p3', agent_type: 'claude', cwd: '/Users/me/app', status: 'error', title: 'Minion', lane: 'acp', parent_pane_id: 'p1' }] },
+    });
+
+  it('uses the same agent row component as a local row, with a nested helper under its starter behind the same "N helpers" chip, and an error pill', async () => {
+    await mount(kids());
+    const g = group()!;
+    const all = [...g.querySelectorAll<HTMLElement>('[data-pane-row]')];
+    expect(all).toHaveLength(3);
+    for (const r of all) {
+      expect(r.classList.contains('ck-row')).toBe(true);
+      expect(r.classList.contains('ck-row--slim')).toBe(true);
+      expect(r.querySelector('.ck-row-glyph .ck-mark')).not.toBeNull();
+    }
+    expect(g.querySelector('.ck-node > .ck-helpers .ck-helper-chip')!.textContent).toBe('1 agent');
+    const minion = g.querySelector<HTMLElement>(`[data-pane-row="dev:${NODE_MAC}:p3"]`)!;
+    expect(minion.closest('.ck-helpers')).not.toBeNull();
+    expect(minion.querySelector('[data-testid="row-spinoff-mark"]')).not.toBeNull();
+    expect(minion.querySelector('.ck-row-pill--error')).not.toBeNull();
+    // Row actions this PC cannot do on another PC's agent are disabled with a plain reason.
+    const more = g.querySelector<HTMLButtonElement>('.ck-row-more')!;
+    expect(more.disabled).toBe(true);
+    expect(more.title).toContain('not available');
+  });
+
+  it('remembers a folded project and a folded helper group', async () => {
+    await mount(kids());
+    await act(async () => group()!.querySelector<HTMLButtonElement>('.ck-helper-chip')!.click());
+    expect(group()!.querySelector(`[data-pane-row="dev:${NODE_MAC}:p3"]`)).toBeNull();
+    await act(async () => group()!.querySelector<HTMLButtonElement>('.ck-proj-head button')!.click());
+    expect(rows()).toHaveLength(0);
+    await act(async () => root.unmount());
+    root = createRoot(host);
+    await mount(kids());
+    expect(rows()).toHaveLength(0);
+    expect(window.localStorage.getItem('pm.devices.foldedProjects')).toContain(NODE_MAC);
+  });
+
+  it('an offline PC keeps its last rows openable, and its last transcript is readable and read-only', async () => {
+    const fake = new DevicesFake({ enabled: true, devices: [MAC_MINI], panes: { [NODE_MAC]: MAC_PANES }, chats: { p1: phoneRenderReply(Date.now()).items } });
+    await mount(fake);
+    await act(async () => rows()[0]!.click());
+    await flush(12);
+    await act(async () => new Promise((r) => setTimeout(r, 2100)));
+    await flush();
+    expect(host.querySelector('[data-testid="session-chat"]')).not.toBeNull();
+    expect(window.localStorage.getItem(`pm.remoteChat.device:${NODE_MAC}:p1`)).not.toBeNull();
+    await act(async () => fake.setDevice(NODE_MAC, { state: 'offline', path: null }));
+    await flush();
+    expect(rows().every((r) => !r.disabled)).toBe(true);
+    // Opened while the PC is away: the kept transcript shows, and there is no message box.
+    await act(async () => rows()[1]!.click());
+    await act(async () => rows()[0]!.click());
+    await flush(12);
+    expect(host.querySelector('[data-testid="session-chat"]')).not.toBeNull();
+    expect(host.querySelector('[data-testid="chat-composer"]')).toBeNull();
+    expect(host.textContent).toContain('create a potato workspace overview page');
+  });
+
+  it('keys no local state with the far pane id: the chat and its box use device:<node>:<pane>', async () => {
+    await mount(seeded());
+    await act(async () => rows()[0]!.click());
+    await flush(12);
+    const box = host.querySelector<HTMLTextAreaElement>('[data-testid="chat-composer"] textarea')!;
+    await act(async () => {
+      Object.getOwnPropertyDescriptor(HTMLTextAreaElement.prototype, 'value')!.set!.call(box, 'half written');
+      box.dispatchEvent(new Event('input', { bubbles: true }));
+    });
+    await act(async () => new Promise((r) => setTimeout(r, 700)));
+    // The draft is saved in one JSON map: it holds the key with the PC in it, and never the bare far pane id.
+    const drafts = JSON.parse(window.localStorage.getItem('pm.composerDrafts') ?? '{}') as Record<string, { text: string }>;
+    expect(drafts[`device:${NODE_MAC}:p1`]?.text).toBe('half written');
+    expect(Object.keys(drafts)).not.toContain('p1');
+    const keys = Object.keys(window.localStorage);
+    expect(keys.some((k) => k.includes('p1') && !k.includes(`device:${NODE_MAC}:p1`) && /draft|plan|view/i.test(k))).toBe(false);
+  });
+
+  it('a PC that lets this one only watch says plainly what works', async () => {
+    const fake = new DevicesFake({ enabled: true, devices: [{ ...MAC_MINI, level: 'watch' }], panes: { [NODE_MAC]: MAC_PANES }, chats: { p1: phoneRenderReply(Date.now()).items } });
+    await mount(fake);
+    await act(async () => rows()[0]!.click());
+    await flush(12);
+    expect(host.querySelector('[data-testid="remote-watch-only"]')!.textContent).toBe('You can watch here. Sending a message to Mac mini needs Answer there.');
   });
 });

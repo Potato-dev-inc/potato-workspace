@@ -122,7 +122,7 @@ describe('palette commands for features that hide', () => {
   });
 
   it('the phone and team commands land on the Connect page: Settings has no such rows any more', () => {
-    expect(connectTabFor('pairing')).toBe('phone');
+    expect(connectTabFor('pairing')).toBe('devices');
     expect(connectTabFor('team')).toBe('team');
     expect(resolveSettingsTarget('team-page')).toBeNull();
   });

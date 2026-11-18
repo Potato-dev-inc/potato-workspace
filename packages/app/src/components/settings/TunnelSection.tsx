@@ -24,6 +24,8 @@ export interface TunnelApi {
   test: () => Promise<TunnelConnectionTest>;
   /** Delete the fixed phone address (OpenTunnel) everywhere. */
   forget?: () => Promise<TunnelStatus>;
+  /** "Temporary link" (true) or "Permanent link" (false). */
+  setTemporary?: (on: boolean) => Promise<TunnelStatus>;
 }
 
 const defaultApi: TunnelApi = {
@@ -32,6 +34,7 @@ const defaultApi: TunnelApi = {
   restart: (tryAnyway) => tauri.restartTunnel(tryAnyway),
   test: () => tauri.testTunnelConnection(),
   forget: () => tauri.forgetOpenTunnelAddress(),
+  setTemporary: (on) => tauri.setLinkTemporary(on),
 };
 
 const DOT: Record<string, string> = {

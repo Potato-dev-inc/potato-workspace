@@ -108,9 +108,9 @@ describe('New agent: Where, Linux and SSH', () => {
   it('lists This PC, the version 2 Linux distros, the paired device and the SSH machines, in that order', async () => {
     await open(new SshFake({ hosts: [BUILD_BOX] }), fakeWsl());
     const rows = [...q('.dev-where-menu')!.querySelectorAll('.dev-where-row')].map((r) => [r.querySelector('span')!.textContent, r.querySelector('small')?.textContent ?? '']);
-    expect(rows.map((r) => r[0])).toEqual(['This PC', 'Ubuntu-Test', 'Mac mini', 'Build box', 'Add a device…']);
+    expect(rows.map((r) => r[0])).toEqual(['Desk-PC · This PC', 'Ubuntu-Test', 'Mac mini', 'Build box', 'Add a PC…']);
     expect(rows[1]![1]).toBe('On this PC');
-    expect(rows[3]![1]).toBe('SSH · terminal only');
+    expect(rows[3]![1]).toBe('On this PC');
   });
 
   it('picking a distro starts the chosen agent in that distro and opens the pane', async () => {

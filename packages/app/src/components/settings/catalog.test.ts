@@ -9,7 +9,7 @@ const allRows = SECTIONS.flatMap((s) => s.rows.map((r) => ({ section: s.id, row:
 
 /** Every row id that existed before the move (115 of them, plus Add an agent and Your agents). */
 const PINNED_IDS = [
-  'account-labs', 'accounts', 'agent-browser-labs', 'companion-vault-labs', 'discord-bot-labs', 'agent-rules', 'less-motion', 'speak-results', 'strong-contrast', 'text-size', 'add-agent', 'agent-default-models', 'agent-lane', 'agent-list', 'agent-pack', 'ask-bar', 'assign-issue', 'away-minutes',
+  'account-labs', 'accounts', 'phone-devices', 'agent-browser-labs', 'companion-vault-labs', 'discord-bot-labs', 'agent-rules', 'less-motion', 'speak-results', 'strong-contrast', 'text-size', 'add-agent', 'agent-default-models', 'agent-lane', 'agent-list', 'agent-pack', 'ask-bar', 'assign-issue', 'away-minutes',
   'bridge-endpoint', 'bring-old-chats', 'budget-turns', 'project-budget', 'right-size', 'chat-addons', 'chat-search-index',
   'checkpoints', 'close-helpers-with-agent', 'close-to-tray', 'collision', 'confirm-close', 'copy-offer', 'crews-labs', 'crews-page', 'definitions', 'desktop-potato-labs', 'devices-labs', 'far-pcs-labs', 'diagnostic-file', 'dock-browser-labs',
   'discord-alerts', 'early-versions', 'handoff-mode', 'started-agents', 'helper-agents', 'helper-answers', 'helper-default-models', 'helper-tools', 'helpers-in-sidebar',
@@ -19,7 +19,7 @@ const PINNED_IDS = [
   'model-bridge', 'most-helpers-at-once', 'night-shift', 'opencode-automation', 'opencode-keys', 'opencode-model',
   'opencode-provider', 'opentunnel-labs', 'package-check', 'preload',
   'pc-notifications', 'project-folder', 'project-guide-labs', 'quiet-hours', 'red-to-green', 'remove-all-keys', 'rust-mcp', 'security-agents-merge',
-  'security-ask-before-control', 'security-recent-approvals', 'settings-file', 'settings-recovery', 'setup-check', 'shared-memory',
+  'security-ask-before-control', 'security-ask-before-helpers', 'security-recent-approvals', 'settings-file', 'settings-recovery', 'setup-check', 'shared-memory',
   'shortcut-agent-board', 'shortcut-ask-aside', 'shortcut-ask-bar', 'shortcut-focus-mode', 'shortcut-mode-toggle', 'shortcut-new-agent', 'shortcut-next-needs-me', 'shortcut-open-inbox',
   'stuck-helper-minutes', 'shortcut-palette', 'shortcut-pane-jump', 'shortcut-pane-next', 'shortcut-pane-prev', 'shortcut-remember', 'shortcut-search-chats',
   'shortcut-show-list', 'shortcut-split', 'shortcut-split-close-side', 'shortcut-split-down', 'shortcut-split-focus-down', 'shortcut-split-focus-left', 'shortcut-split-focus-right', 'shortcut-split-focus-up', 'shortcut-split-swap', 'shortcut-stop-all',
@@ -38,7 +38,7 @@ const PLACEMENT: [string, string, string[]][] = [
   ['agents', 'Where agents start', ['project-folder', 'copy-offer', 'linux']],
   ['agents', 'Moving work', ['handoff-mode', 'keep-going']],
   ['agents', 'All agents', ['show-terminals', 'preload', 'versions']],
-  ['agents', 'Rules for all agents', ['loop-guard', 'package-check', 'security-ask-before-control', 'security-agents-merge', 'agent-rules', 'security-recent-approvals', 'collision']],
+  ['agents', 'Rules for all agents', ['loop-guard', 'package-check', 'security-ask-before-control', 'security-ask-before-helpers', 'security-agents-merge', 'agent-rules', 'security-recent-approvals', 'collision']],
   ['agents', 'Limits', ['budget-turns', 'project-budget', 'right-size']],
   ['agents', 'Undo and memory', ['checkpoints', 'shared-memory']],
   ['agents', 'Your own agents', ['definitions']],

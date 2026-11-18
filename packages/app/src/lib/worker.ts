@@ -3,7 +3,7 @@
 import { invoke } from '@tauri-apps/api/core';
 import { tauri } from './tauri';
 
-export type WorkerFeature = 'team' | 'rooms' | 'stable-link' | 'invites';
+export type WorkerFeature = 'team' | 'rooms' | 'stable-link' | 'invites' | 'pair';
 
 export interface WorkerHealth {
   reachable: boolean;
@@ -44,6 +44,15 @@ export function verdictFor(health: WorkerHealth | null, feature: WorkerFeature):
 export function workersDevAddress(raw: string | null | undefined): string | null {
   const url = (raw ?? '').trim().replace(/\/+$/, '');
   return /^https:\/\/[a-z0-9-]+(\.[a-z0-9-]+)*\.workers\.dev$/i.test(url) ? url : null;
+}
+
+/**
+ * The permanent address of the person's Worker: a workers.dev name OR a domain of their own (`https://host`, no path). Used where the
+ * phone link only needs an address; features that talk to the Worker's team relay keep `workersDevAddress`.
+ */
+export function permanentAddress(raw: string | null | undefined): string | null {
+  const url = (raw ?? '').trim().replace(/\/+$/, '');
+  return /^https:\/\/[a-z0-9-]+(\.[a-z0-9-]+)+(:[0-9]{1,5})?$/i.test(url) ? url : null;
 }
 
 /** The Worker address saved for the phone link (Settings > Connect), when it is a workers.dev address. */

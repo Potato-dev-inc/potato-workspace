@@ -232,7 +232,7 @@ describe('from a remote chat', () => {
   it('Open folder replaces the chat with Files, starts at the chat folder, and Back returns', async () => {
     const fake = new DevicesFake(scenario({ files: { ...MAC_FILES, tree: { notes: MAC_FILES.tree.notes!, app: MAC_FILES.tree.app! } } }));
     await mountRemote(fake);
-    expect(text('[data-testid="open-remote-folder"]')).toBe('Open folder on Mac mini');
+    expect(q('[data-testid="open-remote-folder"]')!.getAttribute('title')).toBe('Open folder on Mac mini');
     await click(q('[data-testid="open-remote-folder"]'));
     await settle(8);
     expect(q('[data-testid="files-view"]')).not.toBeNull();

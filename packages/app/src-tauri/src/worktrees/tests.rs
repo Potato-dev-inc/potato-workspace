@@ -614,7 +614,7 @@ fn gate_repo(handle: &str) -> (Repo, String) {
 }
 
 fn b(allowed: bool) -> crate::agent_authority::config::Config {
-    crate::agent_authority::config::Config { ask_before_agent_control: false, agents_may_merge: allowed }
+    crate::agent_authority::config::Config { ask_before_agent_control: false, agents_may_merge: allowed, ask_before_helpers_start: false }
 }
 
 #[test]

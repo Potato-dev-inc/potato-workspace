@@ -18,6 +18,7 @@ import { resetUndoBar, showUndo } from './lib/undo-bar';
 import { reportProblem, resetProblems } from './lib/problems';
 import { closeSignInAgain } from './lib/agentSignIn';
 import { devicesApi } from './lib/devices';
+import { onFocusDeviceGroup } from './lib/openDevice';
 import { tauri } from './lib/tauri';
 import { deskStore, setDeskSheetOpen, NOT_AWAY, type DeskAway } from './lib/desk-away';
 import { MAC_MINI, NODE_MAC } from './dev/devices-fixtures';
@@ -108,9 +109,10 @@ vi.mock('./components/timeline/TodayPage', async () => {
 });
 
 // The devices state the (mocked) group hook reports: null is the Labs switch off.
-const dev = vi.hoisted(() => ({ view: null as null | { enabled: boolean; devices: unknown[] } }));
+const opened = vi.hoisted(() => ({ result: undefined as boolean | void }));
+const dev = vi.hoisted(() => ({ view: null as null | { enabled: boolean; devices: unknown[] }, groups: [] as unknown[] }));
 vi.mock('./components/devices/useDeviceGroups', () => ({
-  useDeviceGroups: () => ({ view: dev.view, enabled: dev.view?.enabled === true, groups: [], refresh: () => {} }),
+  useDeviceGroups: () => ({ view: dev.view, enabled: dev.view?.enabled === true, groups: dev.groups, refresh: () => {} }),
 }));
 
 vi.mock('./hooks/useCockpit', async () => {
@@ -322,7 +324,10 @@ vi.mock('./components/cockpit/routines/RoutinesPage', async () => {
 });
 vi.mock('./components/connect/ConnectPage', async () => {
   const { createElement: h } = await import('react');
-  return { ConnectPage: ({ tab }: { tab: string }) => h('div', null, `CONNECT VIEW ${tab}`) };
+  return {
+    ConnectPage: ({ tab, onOpenPc, onOpenPane }: { tab: string; onOpenPc?: (node: string) => boolean | void; onOpenPane?: (id: string) => void }) =>
+      h('div', null, `CONNECT VIEW ${tab}`, h('button', { type: 'button', onClick: () => (opened.result = onOpenPc?.('n1')) }, 'Open PC n1'), h('button', { type: 'button', onClick: () => onOpenPane?.('p2') }, 'Open SSH pane')),
+  };
 });
 vi.mock('./components/cockpit/night/MorningPage', async () => {
   const { createElement: h } = await import('react');
@@ -493,6 +498,8 @@ beforeEach(async () => {
   today.on = false;
   away.digest = null;
   dev.view = null;
+  dev.groups = [];
+  opened.result = undefined;
   comps.list = null;
   ui.spawn = null;
   chatStart.starting = null;
@@ -688,7 +695,7 @@ describe('CockpitApp main view precedence', () => {
 
   it('Connect: the sidebar row opens the page over the pane and the next pane click leaves it', () => {
     clickButton('Connect row');
-    expect(mainText()).toBe('CONNECT VIEW phone');
+    expect(mainText()).toBe('CONNECT VIEW devicesOpen PC n1Open SSH pane');
     // Layout guard: the page sits in a scroll container (jsdom has no layout, so read the rule the wrapper uses).
     const wrap = host.querySelector('main [data-testid="connect-scroll"]');
     expect(wrap?.className).toBe('ck-connect-scroll');
@@ -701,9 +708,32 @@ describe('CockpitApp main view precedence', () => {
     expect(mainText()).toBe('PANE VIEW p2');
   });
 
+  it('Connect: a terminal opened on an SSH computer leaves the Connect page and shows that pane', () => {
+    clickButton('Connect row');
+    expect(mainText()).toContain('CONNECT VIEW');
+    clickButton('Open SSH pane');
+    expect(mainText()).toBe('PANE VIEW p2');
+  });
+
+  it('Connect: Open on a PC that has a sidebar section asks the sidebar to unfold and scroll to it; a PC with none answers false', async () => {
+    const heard: string[] = [];
+    const off = onFocusDeviceGroup((n) => heard.push(n));
+    clickButton('Connect row');
+    // No section yet: the page is told false (so it shows that PC's own sheet) and the sidebar is not asked.
+    clickButton('Open PC n1');
+    expect(opened.result).toBe(false);
+    expect(heard).toEqual([]);
+    dev.groups = [{ device: { node: 'n1', name: 'Mac', state: 'online' }, rows: [] }];
+    await act(async () => root.render(createElement(CockpitApp)));
+    clickButton('Open PC n1');
+    expect(opened.result).toBe(true);
+    expect(heard).toEqual(['n1']);
+    off();
+  });
+
   it('Connect: an old Settings link for Lend opens the Lending tab, not Settings', () => {
     clickButton('Old lend link');
-    expect(mainText()).toBe('CONNECT VIEW lending');
+    expect(mainText()).toBe('CONNECT VIEW lendingOpen PC n1Open SSH pane');
     expect(cockpit.openSettings).not.toHaveBeenCalled();
   });
 
@@ -1548,7 +1578,8 @@ describe('CockpitApp: devices connected to this PC', () => {
     await show([{ ...MAC_MINI, lets_run: true, level: 'watch', connected: true }]);
     const banner = host.querySelector('main [data-testid="connected-banner"]');
     expect(banner).not.toBeNull();
-    expect(banner!.textContent).toContain('Mac mini is connected · Watch and answer');
+    expect(banner!.textContent).toContain('Mac mini is using this PC');
+    expect(banner!.textContent).not.toContain('watch and answer only');
     await act(async () => host.querySelector<HTMLButtonElement>(`[data-testid="disconnect-${NODE_MAC}"]`)!.click());
     expect(disconnect).toHaveBeenCalledWith(NODE_MAC);
     disconnect.mockRestore();

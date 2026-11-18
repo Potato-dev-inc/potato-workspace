@@ -112,8 +112,18 @@ export function deepLink(code: string, host: string): string {
   return `potato-workspace://join/${code}?w=${encodeURIComponent(host)}`;
 }
 
-/** The page behind the link. No script, no external asset, and it never burns the code. */
-export function joinPage(code: string, host: string, peek: Peek, downloadUrl: string | undefined): Response {
+/** The one fixed script on the page. The CSP allows exactly this text by its hash, so no 'unsafe-inline' for scripts. */
+const AUTO_TRY = `(function(){try{var a=document.getElementById("go");setTimeout(function(){location.href=a.href;setTimeout(function(){document.getElementById("tried").hidden=false},1500)},300)}catch(e){}})()`;
+
+async function sha256b64(text: string): Promise<string> {
+  const digest = new Uint8Array(await crypto.subtle.digest("SHA-256", new TextEncoder().encode(text)));
+  let bin = "";
+  for (const b of digest) bin += String.fromCharCode(b);
+  return btoa(bin);
+}
+
+/** The page behind the link. One fixed inline script (the auto-try), no external asset, and it never burns the code. */
+export async function joinPage(code: string, host: string, peek: Peek, downloadUrl: string | undefined): Promise<Response> {
   const open = peek.state === "open";
   const team = open ? escapeHtml(peek.team_name || "a team") : "";
   const inviter = open && peek.inviter ? escapeHtml(peek.inviter) : "";
@@ -124,18 +134,24 @@ export function joinPage(code: string, host: string, peek: Peek, downloadUrl: st
       : peek.state === "expired"
         ? "This invite ran out. Ask for a new one."
         : "This invite link is not valid. Ask for a new one.";
+  const link = escapeHtml(deepLink(code, host));
   const body = open
     ? `<h1>Join ${team} in Potato Workspace</h1>
 <p>${inviter ? `${inviter} invited you.` : "You were invited."} The link works once.</p>
-<p><a class="go" href="${escapeHtml(deepLink(code, host))}">Open the app</a></p>
-<p class="sub">No app yet? <a href="${download}">Download Potato Workspace</a>, then open this link again.</p>
+<p><a class="go" id="go" href="${link}">Open in Potato Workspace</a></p>
+<p class="sub" id="tried" hidden>Nothing happened? Press the button again.</p>
+<p class="sub">Don't have the app? <a href="${download}">Get it</a>, then open this link again.</p>
 <p class="sub">Joining shares your name and what you work on with the team. Your team owner still has to say yes.</p>`
     : `<h1>${dead}</h1>`;
+  // One automatic try, so the app opens without a second click. The script is fixed text: nothing from the
+  // link or the record is ever put inside it (the address is read from the button).
+  const script = open ? `<script>${AUTO_TRY}</script>` : "";
+  const scriptSrc = open ? `'sha256-${await sha256b64(AUTO_TRY)}'` : "'none'";
   const html = `<!doctype html>
 <html lang="en"><head><meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <meta name="robots" content="noindex,nofollow">
-<title>Join a team</title>
+<title>Join a team in Potato Workspace</title>
 <style>
   body{margin:0;min-height:100vh;display:flex;align-items:center;justify-content:center;background:#161616;color:#e8e8e8;font:16px/1.5 system-ui,sans-serif}
   main{max-width:24rem;padding:1.5rem;text-align:center}
@@ -143,11 +159,11 @@ export function joinPage(code: string, host: string, peek: Peek, downloadUrl: st
   p{margin:.5rem 0}
   .sub{color:#a0a0a0;font-size:.9rem}
   a{color:#e8e8e8}
-  a.go{display:inline-block;padding:.6rem 1.2rem;border-radius:.5rem;background:#e8e8e8;color:#161616;text-decoration:none;font-weight:600}
+  a.go{display:block;padding:1rem 1.5rem;border-radius:.6rem;background:#e8e8e8;color:#161616;text-decoration:none;font-weight:700;font-size:1.1rem}
 </style></head>
 <body><main>
 ${body}
-</main></body></html>`;
+</main>${script}</body></html>`;
   return new Response(html, {
     status: open ? 200 : 410,
     headers: {
@@ -155,7 +171,7 @@ ${body}
       "cache-control": "no-store",
       "referrer-policy": "no-referrer",
       "x-content-type-options": "nosniff",
-      "content-security-policy": "default-src 'none'; style-src 'unsafe-inline'; base-uri 'none'; form-action 'none'; frame-ancestors 'none'",
+      "content-security-policy": `default-src 'none'; style-src 'unsafe-inline'; script-src ${scriptSrc}; base-uri 'none'; form-action 'none'; frame-ancestors 'none'`,
     },
   });
 }

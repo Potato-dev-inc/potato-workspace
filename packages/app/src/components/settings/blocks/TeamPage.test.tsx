@@ -108,11 +108,11 @@ describe('start a team', () => {
     await open();
     expect(field('Your name').value).toBe('Pat'); // this computer's name, until Settings has one
     const order = buttons();
-    expect(order).toContain('Set up my relay');
+    expect(order).toContain('Make it work anywhere');
     expect(order).not.toContain('Create team relay'); // the token way is under Other ways
     expect(hasText(host, 'Recommended')).toBe(true);
     const other = buttonStarting('Other ways')!;
-    expect(order.indexOf('Set up my relay')).toBeLessThan(order.findIndex((t) => t?.startsWith('Other ways')));
+    expect(order.indexOf('Make it work anywhere')).toBeLessThan(order.findIndex((t) => t?.startsWith('Other ways')));
     expect(other.getAttribute('aria-expanded')).toBe('false');
     expect(hasText(host, 'Use my own address')).toBe(false);
     expect(hasText(host, 'Use a shared folder')).toBe(false);
@@ -255,13 +255,14 @@ describe('join a team', () => {
     return m;
   };
 
-  it('Join stays off until an invite is pasted; a link with a message around it is found right away', async () => {
+  it('one box: nothing else to fill in until an old invite is pasted; its code is asked for only when missing', async () => {
     const { api } = await open();
-    expect(buttonByText(host, 'Join')!.disabled).toBe(true);
-    expect(field('Your name').value).toBe('Pat');
+    expect(buttonByText(host, 'Join')).toBeUndefined();
+    expect(host.querySelectorAll('input').length).toBe(0);
     await typeInto(input('Invite link'), `Hey! Join our team here: ${INVITE}. The code is in the next message.`);
     expect(hasText(host, 'Invite found for “Acme”.')).toBe(true);
-    // The link is there, the code is not yet.
+    // The old link is there, the code is not yet.
+    expect(field('Your name').value).toBe('Pat');
     expect(buttonByText(host, 'Join')!.disabled).toBe(true);
     expect(hasText(host, 'Type the 8-letter code')).toBe(true);
     await typeInto(field('Code'), 'abcdefgh');
@@ -275,7 +276,8 @@ describe('join a team', () => {
   it('a code pasted together with the link fills the code in', async () => {
     await open({ displayName: 'Leo' });
     await typeInto(input('Invite link'), `${INVITE}\nCode: kq7m-4xpd`);
-    expect(field('Code').value).toBe('KQ7M-4XPD');
+    // The code came with the text: there is no code box to fill, and an old invite still joins.
+    expect(host.querySelector('input[placeholder="ABCD-EFGH"]')).toBeNull();
     expect(field('Your name').value).toBe('Leo');
     expect(buttonByText(host, 'Join')!.disabled).toBe(false);
   });
@@ -297,7 +299,8 @@ describe('join a team', () => {
     await open();
     await typeInto(input('Invite link'), 'https://example.com/nope');
     expect(host.querySelector('[role="alert"]')!.textContent).toContain("doesn't look like an invite");
-    expect(buttonByText(host, 'Join')!.disabled).toBe(true);
+    expect(host.querySelector('[role="alert"]')!.textContent).not.toContain('pm://');
+    expect(buttonByText(host, 'Join')).toBeUndefined();
   });
 });
 

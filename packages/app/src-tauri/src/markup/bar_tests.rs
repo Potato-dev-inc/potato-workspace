@@ -69,7 +69,7 @@ fn events_come_back_as_a_list_a_bad_one_does_not_drop_the_good_ones_and_garbage_
     let got = parse_events(raw);
     assert_eq!(got.len(), 4);
     assert!(matches!(got[0], Event::Open) && matches!(got[3], Event::Close));
-    assert!(matches!(&got[2], Event::Send { request, to, .. } if request == "fix it" && to == "pane-1"));
+    assert!(matches!(&got[2], Event::Send { request, to, fix, .. } if request == "fix it" && to == "pane-1" && !*fix));
     assert!(parse_events("nope").is_empty() && parse_events("{}").is_empty());
 }
 
@@ -174,4 +174,21 @@ fn the_picture_shows_on_a_page_that_forbids_everything_with_content_security_pol
     let _ = std::net::TcpStream::connect(addr);
     let said = String::from_utf8_lossy(&out.stdout);
     assert!(said.starts_with("OK "), "{said} {}", String::from_utf8_lossy(&out.stderr));
+}
+
+#[test]
+fn the_send_choice_defaults_to_asking_and_the_bar_has_both_words() {
+    let ask = parse_events(r#"[{"kind":"send","request":"x","marks":[]}]"#);
+    assert!(matches!(&ask[0], Event::Send { fix, .. } if !*fix));
+    let fix = parse_events(r#"[{"kind":"send","request":"x","marks":[],"fix":true}]"#);
+    assert!(matches!(&fix[0], Event::Send { fix, .. } if *fix));
+    let words = strings();
+    for lang in ["en", "zh-TW"] {
+        for k in ["askAbout", "fixIt", "intent"] {
+            assert!(words[lang][k].is_string(), "{lang} {k}");
+        }
+    }
+    assert!(BAR_JS.contains("fix: st.fix"));
+    // One Tab stop for the pair, arrow keys move it, and the choice is hidden on a page the agent made itself.
+    assert!(BAR_JS.contains("ArrowRight") && BAR_JS.contains("'tabindex'") && BAR_JS.contains("st.own ? 'none'"));
 }

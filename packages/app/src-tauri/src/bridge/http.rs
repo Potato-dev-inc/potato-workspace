@@ -250,19 +250,38 @@ pub(super) fn events_poll(caller: &mobile_pairing::Caller, query: &str) -> serde
 /// any other origin gets no CORS header, so the browser does not let it read an answer (or send a
 /// preflighted request), and the bridge refuses it without a paired-device token anyway.
 pub(super) fn cors_lines(headers: &str) -> String {
+    cors_lines_for(headers, &crate::worker_origins::allowed())
+}
+
+/// `cors_lines` with the person's permanent origins given (their own Worker, on workers.dev or their own domain, and the
+/// earlier ones they used). The phone page loads from one of those and calls this PC's tunnel straight from there, so the
+/// browser needs an answer for exactly that origin: echoed back, never `*`, no credentials (the phone sends its bearer
+/// token in a header, never a cookie), only the two headers the phone sends, a short preflight cache. These origins get
+/// no extra trust: `is_app_origin` stays false for them, so a request from one still needs a paired device's token.
+pub(super) fn cors_lines_for(headers: &str, permanent: &[String]) -> String {
     let Some(origin) = mobile_pairing::header_value(headers, "Origin") else {
         return String::new();
     };
-    if !mobile_pairing::is_app_origin(origin) {
-        return "Vary: Origin\r\n".to_string();
+    if mobile_pairing::is_app_origin(origin) {
+        return format!(
+            "Access-Control-Allow-Origin: {origin}\r\n\
+             Vary: Origin\r\n\
+             Access-Control-Allow-Methods: GET, POST, PATCH, DELETE, OPTIONS\r\n\
+             Access-Control-Allow-Headers: Content-Type, Authorization, X-Potato-Workspace-Proxied, {}, X-Potato-Workspace-Session\r\n",
+            mobile_pairing::local_secret::HEADER
+        );
     }
-    format!(
-        "Access-Control-Allow-Origin: {origin}\r\n\
-         Vary: Origin\r\n\
-         Access-Control-Allow-Methods: GET, POST, PATCH, DELETE, OPTIONS\r\n\
-         Access-Control-Allow-Headers: Content-Type, Authorization, X-Potato-Workspace-Proxied, {}, X-Potato-Workspace-Session\r\n",
-        mobile_pairing::local_secret::HEADER
-    )
+    let exact = origin.trim();
+    if permanent.iter().any(|allowed| allowed == exact) {
+        return format!(
+            "Access-Control-Allow-Origin: {exact}\r\n\
+             Vary: Origin\r\n\
+             Access-Control-Allow-Methods: GET, POST, PATCH, DELETE, OPTIONS\r\n\
+             Access-Control-Allow-Headers: Authorization, Content-Type\r\n\
+             Access-Control-Max-Age: 600\r\n"
+        );
+    }
+    "Vary: Origin\r\n".to_string()
 }
 
 pub(super) fn handle_connection(
@@ -861,5 +880,67 @@ mod share_wire_tests {
         // An unknown secret is a plain 404 page.
         let none = send(addr, &remote(&format!("/bridge/share/{}", "z".repeat(32)), "GET"));
         assert!(none.starts_with("HTTP/1.1 404"), "{none}");
+    }
+}
+
+/// The phone page loads from the person's own Worker and calls the tunnel straight from there (see `worker_origins`).
+#[cfg(test)]
+mod worker_origin_cors_tests {
+    use super::*;
+
+    const WORKER: &str = "https://pm.me.workers.dev";
+    const OWN_DOMAIN: &str = "https://phone.example.com";
+
+    fn allowed() -> Vec<String> {
+        vec![WORKER.to_string(), OWN_DOMAIN.to_string()]
+    }
+
+    fn preflight(origin: &str) -> String {
+        format!("OPTIONS /panes HTTP/1.1\r\nHost: x.trycloudflare.com\r\nOrigin: {origin}\r\nAccess-Control-Request-Method: POST\r\nAccess-Control-Request-Headers: authorization,content-type\r\n")
+    }
+
+    #[test]
+    fn each_configured_permanent_origin_gets_its_exact_origin_back_and_no_credentials() {
+        // workers.dev AND a domain of the person's own are both allowed at once (a domain change drops no pairing).
+        for origin in [WORKER, OWN_DOMAIN] {
+            let lines = cors_lines_for(&preflight(origin), &allowed());
+            assert!(lines.contains(&format!("Access-Control-Allow-Origin: {origin}\r\n")), "{lines}");
+            assert!(lines.contains("Vary: Origin\r\n"), "{lines}");
+            assert!(lines.contains("Access-Control-Allow-Headers: Authorization, Content-Type\r\n"), "{lines}");
+            assert!(lines.contains("Access-Control-Max-Age: 600\r\n"), "{lines}");
+            assert!(!lines.contains("Access-Control-Allow-Credentials"), "no cookies: {lines}");
+            assert!(!lines.contains("Allow-Origin: *"), "{lines}");
+        }
+    }
+
+    #[test]
+    fn any_other_origin_is_refused_even_a_lookalike_or_the_other_scheme() {
+        for origin in ["https://evil.example.com", "http://pm.me.workers.dev", "https://pm.me.workers.dev.evil.io", "https://pm.me.workers.dev:8443", "null", "https://PM.me.workers.dev"] {
+            let lines = cors_lines_for(&preflight(origin), &allowed());
+            assert_eq!(lines, "Vary: Origin\r\n", "{origin}");
+        }
+        assert_eq!(cors_lines_for(&preflight(WORKER), &[]), "Vary: Origin\r\n", "nothing configured, nothing allowed");
+        assert_eq!(cors_lines_for("GET /panes HTTP/1.1\r\nHost: x\r\n", &allowed()), "", "no Origin header, no CORS lines");
+    }
+
+    #[test]
+    fn the_apps_own_origins_keep_their_answer() {
+        let lines = cors_lines_for(&preflight("tauri://localhost"), &[]);
+        assert!(lines.contains("Access-Control-Allow-Origin: tauri://localhost\r\n") && lines.contains("X-Potato-Workspace-Proxied"), "{lines}");
+    }
+
+    #[test]
+    fn a_request_from_the_worker_origin_is_still_remote_and_cookies_never_authenticate() {
+        // Still untrusted: loopback peer (the tunnel connects from this PC) with a foreign Origin needs a token.
+        let from_worker = format!("GET /panes HTTP/1.1\r\nHost: 127.0.0.1:17421\r\nOrigin: {WORKER}\r\n");
+        assert!(mobile_pairing::requires_pairing_token(&from_worker, true));
+        assert!(!mobile_pairing::is_app_origin(WORKER) && !mobile_pairing::is_app_origin(OWN_DOMAIN));
+        // The tunnel also marks the request as proxied.
+        let proxied = format!("{from_worker}X-Potato-Workspace-Proxied: 1\r\n");
+        assert!(mobile_pairing::requires_pairing_token(&proxied, true));
+        // A cookie is no credential: only the Authorization header names a token.
+        let cookie = format!("{from_worker}Cookie: token=abc; pm_token=abc\r\n");
+        assert_eq!(mobile_pairing::bearer_token(&cookie), None);
+        assert_eq!(mobile_pairing::bearer_token(&format!("{from_worker}Authorization: Bearer abc\r\n")).as_deref(), Some("abc"));
     }
 }

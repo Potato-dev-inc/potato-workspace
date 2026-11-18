@@ -2,16 +2,18 @@
 // lib/resultFile.ts), this card offers `Get it`. It reads the chat every few seconds while open, and again when that
 // device says something changed. The root is the chat's own folder (same rule as Open folder). The far device checks
 // the path; names and errors are untrusted text.
+import { pollWithBackoff } from '../../lib/runtime/pollWithBackoff';
 import { useEffect, useState } from 'react';
 import { useT } from '../../i18n';
 import { isFarError, lastPart, pickRoot } from '../../lib/deviceFiles';
 import { clipText, devicesApi, type Device, type DevicesApi } from '../../lib/devices';
 import { resultFileOf } from '../../lib/resultFile';
+import { makeRemoteClient } from '../../lib/runtime/remote';
 import { ExistsQuestion, TransferRow } from './TransferRow';
 import { useFileOps, useTransfers } from './useFileOps';
 import '../../styles/devices.css';
 
-export const GET_IT_POLL_MS = 8000;
+export const GET_IT_POLL_MS = 15_000;
 
 export function GetItCard({ device, paneId, cwd = '', api = devicesApi }: { device: Device; paneId: string; cwd?: string; api?: DevicesApi }) {
   const t = useT();
@@ -24,26 +26,23 @@ export function GetItCard({ device, paneId, cwd = '', api = devicesApi }: { devi
   useEffect(() => {
     if (!online) return;
     let live = true;
+    const client = makeRemoteClient(node, api);
     const read = () =>
-      api
-        .request(node, 'GET', `/panes/${encodeURIComponent(paneId)}/chat`)
-        .then((res) => {
-          if (!live || res.status >= 300) return;
-          setFile(resultFileOf((res.body as { items?: unknown } | null)?.items));
-        })
-        .catch(() => undefined);
-    void read();
-    const timer = window.setInterval(() => void read(), GET_IT_POLL_MS);
+      client.transcript(paneId).then((reply) => {
+        if (!live) return;
+        setFile(resultFileOf(reply.items));
+      });
+    const stopPoll = pollWithBackoff({ node, route: `transcript:${paneId}:file`, normalMs: GET_IT_POLL_MS, run: read });
     let off: (() => void) | undefined;
     api
       .onEvent((ev) => {
-        if (ev.node === node && ev.frame.includes(paneId)) void read();
+        if (ev.node === node && ev.frame.includes(paneId)) void read().catch(() => undefined);
       })
       .then((u) => (live ? (off = u) : u()))
       .catch(() => undefined);
     return () => {
       live = false;
-      window.clearInterval(timer);
+      stopPoll();
       off?.();
     };
   }, [api, node, paneId, online]);

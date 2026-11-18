@@ -226,11 +226,11 @@ impl Client {
     }
 
     fn web_usable(&self, node: &NodeId) -> bool {
-        self.route_for(node) != RoutePref::Public && self.web_store.has(&node_hex(node))
+        web::PC_WEB_ROUTE && self.route_for(node) != RoutePref::Public && self.web_store.has(&node_hex(node))
     }
 
     pub fn web_ready(&self, node: &NodeId) -> bool {
-        self.web_store.has(&node_hex(node))
+        web::PC_WEB_ROUTE && self.web_store.has(&node_hex(node))
     }
 
     fn slot(&self, node: &NodeId) -> Arc<Slot> {
@@ -563,6 +563,11 @@ impl Client {
     /// Asks the device for its web address and a token (it answers only when the person turned that on there). Asked at
     /// most once a minute. An answer of "no" forgets what was held.
     async fn fetch_web(self: &Arc<Self>, node: &NodeId) {
+        if !web::PC_WEB_ROUTE {
+            // Off: ask for nothing, and drop anything an older version kept.
+            self.web_store.forget(&node_hex(node));
+            return;
+        }
         if self.route_for(node) == RoutePref::Public {
             return;
         }
@@ -731,7 +736,7 @@ impl Client {
     async fn read_screen_once(self: &Arc<Self>, node: &NodeId, pane: &str) -> ScreenEnd {
         let Ok(link) = self.link_to(node).await else { return ScreenEnd::Lost };
         let Ok(mut stream) = link.open_bi().await else { return ScreenEnd::Lost };
-        let target = format!("/panes/{pane}/snapshot");
+        let target = format!("/pclink/sessions/{pane}/screen");
         if !wire::screen_target_ok(&target) {
             return ScreenEnd::Over;
         }

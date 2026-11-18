@@ -22,10 +22,12 @@ import { ChatMarkdown } from './ChatMarkdown';
 import { PictureSourceContext } from './ChatPicture';
 import { EarlierRow } from './EarlierRow';
 import { useKeepPlace } from '../../hooks/useKeepPlace';
-import { desktopPictureSource } from '../../lib/chatMore';
+import { desktopPictureSource, type PictureSource } from '../../lib/chatMore';
 import type { EarlierState } from '../../hooks/useEarlier';
 import { HelperRow } from './HelperRow';
-import { WorkflowCard } from './WorkflowCard';
+import { MarkupCard, WorkflowCard } from './WorkflowCard';
+import { splitMarkupMessage, type MarkupSplit } from '../../lib/markupCard';
+import { useMarkupSends } from '../../hooks/useMarkupSends';
 import { readWorkflowStart, splitWorkflowMessage, type WorkflowSplit } from '../../lib/workflowCard';
 import { PaneHelperRows } from './PaneHelperRows';
 import { placeHelpers, type ChatHelper } from '../../lib/chat-helpers';
@@ -93,6 +95,8 @@ export interface SessionChatViewProps {
   headerMenu?: ReactNode;
   /** A place in the pane's own header (PaneView). When given, the view switch, the side question button and the chat menu are drawn there and this chat has no header row of its own. `compact`: the header is tight, so the view switch is one pill. */
   headerSlot?: { el: HTMLElement; compact: boolean };
+  /** No Summary/Normal/Verbose switch: the chat is always drawn in full (a chat on another PC, whose far side keeps no such choice). */
+  hideViewMode?: boolean;
   /** A one-line note above the conversation (the Keep going line); it shows nothing when there is nothing to say. */
   banner?: ReactNode;
   /** Something laid over the chat, inside it (the side question box). */
@@ -113,6 +117,8 @@ export interface SessionChatViewProps {
   endings?: EndingActions;
   /** "Show earlier messages": a row at the top while the chat has older messages that are not held. The view keeps its place when they arrive. */
   earlier?: EarlierState;
+  /** Where the pictures come from when this chat is not on this PC (another PC's chat names its own files). Without it, this PC's own pane is asked. */
+  pictures?: PictureSource | null;
 }
 
 /** The `Branch` button on a finished turn's end line. `always`: shown without hover (the newest finished turn). */
@@ -187,7 +193,11 @@ function TurnEndDivider({ turn, branch, endings }: { turn: ChatTurn; branch?: Tu
 export const turnRenders = { count: 0 };
 
 /** Everything here is stable for a turn that did not change (see `groupTurns` and `useStable`), so `memo` can skip it. */
-const TurnView = memo(function TurnView({ turn, fromScreen, markdown, mode, canBranch, branchAlways, onBranch, helpers, onOpenPane, endings, price, paneId, sentFrom, workflow }: { workflow?: WorkflowSplit | null; sentFrom?: string; paneId?: string; price?: TurnPrice; turn: ChatTurn; fromScreen: boolean; markdown: boolean; mode: ChatViewMode; canBranch: boolean; branchAlways: boolean; onBranch?: (userItemId: string) => void; helpers?: readonly ChatHelper[]; onOpenPane?: (paneId: string) => void; endings?: EndingActions }) {
+/** A message the app wrote for the person, folded into one card: the workflow brief, or a mark-up from the agent browser. */
+export type CardView = { kind: 'workflow'; split: WorkflowSplit } | { kind: 'markup'; split: MarkupSplit };
+const cardRequest = (c: CardView): string => (c.kind === 'workflow' ? c.split.request : c.split.comment);
+
+const TurnView = memo(function TurnView({ turn, fromScreen, markdown, mode, canBranch, branchAlways, onBranch, helpers, onOpenPane, endings, price, paneId, sentFrom, card }: { card?: CardView | null; sentFrom?: string; paneId?: string; price?: TurnPrice; turn: ChatTurn; fromScreen: boolean; markdown: boolean; mode: ChatViewMode; canBranch: boolean; branchAlways: boolean; onBranch?: (userItemId: string) => void; helpers?: readonly ChatHelper[]; onOpenPane?: (paneId: string) => void; endings?: EndingActions }) {
   turnRenders.count += 1;
   const branch = useMemo<TurnBranch | undefined>(
     () => (canBranch && onBranch && isBranchable(turn) ? { onBranch: () => onBranch(turn.user.id), always: branchAlways } : undefined),
@@ -205,10 +215,11 @@ const TurnView = memo(function TurnView({ turn, fromScreen, markdown, mode, canB
       {turn.user && (
         <div className="flex flex-col items-end gap-1.5" data-rail-id={turn.user.id}>
           {turn.user.attachments && turn.user.attachments.length > 0 && <AttachmentChips attachments={turn.user.attachments} className="ck-chat-user-files" />}
-          {workflow && <WorkflowCard split={workflow} />}
-          {(workflow ? workflow.request : turn.user.text).trim() !== '' && (
+          {card?.kind === 'workflow' && <WorkflowCard split={card.split} />}
+          {card?.kind === 'markup' && <MarkupCard split={card.split} />}
+          {(card ? cardRequest(card) : turn.user.text).trim() !== '' && (
             <div className="max-w-[85%] whitespace-pre-wrap break-words rounded bg-pm-raised px-2 py-1 text-pm-text ck-chat-bubble">
-              {workflow ? workflow.request : turn.user.text}
+              {card ? cardRequest(card) : turn.user.text}
             </div>
           )}
           {sentFrom && (
@@ -263,14 +274,15 @@ function useStable<T>(next: Map<string, T>): Map<string, T> {
   return out;
 }
 
-export function SessionChatView({ state, reason, waitingFor, ready, source, turns, model, cliVersion, dock, pending, composer, paneId, remember, emptyNote, headerExtra, headerMenu, headerSlot, banner, overlay, aside, jump, readOnly, canBranch, onBranch, helpers, onOpenPane, endings, earlier }: SessionChatViewProps) {
+export function SessionChatView({ state, reason, waitingFor, ready, source, turns, model, cliVersion, dock, pending, composer, paneId, remember, emptyNote, headerExtra, headerMenu, headerSlot, banner, overlay, aside, jump, readOnly, canBranch, onBranch, helpers, onOpenPane, endings, earlier, pictures: farPictures, hideViewMode }: SessionChatViewProps) {
   const fromScreen = source === 'screen';
   // "from OPPO Reno13" under a message that another device sent (names come from the PC's one device record).
   const deviceNames = useDeviceNames(loadDesktopDeviceNames);
   const sentFrom = useMemo(() => sentFromLines(turns, deviceNames), [turns, deviceNames]);
   // Markdown only for what the agent itself wrote (its session file or its API); an unknown source keeps the text as it is.
   const markdown = source === 'file' || source === 'api' || source === 'acp';
-  const [mode, setMode] = useChatViewMode(paneId);
+  const [chosenMode, setMode] = useChatViewMode(paneId);
+  const mode: ChatViewMode = hideViewMode ? 'normal' : chosenMode;
   // Potato ("check on this") reads this chat's turns while it is open, and only reads them.
   const turnsNow = useRef(turns);
   turnsNow.current = turns;
@@ -290,6 +302,20 @@ export function SessionChatView({ state, reason, waitingFor, ready, source, turn
     () => (firstUser && paneId ? splitWorkflowMessage(firstUser.text, readWorkflowStart(paneId)) : null),
     [firstUser?.id, firstUser?.text, paneId],
   );
+  // A mark-up the app sent from the agent browser is folded the same way, in any turn, when it equals a message the app recorded.
+  const markupSends = useMarkupSends(paneId);
+  const cards = useMemo(() => {
+    const out = new Map<string, CardView>();
+    if (workflowCard && firstUser) out.set(firstUser.id, { kind: 'workflow', split: workflowCard });
+    if (markupSends.length > 0) {
+      for (const turn of turns) {
+        if (!turn.user || out.has(turn.user.id)) continue;
+        const split = splitMarkupMessage(turn.user.text, markupSends);
+        if (split) out.set(turn.user.id, { kind: 'markup', split });
+      }
+    }
+    return out;
+  }, [turns, workflowCard, firstUser?.id, markupSends]);
   // The newest callbacks, behind functions that stay the same, so a turn that did not change is not redrawn for them.
   const callbacks = useRef({ onBranch, onOpenPane });
   callbacks.current = { onBranch, onOpenPane };
@@ -302,7 +328,7 @@ export function SessionChatView({ state, reason, waitingFor, ready, source, turn
   const [away, setAway] = useState(false);
   const prices = useStable(useMemo(() => turnPrices(turns), [turns]));
   // The message rail beside the scroll bar: one dash per message. Its own list; nothing here reaches a TurnView.
-  const railEntries = useMemo(() => buildRailEntries(turns, mode, workflowCard && firstUser ? new Map([[firstUser.id, workflowCard.request || workflowCard.name]]) : undefined), [turns, mode, workflowCard, firstUser?.id]);
+  const railEntries = useMemo(() => buildRailEntries(turns, mode, cards.size > 0 ? new Map([...cards].map(([id, c]) => [id, c.kind === 'workflow' ? c.split.request || c.split.name : c.split.comment || c.split.page])) : undefined), [turns, mode, cards]);
 
   // Find in this chat (Ctrl+F): the box, the marks and the count. Esc goes back to the message box.
   const find = useChatFind(scrollRef, () => rootRef.current?.querySelector<HTMLTextAreaElement>('textarea.ck-chat-composer-field')?.focus());
@@ -317,7 +343,8 @@ export function SessionChatView({ state, reason, waitingFor, ready, source, turn
   const sinceLine = useSinceLine({ chatId: paneId, turns, ready: state === 'ready', scrollRef, atBottom });
 
   // Pictures the agent names are asked of the PC for this pane (it only reads files inside the chat's folder).
-  const pictures = useMemo(() => (paneId && !readOnly ? desktopPictureSource(paneId) : null), [paneId, readOnly]);
+  const ownPictures = useMemo(() => (paneId && !readOnly && farPictures === undefined ? desktopPictureSource(paneId) : null), [paneId, readOnly, farPictures]);
+  const pictures = farPictures !== undefined ? farPictures : ownPictures;
 
   // "Show earlier": older messages go in front, and the reader keeps the same message under the same place.
   const noteWhere = useKeepPlace(scrollRef, atBottom, earlier?.version ?? 0);
@@ -399,7 +426,7 @@ export function SessionChatView({ state, reason, waitingFor, ready, source, turn
           <>
             {headerExtra && <span className="flex shrink-0 items-center ck-chat-head-extra">{headerExtra}</span>}
             {/* In the pane header the menu is drawn in the top layer at every width: the header would clip a menu inside it. */}
-            <ViewModeToggle mode={mode} onChange={setMode} compact />
+            {!hideViewMode && <ViewModeToggle mode={mode} onChange={setMode} compact />}
             {headerMenu && <span className="flex shrink-0 items-center ck-chat-head-menu">{headerMenu}</span>}
           </>,
           headerSlot.el,
@@ -410,7 +437,7 @@ export function SessionChatView({ state, reason, waitingFor, ready, source, turn
             {model ?? 'Model not known yet'}
           </span>
           {headerExtra && <span className="ml-auto flex shrink-0 items-center ck-chat-head-extra">{headerExtra}</span>}
-          <ViewModeToggle mode={mode} onChange={setMode} />
+          {!hideViewMode && <ViewModeToggle mode={mode} onChange={setMode} />}
           {headerMenu && <span className="flex shrink-0 items-center ck-chat-head-menu">{headerMenu}</span>}
         </header>
       )}
@@ -453,7 +480,7 @@ export function SessionChatView({ state, reason, waitingFor, ready, source, turn
             <TurnView
               paneId={paneId ?? undefined}
               sentFrom={sentFrom.get(turn.id)}
-              workflow={workflowCard && turn.user && turn.user.id === firstUser?.id ? workflowCard : undefined}
+              card={turn.user ? cards.get(turn.user.id) : undefined}
               price={prices.get(turn.id)}
               turn={turn}
               fromScreen={fromScreen}

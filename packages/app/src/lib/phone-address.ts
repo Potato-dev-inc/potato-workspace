@@ -26,6 +26,8 @@ const hostOf = (url: string): string => {
 /** The stable link as the phone sees it, or `null` when no Worker is chosen. */
 export function phoneStable(status: TunnelStatus | null | undefined): PhoneStable | null {
   if (!status || status.mode !== 'stable' || !status.stable) return null;
+  // "Temporary link": the plain quick address is used directly, the Worker is left out.
+  if (status.link_temporary) return null;
   const { worker_url: worker, link, error } = status.stable;
   if (link === 'linked' && status.state !== 'error') return { worker: trimSlash(worker), linked: true, reason: '' };
   const reason =

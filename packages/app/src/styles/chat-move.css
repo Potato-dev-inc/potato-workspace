@@ -50,3 +50,8 @@
   min-width: 0;
   color: var(--label);
 }
+
+/* The quiet outlined button of the folder sheet (Browse folders, Back, Cancel). */
+.cockpit .ck-move-sheet .ck-btn--secondary {
+  border: 1px solid var(--sep);
+}

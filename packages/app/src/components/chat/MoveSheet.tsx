@@ -4,6 +4,8 @@
 import { useEffect, useId, useMemo, useState } from 'react';
 import { useT } from '../../i18n';
 import { deviceNotices, devicesApi, runtimesOf, stateSentence, type Device, type DevicesApi, type DevicesView } from '../../lib/devices';
+import { useFarLevel } from '../../lib/runtime/farLevel';
+import { atLeast } from '../../lib/runtime/pclink';
 import { farOptions, runMove, type FarOptions, type MoveApi, type MoveMode } from '../../lib/moveChat';
 import { makeRemoteClient } from '../../lib/runtime/remote';
 import { errorSentence } from '../../lib/sayError';
@@ -40,16 +42,18 @@ export function MoveSheet({ paneId, agentType, agentLabel, running, isChat, view
 
   const rows = useMemo(() => runtimesOf(view).flatMap((r) => (r.kind === 'device' ? [r] : [])), [view]);
   const picked: Device | null = rows.find((r) => r.device.node === pickedNode)?.device ?? null;
-  const bridge = useMemo(() => (picked ? makeRemoteClient(picked.node, devices) : null), [picked?.node, devices]);
+  const client = useMemo(() => (picked ? makeRemoteClient(picked.node, devices) : null), [picked?.node, devices]);
+  // Whether the far PC lets this PC work on it is the far PC's to say.
+  const farLevel = useFarLevel(client, !!picked);
 
   useEffect(() => {
     setOptions(null);
     setLoadError(null);
     setAgent(null);
     setProject(null);
-    if (!bridge) return;
+    if (!client) return;
     let live = true;
-    farOptions(bridge).then(
+    farOptions(client).then(
       (o) => {
         if (!live) return;
         setOptions(o);
@@ -62,7 +66,7 @@ export function MoveSheet({ paneId, agentType, agentLabel, running, isChat, view
     return () => {
       live = false;
     };
-  }, [bridge, agentType]);
+  }, [client, agentType]);
 
   const sameAgentThere = !!options?.agents.some((a) => a.id === agentType);
   // The work only goes to the same agent, and only a chat has work to take.
@@ -70,7 +74,7 @@ export function MoveSheet({ paneId, agentType, agentLabel, running, isChat, view
   const effectiveMode: MoveMode = workOff ? 'history' : mode;
   const chosenAgent = effectiveMode === 'work' ? agentType : agent;
   const signedOut = picked && chosenAgent ? deviceNotices(picked, [chosenAgent]).filter((n) => n.kind === 'signedOut') : [];
-  const needsControl = picked && picked.level !== 'full' ? t('move.needsControl', { name: picked.name }) : null;
+  const needsControl = picked && !atLeast(farLevel.level, 'full') ? t('move.needsControl', { name: picked.name }) : null;
   const farProblem =
     options === null
       ? null
@@ -82,14 +86,14 @@ export function MoveSheet({ paneId, agentType, agentLabel, running, isChat, view
             ? t('move.noProjects', { name: picked?.name ?? '' })
             : null;
   const why = running ? t('move.running') : needsControl ?? farProblem ?? (signedOut.length > 0 ? signedOut[0].text : null);
-  const ready = !!picked && !!bridge && !!options && !!chosenAgent && !!project && !why && !busy;
+  const ready = !!picked && !!client && !!options && !!chosenAgent && !!project && !why && !busy;
 
   const go = async () => {
-    if (!ready || !picked || !bridge || !chosenAgent || !project) return;
+    if (!ready || !picked || !client || !chosenAgent || !project) return;
     setBusy(true);
     setError(null);
     try {
-      const done = await runMove({ paneId, mode: effectiveMode, device: picked, bridge, devices, api, fromName: view?.name || 'this PC', agent: chosenAgent, project });
+      const done = await runMove({ paneId, mode: effectiveMode, device: picked, client, api, fromName: view?.name || 'this PC', agent: chosenAgent, project });
       onMoved(picked.node, done.farPane);
     } catch (e) {
       setError(errorSentence(e));

@@ -2,6 +2,7 @@
 //! Built only while the Labs switch is on, and then at once (a PC that lets another run agents has to be reachable
 //! after a restart, before anybody opens the page). Desktop commands (`commands/devices.rs`) get the service here.
 
+use std::collections::HashMap;
 use std::path::PathBuf;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, OnceLock};
@@ -195,6 +196,10 @@ impl AppWebGrant {
 impl WebGrant for AppWebGrant {
     fn mint(&self, node: &str, name: &str, full: bool) -> Result<(String, String), String> {
         use base64::Engine as _;
+        if !web::PC_WEB_ROUTE {
+            // A paired PC is never given a phone's device token.
+            return Err(web::OFF_SENTENCE.into());
+        }
         let base = web_address().ok_or_else(|| "This PC has no web address yet. Set one up in Settings > Phone.".to_string())?;
         let store = crate::mobile_pairing::pairing_store().ok_or_else(|| "Pairing is not ready yet.".to_string())?;
         self.revoke(node);
@@ -234,26 +239,115 @@ pub struct AppWebCall;
 #[async_trait]
 impl WebCall for AppWebCall {
     async fn call(&self, base: &str, token: &str, method: &str, target: &str, body: Vec<u8>) -> Result<(u16, Vec<u8>), String> {
-        use std::io::Read as _;
-        let (url, token, method) = (web::url_for(base, target), token.to_string(), method.to_string());
-        tokio::task::spawn_blocking(move || {
-            let agent = ureq::AgentBuilder::new().timeout(Duration::from_secs(25)).redirects(0).build();
-            let req = agent.request(&method, &url).set("Authorization", &format!("Bearer {token}")).set("Accept-Encoding", "identity");
-            let result = if body.is_empty() { req.call() } else { req.set("Content-Type", "application/json").send_bytes(&body) };
-            let read = |resp: ureq::Response| {
-                let status = resp.status();
-                let mut out = Vec::new();
-                let _ = resp.into_reader().take(super::wire::REPLY_MAX as u64).read_to_end(&mut out);
-                (status, out)
-            };
-            match result {
-                Ok(resp) => Ok(read(resp)),
-                Err(ureq::Error::Status(_, resp)) => Ok(read(resp)),
-                Err(e) => Err(e.kind().to_string()),
+        let (base, token, method, target) = (base.to_string(), token.to_string(), method.to_string(), target.to_string());
+        tokio::task::spawn_blocking(move || web_call_blocking(&base, &token, &method, &target, &body, &crate::mobile_tunnel::stable_link::is_quick_origin))
+            .await
+            .map_err(|_| "The request failed".to_string())?
+    }
+}
+
+/// Tunnel origins just learned from a permanent address (a Worker): the Worker only POINTS at the PC now, so the call goes to the
+/// tunnel it names. Kept for `TUNNEL_KEPT`, forgotten when a call fails (the PC may have a new address after a restart).
+const TUNNEL_KEPT: Duration = Duration::from_secs(15);
+/// An address that has no `/_pm/where` route (a LAN or other non-Worker address): remembered for this long so it is not asked on every call.
+const NO_ROUTE_KEPT: Duration = Duration::from_secs(60);
+
+#[derive(Default)]
+struct Learned {
+    tunnels: HashMap<String, (std::time::Instant, String)>,
+    no_route: HashMap<String, std::time::Instant>,
+}
+static LEARNED: std::sync::Mutex<Option<Learned>> = std::sync::Mutex::new(None);
+
+fn origin_of_url(url: &str) -> String {
+    let (scheme, rest) = url.split_once("://").unwrap_or(("https", url));
+    format!("{scheme}://{}", rest.split('/').next().unwrap_or(""))
+}
+
+/// Where to send a call for the address `origin`.
+#[derive(Debug, PartialEq, Eq)]
+enum Route {
+    /// The address itself (it is a tunnel, or it has no `where` route).
+    AsIs,
+    Tunnel(String),
+    /// A Worker that should name the PC and does not right now: say so, never call the Worker for the bridge.
+    Unreachable,
+}
+
+fn route_for(origin: &str, fresh: bool, accept: &dyn Fn(&str) -> bool) -> Route {
+    use crate::mobile_tunnel::stable_link::Where;
+    if accept(origin) {
+        return Route::AsIs;
+    }
+    let mut guard = LEARNED.lock().unwrap_or_else(|e| e.into_inner());
+    let learned = guard.get_or_insert_with(Learned::default);
+    if !fresh {
+        if learned.no_route.get(origin).is_some_and(|at| at.elapsed() < NO_ROUTE_KEPT) {
+            return Route::AsIs;
+        }
+        if let Some((at, t)) = learned.tunnels.get(origin) {
+            if at.elapsed() < TUNNEL_KEPT {
+                return Route::Tunnel(t.clone());
             }
-        })
-        .await
-        .map_err(|_| "The request failed".to_string())?
+        }
+    }
+    match crate::mobile_tunnel::stable_link::resolve_tunnel(origin, accept) {
+        Where::Tunnel(t) => {
+            learned.no_route.remove(origin);
+            learned.tunnels.insert(origin.to_string(), (std::time::Instant::now(), t.clone()));
+            Route::Tunnel(t)
+        }
+        Where::NoRoute => {
+            learned.tunnels.remove(origin);
+            learned.no_route.insert(origin.to_string(), std::time::Instant::now());
+            Route::AsIs
+        }
+        Where::Failed => {
+            learned.tunnels.remove(origin);
+            Route::Unreachable
+        }
+    }
+}
+
+/// What the far PC is told while the Worker cannot say where this PC is.
+const UNREACHABLE: &str = "That PC cannot be reached right now. Trying again soon.";
+
+/// One web-route request. Through a Worker it is asked where the PC is first, then the tunnel is called directly (this client is
+/// not bound by CORS); one failed call asks again before it gives up. A Worker that cannot say where the PC is is never called for
+/// the bridge. No redirects, a short limit, no token in any error text.
+fn web_call_blocking(base: &str, token: &str, method: &str, target: &str, body: &[u8], accept: &dyn Fn(&str) -> bool) -> Result<(u16, Vec<u8>), String> {
+    use std::io::Read as _;
+    let url = web::url_for(base, target);
+    let origin = origin_of_url(&url);
+    let agent = ureq::AgentBuilder::new().timeout(Duration::from_secs(25)).redirects(0).build();
+    let send = |at: &str| -> Result<(u16, Vec<u8>), String> {
+        let req = agent.request(method, at).set("Authorization", &format!("Bearer {token}")).set("Accept-Encoding", "identity");
+        let result = if body.is_empty() { req.call() } else { req.set("Content-Type", "application/json").send_bytes(body) };
+        let read = |resp: ureq::Response| {
+            let status = resp.status();
+            let mut out = Vec::new();
+            let _ = resp.into_reader().take(super::wire::REPLY_MAX as u64).read_to_end(&mut out);
+            (status, out)
+        };
+        match result {
+            Ok(resp) => Ok(read(resp)),
+            Err(ureq::Error::Status(_, resp)) => Ok(read(resp)),
+            Err(e) => Err(e.kind().to_string()),
+        }
+    };
+    let tunnel = match route_for(&origin, false, accept) {
+        Route::AsIs => return send(&url),
+        Route::Unreachable => return Err(UNREACHABLE.into()),
+        Route::Tunnel(t) => t,
+    };
+    let first = send(&crate::mobile_tunnel::stable_link::repoint(&url, &tunnel));
+    if matches!(&first, Ok((status, _)) if *status < 500) {
+        return first;
+    }
+    // The tunnel did not answer: the PC may have a new address. Ask again; try once more only if it moved.
+    match route_for(&origin, true, accept) {
+        Route::Tunnel(next) if next != tunnel => send(&crate::mobile_tunnel::stable_link::repoint(&url, &next)),
+        _ => first,
     }
 }
 
@@ -330,6 +424,12 @@ pub fn app_service() -> Result<Arc<DeviceLink>, String> {
             Arc::new(pair_owner_key),
             Arc::new(my_worker_host),
         ))),
+        account: Some(Arc::new(super::account_dir::ServicePort)),
+        account_open: store("account-open.txt"),
+        account_lock: store("account-lock.json"),
+        account_links: store("account-links.json"),
+        account_removed: store("account-removed.json"),
+        pclink: Some(Arc::new(super::pclink::app_services::AppServices::new(Arc::new(computer_name)))),
     };
     let deps = Deps {
         keys: KeyStore::app_scoped("devices"),
@@ -368,6 +468,38 @@ pub fn app_service() -> Result<Arc<DeviceLink>, String> {
         svc.apply_settings(&public);
     }
     Ok(svc)
+}
+
+/// The account signed in or out on this PC: the address book entry follows (published again, or withdrawn).
+pub fn account_changed() {
+    let Some(svc) = SERVICE.get().cloned() else { return };
+    tauri::async_runtime::spawn(async move {
+        svc.sync_account().await;
+    });
+}
+
+/// "Let my other PCs open this PC", from the app window only (a guarded command). Saved in its own file, not in the settings.
+pub async fn set_open_from_account(on: bool) -> Result<(), String> {
+    let svc = app_service()?;
+    svc.set_open_from_account(on)?;
+    if on {
+        svc.start().await?;
+    }
+    Ok(())
+}
+
+/// The person dismissed the note that a PC was removed.
+pub fn dismiss_removed_pc(device_id: &str) {
+    if let Some(svc) = SERVICE.get() {
+        svc.dismiss_removed(device_id);
+    }
+}
+
+/// A device was signed out of the account from this PC: the pairing with it goes too.
+pub async fn forget_account_device(device_id: &str) {
+    if let Some(svc) = SERVICE.get().cloned() {
+        svc.forget_account_device(device_id).await;
+    }
 }
 
 /// App quit: grants withdrawn, links closed.
@@ -431,5 +563,93 @@ impl crate::capacity_proxy::service::OwnPort for AppOwn {
     }
     fn my_name(&self) -> String {
         SERVICE.get().map(|s| s.self_name()).unwrap_or_default()
+    }
+}
+
+#[cfg(test)]
+mod web_call_tests {
+    use super::*;
+    use std::io::{Read, Write};
+    use std::net::TcpListener;
+    use std::sync::Mutex;
+
+    /// A loopback server that answers every request with `reply` (status, body) and records the request heads.
+    fn serve(reply: Vec<(u16, String)>) -> (String, u16, Arc<Mutex<Vec<String>>>) {
+        let listener = TcpListener::bind("127.0.0.1:0").unwrap();
+        let port = listener.local_addr().unwrap().port();
+        let seen = Arc::new(Mutex::new(Vec::new()));
+        let log = seen.clone();
+        std::thread::spawn(move || {
+            for (status, body) in reply {
+                let Ok((mut stream, _)) = listener.accept() else { return };
+                let mut buf = [0_u8; 4096];
+                let n = stream.read(&mut buf).unwrap_or(0);
+                log.lock().unwrap().push(String::from_utf8_lossy(&buf[..n]).to_string());
+                let _ = write!(stream, "HTTP/1.1 {status} X\r\nContent-Type: application/json\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{body}", body.len());
+            }
+        });
+        (format!("http://127.0.0.1:{port}"), port, seen)
+    }
+
+    #[test]
+    fn through_a_worker_the_far_pc_asks_where_then_calls_the_tunnel_with_its_token() {
+        let (tunnel, tport, tunnel_seen) = serve(vec![(200, r#"{"ok":true}"#.into())]);
+        let (worker, _wport, worker_seen) = serve(vec![(200, format!(r#"{{"ok":true,"url":"{tunnel}"}}"#))]);
+        let accept = move |u: &str| u == format!("http://127.0.0.1:{tport}");
+        let (status, body) = web_call_blocking(&format!("{worker}/bridge"), "tok-1", "GET", "/health", &[], &accept).unwrap();
+        assert_eq!((status, body.as_slice()), (200, br#"{"ok":true}"#.as_slice()));
+        let w = worker_seen.lock().unwrap();
+        assert_eq!(w.len(), 1, "the Worker is asked where, never for the bridge: {w:?}");
+        assert!(w[0].starts_with("GET /_pm/where "), "{}", w[0]);
+        let t = tunnel_seen.lock().unwrap();
+        assert!(t[0].starts_with("GET /bridge/health "), "{}", t[0]);
+        assert!(t[0].to_ascii_lowercase().contains("authorization: bearer tok-1"));
+    }
+
+    #[test]
+    fn after_a_restart_a_failed_call_asks_again_and_follows_the_new_tunnel() {
+        let (dead, dport, _s) = serve(vec![]);
+        let (live, lport, live_seen) = serve(vec![(200, r#"{"ok":true}"#.into())]);
+        // the dead address answers nothing (its server thread already ended): the connection is refused or closed
+        let (worker, _w, worker_seen) = serve(vec![(200, format!(r#"{{"ok":true,"url":"{dead}"}}"#)), (200, format!(r#"{{"ok":true,"url":"{live}"}}"#))]);
+        let accept = move |u: &str| u == format!("http://127.0.0.1:{dport}") || u == format!("http://127.0.0.1:{lport}");
+        let (status, _) = web_call_blocking(&format!("{worker}/bridge"), "tok-2", "GET", "/health", &[], &accept).unwrap();
+        assert_eq!(status, 200);
+        assert_eq!(worker_seen.lock().unwrap().len(), 2, "asked twice: once, then again after the failure");
+        assert!(live_seen.lock().unwrap()[0].starts_with("GET /bridge/health "));
+    }
+
+    #[test]
+    fn a_worker_that_cannot_say_where_the_pc_is_is_never_called_for_the_bridge() {
+        let (worker, port, seen) = serve(vec![(503, r#"{"ok":false}"#.into())]);
+        // the Worker is not a tunnel: only an unrelated address is accepted here
+        let accept = |u: &str| u == "http://127.0.0.1:1";
+        let err = web_call_blocking(&format!("{worker}/bridge"), "tok-3", "GET", "/health", &[], &accept).unwrap_err();
+        assert!(err.contains("cannot be reached"), "{err}");
+        let seen = seen.lock().unwrap();
+        assert_eq!(seen.len(), 1, "only where was asked (port {port}): {seen:?}");
+        assert!(seen[0].starts_with("GET /_pm/where "));
+    }
+
+    #[test]
+    fn a_base_with_no_where_route_is_called_as_it_is_and_not_asked_on_every_call() {
+        let (lan, _p, seen) = serve(vec![(404, "{}".into()), (200, r#"{"ok":true}"#.into()), (200, r#"{"ok":true}"#.into())]);
+        let accept = |u: &str| u == "http://127.0.0.1:1";
+        for _ in 0..2 {
+            let (status, _) = web_call_blocking(&format!("{lan}/bridge"), "tok-4", "GET", "/health", &[], &accept).unwrap();
+            assert_eq!(status, 200);
+        }
+        let seen = seen.lock().unwrap();
+        let wheres = seen.iter().filter(|r| r.starts_with("GET /_pm/where ")).count();
+        assert_eq!(wheres, 1, "asked once, then remembered for a minute: {seen:?}");
+        assert_eq!(seen.iter().filter(|r| r.starts_with("GET /bridge/health ")).count(), 2);
+    }
+
+    #[test]
+    fn an_address_that_is_itself_a_tunnel_is_called_as_it_is() {
+        let (plain, port, seen) = serve(vec![(200, "{}".into())]);
+        let accept = move |u: &str| u == format!("http://127.0.0.1:{port}");
+        web_call_blocking(&format!("{plain}/bridge"), "t", "GET", "/health", &[], &accept).unwrap();
+        assert!(seen.lock().unwrap()[0].starts_with("GET /bridge/health "));
     }
 }

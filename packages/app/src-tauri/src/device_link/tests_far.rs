@@ -15,7 +15,7 @@ use crate::p2p::far_tests::FakeWorker;
 use crate::p2p::memory::MemoryNet;
 use crate::p2p::pairing::{parse_link, SystemClock};
 
-fn far_instance(name: &str, factory: Arc<dyn TransportFactory>, worker: &Arc<FakeWorker>, far_on: bool) -> Instance {
+pub(super) fn far_instance(name: &str, factory: Arc<dyn TransportFactory>, worker: &Arc<FakeWorker>, far_on: bool) -> Instance {
     let mut options = Options::memory();
     options.far_relay = Some(worker.clone());
     let i = instance_with(name, factory, false, Arc::new(SystemClock), Arc::new(real_now), options);
@@ -24,27 +24,27 @@ fn far_instance(name: &str, factory: Arc<dyn TransportFactory>, worker: &Arc<Fak
     i
 }
 
-fn pending(side: &Instance) -> Value {
+pub(super) fn pending(side: &Instance) -> Value {
     side.link.view()["pending"].clone()
 }
 
-async fn both_sheets(a: &Instance, b: &Instance) {
+pub(super) async fn both_sheets(a: &Instance, b: &Instance) {
     until("both sheets", || !pending(a).is_null() && !pending(b).is_null()).await;
 }
 
-fn choices_of(i: &Instance) -> Vec<String> {
+pub(super) fn choices_of(i: &Instance) -> Vec<String> {
     pending(i)["choices"].as_array().unwrap().iter().map(|c| c.as_str().unwrap().to_string()).collect()
 }
 
 /// The matching number, as the person would pick it: the one that is on both screens.
-fn matching(a: &Instance, b: &Instance) -> String {
+pub(super) fn matching(a: &Instance, b: &Instance) -> String {
     let (x, y) = (choices_of(a), choices_of(b));
     let both: Vec<&String> = x.iter().filter(|n| y.contains(n)).collect();
     assert_eq!(both.len(), 1, "exactly one number is on both screens: {x:?} {y:?}");
     both[0].clone()
 }
 
-fn id_of(side: &Instance) -> u64 {
+pub(super) fn id_of(side: &Instance) -> u64 {
     pending(side)["id"].as_u64().unwrap()
 }
 

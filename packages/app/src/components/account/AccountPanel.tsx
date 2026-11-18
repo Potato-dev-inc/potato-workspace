@@ -20,7 +20,7 @@ function seen(t: ReturnType<typeof useT>, d: AccountDevice, nowSecs: number): st
   return t('account.seenDays', { count: Math.floor(hours / 24) });
 }
 
-export function AccountPanel({ api = accountApi, now = () => Math.floor(Date.now() / 1000) }: { api?: AccountApi; now?: () => number }) {
+export function AccountPanel({ api = accountApi, now = () => Math.floor(Date.now() / 1000), compact = false }: { api?: AccountApi; now?: () => number; /** Signed in: one grey line (who, and Sign out this device) instead of the device list. A new device still gets its banner. */ compact?: boolean }) {
   const t = useT();
   const [view, setView] = useState<AccountView | null>(null);
   const [devices, setDevices] = useState<AccountDevice[]>([]);
@@ -90,6 +90,50 @@ export function AccountPanel({ api = accountApi, now = () => Math.floor(Date.now
     setDismissed(next);
     rememberDismissed(next);
   };
+
+  const thisDevice = devices.find((d) => d.is_this && !d.revoked);
+  if (compact && view.signed_in) {
+    return (
+      <div className="ac-compact" data-testid="account-panel">
+        {fresh.map((d) => (
+          <div key={d.id} className="ac-banner" role="status" data-testid="account-new-device">
+            <span>
+              {t('account.newDevice')} · <b>{d.name}</b>
+            </span>
+            <span className="ac-actions">
+              <button type="button" className="ck-btn" data-testid="account-not-me" disabled={busy === `notme:${d.id}`} onClick={() => run(`notme:${d.id}`, () => api.revoke(d.id, 'not_me'), () => setWarned(true))}>
+                {t('account.notMe')}
+              </button>
+              <button type="button" className="ck-btn" data-testid="account-its-me" onClick={() => dismiss(d.id)}>
+                {t('account.itsMe')}
+              </button>
+            </span>
+          </div>
+        ))}
+        {warned && (
+          <p className="ac-note" role="status" data-testid="account-not-me-advice">
+            {t('account.notMeAdvice')}
+          </p>
+        )}
+        <p className="ac-note" data-testid="account-as">
+          {t('account.signedInAs', { name: view.account?.display_name ?? '' })}
+          {thisDevice && (
+            <>
+              {' '}
+              <button type="button" className="cx-link" data-testid={`account-sign-out-${thisDevice.id}`} disabled={busy === `out:${thisDevice.id}`} onClick={() => run(`out:${thisDevice.id}`, api.signOutHere)}>
+                {t('account.signOutThis')}
+              </button>
+            </>
+          )}
+        </p>
+        {(error ?? view.message) && (
+          <p className="ac-error" role="alert" data-testid="account-error">
+            {error ?? view.message}
+          </p>
+        )}
+      </div>
+    );
+  }
 
   return (
     <section className="ac-panel" data-testid="account-panel" aria-label={t('account.title')}>

@@ -36,6 +36,7 @@ import {
 import { TEAM_DIFF, teamConfig } from './team-fixtures';
 import { borrowedOf, createLendMock } from './lend-fixtures';
 import { previewFor } from './shelf-fixtures';
+import { createAccountMock } from './account-pcs-fixtures';
 import { createDevicesMock } from './devices-fixtures';
 import { shipMock } from './ship-fixtures';
 import { sidebarBranch, sidebarWorktree } from './fixtures-sidebar';
@@ -127,13 +128,14 @@ const WORKFLOW_CREW = {
 export function installTauriMock(scenario: HarnessScenario): void {
   const lendMock = createLendMock(scenario.lend);
   const devicesMock = createDevicesMock(scenario.devices);
+  const accountMock = createAccountMock(scenario.account);
   const closedState: { chats: ClosedChat[] | null } = { chats: null };
   const bringState = newBringChatsState();
   const panes = scenario.panes ?? EXAMPLE_PANES;
   // In-memory plugin-store (one store, rid 1), keyed as the app writes it.
   // The two agent-authority switches, at the shipped defaults unless the scenario says otherwise.
-  let authority = scenario.authority ?? { ask_before_agent_control: true, agents_may_merge: false };
-  const store = new Map<string, unknown>([['settings', { theme: scenario.theme ?? 'dark', ...(scenario.simple ? { simple_mode: true } : {}), ...firstRunStore(scenario.firstRun), ...(scenario.missions?.enabled ? { missions_enabled: true } : {}), ...(scenario.lend ? { lend_enabled: true } : {}), ...(scenario.markup ? { markup_bar_enabled: true } : {}), ...(scenario.timeline ? { timeline_day_enabled: true } : {}), ...(scenario.workflows ? { workflows_enabled: true, crews_enabled: true } : {}), ...(scenario.devices && scenario.devices.enabled !== false ? { devices_enabled: true } : {}), show_terminals: !scenario.chatFirst }]]);
+  let authority = scenario.authority ?? { ask_before_agent_control: true, agents_may_merge: false, ask_before_helpers_start: false };
+  const store = new Map<string, unknown>([['settings', { theme: scenario.theme ?? 'dark', ...(scenario.simple ? { simple_mode: true } : {}), ...firstRunStore(scenario.firstRun), ...(scenario.missions?.enabled ? { missions_enabled: true } : {}), ...(scenario.lend ? { lend_enabled: true } : {}), ...(scenario.markup ? { markup_bar_enabled: true } : {}), ...(scenario.timeline ? { timeline_day_enabled: true } : {}), ...(scenario.workflows ? { workflows_enabled: true, crews_enabled: true } : {}), ...(scenario.devices && scenario.devices.enabled !== false ? { devices_enabled: true } : {}), ...(scenario.account ? { account_enabled: true } : {}), show_terminals: !scenario.chatFirst }]]);
   // Settings > Phone > Devices: one phone with full control in daily use, one watch-and-answer.
   const now = Math.floor(Date.now() / 1000);
   const day = 24 * 60 * 60;
@@ -145,6 +147,8 @@ export function installTauriMock(scenario: HarnessScenario): void {
     { id: '6f1c2a90-aaaa-4bbb-8ccc-000000000002', name: 'Pixel 8', public_key: 'pk2', paired_at: now - 9 * day, caps: ['watch', 'answer'], expires_at: now + 21 * day, last_seen: now - 9 * day, expired: false, idle_expiry_secs: 30 * day },
     { id: '6f1c2a90-aaaa-4bbb-8ccc-000000000003', name: 'Old iPad', public_key: 'pk3', paired_at: now - 120 * day, caps: ['watch', 'answer', 'type', 'control'], expires_at: now - 2 * day, last_seen: now - 32 * day, expired: true, idle_expiry_secs: 30 * day },
   ];
+  if (scenario.phones === 'none') pairedDevices = [];
+  if (scenario.phones === 'basic') pairedDevices = pairedDevices.slice(0, 1).map((d) => ({ ...d, caps: ['watch', 'answer', 'type'] }));
 
   mockWindows(scenario.route === 'settings' ? 'settings' : scenario.route === 'askbar' ? 'askbar' : 'cockpit');
   mockIPC(
@@ -186,6 +190,8 @@ export function installTauriMock(scenario: HarnessScenario): void {
       if (guide.handled) return guide.value;
       const lend = lendMock(cmd, a);
       if (lend.handled) return lend.value;
+      const account = accountMock(cmd, a);
+      if (account.handled) return account.value;
       const devices = devicesMock(cmd, a);
       if (devices.handled) return devices.value;
       const closed = closedChatsMock(scenario.closedChats, closedState, cmd, a);
@@ -628,6 +634,7 @@ export function installTauriMock(scenario: HarnessScenario): void {
           authority = {
             ask_before_agent_control: (a.askBeforeAgentControl as boolean | undefined) ?? authority.ask_before_agent_control,
             agents_may_merge: (a.agentsMayMerge as boolean | undefined) ?? authority.agents_may_merge,
+            ask_before_helpers_start: (a.askBeforeHelpersStart as boolean | undefined) ?? authority.ask_before_helpers_start,
           };
           return authority;
         }

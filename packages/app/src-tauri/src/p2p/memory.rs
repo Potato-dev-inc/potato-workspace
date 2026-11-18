@@ -240,6 +240,14 @@ impl MemLink {
     }
 }
 
+/// Like a real QUIC connection: when the last handle on this end is dropped (a task cancelled, a program gone), the link is closed
+/// and the other end hears it.
+impl Drop for MemLink {
+    fn drop(&mut self) {
+        self.close(0, "dropped");
+    }
+}
+
 #[async_trait]
 impl Link for MemLink {
     fn peer(&self) -> NodeId {

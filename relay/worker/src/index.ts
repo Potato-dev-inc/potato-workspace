@@ -32,6 +32,7 @@ import { isHash, isRid, isToken, MAX_CT_CHARS } from "./pair";
 import { codeKey, isCode, joinPage } from "./invites";
 import { bearer, sha256Hex } from "./stablecrypto";
 import { offlineResponse } from "./offline";
+import { originRule } from "./stable";
 import { isRoomId, isSeatId, parseRegistration, readHashOf, registrationError, ROOM, unb64 } from "./roomproto";
 // The viewer, built by relay/viewer, is bundled as text (wrangler `[[rules]] type = "Text"`).
 import viewerCss from "../../viewer/dist/viewer.css";
@@ -293,7 +294,7 @@ async function joinRoute(request: Request, env: Env, url: URL): Promise<Response
   const code = url.pathname.slice("/join/".length).replace(/\/$/, "");
   const box = await inviteBox(request, env, code);
   const peek = box instanceof Response ? ({ state: "unknown" } as const) : await box.peek();
-  return noStore(joinPage(isCode(code) ? code : "", url.host, peek, env.DOWNLOAD_URL));
+  return noStore(await joinPage(isCode(code) ? code : "", url.host, peek, env.DOWNLOAD_URL));
 }
 
 
@@ -431,6 +432,7 @@ async function readOrigin(request: Request): Promise<unknown> {
 
 /** `/_pm/health`, `/_pm/link/health`, `/_pm/link/register`, `/_pm/link/reset`. The link secret only ever arrives here. */
 async function pmRoute(request: Request, env: Env, path: string): Promise<Response> {
+  if (path === "where") return whereRoute(request, env);
   if (path === "health") {
     return request.method === "GET" ? noStore(json(healthBody(env))) : stableJson(405, { error: "method_not_allowed" });
   }
@@ -448,6 +450,7 @@ async function pmRoute(request: Request, env: Env, path: string): Promise<Respon
   const hash = await sha256Hex(token);
   const address = request.headers.get("cf-connecting-ip") ?? "unknown";
   const outcome = name === "reset" ? await stub.reset(hash, address) : await stub.register(hash, await readOrigin(request), address);
+  if (outcome.status === 200) forgetWhere();
   return outcome.status === 200 ? stableJson(200, { ok: true }) : stableJson(outcome.status, { error: outcome.error });
 }
 
@@ -456,34 +459,123 @@ function rewriteLocation(location: string, origin: string, self: URL): string {
   return location.startsWith(origin) ? `${self.origin}${location.slice(origin.length)}` : location;
 }
 
-/** Everything the relay side does not own goes to the PC's quick-tunnel address, once one is linked. */
-async function forwardToPc(request: Request, origin: string): Promise<Response> {
-  const self = new URL(request.url);
-  const headers = new Headers(request.headers);
-  headers.delete("host");
-  headers.set("x-forwarded-host", self.host);
-  headers.set("x-forwarded-proto", "https");
+// ------------------------------------------------------------------------------- where the PC is (point, do not proxy)
+//
+// The permanent link only POINTS at the PC's quick tunnel. The phone asks `GET /_pm/where`, then talks to the tunnel
+// directly (the PC answers CORS for this Worker's origin). The Worker never carries the phone's API calls or sockets:
+// each one used to cost a Worker request plus a subrequest, which blew the free quota.
+
+const WHERE_PER_MINUTE = 60;
+const WHERE_MAX_AGE_S = 15;
+const WHERE_MEMO_MS = 5_000;
+const MAX_TRACKED_IPS = 2000;
+const whereHits = new Map<string, { start: number; count: number }>();
+let whereMemo: { at: number; origin: string | null } | null = null;
+
+/** Per-address limit in this isolate's memory (no Durable Object, no subrequest). False when over the limit. */
+function whereAllowed(ip: string, now: number): boolean {
+  if (whereHits.size >= MAX_TRACKED_IPS) {
+    for (const [key, w] of whereHits) if (now - w.start >= 60_000) whereHits.delete(key);
+    if (whereHits.size >= MAX_TRACKED_IPS) whereHits.clear();
+  }
+  const w = whereHits.get(ip);
+  if (!w || now - w.start >= 60_000) {
+    whereHits.set(ip, { start: now, count: 1 });
+    return true;
+  }
+  w.count += 1;
+  return w.count <= WHERE_PER_MINUTE;
+}
+
+/** A new address was registered or reset on this isolate: the next `where` reads it at once. */
+function forgetWhere(): void {
+  whereMemo = null;
+}
+
+async function whereRoute(request: Request, env: Env): Promise<Response> {
+  if (request.method !== "GET" && request.method !== "HEAD") return stableJson(405, { error: "method_not_allowed" });
+  const now = Date.now();
+  if (!whereAllowed(request.headers.get("cf-connecting-ip") ?? "unknown", now)) {
+    return new Response('{"ok":false}', { status: 429, headers: { "content-type": "application/json", "cache-control": "no-store", "retry-after": "30" } });
+  }
+  if (!whereMemo || now - whereMemo.at >= WHERE_MEMO_MS) whereMemo = { at: now, origin: await linkOf(env).origin() };
+  const origin = whereMemo.origin;
+  // The stored origin passed the quick-tunnel rule when it was registered; check again so nothing else is ever handed out.
+  if (!origin || !originRule(env).test(origin)) {
+    return new Response('{"ok":false}', { status: 503, headers: { "content-type": "application/json", "cache-control": "no-store", "retry-after": "10" } });
+  }
+  return new Response(JSON.stringify({ ok: true, url: origin }), {
+    headers: { "content-type": "application/json", "cache-control": `public, max-age=${WHERE_MAX_AGE_S}` },
+  });
+}
+
+/** What an older phone page shows when it still calls `/bridge` here (it reads `message` of a 502 `BRIDGE_UNREACHABLE`). */
+const OLD_PAGE_SENTENCE = "This phone page is out of date. Update Potato Workspace on your PC, then open this link again.";
+
+/**
+ * The calls this Worker no longer carries: the phone API (`/bridge`), the dev-info file and every WebSocket. Answered before any
+ * Durable Object or the PC is touched. The 502 + `BRIDGE_UNREACHABLE` + `message` shape is the one an older phone page already turns
+ * into a plain sentence, so a Worker updated before the PC app tells the person what to do instead of failing silently.
+ */
+function refuseProxyCall(request: Request, path: string): Response | undefined {
+  if (path === "/bridge" || path.startsWith("/bridge/") || path.startsWith("/__puppet_master_dev__")) {
+    return new Response(JSON.stringify({ code: "BRIDGE_UNREACHABLE", error: OLD_PAGE_SENTENCE, message: OLD_PAGE_SENTENCE, reason: "not_proxied" }), {
+      status: 502,
+      headers: { "content-type": "application/json", "cache-control": "no-store" },
+    });
+  }
+  if ((request.headers.get("upgrade") ?? "").toLowerCase() === "websocket") return stableJson(404, { error: "not_proxied" });
+  return undefined;
+}
+
+/** What may be kept at the edge: the page's script, style, image, font, manifest and wasm files. Not HTML (a deep link answers `index.html`), never an API answer. */
+const CACHEABLE_TYPE = new RegExp("^(text/css|text/javascript|application/javascript|application/manifest[+]json|application/wasm|image/|font/|application/font)", "i");
+/** These two must always be asked fresh: a new app version replaces the page and its service worker. The PC's own cache headers stay as they are. */
+const ALWAYS_FRESH = new Set(["/", "/index.html", "/sw.js", "/registerSW.js"]);
+
+/**
+ * The phone page itself (index.html, scripts, icons): the only thing still fetched from the PC, GET only, with none of
+ * the client's headers. Page files (html/js/css/images/fonts/manifest/wasm) are kept at the edge so a load costs this Worker
+ * one request and the PC none; `index.html` and `sw.js` pass through with the PC's own cache headers and are never kept.
+ */
+async function shellFromPc(request: Request, env: Env, origin: string, self: URL): Promise<Response> {
+  if (request.method !== "GET" && request.method !== "HEAD") return stableJson(405, { error: "method_not_allowed" });
+  // The stored address passed the quick-tunnel rule when it was registered; check again before any fetch (as `where` does).
+  if (!originRule(env).test(origin)) return offlineResponse();
+  const fresh = ALWAYS_FRESH.has(self.pathname);
+  const key = new Request(`${self.origin}${self.pathname}${self.search}`, { method: "GET" });
+  const cache = fresh ? undefined : (globalThis as { caches?: { default?: Cache } }).caches?.default;
+  const hit = await cache?.match(key).catch(() => undefined);
+  if (hit) return request.method === "HEAD" ? new Response(null, hit) : hit;
+  const headers = new Headers();
+  const accept = request.headers.get("accept");
+  if (accept) headers.set("accept", accept);
   let upstream: Response;
   try {
-    // The request body is passed on as a stream, never buffered. A WebSocket upgrade passes straight through.
-    upstream = await fetch(`${origin}${self.pathname}${self.search}`, {
-      method: request.method,
-      headers,
-      body: request.body,
-      redirect: "manual",
-    });
+    upstream = await fetch(`${origin}${self.pathname}${self.search}`, { method: "GET", headers, redirect: "manual" });
   } catch {
     return offlineResponse();
   }
   if (upstream.status === 502 || upstream.status === 530) return offlineResponse();
-  if (upstream.status === 101) return upstream; // WebSocket: keep the socket object as it is
   const out = new Response(upstream.body, upstream);
   const location = out.headers.get("location");
   if (location) out.headers.set("location", rewriteLocation(location, origin, self));
+  out.headers.delete("set-cookie");
+  if (!fresh && upstream.status === 200 && CACHEABLE_TYPE.test(upstream.headers.get("content-type") ?? "")) {
+    // The phone server says no-store on every file; for these page files (hashed names) the Worker's own header replaces it.
+    out.headers.set("cache-control", "public, max-age=3600, s-maxage=600");
+    if (cache) {
+      try {
+        await cache.put(key, out.clone());
+      } catch {
+        // an uncacheable answer is still an answer
+      }
+    }
+  }
   return out;
 }
 
-/** What the relay side owns: `/v1/...`, the Live Room viewer under `/r/`, `/join/...`, `/_pm/...`. Any other path is the phone link's. */
+/** What the relay side owns: `/v1/...`, the Live Room viewer under `/r/`, `/join/...`, `/_pm/...`. Any other path is the phone page's. */
 const ownedByRelay = (path: string): boolean =>
   path.startsWith("/v1/") || path === "/r/" || path === "/r/viewer.js" || path === "/r/viewer.css";
 
@@ -493,9 +585,12 @@ export default {
     if (url.pathname.startsWith("/_pm/")) return pmRoute(request, env, url.pathname.slice("/_pm/".length));
     if (url.pathname.startsWith("/join/")) return joinRoute(request, env, url);
     if (!ownedByRelay(url.pathname)) {
-      // The phone link: anything else goes to the PC. Not linked yet: the relay's own front page, as before.
+      // Refuse what is not carried here first (no object, no PC touched), then serve the phone page from the PC.
+      const refused = refuseProxyCall(request, url.pathname);
+      if (refused) return refused;
+      // Not linked yet: the relay's own front page, as before.
       const origin = await linkOf(env).origin();
-      if (origin) return forwardToPc(request, origin);
+      if (origin) return shellFromPc(request, env, origin, url);
     }
     const page = viewerPage(request, url);
     if (page !== undefined) return page;

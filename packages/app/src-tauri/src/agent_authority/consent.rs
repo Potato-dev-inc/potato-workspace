@@ -186,6 +186,14 @@ pub fn forget_chat(chat_pane: &str) {
     LEDGER.lock().chats.remove(chat_pane);
 }
 
+/// What a card asks for when a program nobody could place starts or steers agents (setting "Ask me before other tools start agents" on).
+pub const START_OR_STEER: &str = "start or steer agents";
+
+/// "change your settings", or just "start or steer agents" (that target is already a verb phrase).
+pub fn change_phrase(target: &str) -> String {
+    if target == START_OR_STEER { target.to_string() } else { format!("change {target}") }
+}
+
 /// The requester's name inside a sentence: "Allow another agent to ..." rather than "Allow Another agent ...".
 fn in_sentence(requester: &str) -> String {
     if requester == super::gate::UNKNOWN_REQUESTER {
@@ -219,7 +227,7 @@ fn card_words(ask: &Ask) -> (String, String, Vec<Choice>) {
             vec![choice(CHOICE_ONCE, "Allow once"), choice(CHOICE_ALWAYS, "Always allow here"), choice(CHOICE_DENY, "Deny")],
         ),
         Action::ConfigChange => (
-            format!("Allow {who} to change {}?", ask.target),
+            format!("Allow {who} to {}?", change_phrase(&ask.target)),
             config_change_reason(ask),
             vec![choice(CHOICE_ONCE, "Allow once"), choice(CHOICE_DENY, "Deny")],
         ),
@@ -323,7 +331,7 @@ pub fn on_resolved(question: &Question) {
             format!("{who_asked} answering in {}", info.target),
         )
     } else if info.action == ACTION_CONFIG {
-        (format!("to change {}", info.target), format!("{who_asked} changing {}", info.target))
+        (format!("to {}", change_phrase(&info.target)), if info.target == START_OR_STEER { format!("{who_asked} starting or steering agents") } else { format!("{who_asked} changing {}", info.target) })
     } else if info.action == ACTION_BACKGROUND {
         (format!("to run {} in the background", info.target), format!("{who_asked} running {} in the background", info.target))
     } else {

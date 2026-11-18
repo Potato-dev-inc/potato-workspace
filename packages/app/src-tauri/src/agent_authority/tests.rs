@@ -8,8 +8,8 @@ use crate::mcp_sessions::{self, Relation};
 use crate::questions::{self, now_ms, Question, QuestionState};
 use serde_json::{json, Value};
 
-const TODAY: Config = Config { ask_before_agent_control: false, agents_may_merge: true };
-const ASKING: Config = Config { ask_before_agent_control: true, agents_may_merge: true };
+const TODAY: Config = Config { ask_before_agent_control: false, agents_may_merge: true, ask_before_helpers_start: false };
+const ASKING: Config = Config { ask_before_agent_control: true, agents_may_merge: true, ask_before_helpers_start: false };
 
 fn id(tag: &str) -> String {
     format!("{tag}-{}", uuid::Uuid::new_v4())
@@ -392,15 +392,15 @@ fn the_safe_defaults_ask_before_control_and_block_agent_merges() {
     assert!(!defaults.agents_may_merge, "B defaults off");
     assert_eq!(defaults.ask_before_agent_control, super::DEFAULT_ASK_BEFORE_AGENT_CONTROL);
     assert_eq!(defaults.agents_may_merge, super::DEFAULT_AGENTS_MAY_MERGE);
-    assert_eq!(parse("{}"), Config { ask_before_agent_control: true, agents_may_merge: false }, "a file missing both keys takes the safe defaults");
-    assert_eq!(parse(""), Config { ask_before_agent_control: true, agents_may_merge: false }, "a missing file takes the safe defaults");
+    assert_eq!(parse("{}"), Config { ask_before_agent_control: true, agents_may_merge: false, ask_before_helpers_start: false }, "a file missing both keys takes the safe defaults");
+    assert_eq!(parse(""), Config { ask_before_agent_control: true, agents_may_merge: false, ask_before_helpers_start: false }, "a missing file takes the safe defaults");
 }
 
 #[test]
 fn a_saved_choice_beats_the_default_and_a_broken_file_means_the_defaults() {
     use super::config::parse;
-    assert_eq!(parse(r#"{"ask_before_agent_control":true,"agents_may_merge":false}"#), Config { ask_before_agent_control: true, agents_may_merge: false });
-    assert_eq!(parse(r#"{"agents_may_merge":false}"#), Config { ask_before_agent_control: super::DEFAULT_ASK_BEFORE_AGENT_CONTROL, agents_may_merge: false }, "a missing key takes its default");
+    assert_eq!(parse(r#"{"ask_before_agent_control":true,"agents_may_merge":false}"#), Config { ask_before_agent_control: true, agents_may_merge: false, ask_before_helpers_start: false });
+    assert_eq!(parse(r#"{"agents_may_merge":false}"#), Config { ask_before_agent_control: super::DEFAULT_ASK_BEFORE_AGENT_CONTROL, agents_may_merge: false, ask_before_helpers_start: false }, "a missing key takes its default");
     assert_eq!(parse("not json"), Config::default());
     assert_eq!(parse(""), Config::default());
 }
@@ -409,8 +409,8 @@ fn a_saved_choice_beats_the_default_and_a_broken_file_means_the_defaults() {
 fn the_two_settings_are_not_in_the_phone_patchable_public_settings() {
     // A paired phone can patch the public-settings mirror over the bridge. These switches decide
     // what an agent may do without asking, so they live in their own file and Tauri command.
-    let merged = crate::settings_store::merge_public_settings(&json!({}), &json!({"ask_before_agent_control": true, "agents_may_merge": false}));
-    assert!(merged.get("ask_before_agent_control").is_none() && merged.get("agents_may_merge").is_none());
+    let merged = crate::settings_store::merge_public_settings(&json!({}), &json!({"ask_before_agent_control": true, "agents_may_merge": false, "ask_before_helpers_start": false}));
+    assert!(merged.get("ask_before_agent_control").is_none() && merged.get("agents_may_merge").is_none() && merged.get("ask_before_helpers_start").is_none());
 }
 
 // ---- no ungated way in ----

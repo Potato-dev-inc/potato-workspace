@@ -22,6 +22,8 @@ import { Btn, Note, SettingBlock, SettingToggle } from '../../settings-ui';
 
 const ASK_LABEL = en['settings.row.security-ask-before-control.label'];
 const ASK_HINT = en['settings.row.security-ask-before-control.hint'];
+const HELPERS_LABEL = en['settings.row.security-ask-before-helpers.label'];
+const HELPERS_HINT = en['settings.row.security-ask-before-helpers.hint'];
 const MERGE_LABEL = en['settings.row.security-agents-merge.label'];
 const MERGE_HINT = en['settings.row.security-agents-merge.hint'];
 
@@ -74,6 +76,28 @@ export function AskBeforeControlToggle({
       checked={Boolean(value?.ask_before_agent_control)}
       disabled={!value}
       onChange={(on) => void change({ ask_before_agent_control: on }, markSaved, setError)}
+    />
+  );
+}
+
+export function AskBeforeHelpersToggle({
+  markSaved,
+  setError,
+  api = agentAuthorityApi,
+}: {
+  markSaved: () => void;
+  setError: (message: string | null) => void;
+  api?: AgentAuthorityApi;
+}) {
+  const t = useT();
+  const { value, change } = useAuthority(api);
+  return (
+    <SettingToggle
+      label={t('settings.row.security-ask-before-helpers.label')}
+      description={t('settings.row.security-ask-before-helpers.hint')}
+      checked={Boolean(value?.ask_before_helpers_start)}
+      disabled={!value}
+      onChange={(on) => void change({ ask_before_helpers_start: on }, markSaved, setError)}
     />
   );
 }
@@ -230,6 +254,14 @@ export const securityRows: RowDef[] = [
     keywords: 'agent control take over pane consent ask permission lineage security answer prompt',
     group: 'Security',
     render: (env) => <AskBeforeControlToggle markSaved={env.markSaved} setError={env.setError} />,
+  },
+  {
+    id: 'security-ask-before-helpers',
+    label: HELPERS_LABEL,
+    hint: HELPERS_HINT,
+    keywords: 'helpers start run_agent mcp claude code codex other harness tap consent inbox ask security',
+    group: 'Security',
+    render: (env) => <AskBeforeHelpersToggle markSaved={env.markSaved} setError={env.setError} />,
   },
   {
     id: 'security-agents-merge',

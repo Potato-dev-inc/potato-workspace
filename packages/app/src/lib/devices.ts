@@ -15,7 +15,8 @@ import type { SshHost } from './ssh';
 import type { RoomRow } from './room';
 
 export type RoutePref = 'auto' | 'public' | 'own';
-export type DeviceLevel = 'watch' | 'full';
+/** What a paired PC may do on this one: read (watch), also answer and message (answer), or also work on it (full). */
+export type DeviceLevel = 'watch' | 'answer' | 'full';
 export type DeviceLinkState = 'online' | 'offline' | 'asleep' | 'closed' | 'not_allowed' | 'unknown';
 /** The route a live link uses: straight to the device, through the public relay, or through the person's own link. */
 export type DevicePath = 'direct' | 'relay' | 'own' | null;
@@ -100,8 +101,8 @@ export interface ActivityEntry {
   kind: ActivityKind;
 }
 
-/** `code`: both screens show the same code and both press Allow. `check`: pick the number both screens show (no Allow). */
-export type PairMode = 'code' | 'check';
+/** `code`: both screens show the same code and both press Allow. `check`: pick the number both screens show (no Allow). `type`: the PC being opened by a PC of the same account: type the six digits the other PC shows. `show`: the other PC, which shows them. */
+export type PairMode = 'code' | 'check' | 'type' | 'show';
 
 export interface PendingPair {
   id: number;
@@ -115,6 +116,10 @@ export interface PendingPair {
   fingerprint?: string;
   /** Check mode: three 6-digit numbers; one of them is shown on both screens. */
   choices?: string[];
+  /** `show` mode (the PC pressing Open): the six digits the person at the other PC types. Never present on a `type` sheet. */
+  number?: string;
+  /** Both PCs are on the person's own account (found in its address book). `first_seen`: when the account first saw that PC (unix seconds). Only who the account says they are: the number still decides. */
+  account?: { first_seen: number } | null;
 }
 
 export interface DevicesView {
@@ -194,13 +199,22 @@ export interface ScreenFrame {
   content: string;
 }
 
+/** A card on THIS PC: another PC asks to work on it ("Can work on this PC"). Nothing is granted until the person here says yes. */
+export interface FullAsk {
+  id: string;
+  node: string;
+  /** The person's own name for that PC. */
+  name: string;
+  at_ms: number;
+}
+
 export interface DevicesApi {
   state: () => Promise<DevicesView>;
   showCode: () => Promise<DevicesView>;
   cancelCode: () => Promise<DevicesView>;
   join: (address: string, code: string) => Promise<DevicesView>;
   pairAnswer: (id: number, allow: boolean) => Promise<DevicesView>;
-  /** Check mode: the person picked this 6-digit number (no space). */
+  /** The person picked this 6-digit number, or typed these six digits (no space). */
   pairPick: (id: number, pick: string) => Promise<DevicesView>;
   rename: (node: string, name: string) => Promise<DevicesView>;
   setPermission: (node: string, on: boolean, level?: DeviceLevel) => Promise<DevicesView>;
@@ -240,7 +254,12 @@ export interface DevicesApi {
   filesSend: (a: { node: string; root: string; dir: string; local: string[]; on_exists?: OnExists }) => Promise<CopyResult>;
   transferCancel: (id: number) => Promise<DevicesView>;
   transfersClear: () => Promise<DevicesView>;
-  /** Runs one bridge route on the far device through the PC link. The far device enforces its rights. */
+  /** The cards waiting on this PC: PCs that asked to work on it. */
+  fullAsks: () => Promise<FullAsk[]>;
+  /** The person tapped Allow (turns "Can work on this PC" on for that PC) or Not now (changes nothing). */
+  answerFullAsk: (id: string, allow: boolean) => Promise<DevicesView>;
+  onFullAsk: (cb: (ask: FullAsk) => void) => Promise<UnlistenFn>;
+  /** Runs one `/pclink/` route on the far device through the PC link. The far device enforces the level it gave this PC. */
   request: (node: string, method: string, path: string, body?: unknown) => Promise<RequestResult>;
   subscribe: (node: string) => Promise<void>;
   unsubscribe: (node: string) => Promise<void>;
@@ -288,6 +307,9 @@ export const devicesApi: DevicesApi = {
   filesSend: (a) => call('devices_files_send', { ...a }),
   transferCancel: (id) => call('devices_transfer_cancel', { id }),
   transfersClear: () => call('devices_transfers_clear'),
+  fullAsks: () => call('devices_full_asks'),
+  answerFullAsk: (id, allow) => call('devices_full_ask_answer', { id, allow }),
+  onFullAsk: (cb) => (isTauri() ? listen<FullAsk>('devices://full-ask', (e) => cb(e.payload)) : Promise.resolve(noop)),
   request: (node, method, path, body) => call('devices_request', { node, method, path, ...(body === undefined ? {} : { body }) }),
   subscribe: (node) => call('devices_subscribe', { node }),
   unsubscribe: (node) => call('devices_unsubscribe', { node }),
@@ -483,6 +505,14 @@ export function sortActivity(list: unknown): ActivityEntry[] {
 export function activityLine(e: ActivityEntry): string {
   const name = clipText(e.name, 40);
   return `${clockText(e.at)} ${t(`devices.act.${e.dir}.${e.kind}`, { name })}`;
+}
+
+
+/** One word for a PC in the picker and the chip: it can be opened now, it is away, or it cannot be reached (refused, too old, not known yet). */
+export type PcStatus = 'online' | 'offline' | 'cant';
+export function pcStatus(d: Pick<Device, 'state' | 'too_old'>): PcStatus {
+  if (d.state === 'offline' || d.state === 'asleep' || d.state === 'closed') return 'offline';
+  return d.state === 'online' && !d.too_old ? 'online' : 'cant';
 }
 
 /** What the Where picker lists. */

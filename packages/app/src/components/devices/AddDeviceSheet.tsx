@@ -1,4 +1,6 @@
-// "Add a device": nearby (not available yet), with a code, far away (a pairing link), over SSH (any machine with an SSH login).
+// "Add a PC": make a link on one PC, paste it on the other, pick the number that is on both screens. The PCs meet through
+// the maker's own relay, so nobody types an address or a code. The older ways (a code on the same network, an SSH
+// login) stay one step away under "More ways to add".
 import { useState } from 'react';
 import { useT } from '../../i18n';
 import { devicesApi, type DevicesApi, type DevicesView } from '../../lib/devices';
@@ -8,7 +10,7 @@ import { SshForm } from './SshForm';
 import type { SshApi } from '../../lib/ssh';
 import '../../styles/devices.css';
 
-type Tab = 'nearby' | 'code' | 'far' | 'ssh';
+type Tab = 'far' | 'code' | 'ssh';
 
 export function AddDeviceSheet({
   view,
@@ -16,6 +18,7 @@ export function AddDeviceSheet({
   ssh,
   onClose,
   onPaired,
+  onShowCode,
 }: {
   view: DevicesView | null;
   api?: DevicesApi;
@@ -24,9 +27,12 @@ export function AddDeviceSheet({
   onClose: () => void;
   /** The pairing finished: both people said yes. */
   onPaired?: () => void;
+  /** "Show a code on this PC instead": the same-network way, where this PC is the one that shows the code. */
+  onShowCode?: () => void;
 }) {
   const t = useT();
-  const [tab, setTab] = useState<Tab>('code');
+  const [tab, setTab] = useState<Tab>('far');
+  const [more, setMore] = useState(false);
   const [address, setAddress] = useState('');
   const [code, setCode] = useState('');
   const [busy, setBusy] = useState(false);
@@ -45,39 +51,20 @@ export function AddDeviceSheet({
         setBusy(false);
       });
   };
-  const tabs: { id: Tab; label: string; soon?: boolean }[] = [
-    { id: 'nearby', label: t('devices.nearby') },
-    { id: 'code', label: t('devices.withCode') },
-    { id: 'far', label: t('devices.farAway') },
+  const finish = () => {
+    onPaired?.();
+    onClose();
+  };
+  const others: { id: Tab; label: string }[] = [
+    { id: 'far', label: t('devices.addPc.link') },
+    { id: 'code', label: t('devices.addPc.sameNetwork') },
     { id: 'ssh', label: t('devices.overSsh') },
   ];
   return (
     <div className="dev-scrim" data-testid="add-device-sheet">
-      <div className="dev-sheet" role="dialog" aria-label={t('devices.add')}>
-        <h2>{t('devices.add')}</h2>
-        <div className="dev-tabs" role="tablist">
-          {tabs.map((x) => (
-            <button
-              key={x.id}
-              type="button"
-              role="tab"
-              aria-selected={tab === x.id}
-              disabled={x.soon}
-              title={x.soon ? t('devices.comingSoon') : undefined}
-              className={`dev-tab${tab === x.id ? ' is-on' : ''}`}
-              data-testid={`add-tab-${x.id}`}
-              onClick={() => setTab(x.id)}
-            >
-              {x.label}
-              {x.soon && <small> · {t('devices.comingSoon')}</small>}
-            </button>
-          ))}
-        </div>
-        {tab === 'nearby' && (
-          <p className="dev-note" data-testid="nearby-none">
-            {t('devices.nearbyNone')}
-          </p>
-        )}
+      <div className="dev-sheet" role="dialog" aria-label={t('devices.addPc.title')}>
+        <h2>{t('devices.addPc.title')}</h2>
+        {tab === 'far' && <FarAwayTab view={view} api={api} onJoined={finish} />}
         {tab === 'code' && (
           <div className="dev-form">
             <p className="dev-note">{t('devices.joinHelp')}</p>
@@ -97,26 +84,25 @@ export function AddDeviceSheet({
             )}
           </div>
         )}
-        {tab === 'far' && (
-          <FarAwayTab
-            view={view}
-            api={api}
-            onJoined={() => {
-              onPaired?.();
-              onClose();
-            }}
-          />
-        )}
-        {tab === 'ssh' && (
-          <SshForm
-            api={ssh}
-            onCancel={onClose}
-            onSaved={() => {
-              onPaired?.();
-              onClose();
-            }}
-          />
-        )}
+        {tab === 'ssh' && <SshForm api={ssh} onCancel={onClose} onSaved={finish} />}
+        <details className="dev-more" open={more} onToggle={(e) => setMore(e.currentTarget.open)} data-testid="add-more">
+          <summary>{t('devices.moreWays')}</summary>
+          <div className="dev-tabs" role="tablist">
+            {others.map((x) => (
+              <button
+                key={x.id}
+                type="button"
+                role="tab"
+                aria-selected={tab === x.id}
+                className={`dev-tab${tab === x.id ? ' is-on' : ''}`}
+                data-testid={`add-tab-${x.id}`}
+                onClick={() => setTab(x.id)}
+              >
+                {x.label}
+              </button>
+            ))}
+          </div>
+        </details>
         {tab !== 'ssh' && (
           <div className="dev-actions">
             <button type="button" className="dev-btn" onClick={onClose}>
@@ -128,6 +114,13 @@ export function AddDeviceSheet({
               </button>
             )}
           </div>
+        )}
+        {tab === 'code' && onShowCode && (
+          <p className="dev-note">
+            <button type="button" className="dev-btn" onClick={onShowCode} data-testid="add-show-code">
+              {t('devices.showCode')}
+            </button>
+          </p>
         )}
       </div>
     </div>

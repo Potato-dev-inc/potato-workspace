@@ -58,11 +58,12 @@ const ship = { recent: vi.fn().mockResolvedValue([]), gitState: vi.fn().mockReso
 
 const q = <T extends Element = HTMLElement>(sel: string) => document.querySelector<T>(sel);
 
-async function open(fake: DevicesFake, extra: { onAddDevice?: () => void; onStarted?: (...a: unknown[]) => void } = {}) {
+async function open(fake: DevicesFake, extra: { onAddDevice?: () => void; onStarted?: (...a: unknown[]) => void; onOpenNewAgent?: (project?: { path: string; name: string }) => void } = {}) {
   await act(async () =>
     root.render(
       <Sidebar
         c={fakeApi()}
+        onOpenNewAgent={extra.onOpenNewAgent}
         onOpenPalette={() => {}}
         ship={ship}
         devices={{
@@ -83,16 +84,16 @@ describe('New agent: Where', () => {
   it('shows the pill with This PC chosen, and lists This PC, a device, and an offline device that cannot be picked', async () => {
     await open(new DevicesFake({ enabled: true, devices: [MAC_MINI, WORK_LAPTOP] }));
     expect(q('[data-testid="where"]')!.textContent).toContain('Where');
-    expect(q('[data-testid="where-pill"]')!.textContent).toContain('This PC');
+    expect(q('[data-testid="where-pill"]')!.textContent).toContain('Desk-PC · This PC');
     await click(q('[data-testid="where-pill"]'));
     const menu = q('.dev-where-menu')!;
-    expect([...menu.querySelectorAll('.dev-where-row > span:not(.dis-reason)')].map((s) => s.textContent)).toEqual(['This PC', 'Mac mini', 'Work laptop', 'Add a device…']);
+    expect([...menu.querySelectorAll('.dev-where-row > span:not(.dis-reason)')].map((s) => s.textContent)).toEqual(['Desk-PC · This PC', 'Mac mini', 'Work laptop', 'Add a PC…']);
     // The offline device says why on screen, not only in a tooltip.
-    expect(q<HTMLButtonElement>(`[data-testid="where-${WORK_LAPTOP.node}"]`)!.querySelector('.dis-reason')?.textContent).toBe('Cannot pick: offline');
+    expect(q<HTMLButtonElement>(`[data-testid="where-${WORK_LAPTOP.node}"]`)!.querySelector('small')?.textContent).toBe('Offline');
     expect(q<HTMLButtonElement>(`[data-testid="where-${NODE_MAC}"]`)!.disabled).toBe(false);
     const laptop = q<HTMLButtonElement>(`[data-testid="where-${WORK_LAPTOP.node}"]`)!;
     expect(laptop.disabled).toBe(true);
-    expect(laptop.textContent).toContain('Offline.');
+    expect(laptop.textContent).toContain('Offline');
     // The usual menu is still there under it.
     expect(document.body.textContent).toContain('Codex');
   });
@@ -104,11 +105,28 @@ describe('New agent: Where', () => {
     await click(q(`[data-testid="where-${NODE_MAC}"]`));
     await settle(6);
     expect(q('[data-testid="where-pill"]')!.textContent).toContain('Mac mini');
-    expect(fake.requests.some((r) => r.node === NODE_MAC && r.path === '/phone/new-chat')).toBe(true);
-    const tiles = [...document.querySelectorAll('[data-testid="nc-agent-tile"]')].map((t) => t.textContent);
-    expect(tiles).toEqual(['Claude', 'Codex'].map((n) => expect.stringContaining(n)));
-    expect(q('[data-testid="nc-project-pill"]')!.textContent).toContain('app');
-    expect(q('[data-testid="phone-new-chat"]')).not.toBeNull();
+    expect(fake.requests.some((r) => r.node === NODE_MAC && r.path === '/pclink/agents')).toBe(true);
+    // The usual New agent page, held in the menu: the Mac's first agent and project, one "on Mac mini" label, no phone screen.
+    expect(q('[data-testid="phone-new-chat"]')).toBeNull();
+    expect(q('[data-testid="na-on-device"]')!.textContent).toBe('on Mac mini');
+    expect(q('[data-testid="na-agent"]')!.textContent).toContain('Claude');
+    expect(q('[data-testid="na-folder"]')!.textContent).toContain('app');
+    await click(q('[data-testid="na-agent"]'));
+    expect([...document.querySelectorAll('.ck-na-menu [role="menuitemradio"] .ck-na-item-row span:last-child')].map((e) => e.textContent)).toEqual(['Claude', 'Codex']);
+  });
+
+  it('with the full page available, picking a device hands over to the full New agent page with that device remembered', async () => {
+    const fake = new DevicesFake({ enabled: true, devices: [MAC_MINI] });
+    const onOpenNewAgent = vi.fn();
+    await open(fake, { onOpenNewAgent });
+    await click(q('[data-testid="where-pill"]'));
+    await click(q(`[data-testid="where-${NODE_MAC}"]`));
+    await settle(4);
+    expect(onOpenNewAgent).toHaveBeenCalledTimes(1);
+    expect(JSON.parse(window.localStorage.getItem('pm.newAgent.where') ?? '{}')).toEqual({ '': NODE_MAC });
+    // Nothing of the page is squeezed into the popup.
+    expect(q('[data-testid="where-body"]')).toBeNull();
+    expect(q('.ck-na')).toBeNull();
   });
 
   it('starting there goes through the far bridge and opens it', async () => {
@@ -118,10 +136,10 @@ describe('New agent: Where', () => {
     await click(q('[data-testid="where-pill"]'));
     await click(q(`[data-testid="where-${NODE_MAC}"]`));
     await settle(6);
-    await typeInto(q<HTMLTextAreaElement>('textarea')!, 'Build the dmg');
-    await click(q('button.ph-comp-send'));
+    await typeInto(q<HTMLTextAreaElement>('textarea.ck-na-input')!, 'Build the dmg');
+    await click(q('button.ck-na-send'));
     await settle(8);
-    expect(fake.requests.find((r) => r.path === '/phone/chats')).toMatchObject({ node: NODE_MAC, method: 'POST', body: { agent: 'claude', project: 'proj-app', lane: 'chat' } });
+    expect(fake.requests.find((r) => r.path === '/pclink/agents/start')).toMatchObject({ node: NODE_MAC, method: 'POST', body: { agent: 'claude', project: 'proj-app', lane: 'chat' } });
     expect(onStarted).toHaveBeenCalledTimes(1);
     expect(onStarted.mock.calls[0]![0]).toMatchObject({ node: NODE_MAC });
     expect(onStarted.mock.calls[0]![2]).toBe(true);

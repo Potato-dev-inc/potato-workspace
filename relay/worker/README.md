@@ -168,7 +168,7 @@ This one deployment does three jobs. They share the Worker and nothing else (sep
 | Job | Routes | Object |
 |---|---|---|
 | Team relay and Live Rooms | `/v1/teams/...`, `/v1/rooms/...`, `/r/` | `Team`, `IpGate`, `Room`, `RoomIndex` |
-| Stable phone link | `/_pm/link/...`, and every other path goes to your PC once it is linked | `StableLink` |
+| Stable phone link | `/_pm/link/...`, `/_pm/where`, and the phone page once a PC is linked | `StableLink` |
 | Invite links | `/join/<code>`, `/v1/invites/<code>`, `/v1/teams/<team>/invite-links` | `InviteBox` (one per code) |
 
 **One deploy:** `cd relay/worker && npm install && npx wrangler login && npm run deploy`. Keep the name `pm-relay`
@@ -180,9 +180,29 @@ The app reads `features` before it sends anything. A Worker deployed before this
 says "Update your Worker" with the one deploy command. A secret is only ever sent to an address that lists the
 feature it is for: the stable link secret goes to `/_pm/link/...` on a Worker that lists `stable-link`, and nowhere else.
 
-**The phone link's path rule.** The Worker owns `/v1/`, `/r/`, `/join/` and `/_pm/`. Every other path
-(including `/`) is forwarded to your PC's quick-tunnel address once one is linked. Before a PC is linked, `/` shows the
-relay's front page.
+**The phone link points, it does not proxy.** The Worker owns `/v1/`, `/r/`, `/join/` and `/_pm/`. The phone link is
+`GET /_pm/where`: `{"ok":true,"url":"https://<name>.trycloudflare.com"}` while a PC is linked (cacheable for 15 s), else
+`503 {"ok":false}`. It makes no subrequest, is limited per address (60 a minute, in memory, 429 above it) and only ever
+names an address that passes the quick-tunnel rule. The phone page loads from this Worker, asks `where`, and then sends every
+API call, stream and WebSocket straight to that tunnel with its bearer token; the PC answers CORS for this Worker's origin
+(workers.dev or your own domain, and any earlier address you used). The Worker no longer carries those calls: `/bridge/...`,
+WebSocket upgrades and every non-GET request outside the owned prefixes are refused (404/405) without touching the PC. That
+proxy cost a Worker request plus a subrequest per call and used up the free daily quota.
+
+What is still fetched from the PC: only the phone page itself (`GET` of `index.html`, scripts, icons), with none of the
+client's headers. Only page files (script, style, image, font, manifest, wasm) are kept in the edge cache: the phone server says
+`no-store` on every file, and for these the Worker replaces it with `public, max-age=3600, s-maxage=600`, so a load costs this Worker
+one request and the PC none. `index.html`, `sw.js`, `registerSW.js` and HTML answers (a deep link returns `index.html`) pass through with
+the PC's own cache headers and are never kept. Serving
+that page as true static assets (`[assets]` in `wrangler.toml`) would make it free, but needs the app's two deploy paths
+(`team/worker_update.rs` and `relay_deploy.rs`) and `bundle-for-app.mjs` to ship and upload the built phone page: not done yet.
+Before a PC is linked, `/` shows the relay's front page.
+
+**Deploy order: the PC app first, then the Worker.** An older phone page (served by an older PC app) still calls `/bridge/...` on the
+Worker. A new Worker answers those with `502 {"code":"BRIDGE_UNREACHABLE","message":"This phone page is out of date. Update Potato
+Workspace on your PC, then open this link again."}`, the shape an older page already turns into a plain sentence, instead of failing
+silently. So update Potato Workspace on the PC first (it brings the new phone page, which asks `/_pm/where`), then update the Worker.
+The app's own "Update your Worker" step does it in that order.
 
 **Invite links.** A team device asks the Worker for a link (`POST /v1/teams/<team>/invite-links`, signed like every
 team call). The Worker makes a random 16-character code and keeps the invite for at most 24 hours.

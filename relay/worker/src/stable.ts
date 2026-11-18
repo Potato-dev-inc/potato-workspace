@@ -12,7 +12,7 @@ export type Health = { linked: boolean; updated_at: number | null };
 
 type Window = { start: number; count: number };
 
-function originRule(env: Env): RegExp {
+export function originRule(env: Env): RegExp {
   if (env.ALLOWED_ORIGIN_RE) {
     try {
       return new RegExp(env.ALLOWED_ORIGIN_RE);

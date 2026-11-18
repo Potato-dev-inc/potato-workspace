@@ -5,7 +5,7 @@ import { recordWorkflowStart, workflowFirstMessage } from '../lib/workflowCard';
 
 // A chat that started from a workflow: one "Using workflow" card, then the person's words. Example data only.
 const BRIEF = [
-  'You are the front of the workflow "Research + Write". Read each request from the person, decide which helper fits, start that helper yourself, and report back. Work in this folder: D:/project',
+  'You are the front of the workflow "Research + Write". Read each request from the person, decide which helper fits, start that helper yourself, and report back. Work in this folder: D:\pm-night',
   '',
   'Your rules:\nWrite the document the person asks for. A Researcher is collecting facts into research-notes.md in the same folder at the same time. Check that file from time to time and use what it says.',
   '',

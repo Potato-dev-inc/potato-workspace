@@ -28,6 +28,13 @@ const ROW_ALIASES: Record<string, string> = {
   security: 'security-ask-before-control',
   plugins: 'agent-pack',
   costs: 'budget-turns',
+  // The phone's own settings (alerts, keyboard, typing box, sign out every phone, Telegram, the link options) are one Settings row.
+  telegram: 'phone-devices',
+  tunnel: 'phone-devices',
+  'revoke-all-devices': 'phone-devices',
+  'phone-notifications': 'phone-devices',
+  'mobile-keyboard-resizes': 'phone-devices',
+  'mobile-input-visible': 'phone-devices',
   // These rows moved onto each agent's own page; the list of agents is the closest place.
   'agent-default-models': 'agent-list',
   'agent-lane': 'agent-list',

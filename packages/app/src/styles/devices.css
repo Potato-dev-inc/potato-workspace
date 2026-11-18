@@ -435,27 +435,20 @@
   font-size: 11px;
 }
 
-/* The phone's new-chat screen inside the desktop page: the `.ph` wrapper brings the phone tokens and styles, this keeps it in the
-   page (the phone version is a full-screen layer) and a comfortable width. */
-.ph.dev-ph-embed {
-  display: flex;
-  flex: 1;
-  flex-direction: column;
-  width: 100%;
-  max-width: 720px;
-  height: 100%;
-  min-height: 0;
-  margin: 0 auto;
-  background: transparent;
+/* Another PC picked in New agent: the page is the usual one; this is its small "on <device>" label next to the title. */
+.cockpit .ck-na-top-on {
+  margin-left: 8px;
+  color: var(--label-3);
+  font-size: var(--fs-caption, 12px);
 }
-.ph.dev-ph-embed .ph-nc {
-  position: relative;
-  inset: auto;
-  z-index: auto;
-  flex: 1;
+
+/* The sidebar's quick-start menu has no page of its own: the New agent page is held in it, scrolling inside the menu. */
+.dev-menu-page {
+  display: flex;
+  flex-direction: column;
+  max-height: 70vh;
   min-height: 0;
-  padding-top: 0;
-  background: transparent;
+  overflow: auto;
 }
 
 /* The simple view of a pane on another device. */
@@ -892,4 +885,190 @@
   background: var(--bg);
   color: var(--label);
   font-family: var(--font-ui);
+}
+
+/* A pairing link: Copy + picture; the text is folded away. */
+.dev-linkbox-main { align-items: center; gap: 12px; }
+.dev-qr { flex: none; border-radius: 6px; background: #fff; }
+.dev-link-text > summary { cursor: pointer; font-size: 12px; color: var(--label-2, inherit); }
+.dev-link-text[open] > summary { margin-bottom: 6px; }
+.dev-more > summary { cursor: pointer; font-size: 12px; color: var(--label-2, inherit); }
+.dev-more[open] > summary { margin-bottom: 8px; }
+.dev-route-fold > summary { cursor: pointer; font-size: 12px; color: var(--label-2, inherit); margin: 8px 0 4px; }
+
+/* The host sheet's one box for a PC of the person's own account: off until ticked. */
+.dev-tick {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 10px 0 2px;
+  color: var(--label-2);
+  cursor: pointer;
+}
+.dev-tick input {
+  accent-color: var(--accent);
+}
+
+/* The PC being opened: the six digits are typed here, never picked. */
+.dev-type {
+  width: 100%;
+  margin: 10px 0 4px;
+  padding: 12px 14px;
+  font: 600 26px/1.2 var(--font-mono, ui-monospace, monospace);
+  letter-spacing: 0.18em;
+  text-align: center;
+  color: var(--label);
+  background: var(--fill);
+  border: 1px solid var(--sep);
+  border-radius: 8px;
+}
+.dev-type:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 1px;
+}
+
+/* Buttons in a sheet never wrap their label or spill over a neighbour: they keep their size and the row wraps instead. */
+.dev-sheet .dev-actions {
+  flex-wrap: wrap;
+  gap: 8px;
+}
+.dev-actions .dev-btn {
+  flex: none;
+  white-space: nowrap;
+}
+
+/* New agent on a PC that lets this PC only watch and answer: one quiet line where Start would be. */
+.cockpit .ck-na-ask {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  color: var(--label-3);
+  font-size: var(--fs-caption, 12px);
+}
+
+/* Sandboxes of this PC sit indented under This PC in the picker. */
+.dev-where-row.is-place {
+  padding-left: 22px;
+}
+.dev-where-row.is-away small {
+  color: var(--label-4, var(--label-3));
+}
+
+/* The chip at the top of the sidebar: which PC the app is on. It is also the picker. */
+.cockpit .dev-chipbar {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 4px 10px 6px;
+}
+.cockpit .dev-pcchip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  align-self: flex-start;
+  max-width: 100%;
+  padding: 3px 10px;
+  border: 1px solid var(--line, rgba(255, 255, 255, 0.12));
+  border-radius: 999px;
+  background: transparent;
+  color: var(--label-2);
+  font: inherit;
+  font-size: var(--fs-caption, 12px);
+  cursor: pointer;
+}
+.cockpit .dev-pcchip.is-remote {
+  background: var(--fill, rgba(255, 255, 255, 0.08));
+  color: var(--label-1, inherit);
+}
+.cockpit .dev-pcchip.is-amber {
+  border-color: var(--amber, #d9a441);
+  color: var(--amber, #d9a441);
+}
+.cockpit .dev-pcchip-text {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.cockpit .dev-chipbar-lost {
+  margin: 0;
+  color: var(--label-3);
+  font-size: var(--fs-caption, 12px);
+}
+.cockpit .dev-chipbar-lost button {
+  margin-left: 4px;
+}
+
+/* A chat on another PC is the normal chat; it only needs the room the main area gives it. */
+.cockpit .dev-remote-chat {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  min-height: 0;
+}
+.cockpit .dev-watch-only {
+  margin: 0;
+  padding: 10px 16px;
+  color: var(--label-3);
+  font-size: var(--fs-caption, 12px);
+  text-align: center;
+}
+.dev-remote-body:has(> .dev-remote-chat) {
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+.dev-remote-bar {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 36px;
+  padding: 0 14px;
+}
+.dev-remote-name {
+  font-weight: 600;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.dev-remote-tag {
+  flex: 0 0 auto;
+  padding: 0 6px;
+  border-radius: 4px;
+  background: var(--fill);
+  color: var(--label-2);
+  font-size: var(--fs-caption, 12px);
+}
+.dev-remote-folder {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.dev-remote-slot {
+  margin-left: auto;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+/* The Where pill never wraps its name onto two lines. */
+.dev-where--row .dev-where-pill {
+  white-space: nowrap;
+}
+
+.dev-remote-bar .dev-remote-folder {
+  flex: 0 1 auto;
+  margin: 0;
+  color: var(--label-2);
+}
+
+.cockpit .dev-remote-branch {
+  font-family: var(--font-mono, ui-monospace, monospace);
+  font-size: var(--fs-caption, 12px);
+  color: var(--label-3);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 160px;
 }

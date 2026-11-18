@@ -38,13 +38,18 @@ pub(crate) struct FakeWorker {
 
 impl FakeWorker {
     pub(crate) fn new() -> Arc<Self> {
+        Self::at("fake.workers.dev")
+    }
+
+    /// A Worker at its own host name (two PCs in one Cloudflare account each have one).
+    pub(crate) fn at(host: &str) -> Arc<Self> {
         Arc::new(Self {
             boxes: Mutex::new(HashMap::new()),
             next: Mutex::new(0),
             feature: AtomicBool::new(true),
             down: AtomicBool::new(false),
             seen: Mutex::new(Vec::new()),
-            host: "fake.workers.dev".into(),
+            host: host.into(),
         })
     }
 

@@ -78,8 +78,8 @@ fn claude_pane_showing_a_dialog(id: &str) -> Arc<Mutex<PaneRegistry>> {
 #[test]
 fn a_socket_input_from_a_session_into_a_dialog_is_held_like_the_http_route() {
     use crate::agent_authority::config::{with_config, Config};
-    const TODAY: Config = Config { ask_before_agent_control: false, agents_may_merge: true };
-    const ASKING: Config = Config { ask_before_agent_control: true, agents_may_merge: true };
+    const TODAY: Config = Config { ask_before_agent_control: false, agents_may_merge: true, ask_before_helpers_start: false };
+    const ASKING: Config = Config { ask_before_agent_control: true, agents_may_merge: true, ask_before_helpers_start: false };
     let session = uuid::Uuid::new_v4().to_string();
     let pane = format!("socket-dialog-{}", uuid::Uuid::new_v4());
     let registry = claude_pane_showing_a_dialog(&pane);

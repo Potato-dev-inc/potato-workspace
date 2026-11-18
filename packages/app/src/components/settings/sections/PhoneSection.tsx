@@ -1,14 +1,16 @@
-// The phone rows that Connect > Phone draws (phone alerts, keyboard and typing box, revoke all, Telegram). Settings no longer
-// has a Phone page: ConnectPage reads these rows with `phoneRowsOriginal` and shows them through RowShell.
+// The phone rows: phone alerts, keyboard and typing box, revoke all, Telegram, and the link options (how the phone and other PCs reach this
+// PC). Connect (Devices) makes the link by itself and shows none of these; Settings > Advanced > Phone and other devices holds them.
 import { errorSentence } from '../../../lib/sayError';
 import { t, useT } from '../../../i18n';
-import { useEffect, useState } from 'react';
+import { lazy, Suspense, useEffect, useState } from 'react';
 import { tauri } from '../../../lib/tauri';
 import { DEVICES_CHANGED_EVENT } from '../../MobilePairingPanel';
 import type { RowDef, SettingsEnv } from '../model';
 import { SendTest, type TestResult } from '../previews/Previews';
 import { Btn, SettingRow, SettingToggle } from '../settings-ui';
 import { TelegramSetup } from '../blocks/TelegramSetup';
+import { RowShell } from '../SectionView';
+import { PhoneDevicesPcs } from './PhoneDevicesPcs';
 
 type PairedDevice = Awaited<ReturnType<typeof tauri.listPairedMobileDevices>>[number];
 
@@ -92,6 +94,7 @@ export const phoneRowsOriginal: RowDef[] = [
   },
   {
     id: 'mobile-keyboard-resizes',
+    keys: ['mobile_keyboard_resizes_agent'],
     label: 'Keyboard resizes the agent',
     hint: 'Off: the keyboard covers the top of the agent. On: the agent redraws above it.',
     keywords: 'keyboard resize redraw phone screen',
@@ -107,6 +110,7 @@ export const phoneRowsOriginal: RowDef[] = [
   },
   {
     id: 'mobile-input-visible',
+    keys: ['mobile_input_visible'],
     label: 'Show the typing box on the phone',
     hint: 'When off, the box under the terminal is hidden, but the terminal still takes your taps.',
     keywords: 'input box tap target mobile phone keyboard',
@@ -139,3 +143,33 @@ export const phoneRowsOriginal: RowDef[] = [
     render: (env) => <TelegramSetup env={env} />,
   },
 ];
+
+const TunnelSection = lazy(() => import('../TunnelSection').then((m) => ({ default: m.TunnelSection })));
+
+/**
+ * One Settings row that holds everything the Connect page no longer shows: phone alerts, the keyboard and typing box, sign out every
+ * phone, Telegram, and the link options (how the phone and other PCs reach this PC: quick, fixed, own domain, start fresh). The
+ * same screens and commands as before, just not on Connect, where the app does it all by itself.
+ */
+function PhoneDevicesBlock({ env }: { env: SettingsEnv }) {
+  return (
+    <div className="st-row is-block" data-testid="phone-devices">
+      {phoneRowsOriginal.map((row) => (
+        <RowShell key={row.id} row={row} env={env} />
+      ))}
+      <PhoneDevicesPcs />
+      <Suspense fallback={null}>
+        <TunnelSection openTunnelOn={env.settings.opentunnel_stable_link === true} />
+      </Suspense>
+    </div>
+  );
+}
+
+export const phoneDevicesRow: RowDef = {
+  id: 'phone-devices',
+  label: 'Phone and other devices',
+  hint: 'Phone alerts, keyboard, sign out phones, Telegram and the link to this PC.',
+  keywords: 'phone alerts keyboard revoke sign out telegram address tunnel relay worker domain url stable link cloudflare start fresh own',
+  group: 'Phone app',
+  render: (env) => <PhoneDevicesBlock env={env} />,
+};

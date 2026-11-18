@@ -116,10 +116,11 @@ export const tauriModelOptionsApi: ModelOptionsApi = {
 };
 
 /** The list for one agent: loading, then ready or failed. A new agent starts loading again. */
-export function useModelOptions(agentId: string | null, api: ModelOptionsApi = tauriModelOptionsApi): ModelListState {
+export function useModelOptions(agentId: string | null, api: ModelOptionsApi = tauriModelOptionsApi, useCache = true): ModelListState {
   const [state, setState] = useState<{ agentId: string | null; value: ModelListState }>({ agentId: null, value: { status: 'loading' } });
   // While the answer loads, the last list this agent sent (kept on this computer) is shown.
-  const cached = useMemo(() => (agentId ? readCachedOptions(agentId) : null), [agentId]);
+  // (Another PC's list never falls back to this PC's saved one: `useCache` is false there.)
+  const cached = useMemo(() => (agentId && useCache ? readCachedOptions(agentId) : null), [agentId, useCache]);
   useEffect(() => {
     if (!agentId) return undefined;
     let live = true;

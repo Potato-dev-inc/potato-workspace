@@ -14,7 +14,7 @@ import { DeviceNotices } from './DeviceNotices';
 import { DeviceRoute } from './DeviceRoute';
 import '../../styles/devices.css';
 
-export function DevicePage({ device, api = devicesApi, onBack, onRetry, focusRights = false }: { device: Device; api?: DevicesApi; onBack: () => void; onRetry?: () => void; /** "Choose what it may do" asked for this device: show its rights choice. */ focusRights?: boolean }) {
+export function DevicePage({ device, api = devicesApi, onBack, onRetry, focusRights = false, hideRoute = false }: { hideRoute?: boolean; device: Device; api?: DevicesApi; onBack: () => void; onRetry?: () => void; /** "Choose what it may do" asked for this device: show its rights choice. */ focusRights?: boolean }) {
   const t = useT();
   const [name, setName] = useState(device.name);
   const [error, setError] = useState<string | null>(null);
@@ -39,8 +39,8 @@ export function DevicePage({ device, api = devicesApi, onBack, onRetry, focusRig
       </button>
       <h3>{deviceLabel(device)}</h3>
       <p className="dev-note">
-        <span className={`dev-dot${device.state === 'online' ? ' is-up' : ''}`} aria-hidden="true" /> {stateSentence(device)}
-        {chip && (
+        <span className={`dev-dot${device.state === 'online' ? ' is-up' : ''}`} aria-hidden="true" /> {hideRoute && device.state === 'online' ? t('devices.online') : stateSentence(device)}
+        {chip && !hideRoute && (
           <span className="dev-chip" data-testid="route-chip">
             {chip}
           </span>
@@ -83,10 +83,10 @@ export function DevicePage({ device, api = devicesApi, onBack, onRetry, focusRig
       </label>
       {device.lets_run && (
         <div className="dev-levels" role="radiogroup" aria-label={t('devices.level')}>
-          {(['watch', 'full'] as DeviceLevel[]).map((level) => (
+          {(['watch', 'answer', 'full'] as DeviceLevel[]).map((level) => (
             <label key={level} className="dev-opt">
               <input type="radio" name="dev-level" checked={device.level === level} onChange={() => void run(api.setPermission(device.node, true, level))} data-testid={`level-${level}`} />
-              <span>{level === 'watch' ? t('devices.level.watch') : t('devices.level.full')}</span>
+              <span>{level === 'watch' ? t('devices.level.watch') : level === 'answer' ? t('devices.level.answer') : t('devices.level.full')}</span>
             </label>
           ))}
         </div>
@@ -114,7 +114,7 @@ export function DevicePage({ device, api = devicesApi, onBack, onRetry, focusRig
       </label>
       {device.lets_files && <DeviceFolders device={device} api={api} />}
       </div>
-      <DeviceRoute device={device} api={api} run={run} />
+      {!hideRoute && <DeviceRoute device={device} api={api} run={run} />}
       <p className="dev-note">{t('devices.loginsStay')}</p>
       <Transfers api={api} node={device.node} />
       <DeviceActivity device={device} api={api} />

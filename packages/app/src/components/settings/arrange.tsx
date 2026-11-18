@@ -75,7 +75,7 @@ export const LAYOUT: Record<SectionId, LayoutGroup[]> = {
     { group: 'Standby helpers', rows: ['standby-helpers', 'helper-answers'] },
     {
       group: 'Rules for all agents',
-      rows: ['security-ask-before-control', 'security-agents-merge', 'agent-rules', 'loop-guard', 'package-check', 'collision', 'security-recent-approvals'],
+      rows: ['security-ask-before-control', 'security-ask-before-helpers', 'security-agents-merge', 'agent-rules', 'loop-guard', 'package-check', 'collision', 'security-recent-approvals'],
     },
     { group: 'Limits', rows: ['budget-turns', 'project-budget', 'right-size'] },
     { group: 'Undo and memory', rows: ['checkpoints', 'shared-memory'] },
@@ -106,7 +106,7 @@ export const LAYOUT: Record<SectionId, LayoutGroup[]> = {
   advanced: [
     {
       group: 'Connections to other tools',
-      rows: ['toolbelt', 'helper-tools', 'bridge-endpoint', 'mcp-status', 'rust-mcp', 'mcp-install', 'snippet-claude-desktop', 'snippet-codex'],
+      rows: ['toolbelt', 'helper-tools', 'bridge-endpoint', 'mcp-status', 'rust-mcp', 'mcp-install', 'snippet-claude-desktop', 'snippet-codex', 'phone-devices'],
     },
     { group: 'Models', rows: ['librarian-indexer', 'opencode-provider', 'opencode-model', 'model-bridge'] },
     { group: 'App and files', rows: ['storage', 'settings-file', 'diagnostic-file', 'chat-search-index', 'early-versions', 'settings-recovery', 'bring-old-chats'] },

@@ -26,16 +26,56 @@ fn sign_with_prefix(key: &SigningKey, prefix: &str, statement: String) -> Signed
 
 /// "This is my device": account, device id, kind, name and public key, signed by the device key itself.
 pub fn device_statement(key: &SigningKey, account_id: &str, device_id: &str, kind: &str, name: &str) -> Signed {
-    let text = json!({
+    device_statement_with_node(key, account_id, device_id, kind, name, None)
+}
+
+/// The same, naming the PC-link id this device answers on (`node_id`): the account's address book entry that lets the
+/// person's other PCs find it. Signed by the device key, so the server cannot change it.
+pub fn device_statement_with_node(key: &SigningKey, account_id: &str, device_id: &str, kind: &str, name: &str, node_id: Option<&str>) -> Signed {
+    let mut value = json!({
         "v": 1,
         "account_id": account_id,
         "device_id": device_id,
         "kind": kind,
         "name": name,
         "device_pub": b64(key.verifying_key().as_bytes()),
-    })
-    .to_string();
-    sign_with_prefix(key, DEVICE_PREFIX, text)
+    });
+    if let Some(node) = node_id {
+        value["node_id"] = json!(node);
+    }
+    sign_with_prefix(key, DEVICE_PREFIX, value.to_string())
+}
+
+/// The statement of a PC that lets its other PCs open it: the link id, the relay it is reached through and when it was made, all
+/// under the device key. The other PCs trust none of these as more than a place to knock, and ignore a statement that is not recent
+/// (the PC says again every minute), so an old one the account kept cannot send them to an address that no longer works.
+pub fn device_statement_published(key: &SigningKey, account_id: &str, device_id: &str, name: &str, node_id: &str, relay: Option<&str>, issued_at: u64) -> Signed {
+    let mut value = json!({
+        "v": 1,
+        "account_id": account_id,
+        "device_id": device_id,
+        "kind": "pc",
+        "name": name,
+        "device_pub": b64(key.verifying_key().as_bytes()),
+        "node_id": node_id,
+        "issued_at": issued_at,
+    });
+    if let Some(relay) = relay {
+        value["home_relay"] = json!(relay);
+    }
+    sign_with_prefix(key, DEVICE_PREFIX, value.to_string())
+}
+
+/// Whether `signature` (base64url) is `device_pub`'s (base64url) signature over `statement` under the device prefix.
+pub fn verify_device_statement(device_pub: &str, statement: &str, signature: &str) -> bool {
+    use crate::keys::crypto::unb64;
+    use ed25519_dalek::{Signature, Verifier, VerifyingKey};
+    let (Some(pubkey), Some(sig)) = (unb64(device_pub), unb64(signature)) else { return false };
+    let (Ok(pubkey), Ok(sig)) = (<[u8; 32]>::try_from(pubkey.as_slice()), <[u8; 64]>::try_from(sig.as_slice())) else { return false };
+    let Ok(vk) = VerifyingKey::from_bytes(&pubkey) else { return false };
+    let mut msg = DEVICE_PREFIX.as_bytes().to_vec();
+    msg.extend_from_slice(statement.as_bytes());
+    vk.verify(&msg, &Signature::from_bytes(&sig)).is_ok()
 }
 
 /// "Sign this device out" (`sign_out`) or "that was not me" (`not_me`) for one device, signed by the calling device.

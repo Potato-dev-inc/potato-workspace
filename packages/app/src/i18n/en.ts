@@ -75,7 +75,7 @@ import { deskReview } from './en/deskReview';
 import { devices } from './en/devices';
 import { crews } from './en/crews';
 import { workflows } from './en/workflows';
-import { workflowCard } from './en/workflowCard';
+import { workflowCard, markupCard } from './en/workflowCard';
 import { crewCanvas } from './en/crewCanvas';
 import { crewTalk } from './en/crewTalk';
 import { account } from './en/account';
@@ -155,6 +155,7 @@ export const en = {
   ...crewCanvas,
   ...workflows,
   ...workflowCard,
+  ...markupCard,
   ...crewTalk,
   ...account,
   ...agentRules,

@@ -131,6 +131,8 @@ pub struct TunnelStatus {
     /// `moved` (the usual port was busy, another program has it) | `not_running` (the phone server could not start). Absent when all is well.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub port_problem: Option<&'static str>,
+    /// The person chose "Temporary link": phones get the quick address and the Worker is left out (it stays saved and linked).
+    pub link_temporary: bool,
 }
 
 /// Result of "Test connection".
@@ -195,6 +197,9 @@ impl TunnelState {
     /// The address other parts (the phone page, the CLI's pair link) may hand to a phone. A stable-link Worker is offered only
     /// once this computer is linked to it: before that the Worker has no idea where this computer is and answers "PC offline".
     fn advertised_url(&self) -> Option<String> {
+        if let Some(info) = self.stable.as_ref().filter(|_| crate::worker_origins::link_temporary()) {
+            return temporary_url(info.quick_url.as_deref());
+        }
         advertised_url(self.tunnel_url.as_deref(), self.stable.as_ref().map(|s| &s.link))
     }
 
@@ -238,6 +243,12 @@ fn advertised_url(tunnel_url: Option<&str>, stable_link: Option<&LinkState>) -> 
         Some(link) if *link != LinkState::Linked => None,
         _ => tunnel_url.map(str::to_string),
     }
+}
+
+/// "Temporary link": the plain quick address, used directly (no Worker in between). It changes on every restart, so a
+/// phone paired through it must pair again after one. `None` until cloudflared has printed it.
+fn temporary_url(quick_url: Option<&str>) -> Option<String> {
+    quick_url.map(str::to_string)
 }
 
 /// Where the phone server answers on this computer, or `None` when it is not running (it never bound a port).
@@ -386,7 +397,15 @@ pub fn tunnel_status() -> TunnelStatus {
             .map(|wait| wait.as_secs().max(1)),
         local_port: pwa_server::bound_pwa_port(),
         port_problem: pwa_server::pwa_port_problem(),
+        link_temporary: crate::worker_origins::link_temporary(),
     }
+}
+
+/// "Permanent link" (false) or "Temporary link" (true). Takes effect on the next address a phone asks for: no restart, and the
+/// saved Worker and its link stay as they are. Returns the new status.
+pub fn set_link_temporary(on: bool) -> Result<TunnelStatus, String> {
+    crate::worker_origins::set_link_temporary(on)?;
+    Ok(tunnel_status())
 }
 
 pub fn start_mobile_tunnel(app: &AppHandle, bridge_direct_url: String) -> Result<(), String> {
@@ -468,11 +487,18 @@ pub fn apply_tunnel_config(
         return Ok(status);
     }
     tunnel_config::save(&path, &next)?;
+    let origins = crate::worker_origins::origins_file(&path);
     if matches!(input, TunnelConfigInput::ForgetWorker) {
         tunnel_config::forget_stable(&memory);
+        crate::worker_origins::forget(&origins);
     } else {
         tunnel_config::remember_stable(&memory, &next);
+        // A new address (a domain of their own, or back to workers.dev) is trusted next to the earlier ones.
+        if let tunnel_config::TunnelConfig::Stable { worker_url, .. } = &next {
+            crate::worker_origins::remember(&origins, worker_url);
+        }
     }
+    crate::worker_origins::invalidate();
     // "Show secret" changes nothing: do not drop the tunnel (and its address) just to read a secret.
     let only_showing = matches!(&input, TunnelConfigInput::Stable { secret_action: tunnel_config::SecretAction::Show, secret: None, .. }) && next == current;
     let restarted = if only_showing { Ok(tunnel_status()) } else { restart_mobile_tunnel(app) };
@@ -863,7 +889,10 @@ pub fn test_connection(public_url: Option<String>) -> Result<ConnectionTest, Str
                 message,
             });
         }
-        return test_origin(&worker);
+        return test_through_worker(&worker, &|w| match stable_link::resolve_tunnel(w, &stable_link::is_quick_origin) {
+            stable_link::Where::Tunnel(t) => Some(t),
+            _ => None,
+        }, &test_origin);
     }
     let origin = match public_url.filter(|u| !u.trim().is_empty()) {
         Some(raw) => tunnel_config::normalize_origin(&raw, false)?,
@@ -874,6 +903,26 @@ pub fn test_connection(public_url: Option<String>) -> Result<ConnectionTest, Str
             .ok_or_else(|| "No public address yet. Start the tunnel first.".to_string())?,
     };
     test_origin(&origin)
+}
+
+/// The Worker only points at this PC, so the bridge is tried where the Worker points: ask `/_pm/where`, then `<tunnel>/bridge/health`.
+/// `resolve` and `probe` are passed in so the linked and not-pointing cases are unit tests.
+fn test_through_worker(
+    worker: &str,
+    resolve: &dyn Fn(&str) -> Option<String>,
+    probe: &dyn Fn(&str) -> Result<ConnectionTest, String>,
+) -> Result<ConnectionTest, String> {
+    let started = std::time::Instant::now();
+    match resolve(worker) {
+        Some(tunnel) => probe(&tunnel),
+        None => Ok(ConnectionTest {
+            ok: false,
+            url: stable_link::where_url(worker),
+            http_status: None,
+            latency_ms: started.elapsed().as_millis() as u64,
+            message: "The Worker is up, but it does not say where this computer is yet. Press Restart tunnel.".into(),
+        }),
+    }
 }
 
 /// `GET <origin>/bridge/health` and what it says.
@@ -1258,5 +1307,42 @@ mod tests {
         let found = crate::tools_home::with_test_home(manifest, Some(local), || cloudflared_bin(Some(&install), Some(&install), None));
         assert_eq!(found, Ok(staged.join("bin").join(name)));
         std::fs::remove_dir_all(&install).ok();
+    }
+}
+
+#[cfg(test)]
+mod link_choice_tests {
+    use super::*;
+
+    #[test]
+    fn temporary_uses_the_quick_address_directly_and_nothing_before_it_exists() {
+        assert_eq!(temporary_url(Some("https://a-b-c.trycloudflare.com")).as_deref(), Some("https://a-b-c.trycloudflare.com"));
+        assert_eq!(temporary_url(None), None);
+    }
+
+    #[test]
+    fn permanent_still_waits_for_the_link_and_gives_the_phone_the_tunnel_that_serves_the_worker_page() {
+        // Unchanged rule: with a Worker, an address is offered only once linked.
+        assert_eq!(advertised_url(Some("https://w.dev"), Some(&LinkState::Registering)), None);
+        assert_eq!(advertised_url(Some("https://w.dev"), Some(&LinkState::Linked)).as_deref(), Some("https://w.dev"));
+    }
+
+    #[test]
+    fn test_connection_through_a_linked_worker_probes_the_tunnel_it_names_not_the_worker() {
+        let probed = std::cell::RefCell::new(Vec::new());
+        let probe = |origin: &str| -> Result<ConnectionTest, String> {
+            probed.borrow_mut().push(origin.to_string());
+            Ok(ConnectionTest { ok: true, url: format!("{origin}/bridge/health"), http_status: Some(200), latency_ms: 3, message: "ok".into() })
+        };
+        let out = test_through_worker("https://pm.me.workers.dev", &|_| Some("https://a-1.trycloudflare.com".into()), &probe).unwrap();
+        assert!(out.ok && out.url == "https://a-1.trycloudflare.com/bridge/health");
+        assert_eq!(*probed.borrow(), vec!["https://a-1.trycloudflare.com".to_string()], "the bridge is never asked on the Worker");
+    }
+
+    #[test]
+    fn test_connection_says_so_when_the_worker_names_no_tunnel() {
+        let probe = |_: &str| -> Result<ConnectionTest, String> { panic!("nothing to probe") };
+        let out = test_through_worker("https://pm.me.workers.dev", &|_| None, &probe).unwrap();
+        assert!(!out.ok && out.url == "https://pm.me.workers.dev/_pm/where" && out.message.contains("does not say where"));
     }
 }

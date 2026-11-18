@@ -4,6 +4,7 @@
 // offers one button to its own rights choice, and the backend's "nothing is shared yet" line gives way to that next step.
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { useT } from '../../i18n';
+import { clearDeviceLocalState } from '../../lib/deviceLocalState';
 import { chipText, deviceLabel, devicesApi, nextStepLine, stateSentence, stateWord, type DevicesApi } from '../../lib/devices';
 import { EmptyState } from '../common/EmptyState';
 import { onOpenDevice, takePendingDevice } from '../../lib/openDevice';
@@ -19,7 +20,7 @@ import type { SshApi } from '../../lib/ssh';
 import { useDevices } from './useDevices';
 import '../../styles/devices.css';
 
-export function DevicesPage({ api = devicesApi, ssh, onSaved, onOpenPhone, variant = 'settings' }: { api?: DevicesApi; /** The SSH command layer (tests give a fake). */ ssh?: SshApi; onSaved?: () => void; /** "Pair a phone": opens the phone pairing row in Settings. */ onOpenPhone?: () => void; /** `connect`: the Connect page's My PCs tab. What is connected comes first, then the buttons; phones have their own tab. */ variant?: 'settings' | 'connect' }) {
+export function DevicesPage({ api = devicesApi, ssh, onSaved, onOpenPhone, variant = 'settings', hideNodes }: { api?: DevicesApi; /** The SSH command layer (tests give a fake). */ ssh?: SshApi; onSaved?: () => void; /** "Pair a phone": opens the phone pairing row in Settings. */ onOpenPhone?: () => void; /** `connect`: the Connect page's My PCs tab. What is connected comes first, then the buttons; phones have their own tab. */ variant?: 'settings' | 'connect'; /** Paired PCs another list on the page already shows (with their own Open button): left out of this list. */ hideNodes?: ReadonlySet<string> }) {
   const t = useT();
   const { view, enabled, refresh } = useDevices(api);
   const [sheet, setSheet] = useState<'add' | 'show' | null>(null);
@@ -48,7 +49,12 @@ export function DevicesPage({ api = devicesApi, ssh, onSaved, onOpenPhone, varia
       ...api,
       setPermission: (...args) => api.setPermission(...args).then(saved) as ReturnType<DevicesApi['setPermission']>,
       rename: (...args) => api.rename(...args).then(saved) as ReturnType<DevicesApi['rename']>,
-      remove: (node) => api.remove(node).then(saved) as ReturnType<DevicesApi['remove']>,
+      remove: (node) =>
+        api.remove(node).then((v) => {
+          // What this PC kept of that PC goes with the pairing.
+          clearDeviceLocalState(node);
+          return saved(v);
+        }) as ReturnType<DevicesApi['remove']>,
       setFiles: (...args) => api.setFiles(...args).then(saved) as ReturnType<DevicesApi['setFiles']>,
       setWeb: (...args) => api.setWeb(...args).then(saved) as ReturnType<DevicesApi['setWeb']>,
       setAgentsSend: (...args) => api.setAgentsSend(...args).then(saved) as ReturnType<DevicesApi['setAgentsSend']>,
@@ -85,9 +91,11 @@ export function DevicesPage({ api = devicesApi, ssh, onSaved, onOpenPhone, varia
       <button type="button" className="dev-btn is-primary" onClick={() => setSheet('add')} data-testid="add-device">
         {t('devices.add')}
       </button>
-      <button type="button" className="dev-btn" onClick={() => setSheet('show')} data-testid="show-code">
-        {t('devices.showCode')}
-      </button>
+      {!inConnect && (
+        <button type="button" className="dev-btn" onClick={() => setSheet('show')} data-testid="show-code">
+          {t('devices.showCode')}
+        </button>
+      )}
     </div>
   );
   return (
@@ -115,7 +123,7 @@ export function DevicesPage({ api = devicesApi, ssh, onSaved, onOpenPhone, varia
             )
           )}
           {!inConnect && buttons}
-          <h4>{t('devices.list')}</h4>
+          {(view.devices.length === 0 || view.devices.some((d) => !hideNodes?.has(d.node))) && <h4>{t('devices.list')}</h4>}
           {view.devices.length === 0 ? (
             <EmptyState
               testId="devices-empty"
@@ -124,8 +132,8 @@ export function DevicesPage({ api = devicesApi, ssh, onSaved, onOpenPhone, varia
               action={{ label: t('devices.emptyAction'), onClick: () => setSheet('add') }}
             />
           ) : (
-            <ul className="dev-list">
-              {view.devices.map((d) => {
+            <ul className="dev-list" hidden={view.devices.every((d) => hideNodes?.has(d.node))}>
+              {view.devices.filter((d) => !hideNodes?.has(d.node)).map((d) => {
                 const word = stateWord(d);
                 const chip = chipText(d);
                 const next = nextStepLine(d);
@@ -148,7 +156,7 @@ export function DevicesPage({ api = devicesApi, ssh, onSaved, onOpenPhone, varia
           )}
           {inConnect && buttons}
           <SshMachines api={ssh} refreshKey={sshSaved} />
-          <RouteSetting value={view.route_pref} ownReady={view.own_route_ready} onChange={(pref) => void api.setRoute(pref).then(saved)} />
+          {!inConnect && <RouteSetting value={view.route_pref} ownReady={view.own_route_ready} onChange={(pref) => void api.setRoute(pref).then(saved)} />}
           {!inConnect && (
             <>
               <h4>{t('devices.phones')}</h4>
@@ -172,6 +180,7 @@ export function DevicesPage({ api = devicesApi, ssh, onSaved, onOpenPhone, varia
           api={api}
           ssh={ssh}
           onClose={() => setSheet(null)}
+          onShowCode={() => setSheet('show')}
           onPaired={() => {
             setSshSaved((n) => n + 1);
             refresh();

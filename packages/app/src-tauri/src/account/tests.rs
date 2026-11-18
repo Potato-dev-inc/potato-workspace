@@ -301,8 +301,8 @@ fn sign_in_list_sign_out_against_a_local_server() {
     let challenge = Arc::new(Mutex::new(String::new()));
     let key_pub = Arc::new(Mutex::new(None));
     let seen = Arc::new(Mutex::new(Seen::default()));
-    // redeem, devices, sign-out of another device (+ the list again), sign-out here (DELETE /v1/session)
-    let (base, server) = fake_server(5, challenge.clone(), key_pub, seen.clone());
+    // redeem, devices, sign-out of another device (+ the list again), sign-out here (leave the address book, then sign this device out)
+    let (base, server) = fake_server(6, challenge.clone(), key_pub, seen.clone());
     let opened = Arc::new(Mutex::new(Vec::new()));
     let svc = service(&base, "p1", Arc::new(MemoryBackend::new()), opened.clone());
 
@@ -338,10 +338,22 @@ fn sign_in_list_sign_out_against_a_local_server() {
     assert!(svc.revoke("not-an-id", "sign_out").is_err());
     assert!(svc.revoke("22222222-2222-4222-8222-222222222222", "delete_all").is_err());
 
+    let me = svc.view().device_id.unwrap();
     assert!(!svc.sign_out_here().signed_in);
     server.join().unwrap();
     let lines = seen.lock().lines.clone();
-    assert_eq!(lines, vec!["POST /v1/session", "GET /v1/devices", "POST /v1/devices/22222222-2222-4222-8222-222222222222/sign-out", "GET /v1/devices", "DELETE /v1/session"]);
+    assert_eq!(
+        lines,
+        vec![
+            "POST /v1/session".to_string(),
+            "GET /v1/devices".into(),
+            "POST /v1/devices/22222222-2222-4222-8222-222222222222/sign-out".into(),
+            "GET /v1/devices".into(),
+            // Signing out leaves the address book first (no link id, no relay), then signs this very device out.
+            "PATCH /v1/devices/self".into(),
+            format!("POST /v1/devices/{me}/sign-out"),
+        ]
+    );
 }
 
 #[test]
@@ -452,4 +464,159 @@ fn a_refused_sign_in_link_says_why_without_values() {
     assert_eq!(check_link(&link_url("short", STATE, ACCT)).unwrap_err(), Refused::Value);
     assert_eq!(check_link(&"potato-workspace://signin?".repeat(30)).unwrap_err(), Refused::TooLong);
     assert!(!Refused::Value.why().contains(TICKET));
+}
+
+// ---------- my PCs in the address book ----------
+
+mod book {
+    use super::*;
+    use crate::account::directory::{pc_rows, valid_relay_hint, NOT_PUBLISHED, STALE_SECS};
+    use crate::account::statement::{device_statement_published, device_statement_with_node, verify_device_statement};
+
+    const D1: &str = "11111111-1111-4111-8111-111111111111";
+    const NOW: u64 = 5_000_000;
+
+    /// A row as the server's `GET /v1/devices` gives it, for a device with this key.
+    fn row(key: &ed25519_dalek::SigningKey, id: &str, name: &str, node: Option<&str>) -> Value {
+        let s = match node {
+            Some(n) if n != NOT_PUBLISHED => device_statement_published(key, ACCT, id, name, n, Some("https://relay.example.com"), NOW - 10),
+            _ => device_statement_with_node(key, ACCT, id, "pc", name, node),
+        };
+        json!({
+            "id": id, "kind": "pc", "name": name, "device_pub": b64(key.verifying_key().as_bytes()), "node_id": node,
+            "node_binding": node.map(|_| "{\"node\":\"x\"}"), "home_relay": "https://evil.example.com", "created_at": NOW - 100, "last_seen_at": NOW - 10,
+            "online": true, "revoked_at": null, "not_me": false, "self": false, "statement": s.statement, "statement_sig": s.signature,
+        })
+    }
+
+    fn rows_of(list: Vec<Value>) -> Vec<crate::account::directory::PcRow> {
+        pc_rows(&json!({ "devices": list }), ACCT, NOW)
+    }
+
+    #[test]
+    fn a_statement_with_a_link_id_verifies_only_under_its_own_key_and_text() {
+        let (key, other) = (new_signing_key(), new_signing_key());
+        let node = "ab".repeat(32);
+        let s = device_statement_with_node(&key, ACCT, D1, "pc", "Desk", Some(&node));
+        let v: Value = serde_json::from_str(&s.statement).unwrap();
+        assert_eq!(v["node_id"], node.as_str());
+        let public = b64(key.verifying_key().as_bytes());
+        assert!(verify_device_statement(&public, &s.statement, &s.signature));
+        assert!(!verify_device_statement(&b64(other.verifying_key().as_bytes()), &s.statement, &s.signature), "another key");
+        assert!(!verify_device_statement(&public, &s.statement.replace(&node, &"cd".repeat(32)), &s.signature), "changed text");
+        assert!(!verify_device_statement(&public, &s.statement, "x"), "not a signature");
+        // A plain statement has no link id at all.
+        let plain: Value = serde_json::from_str(&device_statement(&key, ACCT, D1, "pc", "Desk").statement).unwrap();
+        assert!(plain.get("node_id").is_none());
+    }
+
+    #[test]
+    fn a_row_is_listed_only_when_its_own_statement_checks_out() {
+        let (key, thief) = (new_signing_key(), new_signing_key());
+        let node = "ab".repeat(32);
+        let good = row(&key, D1, "Desk", Some(&node));
+        let listed = rows_of(vec![good.clone()]);
+        assert_eq!(listed.len(), 1);
+        assert_eq!((listed[0].name.as_str(), listed[0].node.as_deref()), ("Desk", Some(node.as_str())));
+        assert_eq!(listed[0].relay.as_deref(), Some("https://relay.example.com"));
+
+        // The server changes the link id after the PC signed it.
+        let mut moved = good.clone();
+        moved["statement"] = json!(good["statement"].as_str().unwrap().replace(&node, &"cd".repeat(32)));
+        assert!(rows_of(vec![moved]).is_empty());
+        // The server changes the name column: the list uses the signed name, not the column.
+        let mut renamed = good.clone();
+        renamed["name"] = json!("Bank");
+        assert_eq!(rows_of(vec![renamed])[0].name, "Desk");
+        // The server puts another key on the row.
+        let mut other_key = good.clone();
+        other_key["device_pub"] = json!(b64(thief.verifying_key().as_bytes()));
+        assert!(rows_of(vec![other_key]).is_empty());
+        // A row for another device id, another account, or a phone.
+        let mut wrong_id = good.clone();
+        wrong_id["id"] = json!("22222222-2222-4222-8222-222222222222");
+        assert!(rows_of(vec![wrong_id]).is_empty());
+        let foreign = {
+            let s = device_statement_with_node(&key, "99999999-9999-4999-8999-999999999999", D1, "pc", "Desk", Some(&node));
+            let mut r = good.clone();
+            r["statement"] = json!(s.statement);
+            r["statement_sig"] = json!(s.signature);
+            r
+        };
+        assert!(rows_of(vec![foreign]).is_empty());
+        let mut phone = good.clone();
+        phone["kind"] = json!("phone");
+        assert!(rows_of(vec![phone]).is_empty());
+        // Junk where a statement should be.
+        let mut junk = good.clone();
+        junk["statement"] = json!("not json");
+        assert!(rows_of(vec![junk]).is_empty());
+    }
+
+    #[test]
+    fn signed_out_and_stale_rows_disappear_and_this_pc_is_never_stale() {
+        let key = new_signing_key();
+        let mut gone = row(&key, D1, "Desk", None);
+        gone["revoked_at"] = json!(NOW - 5);
+        assert!(rows_of(vec![gone]).is_empty());
+        let mut stale = row(&key, D1, "Desk", None);
+        stale["last_seen_at"] = json!(NOW - STALE_SECS - 1);
+        assert!(rows_of(vec![stale.clone()]).is_empty());
+        stale["self"] = json!(true);
+        assert_eq!(rows_of(vec![stale]).len(), 1);
+    }
+
+    #[test]
+    fn a_pc_that_took_the_tick_off_lists_with_no_link_id_and_a_link_id_without_a_record_is_not_openable() {
+        let key = new_signing_key();
+        // The "not published" word is never a link id.
+        let off = rows_of(vec![row(&key, D1, "Desk", Some(NOT_PUBLISHED))]);
+        assert!(off[0].node.is_none() && off[0].binding.is_none() && off[0].relay.is_none());
+        // A real link id but no node record next to it.
+        let mut bare = row(&key, D1, "Desk", Some(&"ab".repeat(32)));
+        bare["node_binding"] = Value::Null;
+        let listed = rows_of(vec![bare]);
+        assert_eq!(listed.len(), 1);
+        assert!(listed[0].node.is_none(), "nothing to check the link id against");
+        // A link id that is not 64 hex characters.
+        assert!(rows_of(vec![row(&key, D1, "Desk", Some("not-hex"))])[0].node.is_none());
+    }
+
+    #[test]
+    fn the_relay_comes_from_the_signed_statement_and_an_old_or_future_statement_names_no_link_id() {
+        let key = new_signing_key();
+        let node = "ab".repeat(32);
+        let signed_at = |at: u64| {
+            let s = device_statement_published(&key, ACCT, D1, "Desk", &node, Some("https://relay.example.com"), at);
+            let mut r = row(&key, D1, "Desk", None);
+            r["statement"] = json!(s.statement);
+            r["statement_sig"] = json!(s.signature);
+            r["node_binding"] = json!("{\"node\":\"x\"}");
+            r["home_relay"] = json!("https://evil.example.com");
+            rows_of(vec![r])
+        };
+        let fresh = signed_at(NOW - 30);
+        assert_eq!(fresh[0].relay.as_deref(), Some("https://relay.example.com"), "never the account's own column");
+        assert_eq!(fresh[0].node.as_deref(), Some(node.as_str()));
+        // Older than the window (the PC says again every minute while it is open), or from the future: not a place to knock.
+        assert!(signed_at(NOW - 3600)[0].node.is_none());
+        assert!(signed_at(NOW + 3600)[0].node.is_none());
+        // A statement of a PC that never said when (an older app) names no link id either.
+        let mut old = row(&key, D1, "Desk", None);
+        let s = device_statement_with_node(&key, ACCT, D1, "pc", "Desk", Some(&node));
+        old["statement"] = json!(s.statement);
+        old["statement_sig"] = json!(s.signature);
+        old["node_binding"] = json!("{\"node\":\"x\"}");
+        assert!(rows_of(vec![old])[0].node.is_none());
+    }
+
+    #[test]
+    fn a_relay_hint_is_a_plain_https_address_or_nothing() {
+        for ok in ["https://relay.example.com", "https://euw1-1.relay.n0.iroh.iroh.link./", "https://relay.example.com:7443/path"] {
+            assert!(valid_relay_hint(ok).is_some(), "{ok}");
+        }
+        for bad in ["", "http://relay.example.com", "https://", "https://user@relay.example.com", "https://a b.example.com", r"https://evil.example.com\@good.com", "javascript:alert(1)", "https://x.com/\u{7}", &format!("https://{}.com", "a".repeat(300))] {
+            assert!(valid_relay_hint(bad).is_none(), "{bad}");
+        }
+    }
 }

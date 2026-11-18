@@ -45,6 +45,53 @@ export interface DevicesReply {
 
 export type RevokeAction = 'sign_out' | 'not_me';
 
+/**
+ * What pressing Open on one of my other PCs would do.
+ * - `new`: first time. The two PCs pair and both people pick the number on both screens.
+ * - `online` / `away`: already paired; it answers or does not.
+ * - `not_allowed`: paired, but that PC has not let this one run agents there.
+ * - `allow_there`: that PC has not ticked "Let my other PCs open this PC".
+ * - `conflict`: another entry of the account names the same PC; neither is offered.
+ * - `lookalike`: another entry has the same name or one that looks the same; neither is offered.
+ */
+export type AccountPcStatus = 'new' | 'online' | 'away' | 'not_allowed' | 'allow_there' | 'conflict' | 'lookalike';
+
+export interface AccountPc {
+  id: string;
+  /** From that PC's own signed statement. Untrusted text: render as text only. */
+  name: string;
+  status: AccountPcStatus;
+  /** The account says it was seen in the last two minutes. */
+  online: boolean;
+  /** Unix seconds. */
+  last_seen_at: number;
+  created_at: number;
+  /** Added to the account in the last 24 hours. */
+  recent: boolean;
+  /** Its PC-link id (64 hex) when it can be opened. */
+  node: string | null;
+}
+
+export interface AccountPcsReply {
+  available: boolean;
+  signed_in: boolean;
+  /** This PC lets its other PCs open it (the tick). */
+  open_here: boolean;
+  /** This PC told the account where it can be reached. */
+  published: boolean;
+  pcs: AccountPc[];
+  message?: string | null;
+  /** PCs this PC unpaired because the account said they were signed out (the account's word is unsigned): shown until dismissed. `name` is untrusted text. */
+  removed?: { id: string; name: string }[];
+}
+
+export interface OpenedPc {
+  paired: boolean;
+  node: string;
+  name: string;
+  state: string;
+}
+
 /** What the screen reads and writes. Tests give fakes. */
 export interface AccountApi {
   state: () => Promise<AccountView>;
@@ -53,6 +100,14 @@ export interface AccountApi {
   devices: () => Promise<DevicesReply>;
   revoke: (id: string, action: RevokeAction) => Promise<DevicesReply>;
   signOutHere: () => Promise<AccountView>;
+  /** My other PCs on the account (statements checked), with what Open would do. Reads the account. */
+  pcs?: () => Promise<AccountPcsReply>;
+  /** Open one: the first time the two PCs pair (both people pick the number); later it only checks that it answers. */
+  openPc?: (id: string) => Promise<OpenedPc>;
+  /** The tick "Let my other PCs open this PC". Written only by the app window, into its own file (not a setting a phone or an agent can patch). */
+  setOpenHere?: (on: boolean) => Promise<void>;
+  /** Dismiss the note that a PC was removed. */
+  dismissRemoved?: (id: string) => Promise<void>;
   /** Called when the sign-in state changed (a sign-in finished in the browser). Returns the stop function. */
   onChanged: (cb: () => void) => Promise<UnlistenFn>;
 }
@@ -66,6 +121,10 @@ export const accountApi: AccountApi = {
   devices: () => invoke<DevicesReply>('account_devices'),
   revoke: (id, action) => invoke<DevicesReply>('account_revoke_device', { id, action }),
   signOutHere: () => invoke<AccountView>('account_sign_out_here'),
+  pcs: () => invoke<AccountPcsReply>('devices_account_pcs'),
+  openPc: (id) => invoke<OpenedPc>('devices_open_account_pc', { id }),
+  setOpenHere: (on) => invoke<void>('devices_set_open_from_account', { on }),
+  dismissRemoved: (id) => invoke<void>('devices_dismiss_removed_pc', { id }),
   onChanged: (cb) => listen(ACCOUNT_CHANGED_EVENT, () => cb()),
 };
 

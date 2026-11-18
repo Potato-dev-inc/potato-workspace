@@ -74,6 +74,10 @@ pub fn classify(method: &str, target: &str) -> Option<Kind> {
     let path = target.split('?').next().unwrap_or("");
     let segs: Vec<&str> = path.split('/').filter(|s| !s.is_empty()).collect();
     Some(match (method, segs.as_slice()) {
+        // The PC link's own routes (`pclink/`). Asking for Full and warming an agent up are not actions worth a line.
+        ("POST", ["pclink", "full-request"]) | ("POST", ["pclink", "agents", "warm"]) => return None,
+        ("POST", ["pclink", "agents", "start"]) => Kind::Started,
+        ("POST", ["pclink", "sessions", _, "input"]) => Kind::Typed,
         ("DELETE", _) => Kind::Stopped,
         ("POST", ["panes"]) | ("POST", ["phone", "chats"]) | ("POST", ["acp", "sessions"]) | ("POST", ["chats"]) => Kind::Started,
         (_, [_, _, "input" | "keys" | "type" | "paste"]) | (_, ["panes", _, "terminal"]) => Kind::Typed,
@@ -181,6 +185,20 @@ mod tests {
         assert_eq!(classify("POST", "/acp/sessions/p1/cancel"), Some(Kind::Stopped));
         assert_eq!(classify("DELETE", "/panes/p1"), Some(Kind::Stopped));
         assert_eq!(classify("PATCH", "/panes/p1"), Some(Kind::Changed));
+    }
+
+    #[test]
+    fn the_pc_links_own_routes_are_named_too() {
+        assert_eq!(classify("GET", "/pclink/sessions"), None);
+        assert_eq!(classify("POST", "/pclink/agents/start"), Some(Kind::Started));
+        assert_eq!(classify("POST", "/pclink/agents/warm"), None);
+        assert_eq!(classify("POST", "/pclink/full-request"), None);
+        assert_eq!(classify("POST", "/pclink/sessions/p1/messages"), Some(Kind::Messaged));
+        assert_eq!(classify("POST", "/pclink/sessions/p1/input"), Some(Kind::Typed));
+        assert_eq!(classify("POST", "/pclink/sessions/p1/interrupt"), Some(Kind::Stopped));
+        assert_eq!(classify("DELETE", "/pclink/sessions/p1"), Some(Kind::Stopped));
+        assert_eq!(classify("POST", "/pclink/questions/q1/answer"), Some(Kind::Answered));
+        assert_eq!(classify("POST", "/pclink/sessions/p1/config"), Some(Kind::Changed));
     }
 
     #[test]

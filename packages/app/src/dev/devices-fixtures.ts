@@ -1,8 +1,10 @@
 // Example Devices data for the harness and the tests (dev only), and a fake of the `devices_*` commands.
 // The fake keeps its own small state, so pairing, the switch, Remove and a link going down really change what the
-// screens show. A device here is another PC that runs Potato Workspace; its panes are what `GET /panes` answers.
+// screens show. A device here is another PC that runs Potato Workspace; its panes are what its `GET /pclink/sessions` answers.
 import { emit, type UnlistenFn } from '@tauri-apps/api/event';
-import type { ActivityEntry, CopyResult, Device, DeviceEvent, DeviceLevel, DevicesApi, DevicesView, FarError, FileEntry, FileList, FilePreview, FilesFolders, HostingView, OnExists, PendingPair, RoutePref, ScreenFrame, Transfer } from '../lib/devices';
+import type { PcLevel } from '../lib/runtime/pclink';
+import type { UsageSnapshot } from '../lib/usage';
+import type { ActivityEntry, CopyResult, Device, DeviceEvent, DeviceLevel, DevicesApi, DevicesView, FarError, FileEntry, FullAsk, FileList, FilePreview, FilesFolders, HostingView, OnExists, PendingPair, RoutePref, ScreenFrame, Transfer } from '../lib/devices';
 
 type Handler = { handled: true; value: unknown } | { handled: false };
 
@@ -47,6 +49,7 @@ export interface RemotePane {
   status: string;
   title: string;
   lane?: 'acp';
+  parent_pane_id?: string;
 }
 
 export const MAC_PANES: RemotePane[] = [
@@ -121,6 +124,12 @@ export interface DevicesScenario {
   changeAfter?: { ms: number; node: string; patch: Partial<Device> }[];
   /** What a live terminal shows once it starts. */
   screen?: string;
+  /** Per device: the folders its `GET /pclink/projects` lists. */
+  projectsOf?: Record<string, { id: string; name: string; state: string }[]>;
+  /** Per device: what its `GET /pclink/usage` answers. */
+  usageOf?: Record<string, UsageSnapshot>;
+  /** Per device: the places it offers to browse, and the folders in each (`<root id>|<sub>` to names). */
+  browseTree?: Record<string, { roots: { id: string; name: string }[]; dirs: Record<string, string[]> }>;
 }
 
 function baseView(s: DevicesScenario): DevicesView {
@@ -168,6 +177,9 @@ export class DevicesFake implements DevicesApi {
     this.folders = { shared: this.files.folders?.shared ?? [], chosen: this.files.folders?.chosen ?? [] };
     this.activityLog = (s.activity ?? []).map((e) => ({ ...e }));
     this.panes = Object.fromEntries(Object.entries(s.panes ?? {}).map(([k, v]) => [k, v.map((p) => ({ ...p }))]));
+    this.projectsOf = { ...(s.projectsOf ?? {}) };
+    this.usageOf = { ...(s.usageOf ?? {}) };
+    this.browseTree = { ...(s.browseTree ?? {}) };
   }
 
   private emit(): DevicesView {
@@ -355,7 +367,29 @@ export class DevicesFake implements DevicesApi {
     this.addDevice('Studio PC');
     return this.emit();
   };
+  /** A pairing sheet that is not one of the built-in stories (a PC of the person's own account): its owner gets every answer. */
+  private answerHook: ((pick: string | null) => void) | null = null;
+  showPending(p: PendingPair, onAnswer: (pick: string | null) => void): void {
+    this.view = { ...this.view, pending: p, joining: null };
+    this.answerHook = onAnswer;
+    this.emit();
+  }
+  clearPending(): void {
+    this.answerHook = null;
+    this.view = { ...this.view, pending: null, joining: null };
+    this.emit();
+  }
+  addPairedDevice(d: Device): void {
+    this.view = { ...this.view, devices: [...this.view.devices.filter((x) => x.node !== d.node), { ...d }] };
+    this.emit();
+  }
   pairAnswer = async (_id: number, allow: boolean) => {
+    if (this.answerHook) {
+      const h = this.answerHook;
+      this.answerHook = null;
+      h(allow ? 'yes' : null);
+      return this.view;
+    }
     const w = this.waiting;
     this.waiting = null;
     w?.(allow);
@@ -378,6 +412,12 @@ export class DevicesFake implements DevicesApi {
   private checkRight = '';
   pairPick = async (_id: number, pick: string) => {
     this.pickCalls.push(pick);
+    if (this.answerHook) {
+      const h = this.answerHook;
+      this.answerHook = null;
+      h(pick);
+      return this.view;
+    }
     const w = this.waiting;
     this.waiting = null;
     w?.(pick === this.checkRight);
@@ -405,18 +445,40 @@ export class DevicesFake implements DevicesApi {
     if (!d || d.state === 'offline' || d.state === 'unknown') throw new Error('That device is offline.');
     if (d.state === 'not_allowed') return { status: 403, body: { error: 'not_allowed' } };
     const list = (this.panes[node] ??= []);
-    if (method === 'GET' && path === '/panes') {
-      return { status: 200, body: list.map((p, i) => ({ id: p.id, agent_type: p.agent_type, pid: 100 + i, status: p.status, created_at: NOW, last_output_at: null, cwd: p.cwd, cols: 100, rows: 30, title: p.title, ...(p.lane ? { lane: p.lane } : {}) })) };
+    // The far PC's own routes (`/pclink/...`), with the level the far PC gave this PC. Anything else is not served to a PC.
+    const segs = path.split('?')[0]!.split('/').filter(Boolean);
+    if (segs[0] !== 'pclink') return { status: 404, body: { error: 'not found', code: 'USE_PCLINK' } };
+    const level = this.levelOf(node);
+    const denied = (needs: PcLevel) => ({ status: 403, body: { error: 'not_allowed', code: 'DEVICE_NOT_ALLOWED', needs, have: level } });
+    const rank = { watch: 0, answer: 1, full: 2 } as const;
+    const need = (needs: PcLevel) => (rank[level] >= rank[needs] ? null : denied(needs));
+    const id = decodeURIComponent(segs[2] ?? '');
+    if (method === 'GET' && segs[1] === 'me') return { status: 200, body: { level, name: d.name, asked: this.asksAt.has(node) } };
+    if (method === 'GET' && segs[1] === 'sessions' && segs.length === 2) {
+      return { status: 200, body: { sessions: list.map((p) => ({ id: p.id, agent: p.agent_type, title: p.title, status: p.status, project: `p-${p.cwd}`, folder: p.cwd.split('/').filter(Boolean).pop() ?? '', chat: p.lane === 'acp', ...(p.parent_pane_id ? { parent: p.parent_pane_id } : {}) })) } };
     }
-    if (method === 'POST' && (path === '/acp/sessions' || path === '/panes')) {
-      const b = (body ?? {}) as { agent?: string; agent_type?: string; folder?: string; cwd?: string };
-      const id = `n${list.length + 1}`;
-      list.push({ id, agent_type: b.agent ?? b.agent_type ?? 'claude', cwd: b.folder ?? b.cwd ?? '/', status: 'idle', title: 'New', ...(path === '/acp/sessions' ? { lane: 'acp' as const } : {}) });
+    if (method === 'GET' && segs[1] === 'sessions' && segs[3] === 'transcript') {
+      return { status: 200, body: { available: true, reason: null, source: 'file', waitingFor: null, rev: 1, reset: false, items: this.chats[id] ?? [], revision: 1 } };
+    }
+    if (method === 'GET' && segs[1] === 'sessions' && segs[3] === 'screen') return { status: 200, body: { content: '$ make dmg\nBuilding...' } };
+    if (method === 'GET' && segs[1] === 'sessions' && segs[3] === 'messages') return need('answer') ?? { status: 200, body: { messages: [] } };
+    if (method === 'POST' && segs[1] === 'sessions' && segs[3] === 'messages') {
+      return need('answer') ?? { status: 200, body: { message: { id: 'm1', text: (body as { text?: string })?.text ?? '', state: 'sent', createdAt: 1, waitingFor: null, error: null } } };
+    }
+    if (method === 'POST' && segs[1] === 'sessions' && segs[3] === 'interrupt') return need('answer') ?? { status: 200, body: { id, stopped: true } };
+    if (method === 'POST' && segs[1] === 'sessions' && segs[3] === 'input') return need('full') ?? { status: 200, body: { ok: true } };
+    if (method === 'POST' && segs[1] === 'sessions' && segs[3] === 'config') return need('full') ?? { status: 200, body: {} };
+    if (method === 'DELETE' && segs[1] === 'sessions' && segs.length === 3) {
+      const denial = need('full');
+      if (denial) return denial;
+      const at = list.findIndex((p) => p.id === id);
+      if (at < 0) return { status: 404, body: { error: 'unknown session' } };
+      list.splice(at, 1);
       this.emit();
-      return { status: 200, body: { pane_id: id, snapshot: { pane_id: id } } };
+      return { status: 200, body: { ok: true } };
     }
-    // The far device's own agents and recent projects (the phone's new-chat screen reads these).
-    if (method === 'GET' && path === '/phone/new-chat') {
+    // The far PC's own agents and the folders it knows (what the New agent page lists).
+    if (method === 'GET' && segs[1] === 'agents' && segs.length === 2) {
       return {
         status: 200,
         body: {
@@ -424,32 +486,102 @@ export class DevicesFake implements DevicesApi {
             { id: 'claude', label: 'Claude', chat: true, terminal: true },
             { id: 'codex', label: 'Codex', chat: true, terminal: true },
           ],
-          projects: [{ id: 'proj-app', name: 'app', state: 'ready' }],
           terminals: true,
         },
       };
     }
-    if (method === 'POST' && path === '/phone/chats') {
+    if (method === 'GET' && segs[1] === 'projects' && segs.length === 2) return { status: 200, body: { projects: [...(this.projectsOf[node] ?? [{ id: 'proj-app', name: 'app', state: 'ready' }]), ...(this.opened[node] ?? [])] } };
+    // This PC's own usage (the far PC's `GET /pclink/usage`), when the scenario gives one.
+    if (method === 'GET' && segs[1] === 'usage') return this.usageOf[node] ? { status: 200, body: this.usageOf[node] } : { status: 200, body: { rows: [], refreshed_at_ms: 0 } };
+    // Browse folders: the places the far PC offers and the folders in each (Full level).
+    if (method === 'GET' && segs[1] === 'browse') {
+      const denial = need('full');
+      if (denial) return denial;
+      const tree = this.browseTree[node] ?? { roots: [], dirs: {} };
+      const q = new URLSearchParams(path.split('?')[1] ?? '');
+      const rootId = q.get('root');
+      if (!rootId) return { status: 200, body: { roots: tree.roots } };
+      const sub = q.get('sub') ?? '';
+      const names = tree.dirs[`${rootId}|${sub}`];
+      if (!names) return { status: 404, body: { error: 'That folder is not there.', code: 'NOT_A_FOLDER' } };
+      return { status: 200, body: { root: rootId, sub, name: sub.split('/').filter(Boolean).pop() ?? tree.roots.find((r) => r.id === rootId)?.name ?? '', entries: names.map((name) => ({ name })), truncated: false } };
+    }
+    if (method === 'POST' && segs[1] === 'projects' && segs[2] === 'open') {
+      const denial = need('full');
+      if (denial) return denial;
+      const b = (body ?? {}) as { root?: string; sub?: string };
+      if (!b.sub) return { status: 400, body: { error: 'Pick a folder inside it.', code: 'BAD_PATH' } };
+      const project = { id: `opened-${b.root}-${b.sub.split('/').join('-')}`, name: b.sub.split('/').pop() ?? '', state: 'folder' };
+      (this.opened[node] ??= []).push(project);
+      return { status: 200, body: { project } };
+    }
+    if (method === 'GET' && segs[1] === 'agents' && segs[3] === 'models') return need('full') ?? { status: 200, body: { models: [] } };
+    if (method === 'POST' && segs[1] === 'agents' && segs[2] === 'warm') return need('full') ?? { status: 200, body: { warming: true } };
+    if (method === 'POST' && segs[1] === 'agents' && segs[2] === 'start') {
+      const denial = need('full');
+      if (denial) return denial;
       const b = (body ?? {}) as { agent?: string; lane?: string };
-      const id = `n${list.length + 1}`;
-      list.push({ id, agent_type: b.agent ?? 'claude', cwd: '/Users/me/app', status: 'idle', title: 'New chat', ...(b.lane === 'chat' ? { lane: 'acp' as const } : {}) });
+      const newId = `n${list.length + 1}`;
+      list.push({ id: newId, agent_type: b.agent ?? 'claude', cwd: '/Users/me/app', status: 'idle', title: 'New chat', ...(b.lane === 'chat' ? { lane: 'acp' as const } : {}) });
       this.emit();
-      return { status: 200, body: { pane_id: id, agent: b.agent ?? 'claude', lane: b.lane ?? 'chat' } };
+      return { status: 200, body: { pane_id: newId, agent: b.agent ?? 'claude', lane: b.lane ?? 'chat' } };
     }
     // Take the conversation and the work: the far side checks a git bundle out in one of its projects.
-    if (method === 'POST' && path === '/phone/move-work') return { status: 200, body: { ok: true, branch: (body as { branch?: string })?.branch ?? '', sha: 'f'.repeat(40) } };
-    if (method === 'POST' && /^\/panes\/[^/]+\/messages/.test(path)) return { status: 200, body: { message: { id: 'm1', text: (body as { text?: string })?.text ?? '', state: 'sent' } } };
-    if (method === 'GET' && /^\/panes\/[^/]+\/snapshot/.test(path)) return { status: 200, body: { content: '$ make dmg\nBuilding...' } };
-    if (method === 'POST' && /^\/panes\/[^/]+\/input/.test(path)) return { status: 200, body: { ok: true } };
-    if (method === 'GET' && /^\/panes\/[^/]+\/result/.test(path)) {
-      return { status: 200, body: { available: true, turn: 1, sentence: 'Claude edited 2 files (+48 -12), now idle.', durationMs: 45_000, files: { count: 2, added: 48, deleted: 12, paths: [] }, tests: 'all checks passed (3/3)', changes: [{ path: 'src/auth/redirect.ts', status: 'M', added: 30, deleted: 8, binary: false }, { path: 'src/auth/session.ts', status: 'M', added: 18, deleted: 4, binary: false }] } };
+    if (method === 'POST' && segs[1] === 'move-work') return need('full') ?? { status: 200, body: { ok: true, branch: (body as { branch?: string })?.branch ?? '', sha: 'f'.repeat(40) } };
+    // "Ask <PC> to allow agents": a real card on the far PC. Asking grants nothing; a second ask while one waits is not a second card.
+    if (method === 'POST' && segs[1] === 'full-request') {
+      if (level === 'full') return { status: 409, body: { error: 'This PC can already work there.', code: 'ALREADY_FULL' } };
+      if (this.askFails) return { status: 429, body: { error: 'That PC was asked a moment ago.', code: 'TOO_SOON', retry_after_ms: 120_000 } };
+      const already = this.asksAt.has(node);
+      this.asksAt.add(node);
+      return { status: 202, body: already ? { asked: true, already: true } : { asked: true, id: `full-${this.asksAt.size}` } };
     }
-    if (method === 'GET' && /^\/panes\/[^/]+\/chat/.test(path)) {
-      const id = decodeURIComponent(path.split('/')[2] ?? '');
-      return { status: 200, body: { available: true, reason: null, source: 'file', waitingFor: null, rev: 1, reset: false, items: this.chats[id] ?? [], revision: 1 } };
-    }
+    if (method === 'GET' && segs[1] === 'questions') return { status: 200, body: { questions: [] } };
     return { status: 404, body: { error: 'not found' } };
   };
+  /** Per device: the folders its `GET /pclink/projects` lists (default: one called "app"). */
+  projectsOf: Record<string, { id: string; name: string; state: string }[]> = {};
+  /** Folders opened on a device through "Browse folders" (they join its project list). */
+  opened: Record<string, { id: string; name: string; state: string }[]> = {};
+  /** Per device: the usage its `GET /pclink/usage` answers. */
+  usageOf: Record<string, UsageSnapshot> = {};
+  /** Per device: the places it offers to browse, and the folders in each (`<root id>|<sub>` to names). */
+  browseTree: Record<string, { roots: { id: string; name: string }[]; dirs: Record<string, string[]> }> = {};
+  /** What the far PC lets this PC do. Starts from the device's own `level` in the scenario; a test or the harness can change it. */
+  farLevels: Record<string, PcLevel> = {};
+  /** PCs this PC asked for Full (a card is waiting there). */
+  asksAt = new Set<string>();
+  /** The next ask is refused as "asked a moment ago". */
+  askFails = false;
+  levelOf(node: string): PcLevel {
+    return this.farLevels[node] ?? this.view.devices.find((x) => x.node === node)?.level ?? 'watch';
+  }
+  /** The person at the far PC said yes: that PC lets this PC work on it. */
+  grantFull(node: string): void {
+    this.farLevels[node] = 'full';
+    this.asksAt.delete(node);
+  }
+  /** Cards on THIS PC (another PC asked to work on it). */
+  incomingAsks: FullAsk[] = [];
+  private askListeners = new Set<(a: FullAsk) => void>();
+  fullAsks = async () => this.incomingAsks.map((a) => ({ ...a }));
+  answerFullAsk = async (askId: string, allow: boolean) => {
+    const ask = this.incomingAsks.find((a) => a.id === askId);
+    this.incomingAsks = this.incomingAsks.filter((a) => a.id !== askId);
+    this.answeredAsks.push({ id: askId, allow });
+    if (ask && allow) this.view = { ...this.view, devices: this.view.devices.map((x) => (x.node === ask.node ? { ...x, lets_run: true, level: 'full' } : x)) };
+    return this.emit();
+  };
+  answeredAsks: { id: string; allow: boolean }[] = [];
+  onFullAsk = async (cb: (a: FullAsk) => void): Promise<UnlistenFn> => {
+    this.askListeners.add(cb);
+    return () => this.askListeners.delete(cb);
+  };
+  /** Another PC asks to work on this one (the card shows). */
+  simulateFullAsk(ask: FullAsk): void {
+    this.incomingAsks.push(ask);
+    for (const cb of this.askListeners) cb(ask);
+  }
   subscribe = async (node: string) => void this.subscribed.add(node);
   unsubscribe = async (node: string) => void this.subscribed.delete(node);
   onChanged = async (cb: (v: DevicesView) => void): Promise<UnlistenFn> => {
@@ -501,6 +633,10 @@ export function createDevicesMock(s: DevicesScenario | undefined): (cmd: string,
         return v(fake.remove(String(a.node)));
       case 'devices_set_route':
         return v(fake.setRoute(a.pref as RoutePref));
+      case 'devices_full_asks':
+        return v(fake.fullAsks());
+      case 'devices_full_ask_answer':
+        return v(fake.answerFullAsk(String(a.id), a.allow === true));
       case 'devices_request':
         return v(fake.request(String(a.node), String(a.method), String(a.path), a.body));
       case 'devices_make_link':

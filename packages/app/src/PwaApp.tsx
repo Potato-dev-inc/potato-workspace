@@ -11,6 +11,7 @@ import { useBridgePaneRegistry } from './hooks/useBridgePaneRegistry';
 import type { TerminalTransport } from './hooks/useTerminalSession';
 import { usePaneViewportLease, VIEWER_ID } from './hooks/usePaneViewportLease';
 import { useVisualViewportSync } from './hooks/useVisualViewport';
+import { useDirectBridge } from './hooks/useDirectBridge';
 import { makeBridgeClient, type BridgeClient } from './lib/bridge';
 import { subscribeBridgeEventsHandle, type BridgeEventsHandle, type BridgeLinkStats } from './lib/bridge-sse';
 import { DEFAULT_PUBLIC_SETTINGS, type PublicSettings } from './lib/bridge-settings';
@@ -155,11 +156,15 @@ function readActiveTab(): string {
 export default function PwaApp() {
   const t = useT();
   const [inviteCode, setInviteCode] = useState(() => readPairingInviteCode());
-  const [bridgeUrl, setBridgeUrl] = useState<string | null>(() =>
+  // The saved address is `<this page's origin>/bridge` (what the pairing is filed under). When the page comes from the
+  // person's permanent address (a Worker that only points at the PC), calls go to the tunnel it names: `bridgeUrl`.
+  const [savedBridgeUrl, setBridgeUrl] = useState<string | null>(() =>
     readPairingInviteCode()
       ? null
       : resolveBridgeBaseUrl(localStorage.getItem(LS_BRIDGE_URL), window.location),
   );
+  const direct = useDirectBridge(savedBridgeUrl);
+  const bridgeUrl = direct.url;
   const [bridge, setBridge] = useState<BridgeClient | null>(null);
   const [bridgeReady, setBridgeReady] = useState(false);
   /** The PC said "I do not know this phone" (401): the link changed or the pairing is gone. */
@@ -419,6 +424,12 @@ export default function PwaApp() {
   });
 
   const phoneLink = usePhoneLink(bridgeReady, authFailed);
+  // The PC stopped answering: ask the Worker again where it is (a restart gives it a new quick address), slowly, until it answers.
+  const linkDown = phoneLink.kind === 'reconnecting' || phoneLink.kind === 'asleep';
+  useEffect(() => {
+    direct.setStale(linkDown);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [linkDown, direct.setStale]);
   const paneRules = usePaneRules(bridge, bridgeReady);
 
   // The agent chats, in tab order: what the drawer lists and where the app opens.
@@ -910,6 +921,15 @@ export default function PwaApp() {
             setInviteCode(null);
           }}
         />
+      </div>
+    );
+  }
+
+  if (savedBridgeUrl && !bridgeUrl && !editingUrl) {
+    // The first ask to the Worker (a moment): the same quiet line the app shows while it reconnects.
+    return (
+      <div className="pwa-shell ph bg-pm-bg text-zinc-100" data-testid="where-pending">
+        <PhoneLinkLine kind="reconnecting" recovered={false} onPairAgain={() => setEditingUrl(true)} onRetry={() => undefined} />
       </div>
     );
   }

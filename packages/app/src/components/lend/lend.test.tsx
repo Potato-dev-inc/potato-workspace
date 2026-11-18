@@ -4,13 +4,13 @@
 import { act } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { createFakeLendApi, TEAM_PROFILE, GRANT_IN, GRANT_IN_PANE, GRANT_IN_PROBLEM, GRANT_OUT, LEND_MEMBERS, lendState, REQUEST_MAYA, REQUEST_OWN } from '../../dev/lend-fixtures';
+import { createFakeLendApi, MY_PROFILE, TEAM_PROFILE, GRANT_IN, GRANT_IN_PANE, GRANT_IN_PROBLEM, GRANT_OUT, LEND_MEMBERS, lendState, REQUEST_MAYA, REQUEST_OWN } from '../../dev/lend-fixtures';
 import { teamConfig } from '../../dev/team-fixtures';
 import type { TeamApi } from '../../lib/team';
 import { buttonByText, click, hasText, pickOption, settle, type as typeInto } from '../settings/test-utils';
 import { registerNewAgentOpener } from '../../lib/newAgentRequest';
 import { BorrowedChip, MemberLends, useLendToasts } from './Borrowed';
-import { IncomingRequestCard, profilesFor } from './IncomingRequestCard';
+import { copyForMyPcs, IncomingRequestCard, profilesFor } from './IncomingRequestCard';
 import { RequestUsage, sourcesOf } from './RequestUsage';
 import { useLend } from './useLend';
 
@@ -247,6 +247,91 @@ describe('Incoming request card', () => {
     expect(onDone).toHaveBeenCalled();
   });
 
+  it('own PC asks, only a teammates rule exists: says so, one tap makes a copy, then Lend is on and uses it', async () => {
+    const rule = { ...TEAM_PROFILE, max_secs: 5 * 3600, default_secs: 3600, sign_out_on_end: false, keep_awake: false, max_requests: 50, max_tokens: 9000 };
+    const req = { ...REQUEST_OWN, secs: 3600 };
+    const { api, onDone } = await mount(req, { profiles: [rule] });
+    expect(host.textContent).toContain('Your rule Teammates, ask first is for teammates only');
+    expect(host.textContent).not.toContain('No borrow rule');
+    expect(host.textContent).not.toContain('Make a lend profile first');
+    expect(buttonByText(host, 'Lend')!.disabled).toBe(true);
+    await click(buttonByText(host, 'Make a copy of this rule for my PCs'));
+    await settle(2);
+    expect(onDone).toHaveBeenCalled();
+    const saved = api.backend.get().profiles.find((p) => p.name === 'Teammates, ask first (my PCs)')!;
+    expect(saved.who).toBe('my_pcs');
+    expect(saved.member_ids).toEqual([]);
+    for (const k of ['agent_ids', 'account', 'approval', 'max_secs', 'default_secs', 'max_requests', 'max_tokens', 'sign_out_on_end', 'keep_awake'] as const) {
+      expect(saved[k], k).toEqual(rule[k]);
+    }
+    expect(api.backend.get().profiles.find((p) => p.id === 'prof-team')!.who).toBe('teammates');
+    // The parent refreshes: the same card, new state. Lend is on and uses the copy.
+    await act(async () => root.render(<IncomingRequestCard request={req} state={api.backend.get()} api={api} now={Date.now()} onDone={onDone} />));
+    await settle(2);
+    expect(host.querySelector('[data-lend-teammates-only]')).toBeNull();
+    expect(buttonByText(host, 'Lend')!.disabled).toBe(false);
+    await click(buttonByText(host, 'Lend'));
+    await settle(2);
+    expect(api.calls).toContain(`answer("req-in-own",true,"${saved.id}",null)`);
+  });
+
+  it('the borrower named the teammates rule and its (my PCs) copy exists: no second copy button, says already allowed', async () => {
+    const copy = { ...TEAM_PROFILE, id: 'prof-copy', name: `${TEAM_PROFILE.name} (my PCs)`, who: 'my_pcs' as const, member_ids: [] };
+    const { api } = await mount({ ...REQUEST_OWN, profile_id: TEAM_PROFILE.id }, { profiles: [TEAM_PROFILE, copy] });
+    expect(buttonByText(host, 'Make a copy of this rule for my PCs')).toBeFalsy();
+    expect(host.textContent).toContain('Already allowed for your PCs');
+    expect(api.calls).toEqual([]);
+  });
+
+  it('keeps the copy name within 60 characters', async () => {
+    const long = { ...TEAM_PROFILE, name: 'x'.repeat(60) };
+    const copy = copyForMyPcs(long, (b) => `${b} (my PCs)`);
+    expect(copy.name.length).toBeLessThanOrEqual(60);
+    expect(copy.name.endsWith(' (my PCs)')).toBe(true);
+  });
+
+  it('a teammates rule that lends through a saved key is not copied: it points to settings', async () => {
+    const { api } = await mount(REQUEST_OWN, { profiles: [{ ...TEAM_PROFILE, has_key: true }] });
+    expect(host.textContent).toContain('saved API key that cannot be copied');
+    expect(buttonByText(host, 'Make a copy of this rule for my PCs')).toBeFalsy();
+    expect(buttonByText(host, 'Open Lend settings')).toBeTruthy();
+    expect(api.calls).toEqual([]);
+  });
+
+  it('a teammate asks and only a my-PCs rule exists: says so, with the settings button', async () => {
+    await mount(REQUEST_MAYA, { profiles: [MY_PROFILE] });
+    expect(host.textContent).toContain('for your own PCs only, so Maya cannot borrow with it');
+    expect(host.textContent).not.toContain('No borrow rule');
+    expect(buttonByText(host, 'Open Lend settings')).toBeTruthy();
+    expect(buttonByText(host, 'Lend')!.disabled).toBe(true);
+  });
+
+  it('a teammate asks and the rule names other people: says so', async () => {
+    await mount(REQUEST_MAYA, { profiles: [{ ...TEAM_PROFILE, member_ids: ['m-sam'] }] });
+    expect(host.textContent).toContain('is for other people you picked, not Maya');
+  });
+
+  it('matches the agent without case, like the backend', () => {
+    expect(profilesFor(lendState({ profiles: [{ ...lendState().profiles[0], agent_ids: ['Claude'] }] }), REQUEST_OWN)).toHaveLength(1);
+  });
+
+  it('own PC asks and a rule for my PCs exists: Lend is on and uses it', async () => {
+    const { api } = await mount(REQUEST_OWN, { profiles: [TEAM_PROFILE, ...lendState().profiles] });
+    expect(host.textContent).not.toContain('teammates only');
+    expect(buttonByText(host, 'Lend')!.disabled).toBe(false);
+    await click(buttonByText(host, 'Lend'));
+    await settle(2);
+    expect(api.calls).toContain('answer("req-in-own",true,"prof-mine",null)');
+  });
+
+  it('own PC asks and no rule at all: says make one, with the settings button', async () => {
+    await mount(REQUEST_OWN, { profiles: [] });
+    expect(host.textContent).toContain('No borrow rule lets your PCs borrow Claude yet.');
+    expect(buttonByText(host, 'Open Lend settings')).toBeTruthy();
+    expect(host.textContent).toContain('Make a lend profile first');
+    expect(host.querySelector('[data-lend-teammates-only]')).toBeNull();
+  });
+
   it('points to Lend settings when no profile fits', async () => {
     await mount(REQUEST_MAYA, { profiles: [] });
     expect(host.textContent).toContain('No borrow rule lets teammates borrow Claude yet.');
@@ -322,11 +407,11 @@ describe('Time-left chip', () => {
     expect(host.querySelector('[data-testid="lend-problem"]')!.textContent).toBe("The lender's sign-in expired. Ask them to sign in again.");
   });
 
-  it('says in the details that the agent may say API billing but the lender pays', async () => {
+  it('says in the details that the agent may show a billing note but the lender pays', async () => {
     await chip(50 * 60_000);
     await click(el());
     const note = host.querySelector('[data-testid="lend-billing-note"]')!.textContent!;
-    expect(note).toContain('may say "API billing"');
+    expect(note).toContain('may show a billing note');
     expect(note).toContain("charged to Leo's plan");
   });
 
@@ -335,7 +420,7 @@ describe('Time-left chip', () => {
     await click(el());
     expect(host.querySelector('.lend-pop')!.textContent).toContain("Claude · Work account on Leo's PC (borrowed)");
     // The details say what was used (requests and tokens).
-    expect(host.querySelector('[data-testid="lend-usage"]')!.textContent).toBe('Used so far: 3 requests · 5.3k tokens');
+    expect(host.querySelector('[data-testid="lend-usage"]')!.textContent).toBe('Used so far: 3 requests');
     expect(host.querySelector('[data-testid="lend-problem"]')).toBeNull();
     await click(buttonByText(host, 'Give back now'));
     await settle(3);

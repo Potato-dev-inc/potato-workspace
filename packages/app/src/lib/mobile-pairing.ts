@@ -9,6 +9,7 @@ import {
 } from '@potato-workspace/shared';
 import { type BridgeLocation, LS_BRIDGE_URL, resolveBridgeBaseUrl } from './bridge-url';
 import { mergeBridgeHeaders } from './mobile-pairing-auth';
+import { networkBase } from '../pwa/where';
 
 export const LS_MOBILE_PAIRING = 'pm-mobile-pairing-v1';
 
@@ -220,14 +221,15 @@ async function bridgeTokenValid(bridgeUrl: string): Promise<boolean> {
 }
 
 /** Reuse saved credentials when invite link was already consumed (e.g. React StrictMode). */
-export async function reconnectIfAlreadyPaired(bridgeUrl: string): Promise<MobilePairingCredentials | null> {
+export async function reconnectIfAlreadyPaired(bridgeUrl: string, networkUrl: string = bridgeUrl): Promise<MobilePairingCredentials | null> {
   const creds = loadMobilePairingCredentials();
   if (!creds) return null;
   const target = bridgeUrl.replace(/\/$/, '');
   const saved = creds.bridgeUrl.replace(/\/$/, '');
   if (saved !== target) return null;
-  if (!(await bridgeHealthOk(target))) return null;
-  if (!(await bridgeTokenValid(target))) return null;
+  const net = networkUrl.replace(/\/$/, '');
+  if (!(await bridgeHealthOk(net))) return null;
+  if (!(await bridgeTokenValid(net))) return null;
   return creds;
 }
 
@@ -239,16 +241,19 @@ export async function pairFromInviteCode(
   onStage?: (label: string) => void,
 ): Promise<MobilePairingCredentials> {
   const bridgeUrl = resolveBridgeBaseUrl(storedBridgeUrl, location);
+  // From a permanent address (a Worker) the calls go to the tunnel it names; the pairing stays filed under the saved address.
+  const netUrl = await networkBase(bridgeUrl, location);
   onStage?.('Checking bridge…');
-  const existing = await reconnectIfAlreadyPaired(bridgeUrl);
+  const existing = await reconnectIfAlreadyPaired(bridgeUrl, netUrl);
   if (existing) return existing;
 
   onStage?.('Loading pairing session…');
-  const info = await fetchPairingSessionInfo(bridgeUrl, pairingCode);
+  const info = await fetchPairingSessionInfo(netUrl, pairingCode);
   if (info.expires_at * 1000 < Date.now()) {
     throw new Error('Pairing link expired — refresh QR on desktop');
   }
   const connectBridge = bridgeUrl.replace(/\/$/, '');
+  const connectNet = netUrl.replace(/\/$/, '');
   const payload: PairingQrPayload = {
     v: 1,
     u: connectBridge,
@@ -258,9 +263,9 @@ export async function pairFromInviteCode(
   };
   onStage?.('Signing in…');
   try {
-    return await claimPairing(connectBridge, payload, deviceName);
+    return await claimPairing(connectNet, payload, deviceName);
   } catch (err) {
-    const after = await reconnectIfAlreadyPaired(bridgeUrl);
+    const after = await reconnectIfAlreadyPaired(bridgeUrl, netUrl);
     if (after) return after;
     throw err;
   }
@@ -274,5 +279,5 @@ export async function pairFromQrJson(
   if (payload.e * 1000 < Date.now()) {
     throw new Error('Pairing code expired — refresh QR on desktop');
   }
-  return claimPairing(payload.u, payload, deviceName);
+  return claimPairing(await networkBase(payload.u.replace(/\/$/, ''), window.location), payload, deviceName);
 }

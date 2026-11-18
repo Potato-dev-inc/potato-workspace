@@ -18,12 +18,19 @@ pub const SPACES: &str = "spaces";
 pub const AGENTS_LEND: &str = "agents/lend";
 /// Devices: a paired Workspace runs agents and terminals on this PC (`pm/agents/1`). Its level is a second entry.
 pub const AGENTS_REMOTE: &str = "agents/remote";
-/// Marks the level of `agents/remote` as "Full control". Absent = "Watch and answer". Only ever set together with `agents/remote`.
+/// Marks the level of `agents/remote` as "Answer" (watch, plus answer, message and stop). Absent (and no Full) = "Watch" only.
+/// Only ever set together with `agents/remote`.
+pub const AGENTS_REMOTE_ANSWER: &str = "agents/remote/answer";
+/// Marks the level of `agents/remote` as "Full": the one switch "Can work on this PC (start agents, use the terminal, change
+/// files)". Absent = no such right. Only ever set together with `agents/remote`.
 pub const AGENTS_REMOTE_FULL: &str = "agents/remote/full";
 /// Pairing is not a permission anyone is given: it is open to strangers only while the person shows a code.
 pub const PAIR: &str = "pair";
 /// Far-away pairing with a pairing link: open to strangers only while a link is shown, and a relay may carry it.
 pub const PAIR_LINK: &str = "pair/link";
+/// Pairing two PCs of one account: open only while this PC's own tick "Let my other PCs open this PC" is on. A caller
+/// that is not one of the account's PCs is refused before any sheet appears.
+pub const PAIR_ACCOUNT: &str = "pair/account";
 /// This PC lets that device also reach it through its own web address (stable link / tunnel), with a device token.
 /// Only ever set together with `agents/remote`.
 pub const AGENTS_REMOTE_WEB: &str = "agents/remote/web";
@@ -32,7 +39,7 @@ pub const AGENTS_REMOTE_WEB: &str = "agents/remote/web";
 pub const LEND_CONTROL: &str = "agents/lend/control";
 
 /// What the person may turn on per computer, in the order the page shows them. Everything starts off.
-pub const PERMISSIONABLE: [&str; 7] = [DESK_INPUT, DESK_CLIPBOARD, FILES, AGENTS_REMOTE, AGENTS_REMOTE_FULL, AGENTS_REMOTE_WEB, LEND_CONTROL];
+pub const PERMISSIONABLE: [&str; 8] = [DESK_INPUT, DESK_CLIPBOARD, FILES, AGENTS_REMOTE, AGENTS_REMOTE_ANSWER, AGENTS_REMOTE_FULL, AGENTS_REMOTE_WEB, LEND_CONTROL];
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum RelayPolicy {

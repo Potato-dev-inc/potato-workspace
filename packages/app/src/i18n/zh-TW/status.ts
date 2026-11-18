@@ -30,4 +30,12 @@ export const status: Partial<Record<EnglishKey, string>> = {
   'status.room.stale': '{time}前的數字',
   'status.room.suggest': '{place}還有更多額度',
   'status.room.use': '改用這裡',
+  'status.far.title': '{name} 的使用量',
+  'status.far.tip': '{name} 上的 {agent}:已用 {pct}% 額度',
+  'status.far.tipReset': '{name} 上的 {agent}:已用 {pct}% 額度,{time}後重置',
+  'status.far.tag': '{name}',
+  'status.far.lastKnown': '上次讀取是 {time}前',
+  'status.far.waiting': '正在詢問 {name}…',
+  'status.far.none': '{name} 沒有提供使用量。',
+  'status.far.its': '這是 {name} 自己的額度,不是這台電腦的。',
 };

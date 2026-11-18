@@ -31,7 +31,6 @@ import '../../styles/cockpit-sidebar.css';
 import { DotSpinner } from './DotSpinner';
 import { twoTypesWording, useT } from '../../i18n';
 import { PotatoMark, IconChevronDown, IconClosedChats, IconFolderPlus, IconGlobe, IconInbox, IconMore, IconNewAgent, IconPin, IconSearch, IconSort, IconConnect } from './Icons';
-import { RowMark } from './RowMark';
 import { PlanLine } from '../common/PlanLine';
 import { ProjectHeader, ProjectMeta, type ProjectSignal } from './ProjectHeader';
 import { groupByBranch, primaryBranch, projectChanges, usePaneCards } from './useProjectCard';
@@ -73,6 +72,7 @@ import { companionMood, useJustFinished, useLocalHour } from '../../lib/companio
 import { isCompanionPaneId, MAX_COMPANIONS } from './companion/model';
 import { useReviewCount } from './review/useReviewCount';
 import { ClosedChatsSheet } from './ClosedChatsSheet';
+import { AgentRowButton } from './AgentRowButton';
 import { PeekCard } from './PeekCard';
 import { usePeek } from './usePeek';
 import { showUndo } from '../../lib/undo-bar';
@@ -537,23 +537,28 @@ export function Sidebar({
     );
     const entry = c.launchEntries.find((e) => e.type === p.info.agent_type);
     const asking = p.status === 'waiting_input' || questionPanes.has(id);
-    const pill = asking && p.status !== 'error';
     const broken = p.status === 'error';
     const working = p.status === 'running' && !asking;
-    const calm = !asking && !broken && !working;
     const preview = mainPreview(c.previews, id);
     return (
       <div key={id} className="ck-rowwrap" {...peek.rowProps(id)}>
-        <button
-          type="button"
-          data-pane-row={id}
-          className={`ck-row ck-row--slim${active ? ' is-active' : ''}${asking ? ' is-needs' : ''}${broken ? ' is-error' : ''}${calm ? (p.status === 'idle' ? ' is-idle' : ' is-ended') : ''}`}
+        <AgentRowButton
+          id={id}
+          status={p.status}
+          agentType={p.info.agent_type}
+          agentLabel={entry?.label}
+          title={heading.primary}
+          active={active}
+          asking={asking}
+          nested={!!spinOffOf}
+          helperCount={helperCount}
+          elapsed={since ? formatElapsed(c.now - since) : ''}
           onClick={() => {
             // A task open in the main area gives way to the agent, even when that agent is the one already selected.
             if (openTaskId) onOpenTask?.(null);
             c.select(id);
           }}
-          {...dragSourceProps({ kind: 'chat', id, label: heading.primary })}
+          buttonProps={dragSourceProps({ kind: 'chat', id, label: heading.primary })}
           onContextMenu={(e) => {
             e.preventDefault();
             rowMenuFrom.current = e.currentTarget;
@@ -562,54 +567,29 @@ export function Sidebar({
             const fromKeyboard = e.clientX === 0 && e.clientY === 0;
             setRowMenu({ id, x: fromKeyboard ? r.left + 24 : e.clientX, y: fromKeyboard ? r.bottom - 4 : e.clientY });
           }}
-          title={lastTurn.get(id)?.sentence}
-          aria-current={active ? 'true' : undefined}
-          aria-label={pill ? t('sidebar.rowNeedsYou', { name: heading.primary }) : undefined}
-        >
-          <span className="ck-row-glyph">
-            <RowMark status={p.status} asking={asking && p.status !== 'error'} agentId={p.info.agent_type} agentName={entry?.label} />
-          </span>
-          <span
-            className="ck-row-main"
-            title={
-              spinOffOf
-                ? t('sidebar.spinOffTip', { name: paneTitle(spinOffOf), ago: formatElapsed(c.now - p.info.created_at) })
-                : [...new Set([heading.primary, entry?.label, subline, projectWithCopy(p.info.cwd)])].filter(Boolean).join(' · ')
-            }
-          >
-            {spinOffOf && (
-              <span className="ck-row-nest" data-testid="row-spinoff-mark" aria-hidden="true">
-                ↳
-              </span>
-            )}
-            <span className="ck-row-title">{heading.primary}</span>
-            {working && p.info.lane === ACP_LANE && !awayFrom ? <RowDoing paneId={id} api={acp} fallback={subline} /> : <span className="ck-row-sub">{subline}</span>}
-            <PlanLine paneId={id} />
-          </span>
-          {preview && (
-            <span className="ck-row-preview" title={t('sidebar.hasPreviewAt', { address: previewAddress(preview) })} role="img" aria-label={t('sidebar.hasPreview')}>
-              <IconGlobe />
-            </span>
-          )}
-          {pinSet.has(id) && (
-            <span className="ck-row-pin" role="img" aria-label={t('sidebar.pinned')} title={t('sidebar.pinned')}>
-              <IconPin />
-            </span>
-          )}
-          {helperCount > 0 && (
-            <span className="ck-row-helpers" data-testid="row-helper-count" title={t('sidebar.helperCount', { count: helperCount })} role="img" aria-label={t('sidebar.helperCount', { count: helperCount })}>
-              {helperCount}
-            </span>
-          )}
-          {/* The right side says one thing: the chip when it needs you or is broken, the time while it works, else nothing. */}
-          {pill ? (
-            <span className="ck-row-pill">{t('sidebar.needsYou')}</span>
-          ) : broken ? (
-            <span className="ck-row-pill ck-row-pill--error">{t('sidebar.error')}</span>
-          ) : working ? (
-            <span className="ck-row-time">{since ? formatElapsed(c.now - since) : ''}</span>
-          ) : null}
-        </button>
+          rowTip={lastTurn.get(id)?.sentence}
+          tip={
+            spinOffOf
+              ? t('sidebar.spinOffTip', { name: paneTitle(spinOffOf), ago: formatElapsed(c.now - p.info.created_at) })
+              : [...new Set([heading.primary, entry?.label, subline, projectWithCopy(p.info.cwd)])].filter(Boolean).join(' · ')
+          }
+          sub={working && p.info.lane === ACP_LANE && !awayFrom ? <RowDoing paneId={id} api={acp} fallback={subline} /> : <span className="ck-row-sub">{subline}</span>}
+          below={<PlanLine paneId={id} />}
+          extra={
+            <>
+              {preview && (
+                <span className="ck-row-preview" title={t('sidebar.hasPreviewAt', { address: previewAddress(preview) })} role="img" aria-label={t('sidebar.hasPreview')}>
+                  <IconGlobe />
+                </span>
+              )}
+              {pinSet.has(id) && (
+                <span className="ck-row-pin" role="img" aria-label={t('sidebar.pinned')} title={t('sidebar.pinned')}>
+                  <IconPin />
+                </span>
+              )}
+            </>
+          }
+        />
         {!awayFrom && !p.info.parent_pane_id && p.info.cwd && (
           <button
             type="button"
@@ -966,7 +946,7 @@ export function Sidebar({
               <NewAgentWhere
                 where={
                   devices?.where
-                    ? { ...devices.where, onAddDevice: () => (setMenuOpen(false), devices.where!.onAddDevice()), onStarted: (d, id, chat) => (setMenuOpen(false), devices.where!.onStarted(d, id, chat)) }
+                    ? { ...devices.where, onAddDevice: () => (setMenuOpen(false), devices.where!.onAddDevice()), onStarted: (d, id, chat) => (setMenuOpen(false), devices.where!.onStarted(d, id, chat)), ...(onOpenNewAgent ? { pickKey: project?.path ?? '', onPickPlace: () => (setMenuOpen(false), onOpenNewAgent(project ? { path: project.path, name: project.name } : undefined)) } : {}) }
                     : undefined
                 }
               >

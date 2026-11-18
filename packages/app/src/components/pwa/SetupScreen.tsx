@@ -2,6 +2,7 @@
 import { friendlyPhoneName, readPhoneName } from '../../lib/phoneName';
 import { errorSentence } from '../../lib/sayError';
 import { useEffect, useState } from 'react';
+import { networkBase } from '../../pwa/where';
 import { LS_BRIDGE_URL, resolveBridgeBaseUrl, shouldUseSameOriginBridgeProxy } from '../../lib/bridge-url';
 import { ngrokRequestHeaders } from '../../lib/bridge-ngrok';
 import { mergeBridgeHeaders } from '../../lib/mobile-pairing-auth';

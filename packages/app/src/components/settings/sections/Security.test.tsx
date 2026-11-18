@@ -6,7 +6,7 @@ import { click, mountRows, settle } from '../test-utils';
 import { securityRows, whenText } from './bridge/Security';
 
 const mocks = vi.hoisted(() => ({
-  state: { ask_before_agent_control: true, agents_may_merge: false },
+  state: { ask_before_agent_control: true, agents_may_merge: false, ask_before_helpers_start: false },
   entries: [
     { seq: 2, ts_ms: Date.now() - 120_000, kind: 'consent', who: 'desktop', summary: 'You allowed Claude to control Codex, once' },
     { seq: 1, ts_ms: Date.now() - 3_600_000, kind: 'approval', who: 'device', summary: 'A phone answered from its lock screen: Allowed once' },
@@ -37,7 +37,7 @@ const MERGE = 'Let agents merge separate copies';
 const switchFor = (host: HTMLElement, label: string) => host.querySelector<HTMLElement>(`[aria-label="${label}"]`);
 
 beforeEach(() => {
-  mocks.state = { ask_before_agent_control: true, agents_may_merge: false };
+  mocks.state = { ask_before_agent_control: true, agents_may_merge: false, ask_before_helpers_start: false };
   mocks.verify = { ok: true, entries: 2, broken: null };
   vi.clearAllMocks();
 });
@@ -57,11 +57,24 @@ describe('Security rows', () => {
     await click(switchFor(m.host, ASK));
     await settle(5);
     expect(agentAuthorityApi.set).toHaveBeenCalledWith({ ask_before_agent_control: false });
-    expect(mocks.state).toEqual({ ask_before_agent_control: false, agents_may_merge: false });
+    expect(mocks.state).toEqual({ ask_before_agent_control: false, agents_may_merge: false, ask_before_helpers_start: false });
     await click(switchFor(m.host, MERGE));
     await settle(5);
-    expect(mocks.state).toEqual({ ask_before_agent_control: false, agents_may_merge: true });
+    expect(mocks.state).toEqual({ ask_before_agent_control: false, agents_may_merge: true, ask_before_helpers_start: false });
     expect(switchFor(m.host, MERGE)?.getAttribute('aria-checked')).toBe('true');
+    await m.unmount();
+  });
+
+  it('has the helpers switch off by default and saves it through the app command only', async () => {
+    const m = await mountRows(securityRows);
+    await settle(5);
+    const label = 'Ask me before other tools start agents';
+    expect(switchFor(m.host, label)?.getAttribute('aria-checked')).toBe('false');
+    await click(switchFor(m.host, label));
+    await settle(5);
+    expect(agentAuthorityApi.set).toHaveBeenCalledWith({ ask_before_helpers_start: true });
+    expect(mocks.state.ask_before_helpers_start).toBe(true);
+    expect(switchFor(m.host, label)?.getAttribute('aria-checked')).toBe('true');
     await m.unmount();
   });
 

@@ -160,3 +160,38 @@ fn the_real_roots_are_the_project_and_the_phone_uploads() {
     assert_eq!(r.len(), 2);
     assert!(r[1].ends_with("phone-uploads"));
 }
+
+#[test]
+fn a_network_share_is_refused_in_every_spelling_before_the_disk_is_asked() {
+    let d = dirs();
+    for text in [
+        "file:%5C%5Chost%5Cshare%5Cx.png",
+        "file:%5c%5chost%5cshare%5cx.png",
+        "file://host/share/x.png",
+        "file:////host/share/x.png",
+        "//host/share/x.png",
+        r"\\host\share\x.png",
+        "%5C%5Chost%5Cshare%5Cx.png",
+        "%2F%2Fhost/share/x.png",
+        r"\\?\C:\x.png",
+        r"\\.\pipe\x.png",
+        r"/\host/share/x.png",
+    ] {
+        assert_eq!(code(read(text, &cwd(&d), &roots(&d), MAX_BYTES)), "PICTURE_NOT_IN_PROJECT", "{text}");
+    }
+}
+
+#[test]
+fn a_path_outside_the_project_is_refused_by_its_words_before_it_is_opened() {
+    let d = dirs();
+    // The file does not exist at all: the refusal is the same as for one that does, so nothing tells the two apart.
+    let ghost = d.outside.join("ghost.png");
+    assert_eq!(code(read(&ghost.to_string_lossy(), &cwd(&d), &roots(&d), MAX_BYTES)), "PICTURE_NOT_IN_PROJECT");
+    assert_eq!(code(read("../outside/ghost.png", &cwd(&d), &roots(&d), MAX_BYTES)), "PICTURE_NOT_IN_PROJECT");
+    assert!(lexically_inside(&d.project.join("out").join("..").join("a.png"), &roots(&d)));
+    assert!(!lexically_inside(&d.project.join("..").join("outside").join("a.png"), &roots(&d)));
+    // A legitimate file in the project still reads.
+    std::fs::write(d.project.join("ok.png"), png_bytes()).unwrap();
+    assert!(read("ok.png", &cwd(&d), &roots(&d), MAX_BYTES).is_ok());
+    assert!(read(&format!("file:///{}", d.project.join("ok.png").to_string_lossy().replace('\\', "/")), &cwd(&d), &roots(&d), MAX_BYTES).is_ok());
+}

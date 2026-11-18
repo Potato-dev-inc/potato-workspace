@@ -1,93 +1,10 @@
-/* Connect: one page, four tabs (Phone, My PCs, Team, Lending). Colour tokens only; orange (--accent) shows up
-   as the one primary button, the lit "connected" dot and focus. Everything else is grey. */
+/* Connect: the scroll host, the phone code (the giant one in the middle of Devices) and the reused Settings screens. The page itself is connect-tabs.css. */
 
 .cockpit .ck-connect-scroll {
   flex: 1;
   min-height: 0;
   min-width: 0;
   overflow-y: auto;
-}
-.cn-page {
-  display: flex;
-  flex-direction: column;
-  gap: 10px;
-  width: 100%;
-  max-width: 880px;
-  margin: 0 auto;
-  padding: 28px 24px 48px;
-  color: var(--label-2);
-  font-size: 13px;
-}
-.cn-title {
-  margin: 0;
-  font-size: 20px;
-  font-weight: 600;
-  color: var(--label);
-}
-.cn-lead {
-  margin: 0;
-  color: var(--label-2);
-}
-.cn-stay {
-  margin: 0;
-  padding: 7px 10px;
-  width: fit-content;
-  max-width: 100%;
-  font-size: 12px;
-  color: var(--label-3);
-  background: var(--fill);
-  border: 1px solid var(--sep);
-  border-radius: 8px;
-}
-
-.cn-tabs {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 4px;
-  margin-top: 6px;
-  border-bottom: 1px solid var(--sep);
-  overflow: visible;
-}
-.cockpit .cn-tab {
-  padding: 8px 14px;
-  font: inherit;
-  color: var(--label-3);
-  background: transparent;
-  border: 0;
-  border-bottom: 2px solid transparent;
-  margin-bottom: -1px;
-  cursor: pointer;
-  white-space: nowrap;
-}
-.cockpit .cn-tab:hover {
-  color: var(--label);
-}
-.cockpit .cn-tab.is-on {
-  color: var(--label);
-  font-weight: 600;
-  border-bottom-color: var(--label);
-}
-.cn-tab:focus-visible,
-.cn-main:focus-visible,
-.cn-second:focus-visible {
-  outline: 2px solid var(--accent);
-  outline-offset: 2px;
-}
-
-.cn-panel {
-  display: flex;
-  flex-direction: column;
-  gap: 12px;
-  padding-top: 8px;
-  min-width: 0;
-}
-.cn-status {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  margin: 0;
-  color: var(--label);
-  font-size: 14px;
 }
 .cn-dot {
   flex: none;
@@ -96,10 +13,6 @@
   border-radius: 50%;
   background: var(--label-3);
   opacity: 0.55;
-}
-.cn-status[data-on='true'] .cn-dot {
-  background: var(--accent);
-  opacity: 1;
 }
 /* The reused Settings screens: their styles are scoped to .settings, so they get that class but sit in the flow, not over the window. */
 .settings.settings--embed.cn-embed {
@@ -114,98 +27,6 @@
 .cn-embed .st-rowwrap {
   position: relative;
 }
-.cn-actions {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 8px;
-  align-items: center;
-}
-.cn-actions--ask .lend-entry {
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-}
-.cn-more {
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
-  margin-top: 8px;
-}
-.cn-h2 {
-  margin: 0;
-  font-size: 12px;
-  font-weight: 600;
-  color: var(--label-3);
-}
-
-/* The old Settings rows that moved: one line and a button. */
-.cn-moved {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 12px;
-  flex-wrap: wrap;
-  padding: 10px 0;
-  color: var(--label-2);
-  font-size: 13px;
-}
-.cockpit .cn-btn {
-  padding: 5px 12px;
-  font: inherit;
-  color: var(--label);
-  background: var(--fill);
-  border: 1px solid var(--sep);
-  border-radius: 8px;
-  cursor: pointer;
-}
-.cockpit .cn-btn:hover {
-  background: var(--fill-2, var(--fill));
-}
-.cn-btn:focus-visible {
-  outline: 2px solid var(--accent);
-  outline-offset: 2px;
-}
-
-@media (max-width: 640px) {
-  .cn-page {
-    padding: 20px 16px 40px;
-  }
-}
-
-.cn-relay-wrap {
-  display: grid;
-  gap: 6px;
-}
-.cn-relay {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: baseline;
-  gap: 4px 10px;
-  margin: 0;
-  padding: 7px 10px;
-  width: fit-content;
-  max-width: 100%;
-  font-size: 12px;
-  color: var(--label-2);
-  background: var(--fill);
-  border: 1px solid var(--sep);
-  border-radius: 8px;
-}
-.cn-relay-label {
-  color: var(--label-3);
-}
-.cn-relay-status {
-  padding: 1px 8px;
-  border: 1px solid var(--sep);
-  border-radius: 999px;
-}
-.cn-relay[data-state='linked'] .cn-relay-status {
-  color: var(--label);
-}
-.cn-relay-used {
-  color: var(--label-3);
-}
-
 /* Phone, default view: one line, one code, one status line. The code sits on a white card in both themes so a camera can read it. */
 .cn-simple {
   display: flex;
@@ -272,73 +93,6 @@
   margin: 4px 0 0;
   overflow-wrap: anywhere;
 }
-.cn-offer {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 8px;
-  max-width: 420px;
-  padding: 12px 14px;
-  background: var(--fill);
-  border: 1px solid var(--sep);
-  border-radius: 10px;
-  font-size: 13px;
-  color: var(--label-2);
-}
-.cn-offer-text {
-  margin: 0;
-}
-.cn-offer-actions {
-  display: flex;
-  flex-wrap: wrap;
-  justify-content: center;
-  gap: 8px;
-}
-
-/* Advanced: closed by default, grey, at the bottom. */
-.cn-adv {
-  margin-top: 12px;
-  border-top: 1px solid var(--sep);
-  padding-top: 8px;
-}
-.cn-adv-summary {
-  cursor: pointer;
-  font-size: 12px;
-  font-weight: 600;
-  color: var(--label-3);
-}
-.cn-adv-body {
-  display: flex;
-  flex-direction: column;
-  gap: 10px;
-  padding-top: 10px;
-  min-width: 0;
-}
-.cn-adv-intro {
-  margin: 0;
-  font-size: 12px;
-  color: var(--label-3);
-}
-.cn-adv-terms {
-  display: flex;
-  flex-direction: column;
-  gap: 4px;
-  margin: 0;
-  font-size: 12px;
-}
-.cn-adv-term {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 2px 8px;
-}
-.cn-adv-term dt {
-  font-weight: 600;
-  color: var(--label-2);
-}
-.cn-adv-term dd {
-  margin: 0;
-  color: var(--label-3);
-}
 
 /* Code hidden because the window is not being looked at: a blurred card, click to show again. */
 .cn-qr-away {
@@ -352,3 +106,6 @@
   cursor: pointer;
   backdrop-filter: blur(6px);
 }
+/* The giant code: the hero of Devices when no phone is added yet. */
+.cn-simple--giant .cn-qr-canvas { width: min(320px, 80vw); }
+.cn-relay-status { padding: 1px 8px; font-size: 12px; border: 1px solid var(--sep); border-radius: 999px; }

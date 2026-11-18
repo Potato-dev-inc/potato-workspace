@@ -75,6 +75,7 @@ export function WorkerUpdateButton({
     prepare: t('wu.step.prepare'),
     install: t('wu.step.install'),
     login: t('wu.step.login'),
+    look: t('wu.step.look'),
     delete: t('wu.step.delete'),
     deploy: t('wu.step.deploy'),
     check: t('wu.step.check'),

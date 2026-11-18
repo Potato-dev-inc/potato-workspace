@@ -127,7 +127,7 @@ impl HostBridge for TestBridge {
                 },
                 None => Self::answer(404, json!({ "error": "no such pane" })),
             },
-            ("GET", ["panes", "p1", "snapshot"]) => Self::answer(200, json!({ "content": self.screen.lock().clone(), "view": "screen" })),
+            ("GET", ["pclink", "sessions", "p1", "screen"]) => Self::answer(200, json!({ "content": self.screen.lock().clone(), "view": "screen" })),
             ("GET", ["panes", id, "chat"]) => match self.chat(id) {
                 Some(chat) => Self::answer(200, json!({ "items": chat.items().iter().map(|i| serde_json::to_value(i).unwrap()).collect::<Vec<_>>() })),
                 None => Self::answer(404, json!({ "error": "no such pane" })),

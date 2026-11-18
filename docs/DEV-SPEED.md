@@ -15,20 +15,20 @@ Measured on 2026-10-30 on one Windows 11 machine (Ryzen 7 7700, 8 cores / 16 thr
 
 ## How agents get a build slot
 
-Agents that run cargo do not make a new worktree per task. There are three permanent slots (`<slot-root>\1`, `2`, `3`), each a git worktree with its own `node_modules`,
-its resources and its own cargo target (`<slot-root>\target\<n>`). The path never changes, so cargo's incremental cache stays warm from task to task. One agent holds one slot, so nobody waits on cargo's file lock. UI-only work (no cargo) may still use a plain worktree.
+Agents that run cargo do not make a new worktree per task. There are three permanent slots (`E:\pm-slot\1`, `2`, `3`), each a git worktree with its own `node_modules`,
+its resources and its own cargo target (`E:\pm-slot\target\<n>`). The path never changes, so cargo's incremental cache stays warm from task to task. One agent holds one slot, so nobody waits on cargo's file lock. UI-only work (no cargo) may still use a plain worktree.
 
 ```
 node scripts/dev/slot.mjs lease --name <task> --branch <branch> [--wait 600]   # prints the slot path and the env lines
 node scripts/dev/slot-prepare.mjs <n> --source <checkout with the resources>   # worktree if missing, npm ci only if the lock changed, copy resources
-cd <slot-root>\<n> ; git switch -c <branch> master                            # then use the CARGO_TARGET_DIR and CARGO_BUILD_JOBS lines printed by lease
+cd E:\pm-slot\<n> ; git switch -c <branch> master                            # then use the CARGO_TARGET_DIR and CARGO_BUILD_JOBS lines printed by lease
 node scripts/dev/slot.mjs release <n>                                         # when done (commit first)
 node scripts/dev/slot.mjs status                                              # who holds what
 node scripts/dev/disk-guard.mjs [--trim]                                      # free space per drive, size per slot target
 ```
 
-- A lease is a file in `<slot-root>\leases` made with an exclusive open. It expires after 3 hours (or at once if you passed `--pid` and that process is gone). `lease --release-slot` takes the fourth lease, for the release folder. All slots taken: `lease` exits with code 2 (or waits with `--wait`).
-- Nothing is deleted. Released and expired leases move to `leases\old`; `disk-guard.mjs --trim` moves the `incremental` folders of unleased slots to `<trash folder>` when the drive has under 60 GB free or a target is over 40 GB.
+- A lease is a file in `E:\pm-slot\leases` made with an exclusive open. It expires after 3 hours (or at once if you passed `--pid` and that process is gone). `lease --release-slot` takes the fourth lease, for the release folder. All slots taken: `lease` exits with code 2 (or waits with `--wait`).
+- Nothing is deleted. Released and expired leases move to `leases\old`; `disk-guard.mjs --trim` moves the `incremental` folders of unleased slots to `D:\pm-trash` when the drive has under 60 GB free or a target is over 40 GB.
 - `PM_SLOT_ROOT` moves the whole layout (the tests use a temp folder). Never set a shared `CARGO_TARGET_DIR` by hand.
 - `.cargo/config.toml` selects `rust-lld` as the linker on Windows MSVC. Indicative (busy machine, one edit then `cargo test --lib --no-run`): 75 s and 81 s with `link.exe`, 54 s with `rust-lld`. Switching linker once rebuilds everything (496 s, loaded), so do it between tasks, not mid-task.
 
@@ -117,7 +117,7 @@ The 222k lines of Rust are one library crate in 1,372 files plus two small binar
 
 | Change | Before | After |
 |---|---|---|
-| `scripts/check.mjs`: the checks in one command, in the repo, no personal paths | a private script outside the repo, sequential, `npm ci` every time, copies a folder from the main checkout, forces `CARGO_INCREMENTAL=0` | Rust, TypeScript and guards run side by side (the total is the slowest lane, not the sum; not timed end to end to save usage); only prepares what is missing; keeps your cargo settings |
+| `scripts/check.mjs`: the checks in one command, in the repo, no personal paths | `/d/pm-night/full-check.sh`: out of the repo, sequential, `npm ci` every time, copies a folder from the main checkout, forces `CARGO_INCREMENTAL=0` | Rust, TypeScript and guards run side by side (the total is the slowest lane, not the sum; not timed end to end to save usage); only prepares what is missing; keeps your cargo settings |
 | `scripts/test-changed.mjs`: tests your change can reach | everything, or a hand-typed filter | a change in a leaf module runs 1 to 7 modules; a one-line plan with `--dry-run` |
 | `scripts/where.mjs` | read a 227 KB file | one command, about 2.5 KB of output |
 | `scripts/check-merge-leftovers.mjs` (replaces the out-of-repo `dupcheck.sh`) | found by a failed compile after 2 minutes | 0.35 s |
@@ -136,7 +136,7 @@ node scripts/where.mjs approval prompt      # where to look
 node scripts/test-changed.mjs --dry-run      # what would run for my change
 node scripts/test-changed.mjs                # run it (Rust modules + their users, vitest related, tsc)
 node scripts/check.mjs                       # before a push: everything CI runs
-$env:CARGO_TARGET_DIR = "<cargo target folder>"   # keep the 2 to 8 GB off the repo drive
+$env:CARGO_TARGET_DIR = "D:\cargo-target\my-worktree"   # keep the 2 to 8 GB off the repo drive
 ```
 
 `check.mjs` and `test-changed.mjs` write their logs to `<temp>/pm-check/<checkout name>/` (set `PM_CHECK_LOGS` to move them) and print one line per lane.
@@ -185,6 +185,6 @@ A test passes on a quiet machine and fails when ten builds run beside it: that i
 
 - **Wait for an event or a condition, with a deadline. Never a bare sleep.** Poll the thing you need (a file exists, a pid is gone, an event arrived) every few milliseconds and fail only when a generous deadline passes. A fixed `sleep` that is "long enough" is a bug waiting for a busy machine.
 - **Tests share nothing process-wide**: no shared tables, no fixed ports, no fixed temp names (use a unique folder per test).
-- **A test that passes only on retry is a flake, not a pass.** Run `node scripts/dev/flakes.mjs` (nextest profile `local`, 2 retries); it writes every retried test with the date and branch to the flake ledger (set `FLAKES_LOG` to choose the file). Fix the names in the ledger.
+- **A test that passes only on retry is a flake, not a pass.** Run `node scripts/dev/flakes.mjs` (nextest profile `local`, 2 retries); it writes every retried test with the date and branch to the flake ledger (`D:/pm-night/flakes.log`, or set `FLAKES_LOG`). Fix the names in the ledger.
 - **The sleep budget** (`src/sleep_budget_tests.rs`) counts `thread::sleep(` and `time::sleep(` lines in test files and fails when the count grows. When you remove sleeps, lower `BUDGET` in the same change.
 - Production code that starts helper processes must not depend on timing either. Example fixed on 2026-11-12: the ACP process-tree stop ended the Windows job, but a helper started before the adapter was put in the job was not in it, so under load the helper survived a cancel. `Containment::terminate` now walks the tree by pid first, then ends the job. Before the fix `acp::bridge::tests::cancel_kills_the_whole_process_tree` and `...the_host_cancel_and_failure_paths_work_through_the_bridge` failed 4 and 12 times in 50 runs under load; after it, 0 and 0.

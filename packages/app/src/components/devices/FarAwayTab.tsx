@@ -1,5 +1,6 @@
-// "Far away": one device makes a pairing link (valid 10 minutes, works once), the other pastes it. The link gives no
-// rights by itself: both people still confirm, on the same sheet as a code. If the relay is off, the error says so.
+// "Add a PC": one PC makes a link (valid 10 minutes, works once) and the other pastes it. The PCs meet through the maker's own
+// relay (the link carries its address, so nobody types one); then both people pick the one number shown on both screens.
+// The link gives no rights by itself. With no relay it still works when the PCs can reach each other directly, and says so.
 import { useEffect, useRef, useState } from 'react';
 import { useT } from '../../i18n';
 import type { DevicesApi, DevicesView } from '../../lib/devices';
@@ -54,7 +55,7 @@ export function FarAwayTab({ view, api, onJoined }: { view: DevicesView | null; 
         <LinkBox link={link} />
       ) : (
         <div className="dev-row">
-          <button type="button" className="dev-btn" onClick={make} data-testid="make-link">
+          <button type="button" className="dev-btn is-primary" onClick={make} data-testid="make-link">
             {t('devices.makeLink')}
           </button>
         </div>
@@ -64,12 +65,17 @@ export function FarAwayTab({ view, api, onJoined }: { view: DevicesView | null; 
           {t('devices.far.viaRelay')}
         </p>
       )}
+      {link && !viaRelay && (
+        <p className="dev-note" data-testid="far-no-relay">
+          {t('devices.far.noRelay')}
+        </p>
+      )}
       <label className="dev-field">
         <span>{t('devices.pasteLink')}</span>
         <input type="text" value={pasted} placeholder={t('devices.linkPlaceholder')} onChange={(e) => setPasted(e.target.value)} data-testid="paste-link" />
       </label>
       <div className="dev-row">
-        <button type="button" className="dev-btn is-primary" disabled={busy || pasted.trim() === ''} onClick={join} data-testid="join-link-go">
+        <button type="button" className={`dev-btn${pasted.trim() === '' ? '' : ' is-primary'}`} disabled={busy || pasted.trim() === ''} onClick={join} data-testid="join-link-go">
           {busy ? t('devices.joining') : t('devices.join')}
         </button>
       </div>

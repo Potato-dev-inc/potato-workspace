@@ -99,7 +99,7 @@ describe('Who may borrow', () => {
     const text = section('Who may borrow').textContent!;
     expect(text).toContain('My other PCs');
     expect(text).toContain('up to 24 hours');
-    expect(text).toContain('Up to 200 requests and 500,000 tokens');
+    expect(text).toContain('Up to 200 requests');
   });
 
   it('with no profiles: one block explains what a profile is for, and its button starts one', async () => {
@@ -113,8 +113,8 @@ describe('Who may borrow', () => {
 
   it('while the switch is off it shows only the status line and the one note, no profiles', async () => {
     await mount({ enabled: false });
-    expect(host.querySelector('[data-testid="lend-status"]')!.getAttribute('data-state')).toBe('off');
-    expect(host.textContent).toBe('Lending from this PC: Off·ChangeTurn it on to lend, and to borrow from another PC.');
+    expect(host.querySelector('[data-testid="lend-status"]')).toBeNull();
+    expect(host.textContent).toBe('Turn it on to lend, and to borrow from another PC.');
     expect(host.querySelector('[data-testid="lend-empty"]')).toBeNull();
   });
 
@@ -476,7 +476,7 @@ describe('Active lends', () => {
     const box = section('Active lends');
     expect(box.textContent).toMatch(/Lending Claude to Maya/);
     expect(box.textContent).toMatch(/Borrowing Claude from Sam/);
-    expect(box.textContent).toContain('Used so far: 14 requests · 62.1k tokens');
+    expect(box.textContent).toContain('Used so far: 14 requests');
     // Taking back asks first.
     await click(buttonByText(box, 'Take back'));
     expect(box.textContent).toContain('Take back Claude from Maya? Their agent stops now.');
@@ -495,20 +495,22 @@ describe('Active lends', () => {
 });
 
 describe('Show usage in the usage bar (per lend profile)', () => {
-  it('is a checkbox on a sign-in profile, off by default, and saving it turns show_usage on; a key profile has none', async () => {
+  it('is a switch on a sign-in profile, off by default, and saving it turns show_usage on; a key profile has none', async () => {
     const { api } = await mount({ profiles: [MY_PROFILE, KEY_PROFILE] });
     const rows = [...section('Who may borrow').querySelectorAll('li')];
     const mine = rows.find((r) => r.textContent?.includes('My other PCs'))!;
     const key = rows.find((r) => r.textContent?.includes('Work key'))!;
-    const box = mine.querySelector<HTMLInputElement>('.lend-showusage input')!;
-    expect(box.checked).toBe(false);
+    const box = mine.querySelector<HTMLElement>('.lend-showusage [role="switch"]')!;
+    expect(box.getAttribute('aria-checked')).toBe('false');
     expect(mine.textContent).toContain('Show usage in the usage bar');
     expect(key.querySelector('.lend-showusage')).toBeNull();
     await click(box);
     await settle(3);
     const saved = api.backend.get().profiles.find((p) => p.id === MY_PROFILE.id)!;
     expect(saved.show_usage).toBe(true);
-    expect(section('Who may borrow').querySelector<HTMLInputElement>('.lend-showusage input')!.checked).toBe(true);
+    expect(section('Who may borrow').querySelector('.lend-showusage [role="switch"]')!.getAttribute('aria-checked')).toBe('true');
+    // The hint sits on its own grey line under the switch.
+    expect(mine.querySelector('.lend-showusage > small.lend-muted')!.textContent).toBe('The person who borrows it sees these numbers too.');
   });
 });
 

@@ -250,6 +250,8 @@ export interface TunnelStatus {
   local_port?: number | null;
   /** `moved`: the usual port was busy; `not_running`: the phone server could not start. */
   port_problem?: 'moved' | 'not_running' | null;
+  /** "Temporary link": phones get the plain quick address and the Worker is left out (it stays saved and linked). */
+  link_temporary?: boolean;
 }
 
 export interface TunnelStableStatus {

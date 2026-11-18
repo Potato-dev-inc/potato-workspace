@@ -9,6 +9,7 @@
 
 pub use signin::link_shape;
 pub mod client;
+pub mod directory;
 pub mod service;
 pub mod signin;
 pub mod statement;
@@ -49,6 +50,8 @@ pub fn handle_link<S: AsRef<str>>(app: &AppHandle, urls: &[S]) -> bool {
     let spawned = std::thread::Builder::new().name("account-signin".into()).spawn(move || {
         if service::service().finish_sign_in(&link) {
             crate::cockpit::open_cockpit(&app, None);
+            // Signed in: a PC that lets its other PCs open it tells the account where it is.
+            crate::device_link::app::account_changed();
         }
         let _ = app.emit(CHANGED_EVENT, ());
     });

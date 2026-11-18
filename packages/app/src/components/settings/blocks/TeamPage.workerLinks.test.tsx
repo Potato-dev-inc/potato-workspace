@@ -77,11 +77,8 @@ describe('Join through a one-time link', () => {
     const api = await mount(teamConfig(NOT_ON_TEAM));
     await click(buttonStarting('Join a team'));
     await typeInto(pasteBox(), `Join my team: ${LINK} .`);
-    expect(host.querySelector('[data-testid="join-link-found"]')).not.toBeNull();
-    expect(dialog()).toBeNull();
-    expect(api.calls).toEqual([]); // nothing asked of the network until the person opens it
-
-    await click(buttonByText(host, 'Look at this invite'));
+    // One box: no code field, no name field. The card opens by itself, and only a look-up has gone out.
+    expect(host.querySelector('input[placeholder="ABCD-EFGH"]')).toBeNull();
     await settle(3);
     expect(api.calls).toEqual([`lookup(${LINK})`]);
     const popup = dialog()!;
@@ -98,11 +95,21 @@ describe('Join through a one-time link', () => {
     expect(dialog()!.textContent).toContain('Asked Maya to let you into Acme crew');
   });
 
+  it('caps the paste box at 4096 characters and ignores a link after the cut', async () => {
+    const api = await mount(teamConfig(NOT_ON_TEAM));
+    await click(buttonStarting('Join a team'));
+    expect(pasteBox().maxLength).toBe(4096);
+    await typeInto(pasteBox(), `${'x'.repeat(4100)} ${LINK}`);
+    await settle(3);
+    expect(pasteBox().value.length).toBe(4096);
+    expect(dialog()).toBeNull();
+    expect(api.calls).toEqual([]);
+  });
+
   it('Not now closes it and does not use the invite', async () => {
     const api = await mount(teamConfig(NOT_ON_TEAM));
     await click(buttonStarting('Join a team'));
     await typeInto(pasteBox(), LINK);
-    await click(buttonByText(host, 'Look at this invite'));
     await settle(3);
     await click([...dialog()!.querySelectorAll('button')].find((b) => b.textContent === 'Not now'));
     expect(dialog()).toBeNull();
@@ -117,7 +124,6 @@ describe('Join through a one-time link', () => {
     });
     await click(buttonStarting('Join a team'));
     await typeInto(pasteBox(), LINK);
-    await click(buttonByText(host, 'Look at this invite'));
     await settle(3);
     expect(dialog()!.textContent).toContain('already used');
     expect([...dialog()!.querySelectorAll('button')].map((b) => b.textContent)).toEqual(['Close']);
@@ -143,14 +149,13 @@ describe('Join through a one-time link', () => {
     await mount(teamConfig(NOT_ON_TEAM), { inviteLookup: undefined, inviteAccept: undefined });
     await click(buttonStarting('Join a team'));
     await typeInto(pasteBox(), LINK);
-    await click(buttonByText(host, 'Look at this invite'));
     await settle(2);
     expect(dialog()!.textContent).toContain('Update Potato Workspace');
   });
 });
 
 describe('Make an invite on a Potato Worker', () => {
-  it('shows the one-time link first, with the older link and code folded behind it', async () => {
+  it('shows only the one-time link and one Copy invite link button: no pm:// text, no code', async () => {
     const joinUrl = 'https://pm-relay.maya.workers.dev/join/ABCDEFGH23456789';
     await mount(teamConfig(), {
       invite: async () => ({ link: 'pm://team/join?t=Acme&k=abc', code: 'KQ7M-4XPD', expiresAtMs: Date.now() + 86_400_000, joinUrl }),
@@ -160,9 +165,10 @@ describe('Make an invite on a Potato Worker', () => {
     const field = host.querySelector<HTMLInputElement>('[data-testid="invite-join-url"]')!;
     expect(field.value).toBe(joinUrl);
     expect(hasText(host, 'It works once, for 24 hours.')).toBe(true);
-    const older = host.querySelector('details.tp-older')!;
-    expect(older.textContent).toContain('KQ7M-4XPD');
-    expect(older.hasAttribute('open')).toBe(false);
+    expect(host.querySelector('details.tp-older')).toBeNull();
+    expect(hasText(host, 'KQ7M-4XPD')).toBe(false);
+    expect(host.innerHTML).not.toContain('pm://');
+    expect(buttonByText(host, 'Copy invite link')).toBeTruthy();
   });
 
   it('an older Worker gets the pasted invite and the one update command', async () => {

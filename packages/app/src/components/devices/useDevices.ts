@@ -1,4 +1,5 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
+import { clearDeviceLocalState } from '../../lib/deviceLocalState';
 import { devicesApi, withShortIds, type Device, type DevicesApi, type DevicesView, type HostingView } from '../../lib/devices';
 
 /** How often the state is read again when no change event came (a link going down is only noticed by asking). */
@@ -64,6 +65,14 @@ export function useDevices(api: DevicesApi = devicesApi): DevicesHandle {
       .then((s) => setView(sane(s)))
       .catch(() => setView(null));
   }, [api]);
+  // A PC that was there and is not any more (unlinked from the other side, or removed by the backend): what was kept of it goes too.
+  const known = useRef<ReadonlySet<string> | null>(null);
+  useEffect(() => {
+    if (!view?.enabled) return;
+    const now = new Set(view.devices.map((d) => d.node));
+    for (const node of known.current ?? []) if (!now.has(node)) clearDeviceLocalState(node);
+    known.current = now;
+  }, [view]);
   useEffect(() => {
     refresh();
     let off: (() => void) | undefined;

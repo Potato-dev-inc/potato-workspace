@@ -13,6 +13,7 @@ export const defaultTunnelApi: TunnelApi = {
   save: (input) => tauri.setTunnelConfig(input),
   restart: () => tauri.restartTunnel(),
   test: () => tauri.testTunnelConnection(),
+  setTemporary: (on) => tauri.setLinkTemporary(on),
 };
 
 const hostOf = (url: string | null | undefined): string => {

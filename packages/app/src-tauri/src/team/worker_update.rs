@@ -75,13 +75,16 @@ pub struct StepOut {
     /// The `https://<name>.<you>.workers.dev` address the deploy printed.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub url: Option<String>,
+    /// `look` only: a relay with this name already exists in the account and this PC does not hold its key.
+    #[serde(skip_serializing_if = "std::ops::Not::not")]
+    pub taken: bool,
 }
 
 fn fail(output: impl Into<String>) -> StepOut {
-    StepOut { ok: false, output: output.into(), url: None }
+    StepOut { ok: false, output: output.into(), url: None, taken: false }
 }
 fn done(output: impl Into<String>) -> StepOut {
-    StepOut { ok: true, output: output.into(), url: None }
+    StepOut { ok: true, output: output.into(), url: None, taken: false }
 }
 
 pub struct Env {
@@ -292,7 +295,7 @@ fn run_node_as(env: &Env, script: &Path, args: &[&str], limit: Duration, account
     match run_raw(env, script, args, limit, account) {
         Err(e) => fail(e),
         Ok(r) if r.cancelled => fail("Cancelled."),
-        Ok(r) if r.ok => StepOut { ok: true, url: workers_dev_url(&r.text), output: scrub(&r.text) },
+        Ok(r) if r.ok => StepOut { ok: true, url: workers_dev_url(&r.text), output: scrub(&r.text), taken: false },
         Ok(r) if r.timed_out => fail(format!("{}\nThis took too long and was stopped.", scrub(&r.text))),
         Ok(r) => fail(scrub(&r.text)),
     }
@@ -300,6 +303,85 @@ fn run_node_as(env: &Env, script: &Path, args: &[&str], limit: Duration, account
 
 fn run_node(env: &Env, script: &Path, args: &[&str], limit: Duration) -> StepOut {
     run_node_as(env, script, args, limit, None)
+}
+
+/// The first wrangler that has `wrangler auth token --json` (the "look" and the safe delete need it): 4.57.0, from
+/// wrangler's own changelog ("Add `wrangler auth token` command", with its `--json` output).
+pub const MIN_WRANGLER: (u64, u64, u64) = (4, 57, 0);
+
+/// Whether a version text like `4.163.0` is at least `min`.
+pub fn version_at_least(version: &str, min: (u64, u64, u64)) -> bool {
+    let mut it = version.trim().split(['.', '-', '+']).map(|p| p.parse::<u64>().ok());
+    match (it.next().flatten(), it.next().flatten(), it.next().flatten()) {
+        (Some(a), Some(b), Some(c)) => (a, b, c) >= min,
+        _ => false,
+    }
+}
+
+const TOO_OLD: &str = "The tool this needs is too old and could not be updated. Press Try again.";
+
+/// A finished install only counts when the tool that is now there is new enough.
+fn after_install(env: &Env, out: StepOut) -> StepOut {
+    if out.ok && !wrangler_current(env) {
+        return fail(TOO_OLD);
+    }
+    out
+}
+
+/// The installed wrangler is there and new enough.
+fn wrangler_current(env: &Env) -> bool {
+    if !wrangler_js(env).is_file() {
+        return false;
+    }
+    let pkg = plain(&env.work).join("node_modules").join("wrangler").join("package.json");
+    std::fs::read_to_string(pkg)
+        .ok()
+        .and_then(|t| serde_json::from_str::<serde_json::Value>(&t).ok())
+        .and_then(|v| v["version"].as_str().map(str::to_string))
+        .is_some_and(|v| version_at_least(&v, MIN_WRANGLER))
+}
+
+const DEPLOYED_FILE: &str = "deployed-relays.txt";
+
+/// `<account id> <relay name>` lines of the relays this PC put online itself (written right after a good deploy). The
+/// look counts a line as "mine" only for the account where it found the name. An old line with a bare name has no
+/// account, so it is never "mine" (the safe default).
+pub fn recorded(env: &Env, account: &str, name: &str) -> bool {
+    std::fs::read_to_string(env.work.join(DEPLOYED_FILE)).unwrap_or_default().lines().any(|l| {
+        let mut p = l.split_whitespace();
+        p.next() == Some(account) && p.next() == Some(name) && p.next().is_none()
+    })
+}
+
+fn record_deployed(env: &Env, account: &str, name: &str) {
+    if recorded(env, account, name) {
+        return;
+    }
+    use std::io::Write;
+    if let Ok(mut f) = std::fs::OpenOptions::new().create(true).append(true).open(env.work.join(DEPLOYED_FILE)) {
+        let _ = writeln!(f, "{account} {name}");
+    }
+}
+
+/// After a delete (Start fresh) the line goes: another PC may now own that name.
+fn forget_deployed(env: &Env, account: &str, name: &str) {
+    let path = env.work.join(DEPLOYED_FILE);
+    let Ok(text) = std::fs::read_to_string(&path) else { return };
+    let keep: Vec<&str> = text
+        .lines()
+        .filter(|l| {
+            let mut p = l.split_whitespace();
+            !(p.next() == Some(account) && p.next() == Some(name))
+        })
+        .collect();
+    let _ = std::fs::write(&path, keep.iter().map(|l| format!("{l}\n")).collect::<String>());
+}
+
+/// The one account wrangler is signed in to (none when it cannot be told or there are several).
+fn single_account(env: &Env) -> Option<String> {
+    let r = run_raw(env, &wrangler_js(env), &["whoami", "--json"], Duration::from_secs(60), None).ok().filter(|r| r.ok)?;
+    let mut ids = accounts_from_whoami(&r.stdout);
+    (ids.len() == 1).then(|| ids.remove(0))
 }
 
 fn wrangler_js(env: &Env) -> PathBuf {
@@ -320,7 +402,7 @@ fn prepare(env: &Env, name: &str) -> StepOut {
         std::fs::write(env.work.join("wrangler.toml"), wrangler_toml(&bundle.manifest, name))?;
         std::fs::write(
             env.work.join("package.json"),
-            "{\n  \"name\": \"potato-worker-update\",\n  \"private\": true,\n  \"devDependencies\": { \"wrangler\": \"^4.0.0\" }\n}\n",
+            "{\n  \"name\": \"potato-worker-update\",\n  \"private\": true,\n  \"devDependencies\": { \"wrangler\": \"^4.57.0\" }\n}\n",
         )?;
         Ok(())
     };
@@ -458,8 +540,71 @@ pub fn delete_verified(
             return fail(words);
         }
     }
+    forget_deployed(env, &account, name);
     *PINNED.lock().unwrap_or_else(|e| e.into_inner()) = Some((name.to_string(), account));
     done(if out.ok { "The old Worker is deleted." } else { "The old Worker was already gone." })
+}
+
+/// The Worker names in an account (Cloudflare's own list; the token stays in memory, never printed). `None`: not sure.
+fn cloudflare_scripts(token: &str, account: &str) -> Option<Vec<String>> {
+    let agent = ureq::AgentBuilder::new().timeout(Duration::from_secs(20)).redirects(0).user_agent("potato-workspace").build();
+    let resp = agent.get(&format!("https://api.cloudflare.com/client/v4/accounts/{account}/workers/scripts")).set("authorization", &format!("Bearer {token}")).call().ok()?;
+    let v: serde_json::Value = resp.into_json().ok()?;
+    Some(v["result"].as_array()?.iter().filter_map(|x| x["id"].as_str()).map(str::to_string).collect())
+}
+
+const NOT_SURE_LOOK: &str = "Could not look at your Cloudflare account, so nothing was changed. Press Try again and sign in.";
+
+/// Whether this PC may put its relay under `name`: the shipped name, or that with a short ending (a second PC in the
+/// same account). Never any other Worker name.
+pub fn own_name(shipped: &str, requested: &str) -> bool {
+    valid_name(requested)
+        && (requested == shipped
+            || requested.strip_prefix(shipped).and_then(|r| r.strip_prefix('-')).is_some_and(|tail| (3..=12).contains(&tail.len()) && tail.chars().all(|c| c.is_ascii_lowercase())))
+}
+
+/// "Look before deploy": reads (never writes) which Workers the account has. A Worker with this name that this PC does
+/// not hold the key for (it is not the saved one) is `taken`: nothing may be deployed over it. When it cannot be told,
+/// the answer is "failed", never "free".
+pub fn look_verified(
+    env: &Env,
+    name: &str,
+    saved_worker_url: Option<&str>,
+    scripts_of: impl Fn(&str, &str) -> Option<Vec<String>>,
+    subdomain_of: impl Fn(&str, &str) -> Option<String>,
+) -> StepOut {
+    if !valid_name(name) {
+        return fail("That Worker name is not valid.");
+    }
+    let w = wrangler_js(env);
+    let accounts = match run_raw(env, &w, &["whoami", "--json"], Duration::from_secs(60), None) {
+        Ok(r) if r.ok => accounts_from_whoami(&r.stdout),
+        _ => Vec::new(),
+    };
+    let token = match run_raw(env, &w, &["auth", "token", "--json"], Duration::from_secs(60), None) {
+        Ok(r) if r.ok => token_from_output(&r.stdout),
+        _ => None,
+    };
+    let (Some(token), false) = (token, accounts.is_empty()) else { return fail(NOT_SURE_LOOK) };
+    let mut found_in: Vec<&String> = Vec::new();
+    for id in &accounts {
+        match scripts_of(&token, id) {
+            Some(list) if list.iter().any(|n| n == name) => found_in.push(id),
+            Some(_) => {}
+            None => return fail(NOT_SURE_LOOK),
+        }
+    }
+    if found_in.is_empty() {
+        return done("No relay with this name yet.");
+    }
+    // Mine only in the account where it was found: this PC put it there (its own line), or its saved link points at
+    // that account's workers.dev name.
+    let saved = saved_worker_url.and_then(parts_from_address).filter(|(n, _)| n == name).map(|(_, sub)| sub);
+    let mine_in = |id: &String| recorded(env, id, name) || saved.as_deref().is_some_and(|sub| subdomain_of(&token, id).is_some_and(|s| s.eq_ignore_ascii_case(sub)));
+    if found_in.iter().all(|id| mine_in(id)) {
+        return done("Your relay is already here.");
+    }
+    StepOut { ok: true, output: "A relay set up on another PC is already in this account.".into(), url: None, taken: true }
 }
 
 /// Runs one step. `name` is the Worker's name (from its address, or the shipped default).
@@ -483,14 +628,15 @@ pub fn run_step_with(env: &Env, step: &str, name: &str, vars: &[(&str, String)])
             if !env.work.join("package.json").is_file() {
                 return fail("The working copy is not ready.");
             }
-            if wrangler_js(env).is_file() {
+            if wrangler_current(env) {
                 return done("The tool is already here.");
             }
             let npm = npm_cli_js(env);
             if !npm.is_file() {
                 return fail("The built-in npm is missing.");
             }
-            run_node(env, &npm, &["install", "--no-audit", "--no-fund"], Duration::from_secs(600))
+            let out = run_node(env, &npm, &["install", "--no-audit", "--no-fund"], Duration::from_secs(600));
+            after_install(env, out)
         }
         "login" => {
             let w = wrangler_js(env);
@@ -511,6 +657,12 @@ pub fn run_step_with(env: &Env, step: &str, name: &str, vars: &[(&str, String)])
             let mut out = run_node_as(env, &wrangler_js(env), &refs, Duration::from_secs(300), pinned.as_deref());
             // Only this Worker's own address counts: anything else the tool printed is ignored.
             out.url = out.url.filter(|u| name_from_address(u).as_deref() == Some(name));
+            if out.ok {
+                // Which account got it: the pinned one, else the only one signed in (never a guess).
+                if let Some(account) = pinned.clone().or_else(|| single_account(env)) {
+                    record_deployed(env, &account, name);
+                }
+            }
             out
         }
         _ => fail("Unknown step."),
@@ -533,19 +685,29 @@ fn env_for(app: &tauri::AppHandle) -> Env {
 
 /// One step of "Update Worker". `address`: the Worker to update (its name is used); none: a new Worker with the shipped name.
 #[tauri::command]
-pub async fn worker_update_step(app: tauri::AppHandle, step: String, address: Option<String>, confirmed: Option<bool>) -> Result<StepOut, String> {
+pub async fn worker_update_step(app: tauri::AppHandle, step: String, address: Option<String>, confirmed: Option<bool>, worker_name: Option<String>) -> Result<StepOut, String> {
     let env = env_for(&app);
     tauri::async_runtime::spawn_blocking(move || {
         let name = match address.as_deref().filter(|a| !a.trim().is_empty()) {
             Some(a) => name_from_address(a).ok_or("That address is not a workers.dev address.")?,
-            None => load_bundle(&env.bundle_dir).map(|b| b.manifest.name).unwrap_or_else(|_| "pm-relay".into()),
+            None => {
+                let shipped = load_bundle(&env.bundle_dir).map(|b| b.manifest.name).unwrap_or_else(|_| "pm-relay".into());
+                match worker_name.as_deref().filter(|n| !n.is_empty()) {
+                    Some(n) if own_name(&shipped, n) => n.to_string(),
+                    Some(_) => return Err("That is not a relay name this app makes.".to_string()),
+                    None => shipped,
+                }
+            }
         };
+        let saved = crate::tunnel_config::load(&crate::tunnel_config::tunnel_file());
+        let saved_url = match &saved {
+            crate::tunnel_config::TunnelConfig::Stable { worker_url, .. } => Some(worker_url.as_str()),
+            _ => None,
+        };
+        if step == "look" {
+            return Ok(exclusive(|| look_verified(&env, &name, saved_url, cloudflare_scripts, cloudflare_subdomain)));
+        }
         if step == "delete" {
-            let saved = crate::tunnel_config::load(&crate::tunnel_config::tunnel_file());
-            let saved_url = match &saved {
-                crate::tunnel_config::TunnelConfig::Stable { worker_url, .. } => Some(worker_url.as_str()),
-                _ => None,
-            };
             return Ok(exclusive(|| delete_verified(&env, &name, saved_url, confirmed == Some(true), cloudflare_subdomain)));
         }
         // Far-away PCs (Labs): the Worker is told the public key that may open pairing boxes. Never a secret.
@@ -715,6 +877,174 @@ mod tests {
         let Some((env, work)) = fake_env("del-login", &whoami_script("console.error('You are not logged in');process.exit(1);")) else { return };
         assert!(delete_verified(&env, "pm-relay", Some(SAVED), true, me).output.contains("not signed in"));
         let _ = std::fs::remove_dir_all(&work);
+    }
+
+    /// A fake wrangler for ONE shared Cloudflare account: `account` is a file listing the Workers in it; a deploy over a
+    /// name that is already there is written down as `CLOBBER` (that is what replaces the other PC's relay).
+    fn account_script(account: &Path) -> String {
+        let id = "d".repeat(32);
+        let file = account.to_string_lossy().replace('\\', "/");
+        format!(
+            "const fs=require('fs');const a=process.argv.slice(2);const F='{file}';\
+             const rd=()=>fs.existsSync(F)?fs.readFileSync(F,'utf8').split('\\n').filter(Boolean):[];\
+             if(a[0]==='whoami'){{console.log(JSON.stringify({{accounts:[{{id:'{id}',name:'x'}}]}}));}}\
+             else if(a[0]==='auth'){{console.log(JSON.stringify({{token:'tok'}}));}}\
+             else if(a[0]==='deploy'){{const n=/name = \"([^\"]+)\"/.exec(fs.readFileSync('wrangler.toml','utf8'))[1];\
+               fs.appendFileSync(F,(rd().includes(n)?'CLOBBER ':'')+n+'\\n');console.log('Deployed');}}"
+        )
+    }
+    fn names_in(account: &Path) -> Vec<String> {
+        std::fs::read_to_string(account).unwrap_or_default().lines().map(str::to_string).collect()
+    }
+    /// What Cloudflare's list answers for the fake account.
+    fn listed(account: &Path) -> impl Fn(&str, &str) -> Option<Vec<String>> + '_ {
+        move |_, _| Some(names_in(account).iter().map(|n| n.trim_start_matches("CLOBBER ").to_string()).collect())
+    }
+    fn me(_: &str, _: &str) -> Option<String> {
+        Some("me".to_string())
+    }
+    fn pc(tag: &str, account: &Path, name: &str) -> Option<(Env, PathBuf)> {
+        let (env, work) = fake_env(tag, &account_script(account))?;
+        std::fs::write(work.join("wrangler.toml"), format!("name = \"{name}\"\n")).unwrap();
+        Some((env, work))
+    }
+
+    #[test]
+    fn two_pcs_one_account_the_second_pc_never_deploys_over_the_first() {
+        let _g = PIN_GUARD.lock().unwrap_or_else(|e| e.into_inner());
+        let acct = tmp("acct").join("workers.txt");
+        let Some((pc1, w1)) = pc("pc1", &acct, "pm-relay") else { return };
+        let (pc2, w2) = pc("pc2", &acct, "pm-relay").unwrap();
+        let mine = |u: &'static str| Some(u);
+        // PC 1 sets up first: nothing there, so it may deploy.
+        let first = look_verified(&pc1, "pm-relay", None, listed(&acct), me);
+        assert!(first.ok && !first.taken, "{}", first.output);
+        assert!(run_step(&pc1, "deploy", "pm-relay").ok);
+        // PC 2, same account, no key for it: the look says taken.
+        let second = look_verified(&pc2, "pm-relay", None, listed(&acct), me);
+        assert!(second.ok && second.taken, "{}", second.output);
+        // The old behaviour (no look) is what broke PC 1: the same name gets deployed over.
+        assert!(run_step(&pc2, "deploy", "pm-relay").ok);
+        assert_eq!(names_in(&acct), vec!["pm-relay", "CLOBBER pm-relay"], "the root cause: a second deploy under the same name");
+        // The fixed path: PC 2 takes its own name. PC 1's relay is not deployed over again.
+        let _ = std::fs::remove_file(&acct);
+        assert!(run_step(&pc1, "deploy", "pm-relay").ok);
+        let _ = std::fs::remove_file(w2.join(DEPLOYED_FILE));
+        std::fs::write(w2.join("wrangler.toml"), "name = \"pm-relay-abcd\"\n").unwrap();
+        let own = look_verified(&pc2, "pm-relay-abcd", None, listed(&acct), me);
+        assert!(own.ok && !own.taken, "{}", own.output);
+        assert!(run_step(&pc2, "deploy", "pm-relay-abcd").ok);
+        assert_eq!(names_in(&acct), vec!["pm-relay", "pm-relay-abcd"], "both relays exist, nothing was replaced");
+        // PC 1 looking at its own relay again (an update) is not "taken": it holds the key.
+        let again = look_verified(&pc1, "pm-relay", mine("https://pm-relay.me.workers.dev"), listed(&acct), me);
+        assert!(again.ok && !again.taken, "{}", again.output);
+        // PC 2 does not hold PC 1's name even when it saved its own.
+        let other = look_verified(&pc2, "pm-relay", mine("https://pm-relay-abcd.me.workers.dev"), listed(&acct), me);
+        assert!(other.taken);
+        for w in [w1, w2, acct.parent().unwrap().to_path_buf()] {
+            let _ = std::fs::remove_dir_all(&w);
+        }
+    }
+
+    #[test]
+    fn this_pcs_own_deploy_is_mine_on_a_retry_even_when_nothing_else_was_saved() {
+        let _g = PIN_GUARD.lock().unwrap_or_else(|e| e.into_inner());
+        let acct = tmp("acct-own").join("workers.txt");
+        let Some((pc1, w1)) = pc("pc-own", &acct, "pm-relay") else { return };
+        // Deploy worked, then the check failed / the person quit: nothing saved. Try again must not say "another PC".
+        assert!(run_step(&pc1, "deploy", "pm-relay").ok);
+        let id = "d".repeat(32);
+        assert!(recorded(&pc1, &id, "pm-relay"), "the line holds the account and the name");
+        assert!(!recorded(&pc1, &"e".repeat(32), "pm-relay"));
+        let again = look_verified(&pc1, "pm-relay", None, listed(&acct), me);
+        assert!(again.ok && !again.taken, "{}", again.output);
+        // A failed deploy records nothing.
+        let Some((bad, wb)) = fake_env("pc-own-bad", "console.error('boom');process.exit(1);") else { return };
+        assert!(!run_step(&bad, "deploy", "pm-relay").ok);
+        assert!(!std::fs::read_to_string(bad.work.join(DEPLOYED_FILE)).is_ok_and(|t| !t.is_empty()));
+        for w in [w1, wb, acct.parent().unwrap().to_path_buf()] {
+            let _ = std::fs::remove_dir_all(&w);
+        }
+    }
+
+    #[test]
+    fn the_same_name_in_another_account_is_taken_and_a_stale_line_goes_after_start_fresh() {
+        let _g = PIN_GUARD.lock().unwrap_or_else(|e| e.into_inner());
+        let acct = tmp("acct-x").join("workers.txt");
+        let Some((pc1, w1)) = pc("pc-x", &acct, "pm-relay") else { return };
+        let id = "d".repeat(32);
+        let other = "e".repeat(32);
+        // This PC once deployed pm-relay to ANOTHER account; now it is signed in to account d, where pm-relay exists.
+        std::fs::write(pc1.work.join(DEPLOYED_FILE), format!("{other} pm-relay\npm-relay\n")).unwrap();
+        std::fs::write(&acct, "pm-relay\n").unwrap();
+        let out = look_verified(&pc1, "pm-relay", None, listed(&acct), me);
+        assert!(out.ok && out.taken, "same name in another account, and an old bare-name line, are not mine: {}", out.output);
+        // A saved link under another workers.dev name does not count either.
+        let out = look_verified(&pc1, "pm-relay", Some("https://pm-relay.elsewhere.workers.dev"), listed(&acct), me);
+        assert!(out.taken, "{}", out.output);
+        // The line for account d counts; Start fresh removes it, so a later owner of the name is not "mine".
+        std::fs::write(pc1.work.join(DEPLOYED_FILE), format!("{id} pm-relay\n")).unwrap();
+        assert!(!look_verified(&pc1, "pm-relay", None, listed(&acct), me).taken);
+        let del = delete_verified(&pc1, "pm-relay", Some(SAVED), true, |_, a| (a == id).then(|| "me".to_string()));
+        assert!(del.ok, "{}", del.output);
+        assert!(!recorded(&pc1, &id, "pm-relay"), "the delete removes the line");
+        assert!(look_verified(&pc1, "pm-relay", None, listed(&acct), me).taken);
+        for w in [w1, acct.parent().unwrap().to_path_buf()] {
+            let _ = std::fs::remove_dir_all(&w);
+        }
+    }
+
+    #[test]
+    fn an_install_that_leaves_the_tool_too_old_says_so_plainly() {
+        let Some((env, work)) = fake_env("inst-old", "") else { return };
+        std::fs::write(work.join("node_modules/wrangler/package.json"), "{\"version\":\"4.1.0\"}").unwrap();
+        let out = after_install(&env, done("added 1 package"));
+        assert!(!out.ok && out.output.contains("too old") && !out.output.to_lowercase().contains("sign"), "{}", out.output);
+        std::fs::write(work.join("node_modules/wrangler/package.json"), "{\"version\":\"4.163.0\"}").unwrap();
+        assert!(after_install(&env, done("ok")).ok);
+        assert!(!after_install(&env, fail("npm broke")).ok);
+        let _ = std::fs::remove_dir_all(&work);
+    }
+
+    #[test]
+    fn the_tool_must_be_new_enough_to_print_its_token() {
+        assert!(version_at_least("4.57.0", MIN_WRANGLER) && version_at_least("4.163.0", MIN_WRANGLER) && version_at_least("5.0.0", MIN_WRANGLER));
+        for old in ["4.56.9", "4.0.0", "3.99.0", "", "x.y.z", "4.57"] {
+            assert!(!version_at_least(old, MIN_WRANGLER), "{old}");
+        }
+        // An installed tool that is too old (or has no version) is installed again, not trusted.
+        let Some((env, work)) = fake_env("old-wr", "") else { return };
+        assert!(!wrangler_current(&env));
+        let pkg = work.join("node_modules/wrangler/package.json");
+        std::fs::write(&pkg, "{\"version\":\"4.40.1\"}").unwrap();
+        assert!(!wrangler_current(&env));
+        std::fs::write(&pkg, "{\"version\":\"4.163.0\"}").unwrap();
+        assert!(wrangler_current(&env));
+        let _ = std::fs::remove_dir_all(&work);
+    }
+
+    #[test]
+    fn when_the_account_cannot_be_read_the_look_fails_instead_of_saying_free() {
+        let acct = tmp("acct-bad").join("workers.txt");
+        let Some((env, work)) = pc("pc-bad", &acct, "pm-relay") else { return };
+        let out = look_verified(&env, "pm-relay", None, |_, _| None, me);
+        assert!(!out.ok && !out.taken && out.output.contains("nothing was changed"), "{}", out.output);
+        assert!(!look_verified(&env, "Bad Name", None, listed(&acct), me).ok);
+        // Signed out (the tool cannot say who): also not "free".
+        let Some((env2, work2)) = fake_env("look-who", "console.error('boom');process.exit(1);") else { return };
+        assert!(!look_verified(&env2, "pm-relay", None, |_, _| Some(vec![]), me).ok);
+        for w in [work, work2, acct.parent().unwrap().to_path_buf()] {
+            let _ = std::fs::remove_dir_all(&w);
+        }
+    }
+
+    #[test]
+    fn a_second_pc_may_only_name_its_relay_after_ours() {
+        assert!(own_name("pm-relay", "pm-relay"));
+        assert!(own_name("pm-relay", "pm-relay-abcd"));
+        for bad in ["pm-relay-", "pm-relay-ab", "pm-relay-abcdefghijklm", "other", "pm-relayx", "pm-relay-AB12", "pm-relay-ab12", "pm-relay-a-bc", "my-blog", "pm-relay--x"] {
+            assert!(!own_name("pm-relay", bad), "{bad}");
+        }
     }
 
     #[test]

@@ -127,7 +127,7 @@ function connectApi(account: AccountApi, settings: Partial<Settings> = { account
 }
 
 function Screen({ api }: { api: Partial<ConnectApi> }) {
-  const [tab, setTab] = useState<ConnectTab>('pcs');
+  const [tab, setTab] = useState<ConnectTab>('devices');
   return <ConnectPage tab={tab} onTab={setTab} api={api} />;
 }
 
@@ -140,7 +140,7 @@ describe('Potato account on the Connect page', () => {
   it('draws nothing while the Labs switch is off', async () => {
     await mount(connectApi(fakeAccount(SIGNED_OUT), { account_enabled: false }));
     expect(q('[data-testid="account-panel"]')).toBeNull();
-    expect(q('[data-testid="devices-page"]')).not.toBeNull();
+    expect(q('[data-testid="connect-pc-group"]')).not.toBeNull();
   });
 
   it('signed out: one Sign in to Potato button starts the browser sign-in and the page waits for it', async () => {

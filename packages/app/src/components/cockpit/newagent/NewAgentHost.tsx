@@ -10,7 +10,28 @@ import type { SplitMemory } from '../split-memory';
 import { previousRun } from '../yesterday-memory';
 import { NewAgentWhere, type WhereProps } from '../../devices/NewAgentWhere';
 import { NewAgentPage, type PaneBrief } from './NewAgentPage';
+import { t } from '../../../i18n';
+import { sendPaneMessage } from '../../../lib/paneOutbox';
 import { realStartDeps, runStart } from './start';
+import type { LinuxPlace } from '../../devices/NewAgentWhere';
+import type { StartRequest } from './model';
+
+/** The usual composer, started inside a Linux distro: a terminal pane there in the chosen folder, then the first message. */
+async function startInLinux(place: LinuxPlace, request: StartRequest, notify: (text: string) => void): Promise<string | null> {
+  let paneId: string;
+  try {
+    paneId = await place.start(request.agentId, request.folder);
+  } catch (e) {
+    notify(e instanceof Error ? e.message : typeof e === 'string' ? e : t('devices.wsl.errStart'));
+    return null;
+  }
+  try {
+    await sendPaneMessage(paneId, request.prompt);
+  } catch {
+    notify(t('devices.wsl.errSend'));
+  }
+  return paneId;
+}
 
 export function NewAgentHost({
   c,
@@ -47,29 +68,47 @@ export function NewAgentHost({
   const openIds = useMemo(() => c.registry.paneList.map((p) => p.info.id), [c.registry.paneList]);
 
   return (
-    <NewAgentWhere where={where} remember={project?.path ?? ''}>
-      {(pill) => (
+    <NewAgentWhere where={where ? { ...where, notify: where.notify ?? c.notify } : where} remember={project?.path ?? ''}>
+      {(pill, slot, extras) => {
+        // Another PC picked: the same page, fed by that PC's answers. Nothing of this PC (its chats, folder, cards) is passed down.
+        const far = slot?.remote ?? null;
+        return (
     <NewAgentPage
+      key={far?.node ?? 'this-pc'}
       leading={pill}
-      agents={listing.agents}
-      panes={briefs}
-      needs={briefs.filter((p) => waiting.has(p.id))}
-      selectedCwd={selectedCwd}
-      project={project}
-      runningFolders={runningFolders}
+      devices={extras.picker}
+      startFolder={extras.startFolder}
+      place={extras.place ? { name: extras.place.distro, whyNot: extras.place.whyNot } : null}
+      remote={far ? { deviceName: far.deviceName, terminals: far.terminals, blocked: slot?.blocked ?? null, onWarm: far.warm, agentsOff: slot?.agentsOff } : null}
+      agents={far ? far.agents : listing.agents}
+      panes={far ? [] : briefs}
+      needs={far ? [] : briefs.filter((p) => waiting.has(p.id))}
+      selectedCwd={far ? null : selectedCwd}
+      project={far ? null : project}
+      runningFolders={far ? [] : runningFolders}
+      api={far?.api}
+      addonApi={far?.addonApi}
+      modelApi={far?.modelApi}
+      defaultsApi={far?.defaultsApi}
+      rulesApi={far?.rulesApi}
       onOpenPane={(id) => c.select(id)}
-      onSetUp={onSetUp}
-      continueYesterday={{
-        previous: previousRun(),
-        api: tauriClosedChatsApi,
-        openIds,
-        onReopened: (paneIds, split) => (onReopenedRun ? onReopenedRun(paneIds, split) : paneIds[0] && c.select(paneIds[0])),
-      }}
+      onSetUp={far ? undefined : onSetUp}
+      continueYesterday={
+        far
+          ? undefined
+          : {
+              previous: previousRun(),
+              api: tauriClosedChatsApi,
+              openIds,
+              onReopened: (paneIds, split) => (onReopenedRun ? onReopenedRun(paneIds, split) : paneIds[0] && c.select(paneIds[0])),
+            }
+      }
       // The agent's own terminal pane, in the folder: the person signs in there (the same login Chat uses).
-      onSignIn={(agentId, folder) => c.newAgent(agentId, undefined, false, folder, undefined, 'terminal')}
-      onStart={(request) => runStart(request, realStartDeps({ newAgent: c.newAgent, select: c.select, notify: c.notify }))}
+      onSignIn={far ? undefined : (agentId, folder) => c.newAgent(agentId, undefined, false, folder, undefined, 'terminal')}
+      onStart={far ? far.onStart : extras.place ? (request) => startInLinux(extras.place!, request, c.notify) : (request) => runStart(request, realStartDeps({ newAgent: c.newAgent, select: c.select, notify: c.notify }))}
     />
-      )}
+        );
+      }}
     </NewAgentWhere>
   );
 }

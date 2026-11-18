@@ -2,7 +2,7 @@ import { describe, expect, it, vi } from 'vitest';
 import type { AcpLaneView } from './acpChat';
 import { freshSteps, handoffTask, isUpToDate, MAX_TRIES, pickHandoffAgent, runWorkerUpdate, type StepAnswer, type UpdateApi, type UpdateStepId } from './workerUpdate';
 
-const LABELS: Record<UpdateStepId, string> = { prepare: 'Getting the link files ready', install: 'Installing the tool it needs', login: 'Signing in to Cloudflare', delete: 'Removing the old link', deploy: 'Turning your link on', check: 'Checking that it works' };
+const LABELS: Record<UpdateStepId, string> = { prepare: 'Getting the link files ready', install: 'Installing the tool it needs', login: 'Signing in to Cloudflare', look: 'Looking at your Cloudflare account', delete: 'Removing the old link', deploy: 'Turning your link on', check: 'Checking that it works' };
 const GOOD = { reachable: true, features: ['team', 'rooms', 'stable-link', 'invites'], legacyLink: false };
 
 function api(answer: (id: string, call: number) => StepAnswer | Error, health = GOOD): UpdateApi & { calls: string[] } {
@@ -123,5 +123,63 @@ describe('fresh run', () => {
     });
     expect(run.ok).toBe(true);
     expect(calls).toEqual(['prepare', 'install', 'login', 'delete', 'deploy']);
+  });
+});
+
+describe('two PCs in one Cloudflare account (fake account)', () => {
+  /** One account shared by two PCs. A deploy under a name that is already there REPLACES that relay (what Cloudflare does). */
+  function account() {
+    const relays = new Map<string, { owner: string; replaced: number }>();
+    const log: string[] = [];
+    const pc = (owner: string): UpdateApi => ({
+      step: async (id, _address, _confirmed, name) => {
+        const n = name ?? 'pm-relay';
+        log.push(`${owner}:${id}:${n}`);
+        if (id === 'look') {
+          const there = relays.get(n);
+          return { ok: true, output: '', taken: !!there && there.owner !== owner };
+        }
+        if (id === 'deploy') {
+          const there = relays.get(n);
+          relays.set(n, { owner: there?.owner ?? owner, replaced: (there?.replaced ?? 0) + (there ? 1 : 0) });
+          return { ok: true, output: '', url: `https://${n}.me.workers.dev` };
+        }
+        return { ok: true, output: '' };
+      },
+      check: async () => GOOD,
+    });
+    return { relays, log, pc };
+  }
+
+  it('the second PC finds the first PC\'s relay and stops before deploying over it', async () => {
+    const acct = account();
+    const first = await runWorkerUpdate({ address: null, look: true, pauseMs: 0, api: acct.pc('pc1') });
+    expect(first.ok).toBe(true);
+    expect(acct.relays.get('pm-relay')).toEqual({ owner: 'pc1', replaced: 0 });
+    const second = await runWorkerUpdate({ address: null, look: true, pauseMs: 0, api: acct.pc('pc2') });
+    expect(second.taken).toBe(true);
+    expect(second.ok).toBe(false);
+    expect(acct.log.filter((l) => l.startsWith('pc2:deploy'))).toEqual([]);
+    expect(acct.relays.get('pm-relay')).toEqual({ owner: 'pc1', replaced: 0 });
+  });
+
+  it('Add this PC: a relay of its own next to the first one; the first one is never replaced', async () => {
+    const acct = account();
+    await runWorkerUpdate({ address: null, look: true, pauseMs: 0, api: acct.pc('pc1') });
+    const own = await runWorkerUpdate({ address: null, look: true, name: 'pm-relay-wxyz', pauseMs: 0, api: acct.pc('pc2') });
+    expect(own.ok).toBe(true);
+    expect(own.address).toBe('https://pm-relay-wxyz.me.workers.dev');
+    expect([...acct.relays.keys()].sort()).toEqual(['pm-relay', 'pm-relay-wxyz']);
+    expect(acct.relays.get('pm-relay')).toEqual({ owner: 'pc1', replaced: 0 });
+    // The same PC setting up again (an update of its own relay) is not "taken".
+    const again = await runWorkerUpdate({ address: null, look: true, pauseMs: 0, api: acct.pc('pc1') });
+    expect(again.taken).toBeUndefined();
+  });
+
+  it('without the look (the old behaviour) the second PC replaces the first PC\'s relay: the root cause', async () => {
+    const acct = account();
+    await runWorkerUpdate({ address: null, pauseMs: 0, api: acct.pc('pc1') });
+    await runWorkerUpdate({ address: null, pauseMs: 0, api: acct.pc('pc2') });
+    expect(acct.relays.get('pm-relay')).toEqual({ owner: 'pc1', replaced: 1 });
   });
 });

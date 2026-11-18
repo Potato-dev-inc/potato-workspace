@@ -9,20 +9,23 @@ export function DeviceRoute({ device, api, run }: { device: Device; api: Devices
   const value = device.route_override ?? 'same';
   return (
     <>
-      <label className="dev-field">
-        <span>{t('devices.route.device')}</span>
-        <select
-          className="dev-select"
-          value={value}
-          data-testid="device-route"
-          onChange={(e) => void run(api.setDeviceRoute(device.node, e.target.value === 'same' ? null : (e.target.value as RoutePref)))}
-        >
-          <option value="same">{t('devices.route.same')}</option>
-          <option value="auto">{t('devices.route.auto')}</option>
-          <option value="public">{t('devices.route.public')}</option>
-          <option value="own">{t('devices.route.own')}</option>
-        </select>
-      </label>
+      <details className="dev-route-fold" open={device.route_override !== null && device.route_override !== undefined}>
+        <summary>{t('devices.route.change')}</summary>
+        <label className="dev-field">
+          <span>{t('devices.route.device')}</span>
+          <select
+            className="dev-select"
+            value={value}
+            data-testid="device-route"
+            onChange={(e) => void run(api.setDeviceRoute(device.node, e.target.value === 'same' ? null : (e.target.value as RoutePref)))}
+          >
+            <option value="same">{t('devices.route.same')}</option>
+            <option value="auto">{t('devices.route.auto')}</option>
+            <option value="public">{t('devices.route.public')}</option>
+            <option value="own">{t('devices.route.own')}</option>
+          </select>
+        </label>
+        </details>
       {device.route_override === 'own' && !device.web_ready && (
         <p className="dev-note" data-testid="route-no-web">
           {t('devices.route.noWeb', { name: device.name })}

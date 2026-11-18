@@ -9,7 +9,7 @@ const s: HarnessScenario = {
   route: 'settings',
   settingsTab: 'security',
   window: { width: 1440, height: 1100 },
-  authority: { ask_before_agent_control: true, agents_may_merge: false },
+  authority: { ask_before_agent_control: true, agents_may_merge: false, ask_before_helpers_start: false },
   audit: [
     { seq: 7, ts_ms: now - 2 * min, kind: 'consent', who: 'desktop', summary: 'You allowed Claude to control Codex, once' },
     { seq: 6, ts_ms: now - 41 * min, kind: 'approval', who: 'device', summary: 'A phone answered from its lock screen: Allowed once' },

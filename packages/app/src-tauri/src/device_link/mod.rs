@@ -18,17 +18,21 @@
 //! `DeviceLink` is the service the commands call. It owns the endpoint (`P2p`), the pairing manager, the signed trust
 //! list, the client (`client.rs`) and the open inbound links (`serve.rs::Live`).
 
+pub mod account_dir;
 pub mod activity;
 pub mod app;
 pub mod client;
 pub mod files;
 pub mod far_http;
+pub mod pclink;
 pub mod files_client;
 pub mod route;
 pub mod serve;
 pub mod web;
 pub mod wire;
 
+#[cfg(test)]
+mod account_tests;
 #[cfg(test)]
 mod files_tests;
 #[cfg(test)]
@@ -37,6 +41,8 @@ mod local_net_tests;
 mod tests;
 #[cfg(test)]
 mod tests_far;
+#[cfg(test)]
+mod tests_far_cross;
 #[cfg(test)]
 mod tests_p2;
 
@@ -47,6 +53,7 @@ use std::time::Duration;
 
 use serde_json::{json, Value};
 
+use self::account_dir::{AccountDir, AccountPort, Door};
 use self::activity::{ActivityLog, Dir, Kind};
 use self::client::{AskError, Client, Reach, Timeouts};
 use self::files::{Deny, Folders, FilesEnv, FilesHandler};
@@ -62,7 +69,8 @@ use crate::p2p::alpn;
 use crate::p2p::capability::{self, Capability, Registry, RelayPolicy};
 use crate::p2p::discovery::Discovery;
 use crate::p2p::endpoint::{NodeId, PathKind, TransportFactory};
-use crate::p2p::pairing::{Clock, PairManager};
+use crate::p2p::identity::DeviceIdentity;
+use crate::p2p::pairing::{AccountExpect, Clock, PairError, PairManager};
 use crate::p2p::trust::{KeyStoreSigner, RemoteLevel, TrustList, TrustStorage};
 use crate::p2p::{labs_on_for, P2p};
 
@@ -76,6 +84,16 @@ fn observe_identity(node_hex: &str, own_name: &str) -> String {
 }
 
 pub const OFF: &str = "FEATURE_OFF: Devices is switched off in Labs";
+
+// The tick "Let my other PCs open this PC" is NOT a public setting: it is kept in its own small file (`Options::account_open`) and
+// written only by `set_open_from_account`, which only an app-window command calls. The settings the bridge, a paired phone or an
+// agent's config plan can patch cannot turn the door on.
+
+/// How often a PC that lets the others open it tells the account it is still here (the account calls a PC online for two minutes).
+const ACCOUNT_BEAT: Duration = Duration::from_secs(60);
+/// What the Open error starts with when the account route is paused: this marker, then the time it ends (unix ms). The page turns it into
+/// "paused until HH:MM" in the person's own clock.
+pub const ACCOUNT_LOCKED_MARK: &str = "account_locked_until:";
 const NOT_PAIRED: &str = "That device is not paired.";
 
 /// How often every paired device is asked whether it answers.
@@ -114,6 +132,18 @@ pub struct Options {
     pub deny_paths: Vec<std::path::PathBuf>,
     /// The person's own Worker, for meeting far-away PCs (Labs far_pcs_enabled). None: no far-away route.
     pub far_relay: Option<Arc<dyn crate::p2p::far::PairRelay>>,
+    /// The person's account, as an address book of their PCs (Connect > My PCs). None: no such list and no such door.
+    pub account: Option<Arc<dyn AccountPort>>,
+    /// The tick "Let my other PCs open this PC" ("1" or nothing). Its own file: never part of the settings a phone or agent can patch.
+    pub account_open: Arc<dyn PrefsStore>,
+    /// The lockouts of the account route (kept so a restart does not clear them).
+    pub account_lock: Arc<dyn PrefsStore>,
+    /// Which pairings came from the account (device id -> link id), so signing a device out of the account takes the pairing with it.
+    pub account_links: Arc<dyn PrefsStore>,
+    /// PCs this PC unpaired because the account said they were signed out, until the person dismisses the notice.
+    pub account_removed: Arc<dyn PrefsStore>,
+    /// The app's own services for the PC link's routes (`pclink/`). None: the host door is the one given in `Deps::bridge` alone (tests).
+    pub pclink: Option<Arc<dyn pclink::Services>>,
 }
 
 impl Options {
@@ -135,6 +165,12 @@ impl Options {
             downloads: Arc::new(|| std::env::temp_dir().join("pm-downloads")),
             deny_paths: Vec::new(),
             far_relay: None,
+            account: None,
+            account_open: route::MemoryPrefs::new(),
+            account_lock: route::MemoryPrefs::new(),
+            account_links: route::MemoryPrefs::new(),
+            account_removed: route::MemoryPrefs::new(),
+            pclink: None,
         }
     }
 }
@@ -184,6 +220,12 @@ impl SelfInfo for Info {
 }
 
 pub struct DeviceLink {
+    keys: KeyStore,
+    open_pref: Arc<dyn PrefsStore>,
+    links: account_dir::Links,
+    removed: account_dir::Links,
+    acct: Option<Arc<AccountDir>>,
+    account_task: Mutex<Option<tokio::task::JoinHandle<()>>>,
     p2p: Arc<P2p>,
     mgr: Arc<PairManager>,
     trust: Arc<TrustList>,
@@ -208,13 +250,31 @@ pub struct DeviceLink {
     last_probe: AtomicU64,
     last_addrs: Mutex<String>,
     now_secs: Arc<dyn Fn() -> u64 + Send + Sync>,
+    pclink_asks: Arc<pclink::Asks>,
 }
 
-/// The rights a level stands for. `Watch and answer` is what a phone gets when it can only look and answer.
+/// What the two routes that still use the old link door get (`POST /agents/run` and `POST /lend/item`: neither is a phone route,
+/// and the desktop's remote runtime uses neither). Everything else a PC does on another goes through `pclink::` and its own levels.
 pub fn caps_of(level: RemoteLevel) -> Caps {
     match level {
-        RemoteLevel::Watch => Caps::watch_and_answer(),
+        RemoteLevel::Watch => Caps::none().with(crate::mobile_pairing::Cap::Watch, true),
+        RemoteLevel::Answer => Caps::watch_and_answer(),
         RemoteLevel::Full => Caps::all(),
+    }
+}
+
+fn pclink_now_ms() -> u64 {
+    std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).map(|d| d.as_millis() as u64).unwrap_or(0)
+}
+
+fn reach_word(r: Reach) -> &'static str {
+    match r {
+        Reach::Unknown => "unknown",
+        Reach::Online => "online",
+        Reach::Offline => "offline",
+        Reach::Asleep => "asleep",
+        Reach::Closed => "closed",
+        Reach::NotAllowed => "not_allowed",
     }
 }
 
@@ -235,7 +295,13 @@ impl DeviceLink {
         let trust = TrustList::open(deps.trust_storage, Arc::new(KeyStoreSigner::new(deps.keys.clone())));
         let registry = Arc::new(Registry::new());
         let p2p = Arc::new(P2p::new(deps.keys.clone(), deps.factory, registry.clone(), trust.clone()).loopback_only(deps.loopback_only));
+        let keys = deps.keys.clone();
         let mgr = PairManager::new(p2p.clone(), trust.clone(), deps.keys, deps.clock, deps.discovery, &deps.name).map_err(|e| e.to_string())?;
+        let acct = deps.options.account.clone().map(|port| AccountDir::new(port, deps.now_secs.clone()));
+        if let Some(dir) = &acct {
+            mgr.set_account_intro(Arc::new(Door(dir.clone())));
+            mgr.set_account_lock_store(Arc::new(account_dir::LockFile(deps.options.account_lock.clone())));
+        }
         if let Some(relay) = deps.options.far_relay.clone() {
             mgr.set_far_relay(relay);
         }
@@ -255,11 +321,41 @@ impl DeviceLink {
             web: deps.options.web_grant.clone(),
             web_allowed: {
                 let trust = trust.clone();
-                Arc::new(move |peer: &NodeId| trust.web_allowed(peer).then(|| trust.remote_level(peer) == Some(RemoteLevel::Full)))
+                // The web route is off for PC links (see `web::PC_WEB_ROUTE`): no PC is ever handed a token.
+                Arc::new(move |peer: &NodeId| (web::PC_WEB_ROUTE && trust.web_allowed(peer)).then(|| trust.remote_level(peer) == Some(RemoteLevel::Full)))
             },
         };
+        let pclink_asks = Arc::new(pclink::Asks::new());
+        // The PC link's own door: `/pclink/...` is served under the PC's own levels, and the phone's routes are not reachable.
+        let host_bridge: Arc<dyn HostBridge> = match deps.options.pclink.clone() {
+            Some(services) => Arc::new(pclink::Door {
+                legacy: deps.bridge,
+                services,
+                asks: pclink_asks.clone(),
+                level_of: {
+                    let (trust, enabled) = (trust.clone(), enabled.clone());
+                    Arc::new(move |node: &str| {
+                        let node = node_of(node).ok()?;
+                        if !enabled.load(Ordering::SeqCst) {
+                            return None;
+                        }
+                        pclink::Level::of(trust.remote_level(&node))
+                    })
+                },
+                name_of: {
+                    let trust = trust.clone();
+                    Arc::new(move |node: &str| node_of(node).ok().and_then(|n| trust.get(&n)).map(|d| d.name).unwrap_or_default())
+                },
+                lend_ok: {
+                    let (trust, enabled) = (trust.clone(), enabled.clone());
+                    Arc::new(move |node: &str| enabled.load(Ordering::SeqCst) && node_of(node).is_ok_and(|n| trust.lend_allowed(&n)))
+                },
+                now_ms: Arc::new(|| std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).map(|d| d.as_millis() as u64).unwrap_or(0)),
+            }),
+            None => deps.bridge,
+        };
         let handler = AgentsHandler {
-            bridge: deps.bridge,
+            bridge: host_bridge,
             info: Arc::new(Info { p2p: p2p.clone(), name: deps.name.clone(), health: deps.options.health.clone(), room: deps.options.room.clone() }),
             live: live.clone(),
             still_allowed: still,
@@ -302,6 +398,12 @@ impl DeviceLink {
             }
         }
         let me = Arc::new(Self {
+            keys,
+            open_pref: deps.options.account_open.clone(),
+            links: account_dir::Links(deps.options.account_links.clone()),
+            removed: account_dir::Links(deps.options.account_removed.clone()),
+            acct,
+            account_task: Mutex::new(None),
             p2p,
             mgr,
             trust,
@@ -326,6 +428,7 @@ impl DeviceLink {
             last_probe: AtomicU64::new(0),
             last_addrs: Mutex::new(String::new()),
             now_secs: deps.now_secs,
+            pclink_asks,
         });
         let weak = Arc::downgrade(&me);
         me.mgr.set_notifier(Arc::new({
@@ -349,6 +452,17 @@ impl DeviceLink {
             move || {
                 if let Some(me) = weak.upgrade() {
                     me.changed();
+                }
+            }
+        }));
+        me.mgr.set_on_account_paired(Arc::new({
+            let weak = weak.clone();
+            move |node, device_id| {
+                if let Some(me) = weak.upgrade() {
+                    // Remember which account device this pairing is with: signing that device out takes the pairing with it.
+                    me.links.set(&device_id, &node.to_hex());
+                    // Every right stays at the pairing default (off). Nothing on this route turns one on.
+                    me.rights_changed();
                 }
             }
         }));
@@ -399,6 +513,15 @@ impl DeviceLink {
     pub fn apply_settings(self: &Arc<Self>, public: &Value) {
         let on = labs_on_for(public, capability::AGENTS_REMOTE);
         self.p2p.apply_settings(public);
+        // "Let my other PCs open this PC": the door closes the moment the tick goes off, and the listing is withdrawn.
+        let tick = on && self.open_pref.load().as_deref() == Some("1");
+        if let Some(dir) = &self.acct {
+            let was_open = dir.set_open(tick);
+            self.trust.set_account_pairing_open(tick);
+            if !tick {
+                self.withdraw_account(was_open);
+            }
+        }
         let was = self.enabled.swap(on, Ordering::SeqCst);
         if on == was {
             return;
@@ -432,6 +555,7 @@ impl DeviceLink {
         }
         self.sync_relay().await;
         self.p2p.want(capability::AGENTS_REMOTE).await.map_err(|e| e.to_string())?;
+        self.sync_account().await;
         // Files is a second protocol name on the same endpoint; it needs no extra switch of its own to be listening, because every
         // device's own `files` switch is checked at the door.
         let _ = self.p2p.want(capability::FILES).await;
@@ -511,6 +635,12 @@ impl DeviceLink {
                 }
             }
         }
+        // No PC holds a web token while the route is off: any left from an older version is revoked now, at every start and level change.
+        if !web::PC_WEB_ROUTE {
+            for d in self.trust.list() {
+                self.web_grant.revoke(&d.node.to_hex());
+            }
+        }
         let mut granted = self.granted.lock().unwrap_or_else(|p| p.into_inner());
         for gone in granted.difference(&now) {
             set_link_caps(gone, None);
@@ -570,7 +700,7 @@ impl DeviceLink {
     pub fn view(&self) -> Value {
         let pair = self.mgr.view();
         let hosting = pair["hosting"].as_object().map(|h| {
-            json!({ "kind": h["kind"], "code": h["code"], "address": h["ticket"], "link": h["link"], "expires_at": h["expires_at"] })
+            json!({ "kind": h["kind"], "code": h["code"], "address": h["ticket"], "link": h["link"], "expires_at": h["expires_at"], "worker": h.get("worker").cloned().unwrap_or(Value::Null) })
         });
         let now = (self.now_secs)();
         let devices: Vec<Value> = self
@@ -604,8 +734,8 @@ impl DeviceLink {
                     "last_seen": st.last_seen,
                     "too_old": st.too_old,
                     "lets_run": level.is_some(),
-                    "level": if level == Some(RemoteLevel::Full) { "full" } else { "watch" },
-                    "lets_web": self.trust.web_allowed(&d.node),
+                    "level": match level { Some(RemoteLevel::Full) => "full", Some(RemoteLevel::Answer) => "answer", _ => "watch" },
+                    "lets_web": web::PC_WEB_ROUTE && self.trust.web_allowed(&d.node),
                     "lets_lend": self.trust.lend_allowed(&d.node),
                     "agents_may_send": self.agents_may_send(&d.node.to_hex()),
                     "web_ready": self.client.web_ready(&d.node),
@@ -630,10 +760,272 @@ impl DeviceLink {
             "joining": pair["joining"],
             "message": pair["message"],
             "locked_until": pair["locked_until"],
+            "account_locked_until": pair["account_locked_until"],
             "tampered": pair["tampered"],
             "devices": devices,
             "transfers": self.files.rows_json(),
         })
+    }
+
+    // ----- my PCs from the account (Connect > My PCs) -----
+
+    /// The tick went on (or the app started with it on): open the door, tell the account where this PC can be reached, and keep
+    /// telling it while the app runs. Does nothing while the tick is off.
+    pub async fn sync_account(self: &Arc<Self>) {
+        let Some(dir) = self.acct.clone() else { return };
+        if !(dir.is_open() && self.enabled()) {
+            return;
+        }
+        // Signed out: the door shuts (and stays shut until the person signs in again).
+        let port = dir.port().clone();
+        if !tokio::task::spawn_blocking(move || port.signed_in()).await.unwrap_or(false) {
+            self.trust.set_account_pairing_open(false);
+            if let Some(h) = self.account_task.lock().unwrap_or_else(|p| p.into_inner()).take() {
+                h.abort();
+            }
+            dir.forget();
+            dir.set_published(false);
+            self.p2p.unwant(capability::PAIR_ACCOUNT).await;
+            return;
+        }
+        self.trust.set_account_pairing_open(true);
+        let _ = self.p2p.want(capability::PAIR_ACCOUNT).await;
+        self.publish_account().await;
+        self.start_account_task();
+    }
+
+    /// The tick went off, the Labs switch went off, or the person signed out: close the door and take this PC out of the book.
+    fn withdraw_account(&self, was_open: bool) {
+        if let Some(h) = self.account_task.lock().unwrap_or_else(|p| p.into_inner()).take() {
+            h.abort();
+        }
+        let Some(dir) = &self.acct else { return };
+        dir.forget();
+        if dir.set_published(false) {
+            let port = dir.port().clone();
+            std::thread::spawn(move || {
+                let _ = port.unpublish();
+            });
+        }
+        if was_open {
+            if let Ok(rt) = tokio::runtime::Handle::try_current() {
+                let p2p = self.p2p.clone();
+                rt.spawn(async move { p2p.unwant(capability::PAIR_ACCOUNT).await });
+            }
+        }
+    }
+
+    /// Tells the account this PC's link id, its signed node record and the relay it can be reached through. The statement is
+    /// signed by this PC's own key; the account can pass it on but not change it.
+    async fn publish_account(self: &Arc<Self>) {
+        let Some(dir) = self.acct.clone() else { return };
+        if !dir.is_open() {
+            return;
+        }
+        let Ok(identity) = DeviceIdentity::load(&self.keys) else { return };
+        let (node, binding) = (identity.id().to_hex(), account_dir::binding_text(&identity.binding()));
+        let relay = if self.p2p.relays_allowed() { self.p2p.home_relay_within(Duration::from_secs(3)).await } else { None };
+        let relay = relay.and_then(|r| crate::account::directory::valid_relay_hint(&r));
+        let port = dir.port().clone();
+        let done = tokio::task::spawn_blocking(move || port.publish(&node, &binding, relay.as_deref())).await;
+        dir.set_published(matches!(done, Ok(Ok(()))));
+    }
+
+    fn start_account_task(self: &Arc<Self>) {
+        let mut slot = self.account_task.lock().unwrap_or_else(|p| p.into_inner());
+        if slot.as_ref().is_some_and(|h| !h.is_finished()) {
+            return;
+        }
+        let me = Arc::downgrade(self);
+        *slot = Some(tokio::spawn(async move {
+            loop {
+                tokio::time::sleep(ACCOUNT_BEAT).await;
+                let Some(this) = me.upgrade() else { return };
+                if !this.enabled() || !this.acct.as_ref().is_some_and(|d| d.is_open()) {
+                    return;
+                }
+                this.publish_account().await;
+                this.reconcile_links().await;
+            }
+        }));
+    }
+
+    /// The tick, as the person set it on this PC. Only an app-window command calls this. Closing the door and taking this PC out of the
+    /// address book happen at once; opening it publishes on the next `start`.
+    pub fn set_open_from_account(&self, on: bool) -> Result<(), String> {
+        self.require_on()?;
+        self.open_pref.save(if on { "1" } else { "0" })?;
+        if let Some(dir) = &self.acct {
+            let was_open = dir.set_open(on);
+            self.trust.set_account_pairing_open(on);
+            if !on {
+                self.withdraw_account(was_open);
+            }
+        }
+        self.changed();
+        Ok(())
+    }
+
+    /// A device was signed out of the account (here, or on another PC): this PC's pairing with it goes too. A PC that is gone from the
+    /// account must not keep the keys to this one.
+    pub async fn forget_account_device(self: &Arc<Self>, device_id: &str) {
+        self.forget_account_device_as(device_id, false).await;
+    }
+
+    /// `notice`: the account (not this PC's person) said it was signed out; the person is told, and the PC stays listed under a note
+    /// until they dismiss it. The account's "signed out" is not signed by anything, so it is never a silent removal.
+    async fn forget_account_device_as(self: &Arc<Self>, device_id: &str, notice: bool) {
+        if let Some(node) = self.links.remove(device_id) {
+            let name = node_of(&node).ok().and_then(|n| self.trust.get(&n)).map(|d| d.name).unwrap_or_default();
+            let _ = self.remove(&node).await;
+            if notice {
+                self.removed.set(device_id, &name);
+                self.changed();
+            }
+        }
+    }
+
+    /// The person dismissed the notice that a PC was removed.
+    pub fn dismiss_removed(&self, device_id: &str) {
+        self.removed.remove(device_id);
+        self.changed();
+    }
+
+    /// Reads the account and drops this PC's pairing with every linked device the account says was signed out.
+    async fn reconcile_links(self: &Arc<Self>) {
+        let Some(dir) = self.acct.clone() else { return };
+        if self.links.all().is_empty() {
+            return;
+        }
+        let d2 = dir.clone();
+        let _ = tokio::task::spawn_blocking(move || d2.rows(0)).await;
+        for id in dir.revoked() {
+            self.forget_account_device_as(&id, true).await;
+        }
+    }
+
+    /// My other PCs on the account, for the page: each with what pressing Open would do. Blocking (it may read the account).
+    pub fn account_pcs(self: &Arc<Self>) -> Result<Value, String> {
+        self.require_on()?;
+        let Some(dir) = &self.acct else {
+            return Ok(json!({ "available": false, "signed_in": false, "open_here": false, "published": false, "pcs": [] }));
+        };
+        let now = (self.now_secs)();
+        let head = |signed_in: bool, pcs: Vec<Value>, message: Option<String>| {
+            let removed: Vec<Value> = self.removed.all().into_iter().map(|(id, name)| json!({ "id": id, "name": name })).collect();
+            json!({ "available": true, "signed_in": signed_in, "open_here": dir.is_open(), "published": dir.was_published(), "pcs": pcs, "message": message, "removed": removed })
+        };
+        match dir.list_rows() {
+            Err(sentence) => Ok(head(true, Vec::new(), Some(sentence))),
+            Ok(None) => Ok(head(false, Vec::new(), None)),
+            Ok(Some(rows)) => {
+                // Devices signed out of the account elsewhere: this PC's pairing with them goes too.
+                if !self.links.all().is_empty() {
+                    let revoked = dir.revoked();
+                    if !revoked.is_empty() {
+                        if let Ok(rt) = tokio::runtime::Handle::try_current() {
+                            let me = self.clone();
+                            rt.spawn(async move {
+                                for id in revoked {
+                                    me.forget_account_device_as(&id, true).await;
+                                }
+                            });
+                        }
+                    }
+                }
+                let lookalike = account_dir::flagged_names(&rows);
+                // Two entries that name the same link id are not told apart: somebody can copy a PC's public record into an entry of
+                // their own to borrow its name. Neither is offered; the person signs out the one they do not know.
+                let mut seen: std::collections::HashMap<String, usize> = std::collections::HashMap::new();
+                for r in rows.iter().filter(|r| !r.is_this) {
+                    if let Some(n) = account_dir::usable(r).map(|(n, _)| n.to_hex()) {
+                        *seen.entry(n).or_default() += 1;
+                    }
+                }
+                let pcs = rows
+                    .iter()
+                    .filter(|r| !r.is_this)
+                    .map(|r| {
+                        let ready = account_dir::usable(r);
+                        if ready.as_ref().is_some_and(|(n, _)| seen.get(&n.to_hex()).copied().unwrap_or(0) > 1) {
+                            return account_dir::flag_json(r, now, "conflict");
+                        }
+                        if lookalike.contains(&r.id) {
+                            return account_dir::flag_json(r, now, "lookalike");
+                        }
+                        // Paired only when this PC trusts that very node with the very device key the row's record names.
+                        let paired = ready.as_ref().and_then(|(n, b)| self.trust.get(n).filter(|t| t.device_pub == b.device_pub).map(|t| (*n, t.name)));
+                        let reach = paired.as_ref().map(|(n, _)| reach_word(self.client.status(n).reach));
+                        account_dir::row_json(r, now, paired.as_ref().map(|(_, name)| name.as_str()), reach)
+                    })
+                    .collect();
+                Ok(head(true, pcs, None))
+            }
+        }
+    }
+
+    /// "Open" on a PC of my account. Paired already: nothing to do but go there (it is asked once, to say whether it answers).
+    /// Not paired: the two PCs talk to each other and both people pick the number on both screens; the account is only where
+    /// this PC learned where to knock. Returns once the pairing is done (or refused).
+    pub async fn open_account_pc(self: &Arc<Self>, id: &str) -> Result<Value, String> {
+        self.require_on()?;
+        let dir = self.acct.clone().ok_or_else(|| "Your account is not set up on this PC.".to_string())?;
+        let (d2, id2) = (dir.clone(), id.to_lowercase());
+        let row = tokio::task::spawn_blocking(move || d2.fresh_row(&id2))
+            .await
+            .map_err(|_| "Could not read your account.".to_string())??
+            .ok_or_else(|| "That PC is not on your account any more.".to_string())?;
+        let (node, binding) = account_dir::usable(&row).ok_or_else(|| format!("{} has not been allowed to be opened yet. On that PC, tick \"Let my other PCs open this PC\".", row.name))?;
+        // Not when another entry of the account names the same link id (see `account_pcs`).
+        let twins = {
+            let d3 = dir.clone();
+            tokio::task::spawn_blocking(move || d3.rows(5)).await.map_err(|_| "Could not read your account.".to_string())??.unwrap_or_default()
+        };
+        if account_dir::flagged_names(&twins).contains(&row.id) {
+            return Err("Another PC on your account has the same name or one that looks the same. Rename one PC (Windows Settings > System > About) or sign out the old entry (check the date added), then try again.".into());
+        }
+        if twins.iter().filter(|r| !r.is_this && account_dir::usable(r).is_some_and(|(n, _)| n == node)).count() > 1 {
+            return Err("Two entries on your account name the same PC. Sign out the old entry (check the date added), then try again.".into());
+        }
+        self.start().await?;
+        if let Some(t) = self.trust.get(&node) {
+            if t.device_pub != binding.device_pub {
+                return Err("That PC's key is not the one this PC paired with. Remove the old pairing first.".into());
+            }
+            // Paired already: no second number. It is asked once whether it answers, and the page says what it found. (A PC that has not
+            // let this one run agents, and a PC that removed this one, both read as "not allowed": the person removes the pairing here to
+            // start over, which makes the row "first time" again.)
+            let _ = self.client.hello(&node).await;
+            let reach = self.client.status(&node).reach;
+            self.changed();
+            return Ok(json!({ "paired": true, "node": node.to_hex(), "name": t.name, "state": reach_word(reach) }));
+        }
+        if let Some(relay) = &row.relay {
+            self.p2p.addrs().remember_relay(node, relay);
+        }
+        let peer = self.p2p.addrs().peer(node);
+        // This PC proves it is a device signed in on the account: a statement signed by its account key, naming its own link id.
+        let identity = DeviceIdentity::load(&self.keys).map_err(|e| e.to_string())?;
+        let (port, mine) = (dir.port().clone(), identity.id().to_hex());
+        let claim = tokio::task::spawn_blocking(move || port.introduce(&mine))
+            .await
+            .map_err(|_| "Could not read your account.".to_string())??
+            .ok_or_else(|| "You are not signed in.".to_string())?;
+        let expect = AccountExpect { claim, name: row.name.clone(), device_id: row.id.clone(), first_seen: row.created_at, device_pub: binding.device_pub };
+        // A lock is told to the page as a marker plus the time (unix ms), so it can say "paused until HH:MM" in the person's own clock.
+        let name = self
+            .mgr
+            .join_account(peer, expect)
+            .await
+            .map_err(|e| match e {
+                PairError::AccountLocked(Some(until)) => format!("{ACCOUNT_LOCKED_MARK}{until}"),
+                e => e.to_string(),
+            })?;
+        self.save_addrs();
+        let _ = self.client.hello(&node).await;
+        let reach = self.client.status(&node).reach;
+        self.changed();
+        Ok(json!({ "paired": true, "node": node.to_hex(), "name": name, "state": reach_word(reach) }))
     }
 
     // ----- pairing (the person's, at this screen) -----
@@ -686,7 +1078,7 @@ impl DeviceLink {
         Ok(self.view())
     }
 
-    /// The person's pick on a sheet that shows numbers. Only an app window may call this.
+    /// The person's pick (or typed digits) on a sheet that asks for a number. Only an app window may call this.
     pub fn pair_pick(&self, id: u64, pick: &str) -> Result<Value, String> {
         self.require_on()?;
         self.mgr.answer_pick(id, pick).map_err(|e| e.to_string())?;
@@ -702,7 +1094,7 @@ impl DeviceLink {
         Ok(self.view())
     }
 
-    /// What this PC lets `node` do when it runs agents here. `level` is `"watch"` or `"full"` (default `"watch"`).
+    /// What this PC lets `node` do when it runs agents here. `level` is `"watch"`, `"answer"` or `"full"` (default `"watch"`).
     /// A new device has nothing on; only the person at this screen turns it on.
     pub fn set_permission(&self, node: &str, on: bool, level: Option<&str>) -> Result<Value, String> {
         self.require_on()?;
@@ -711,23 +1103,50 @@ impl DeviceLink {
             return Err(NOT_PAIRED.into());
         }
         if on {
-            let full = match level {
-                Some("full") => true,
-                Some("watch") | None => false,
-                Some(_) => return Err("Pick Watch and answer, or Full control.".into()),
+            // Watch is the default: a PC that is switched on and told no more can only look.
+            let (answer, full) = match level {
+                Some("full") => (true, true),
+                Some("answer") => (true, false),
+                Some("watch") | None => (false, false),
+                Some(_) => return Err("Pick Watch, Answer, or Can work on this PC.".into()),
             };
             self.mgr.set_permission(&node, capability::AGENTS_REMOTE, true).map_err(|e| e.to_string())?;
+            self.mgr.set_permission(&node, capability::AGENTS_REMOTE_ANSWER, answer).map_err(|e| e.to_string())?;
             self.mgr.set_permission(&node, capability::AGENTS_REMOTE_FULL, full).map_err(|e| e.to_string())?;
         } else {
             self.mgr.set_permission(&node, capability::AGENTS_REMOTE, false).map_err(|e| e.to_string())?;
+            self.pclink_asks.drop_node(&node.to_hex());
         }
         self.rights_changed();
         Ok(self.view())
     }
 
+    /// The cards on this PC's screen: PCs asking "Can work on this PC" (`POST /pclink/full-request`). Nothing is granted by asking.
+    pub fn full_asks(&self) -> Value {
+        let now = pclink_now_ms();
+        let trusted: Vec<_> = self.pclink_asks.pending(now).into_iter().filter(|a| node_of(&a.node).is_ok_and(|n| self.trust.remote_level(&n).is_some())).collect();
+        serde_json::to_value(trusted).unwrap_or(Value::Null)
+    }
+
+    /// The person at this PC answered a card. Only a person's own tap on this window calls this (`commands::devices`). Allow turns
+    /// the one switch on (Full, `agents/remote/full`); No changes nothing.
+    pub fn answer_full_ask(&self, id: &str, allow: bool) -> Result<Value, String> {
+        self.require_on()?;
+        let ask = self.pclink_asks.take(id, pclink_now_ms()).ok_or("That question is not waiting any more.")?;
+        if !allow {
+            return Ok(self.view());
+        }
+        let node = node_of(&ask.node)?;
+        if !self.trust.is_trusted(&node) || self.trust.remote_level(&node).is_none() {
+            return Err("That PC is not allowed in any more.".into());
+        }
+        self.set_permission(&ask.node, true, Some("full"))
+    }
+
     pub async fn remove(&self, node: &str) -> Result<Value, String> {
         self.require_on()?;
         let id = node_of(node)?;
+        self.pclink_asks.drop_node(&id.to_hex());
         self.mgr.remove(&id).map_err(|e| e.to_string())?;
         crate::device_identity::global().forget(&crate::mobile_pairing::link_device_id(node));
         self.rights_changed();
@@ -791,6 +1210,9 @@ impl DeviceLink {
     /// Lets (or stops letting) a device also reach this PC through its web address. Only with the run switch on.
     pub fn set_web(&self, node: &str, on: bool) -> Result<Value, String> {
         self.require_on()?;
+        if on && !web::PC_WEB_ROUTE {
+            return Err(web::OFF_SENTENCE.into());
+        }
         let id = node_of(node)?;
         if !self.trust.is_trusted(&id) {
             return Err(NOT_PAIRED.into());

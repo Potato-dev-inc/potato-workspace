@@ -65,6 +65,8 @@
     taking: false,
     noPicture: false,
     request: '',
+    fix: false,
+    own: false,
     needText: false,
     targets: [],
     to: '',
@@ -625,7 +627,7 @@
       refresh();
       return ui.req.focus();
     }
-    push({ kind: 'send', request: st.request, marks: wireMarks(), to: st.to });
+    push({ kind: 'send', request: st.request, marks: wireMarks(), to: st.to, fix: st.fix });
   }
   function say(text) {
     st.status = text;
@@ -734,6 +736,29 @@
         refresh();
       }
     });
+    // Ask about it (the default) or fix it in this project: two buttons, one of them on.
+    ui.seg = css(el('div'), 'display:flex;gap:4px;font-size:12px;flex-wrap:wrap');
+    ui.seg.setAttribute('role', 'radiogroup');
+    ui.seg.setAttribute('aria-label', S.intent);
+    ui.segAsk = el('button');
+    ui.segFix = el('button');
+    [[ui.segAsk, S.askAbout, false], [ui.segFix, S.fixIt, true]].forEach(function (d) {
+      d[0].setAttribute('type', 'button');
+      d[0].setAttribute('role', 'radio');
+      d[0].textContent = d[1];
+      click(d[0], function () { st.fix = d[2]; refresh(); });
+      // One Tab stop for the pair; the arrow keys move the choice (and the focus) like any radio group.
+      listen.call(d[0], 'keydown', function (e) {
+        e.stopPropagation();
+        var go = e.key === 'ArrowRight' || e.key === 'ArrowDown' ? 1 : e.key === 'ArrowLeft' || e.key === 'ArrowUp' ? -1 : 0;
+        if (!go) return;
+        e.preventDefault();
+        st.fix = !st.fix;
+        refresh();
+        (st.fix ? ui.segFix : ui.segAsk).focus();
+      });
+      ui.seg.appendChild(d[0]);
+    });
     var meta = css(el('div'), 'display:flex;align-items:center;gap:8px;font-size:12px');
     ui.count = el('span');
     ui.toBtn = css(el('button'), '');
@@ -766,6 +791,7 @@
     meta.appendChild(ui.toBtn);
     meta.appendChild(ui.go);
     col.appendChild(ui.req);
+    col.appendChild(ui.seg);
     col.appendChild(meta);
     ui.row.appendChild(ui.thumb);
     ui.row.appendChild(ui.thumbNone);
@@ -927,6 +953,13 @@
       st.marks.forEach(function (m) { if (m.type === 'pick') els++; });
       ui.count.textContent = (n === 1 ? S.count1 : S.countN.replace('{n}', String(n))) + (els ? ' · ' + (els === 1 ? S.element1 : S.elementsN.replace('{n}', String(els))) : '');
       css(ui.count, 'color:' + T.dim);
+      ui.seg.style.display = st.own ? 'none' : 'flex';
+      [[ui.segAsk, false], [ui.segFix, true]].forEach(function (d) {
+        var on = st.fix === d[1];
+        d[0].setAttribute('aria-checked', on ? 'true' : 'false');
+        d[0].setAttribute('tabindex', on ? '0' : '-1');
+        css(d[0], 'all:unset;cursor:pointer;padding:3px 9px;border-radius:7px;box-sizing:border-box;white-space:nowrap;border:1px solid ' + (on ? T.accent : T.line) + ';color:' + (on ? T.text : T.dim) + ';background:' + (on ? T.hover : 'transparent'));
+      });
       // Who gets it: a running agent, the page's own first.
       renderTo();
       ui.go.disabled = st.taking || !st.targets.some(function (t) { return t.ok; });
@@ -988,12 +1021,14 @@
         if ('noPicture' in v) st.noPicture = !!v.noPicture;
         if (v.targets) st.targets = v.targets.slice(0, 40);
         if ('to' in v) st.to = String(v.to || '');
+        if ('ownPage' in v) { st.own = !!v.ownPage; if (st.own) st.fix = false; }
         if ('ownerId' in v) st.ownerId = String(v.ownerId || '');
         if ('owner' in v) st.owner = one(v.owner, 60);
         if (v.status) say(one(v.status, 160));
         if (v.sent) {
           clearMarks(true);
           st.request = '';
+          st.fix = false;
           if (ui) ui.req.value = '';
           say(one(v.status || S.sent, 160));
         }

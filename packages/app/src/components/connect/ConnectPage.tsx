@@ -1,63 +1,57 @@
-// Connect: the phone, other PCs, the team and lending on ONE page with four tabs. Each tab starts with what is
-// connected, then one main button. The screens inside are the ones Settings, the Team page and the Devices page
-// always had (PairedDevices, MobilePairingPanel, DevicesPage, TeamHost, LendPage, RequestUsage): this file only
-// arranges them. "Sign-ins stay on their own device" is said once, at the top.
-import { lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState, type KeyboardEvent, type ReactNode } from 'react';
+// Connect: three tabs, one job each. Devices (my phone, my other PCs, can they reach this PC), Team (who is here, let
+// people in) and Lending (lend my agent, borrow someone's). The screens inside are the ones Settings and the Team page
+// always had (TeamHost, LendPage, RequestUsage): this file arranges them. Nothing is folded away: no "Advanced", no
+// "More options". A tab that needs you gets a small amber dot. Switching tabs keeps each tab's scroll place and any
+// half-done sheet (a visited tab stays mounted, hidden), and the app reopens Connect on the tab used last.
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type KeyboardEvent } from 'react';
 import type { PairedDeviceInfo, Settings } from '@potato-workspace/shared';
 import { useT } from '../../i18n';
 import { accountApi, type AccountApi } from '../../lib/account';
 import { devicesApi, type DevicesApi } from '../../lib/devices';
 import { isActiveIn, isActiveOut, lendApi, type LendApi } from '../../lib/lend';
-import { CONNECT_TABS, type ConnectTab } from '../../lib/openConnect';
-import { parseDevServerPort } from '../../lib/public-bridge-url';
+import { CONNECT_TABS, rememberConnectTab, type ConnectTab } from '../../lib/openConnect';
 import { loadSettings, patchSettings, type SettingsPatch } from '../../lib/settings';
 import { tauri } from '../../lib/tauri';
+import type { SshApi } from '../../lib/ssh';
 import { teamApi, type TeamApi } from '../../lib/team';
-import { DEVICES_CHANGED_EVENT, MobilePairingPanel } from '../MobilePairingPanel';
 import { useTeam, type TeamHandle } from '../cockpit/team/useTeam';
-import { AccountPanel } from '../account/AccountPanel';
-import { EmptyState } from '../common/EmptyState';
-import { DevicesPage } from '../devices/DevicesPage';
-import { useDevices } from '../devices/useDevices';
 import { RequestUsage } from '../lend/RequestUsage';
 import { useLend, type LendHandle } from '../lend/useLend';
-import { PairedDevices } from '../settings/blocks/PairedDevices';
 import { LendPage } from '../settings/blocks/LendPage';
-import { ConfirmSheet } from '../settings/controls';
-import type { ConfirmOptions, RowDef, SettingsEnv } from '../settings/model';
-import { RowShell } from '../settings/SectionView';
-import { phoneRowsOriginal } from '../settings/sections/PhoneSection';
 import { TeamHost } from '../team-page/TeamHost';
 import { defaultTunnelApi } from '../PairingAddress';
-import { Advanced } from './Advanced';
-import { SimplePhone } from './SimplePhone';
-import { RelaySetupSheet } from './RelaySetup';
-import { StableOffer } from './StableOffer';
-import { useTunnelStatus } from './useTunnelStatus';
-import { YourRelay } from './YourRelay';
-import { markTeamOfferSeen, offerSnoozed, teamFirstOpenPain } from '../../lib/connect-offer';
+import { DevicesTab } from './DevicesTab';
+import { Embed } from './ConnectParts';
+import type { PhoneApi } from './PhoneGroup';
+import { ReachLine, useThisPc, type ThisPcHandle } from './ThisPc';
 import '../../styles/settings.css';
 import '../../styles/settings-rows.css';
 import '../../styles/connect.css';
+import '../../styles/connect-tabs.css';
 
 import type { TunnelApi } from '../settings/TunnelSection';
 import type { UpdateApi } from '../../lib/workerUpdate';
-
-const TunnelSection = lazy(() => import('../settings/TunnelSection').then((m) => ({ default: m.TunnelSection })));
+import type { WorkerHealth } from '../../lib/worker';
 
 /** What the page reads and writes. Tests pass fakes; the app uses the defaults. */
 export interface ConnectApi {
   loadSettings: () => Promise<Settings>;
   patchSettings: (patch: SettingsPatch) => Promise<Settings>;
   listPhones: () => Promise<PairedDeviceInfo[]>;
+  /** What a phone's own sheet changes (rename, one switch, remove). */
+  phoneApi?: PhoneApi;
   devices: DevicesApi;
   account: AccountApi;
   lend: LendApi;
   team: TeamApi;
-  /** The phone address screen's commands. Tests pass a fake; the app uses the real ones. */
+  /** The link's commands (start, fix, check). Tests pass a fake; the app uses the real ones. */
   tunnel?: TunnelApi;
-  /** The one-button relay setup's step commands. Tests pass fakes; the app uses the real ones. */
+  /** The one-button setup's step commands. Tests pass fakes; the app uses the real ones. */
   updateApi?: UpdateApi;
+  /** Asks the link what it can do (plain GETs). Tests pass a fake; the app asks the real one. */
+  workerHealth?: (address: string) => Promise<WorkerHealth | null>;
+  /** The SSH commands (Other computers). Tests pass a fake. */
+  ssh?: SshApi;
 }
 
 const DEFAULT_API: ConnectApi = {
@@ -78,25 +72,32 @@ export interface ConnectPageProps {
   lend?: LendHandle;
   paneNames?: Map<string, string>;
   displayName?: string;
+  /**
+   * "Open" on one of my PCs: show that PC's section in the sidebar (unfold it and scroll to it). The cockpit passes this
+   * once the sidebar has those sections; without it Connect shows that PC's own page inside the Devices tab.
+   */
+  onOpenPc?: (node: string) => boolean | void;
+  /** A terminal was opened on an SSH computer: the cockpit shows that pane. */
+  onOpenPane?: (paneId: string) => void;
   api?: Partial<ConnectApi>;
 }
 
-const TAB_KEY = {
-  phone: 'connect.tab.phone',
-  pcs: 'connect.tab.pcs',
-  team: 'connect.tab.team',
-  lending: 'connect.tab.lending',
-} as const;
+const TAB_KEY = { devices: 'connect.tab.devices', team: 'connect.tab.team', lending: 'connect.tab.lending' } as const;
 
-export function ConnectPage({ tab, onTab, team, lend, paneNames, displayName, api: apiIn }: ConnectPageProps) {
+export function ConnectPage({ tab, onTab, team, lend, paneNames, displayName, onOpenPc, onOpenPane, api: apiIn }: ConnectPageProps) {
   const t = useT();
   // Held in a ref-like memo keyed on the parts, so a new `api` object each render does not restart the reads.
   const apiRef = useRef(apiIn);
   apiRef.current = apiIn;
   const api = useMemo<ConnectApi>(() => ({ ...DEFAULT_API, ...apiRef.current }), []);
   const [settings, setSettings] = useState<Settings | null>(null);
-  const [confirmAsk, setConfirmAsk] = useState<{ options: ConfirmOptions; resolve: (ok: boolean) => void } | null>(null);
   const tabRefs = useRef<Array<HTMLButtonElement | null>>([]);
+  const pageRef = useRef<HTMLDivElement>(null);
+  const scrolls = useRef<Record<string, number>>({});
+  const lastTab = useRef<ConnectTab>(tab);
+  // A tab is built the first time it is shown and then kept (hidden), so a half-done sheet survives a switch.
+  const [visited, setVisited] = useState<ReadonlySet<ConnectTab>>(() => new Set([tab]));
+  if (!visited.has(tab)) setVisited(new Set([...visited, tab]));
 
   useEffect(() => {
     let alive = true;
@@ -108,7 +109,6 @@ export function ConnectPage({ tab, onTab, team, lend, paneNames, displayName, ap
       alive = false;
     };
   }, [api]);
-
   const patch = useCallback(
     async (p: SettingsPatch) => {
       const saved = await api.patchSettings(p);
@@ -116,21 +116,23 @@ export function ConnectPage({ tab, onTab, team, lend, paneNames, displayName, ap
     },
     [api],
   );
-  const env = useMemo<SettingsEnv | null>(
-    () =>
-      settings
-        ? {
-            settings,
-            patch,
-            markSaved: () => undefined,
-            setError: () => undefined,
-            confirm: (options) => new Promise<boolean>((resolve) => setConfirmAsk({ options, resolve })),
-            projectPath: null,
-            bridgeUrl: null,
-          }
-        : null,
-    [settings, patch],
-  );
+
+  // Each tab keeps its own scroll place: the page that scrolls is the nearest scrolling parent.
+  useLayoutEffect(() => {
+    const el = (pageRef.current?.closest('.ck-connect-scroll') as HTMLElement | null) ?? null;
+    if (lastTab.current !== tab) {
+      scrolls.current[lastTab.current] = el?.scrollTop ?? 0;
+      lastTab.current = tab;
+      if (el) el.scrollTop = scrolls.current[tab] ?? 0;
+    }
+    rememberConnectTab(tab);
+  }, [tab]);
+
+  const pc = useThisPc({ tunnel: api.tunnel ?? defaultTunnelApi, updateApi: api.updateApi, pcsOn: settings?.far_pcs_enabled !== false, healthApi: api.workerHealth });
+  const ownTeam = useTeam(api.team, !team);
+  const ownLend = useLend(api.lend);
+  const lendHandle = lend ?? ownLend;
+  const dots = useAttention(api.team, lendHandle, pc);
 
   const onKey = (e: KeyboardEvent<HTMLButtonElement>, i: number) => {
     const step = e.key === 'ArrowRight' ? 1 : e.key === 'ArrowLeft' ? -1 : 0;
@@ -142,273 +144,111 @@ export function ConnectPage({ tab, onTab, team, lend, paneNames, displayName, ap
   };
 
   return (
-    <div className="cn-page" data-testid="connect-page">
-      <h1 className="cn-title">{t('connect.title')}</h1>
-      <p className="cn-lead">{t('connect.lead')}</p>
-      <p className="cn-stay" data-testid="connect-stay">
-        {t('connect.stay')}
-      </p>
-      <div className="cn-tabs" role="tablist" aria-label={t('connect.tabs.aria')}>
-        {CONNECT_TABS.map((id, i) => (
-          <button
-            key={id}
-            ref={(el) => {
-              tabRefs.current[i] = el;
-            }}
-            type="button"
-            role="tab"
-            id={`connect-tab-${id}`}
-            data-testid={`connect-tab-${id}`}
-            aria-selected={tab === id}
-            aria-controls={`connect-panel-${id}`}
-            tabIndex={tab === id ? 0 : -1}
-            className={`cn-tab${tab === id ? ' is-on' : ''}`}
-            onClick={() => onTab(id)}
-            onKeyDown={(e) => onKey(e, i)}
-          >
-            {t(TAB_KEY[id])}
-          </button>
-        ))}
+    <div className="cx-shell" data-testid="connect-page" ref={pageRef}>
+      <h1 className="cx-sr">{t('connect.title')}</h1>
+      <div className="cx-tabsbar">
+        <div className="cx-seg" role="tablist" aria-label={t('connect.tabs.aria')}>
+          {CONNECT_TABS.map((id, i) => (
+            <button
+              key={id}
+              ref={(el) => {
+                tabRefs.current[i] = el;
+              }}
+              type="button"
+              role="tab"
+              id={`connect-tab-${id}`}
+              data-testid={`connect-tab-${id}`}
+              aria-selected={tab === id}
+              aria-controls={`connect-panel-${id}`}
+              tabIndex={tab === id ? 0 : -1}
+              onClick={() => onTab(id)}
+              onKeyDown={(e) => onKey(e, i)}
+            >
+              {t(TAB_KEY[id])}
+              {dots[id] && <span className="cx-tdot" data-testid={`connect-dot-${id}`} role="img" aria-label={t('connect.tab.needsYou')} />}
+            </button>
+          ))}
+        </div>
       </div>
-      <div className="cn-panel" role="tabpanel" id={`connect-panel-${tab}`} aria-labelledby={`connect-tab-${tab}`} data-testid={`connect-panel-${tab}`}>
-        {tab === 'phone' && <PhoneTab api={api} env={env} />}
-        {tab === 'pcs' && <PcsTab api={api} settings={settings} patch={patch} />}
-        {tab === 'team' && <TeamTab api={api} team={team} lend={lend} paneNames={paneNames} displayName={displayName} />}
-        {tab === 'lending' && <LendingTab api={api} lend={lend} settings={settings} patch={patch} />}
-      </div>
-      {confirmAsk && (
-        <ConfirmSheet
-          title={confirmAsk.options.title}
-          body={confirmAsk.options.body}
-          confirmLabel={confirmAsk.options.confirmLabel}
-          onConfirm={() => (confirmAsk.resolve(true), setConfirmAsk(null))}
-          onCancel={() => (confirmAsk.resolve(false), setConfirmAsk(null))}
-        />
+      {CONNECT_TABS.map((id) =>
+        visited.has(id) ? (
+          <div key={id} className="cx-panel" role="tabpanel" id={`connect-panel-${id}`} aria-labelledby={`connect-tab-${id}`} data-testid={`connect-panel-${id}`} hidden={tab !== id}>
+            {id === 'devices' && <DevicesTab api={api} settings={settings} patch={patch} pc={pc} active={tab === id} onOpenPc={onOpenPc} onOpenPane={onOpenPane} />}
+            {id === 'team' && (
+              <div className="cx-page">
+                <ReachLine pc={pc} />
+                <TeamHost api={api.team} lendClient={api.lend} team={team ?? ownTeam} lend={lendHandle} paneNames={paneNames} displayName={displayName} />
+              </div>
+            )}
+            {id === 'lending' && <LendingTab api={api} lend={lendHandle} settings={settings} patch={patch} pc={pc} />}
+          </div>
+        ) : null,
       )}
     </div>
   );
 }
 
-/** The reused Settings screens carry their own `.settings`-scoped styles: this gives them that scope without the Settings window around them. */
-function Embed({ children, testId }: { children: ReactNode; testId?: string }) {
-  return (
-    <div className="settings settings--embed cn-embed" data-testid={testId}>
-      {children}
-    </div>
-  );
-}
-
-/** What is connected, in one line, with a dot that is lit when something is. */
-function Status({ tab, line, on }: { tab: ConnectTab; line: string; on?: boolean }) {
-  return (
-    <p className="cn-status" data-testid={`connect-status-${tab}`} data-on={on ? 'true' : 'false'}>
-      <span className="cn-dot" aria-hidden="true" />
-      {line}
-    </p>
-  );
-}
-
-/** The one main button of a tab. */
-function Main({ tab, children, onClick, expanded }: { tab: ConnectTab; children: ReactNode; onClick: () => void; expanded?: boolean }) {
-  return (
-    <button type="button" className="ck-btn ck-btn--primary cn-main" data-testid={`connect-main-${tab}`} aria-expanded={expanded} onClick={onClick}>
-      {children}
-    </button>
-  );
-}
-
-function rowOf(id: string): RowDef {
-  return phoneRowsOriginal.find((r) => r.id === id)!;
-}
-
-// ---------- Phone ----------
-
-function PhoneTab({ api, env }: { api: ConnectApi; env: SettingsEnv | null }) {
-  const t = useT();
-  const [phones, setPhones] = useState<PairedDeviceInfo[] | null>(null);
-  const [pairing, setPairing] = useState(false);
-  const [address, setAddress] = useState(false);
+/** Which tabs need the person: this PC cannot be reached (Devices), someone waits to join (Team), someone asks to borrow (Lending). */
+function useAttention(teamClient: TeamApi, lend: LendHandle, pc: ThisPcHandle): Record<ConnectTab, boolean> {
+  const [joins, setJoins] = useState(false);
   useEffect(() => {
     let alive = true;
     const load = () =>
-      api
-        .listPhones()
-        .then((p) => alive && setPhones(p.filter((d) => !d.expired)))
-        .catch(() => alive && setPhones([]));
+      void Promise.resolve()
+        .then(() => teamClient.configGet())
+        .then((c) => alive && setJoins(c.admin === true && Array.isArray(c.joins) && c.joins.length > 0))
+        .catch(() => undefined);
     load();
-    window.addEventListener(DEVICES_CHANGED_EVENT, load);
-    // A phone that scans the code shows up by itself.
-    const timer = window.setInterval(load, 3000);
+    let off: (() => void) | undefined;
+    teamClient
+      .onChanged(load)
+      .then((u) => (alive ? (off = u) : u()))
+      .catch(() => undefined);
+    const timer = window.setInterval(load, 15_000);
     return () => {
       alive = false;
+      off?.();
       window.clearInterval(timer);
-      window.removeEventListener(DEVICES_CHANGED_EVENT, load);
     };
-  }, [api]);
-  const count = phones?.length ?? 0;
-  return (
-    <>
-      <SimplePhone
-        tunnel={api.tunnel ?? defaultTunnelApi}
-        phones={phones === null ? null : count}
-        publicPwaUrl={env?.settings.public_pwa_url ?? ''}
-        devServerPort={env?.settings.dev_server_port}
-        ready={env !== null}
-        paused={pairing}
-        updateApi={api.updateApi}
-      />
-      <Advanced testId="connect-advanced" lines={['tunnel', 'named', 'custom', 'relay', 'token', 'restart']}>
-        <YourRelay tunnel={api.tunnel ?? defaultTunnelApi} team={api.team} updateApi={api.updateApi} />
-      <Status tab="phone" on={count > 0} line={phones === null ? '…' : count > 0 ? t('connect.phone.count', { count }) : t('connect.phone.none')} />
-      <div className="cn-actions">
-        <Main tab="phone" expanded={pairing} onClick={() => setPairing((v) => !v)}>
-          {t('connect.phone.pair')}
-        </Main>
-        <button type="button" className="ck-btn cn-second" data-testid="connect-address" aria-expanded={address} onClick={() => setAddress((v) => !v)}>
-          {t('connect.phone.address')}
-        </button>
-      </div>
-      {pairing && env && (
-        <Embed testId="connect-pairing">
-          <MobilePairingPanel
-            publicPwaUrl={env.settings.public_pwa_url ?? ''}
-            devServerPort={parseDevServerPort(env.settings.dev_server_port)}
-            onPublicPwaUrlChange={(value) => env.patch({ public_pwa_url: value.trim() || null })}
-            onDevServerPortChange={(port) => env.patch({ dev_server_port: port })}
-          />
-        </Embed>
-      )}
-      {address && (
-        <Embed testId="connect-tunnel">
-          <Suspense fallback={null}>
-            <TunnelSection api={api.tunnel} openTunnelOn={env?.settings.opentunnel_stable_link === true} />
-          </Suspense>
-        </Embed>
-      )}
-      <Embed testId="connect-phones">
-        <PairedDevices />
-      </Embed>
-      {env && (
-        <div className="cn-more" data-testid="connect-phone-more">
-          <h2 className="cn-h2">{t('connect.phone.moreTitle')}</h2>
-          <Embed>
-            <RowShell row={rowOf('phone-notifications')} env={env} />
-            <RowShell row={rowOf('mobile-keyboard-resizes')} env={env} />
-            <RowShell row={rowOf('mobile-input-visible')} env={env} />
-            <RowShell row={rowOf('revoke-all-devices')} env={env} />
-          </Embed>
-        </div>
-      )}
-      {env && (
-        <details className="cn-more" data-testid="connect-telegram">
-          <summary className="cn-h2">{t('connect.phone.telegram')}</summary>
-          <Embed>
-            <RowShell row={rowOf('telegram')} env={env} />
-          </Embed>
-        </details>
-      )}
-      </Advanced>
-    </>
-  );
-}
-
-// ---------- My PCs ----------
-
-function PcsTab({ api, settings, patch }: { api: ConnectApi; settings: Settings | null; patch: (p: SettingsPatch) => Promise<void> }) {
-  const t = useT();
-  const { view, enabled } = useDevices(api.devices);
-  const off = settings !== null && settings.devices_enabled !== true && !enabled;
-  // Potato account (Labs): the sign-in and "My devices" come first, whether or not PC pairing is on.
-  const account = settings?.account_enabled === true ? <AccountPanel api={api.account} /> : null;
-  if (off) {
-    return (
-      <>
-        {account}
-        <Status tab="pcs" line={t('connect.pcs.none')} />
-        <EmptyState
-          testId="connect-pcs-off"
-          title={t('connect.pcs.offTitle')}
-          line={t('connect.pcs.offLine')}
-          action={{ label: t('connect.pcs.turnOn'), onClick: () => void patch({ devices_enabled: true }) }}
-        />
-      </>
-    );
-  }
-  const devices = view?.devices ?? [];
-  const online = devices.filter((d) => d.state === 'online').length;
-  return (
-    <>
-      {account}
-      <Status tab="pcs" on={devices.length > 0} line={view ? (devices.length > 0 ? t('connect.pcs.count', { count: devices.length, online }) : t('connect.pcs.none')) : '…'} />
-      <Embed>
-        <DevicesPage api={api.devices} variant="connect" />
-      </Embed>
-    </>
-  );
-}
-
-// ---------- Team ----------
-
-function TeamTab({ api, team, lend, paneNames, displayName }: { api: ConnectApi; team?: TeamHandle; lend?: LendHandle; paneNames?: Map<string, string>; displayName?: string }) {
-  const t = useT();
-  const own = useTeam(api.team, !team);
-  const { state } = team ?? own;
-  const others = state?.members.length ?? 0;
-  const line = !state ? '…' : !state.active ? t('connect.team.none') : others > 0 ? t('connect.team.on', { count: others }) : t('connect.team.alone');
-  const tunnel = api.tunnel ?? defaultTunnelApi;
-  const [tunnelStatus, setTunnelStatus] = useTunnelStatus(tunnel, 5000);
-  // Team opened for the first time (after a phone has worked): one quiet offer to keep the same link.
-  const [pain] = useState(() => teamFirstOpenPain() && !offerSnoozed());
-  const [gone, setGone] = useState(false);
-  const [setup, setSetup] = useState(false);
-  useEffect(() => {
-    if (pain) markTeamOfferSeen();
-  }, [pain]);
-  const hasFixed = tunnelStatus?.mode === 'stable' && Boolean(tunnelStatus.stable);
-  return (
-    <>
-      <Status tab="team" on={Boolean(state?.active)} line={line} />
-      {pain && !gone && !hasFixed && tunnelStatus !== undefined && <StableOffer onSet={() => setSetup(true)} onGone={() => setGone(true)} />}
-      {setup && <RelaySetupSheet api={tunnel} updateApi={api.updateApi} onStatus={setTunnelStatus} onClose={() => setSetup(false)} />}
-      <TeamHost api={api.team} lendClient={api.lend} team={team} lend={lend} paneNames={paneNames} displayName={displayName} />
-      <Advanced testId="connect-team-advanced" lines={['relay', 'token']}>
-        <YourRelay tunnel={tunnel} team={api.team} updateApi={api.updateApi} />
-      </Advanced>
-    </>
-  );
+  }, [teamClient]);
+  const asked = lend.state ? lend.state.requests_in.some((r) => r.state === 'open') : false;
+  return { devices: pc.state === 'broken', team: joins, lending: asked };
 }
 
 // ---------- Lending ----------
 
-function LendingTab({ api, lend, settings, patch }: { api: ConnectApi; lend?: LendHandle; settings: Settings | null; patch: (p: SettingsPatch) => Promise<void> }) {
+function LendingTab({ api, lend, settings, patch, pc }: { api: ConnectApi; lend: LendHandle; settings: Settings | null; patch: (p: SettingsPatch) => Promise<void>; pc: ThisPcHandle }) {
   const t = useT();
-  const own = useLend(api.lend);
-  const handle = lend ?? own;
-  const state = handle.state;
-  if (settings !== null && settings.lend_enabled !== true && !handle.enabled) {
-    return (
-      <>
-        <Status tab="lending" line={t('connect.lending.none')} />
-        <EmptyState
-          testId="connect-lending-off"
-          title={t('connect.lending.offTitle')}
-          line={t('connect.lending.offLine')}
-          action={{ label: t('connect.lending.turnOn'), onClick: () => void patch({ lend_enabled: true }) }}
-        />
-      </>
-    );
-  }
-  const out = state ? state.grants.filter((g) => isActiveOut(g, handle.now)).length : 0;
-  const incoming = state ? state.grants.filter((g) => isActiveIn(g, handle.now)).length : 0;
+  const on = settings?.lend_enabled === true || lend.enabled;
+  const state = lend.state;
+  const out = state ? state.grants.filter((g) => isActiveOut(g, lend.now)).length : 0;
+  const incoming = state ? state.grants.filter((g) => isActiveIn(g, lend.now)).length : 0;
   return (
-    <>
-      <Status tab="lending" on={out + incoming > 0} line={!state ? '…' : out + incoming > 0 ? t('connect.lending.status', { out, in: incoming }) : t('connect.lending.none')} />
-      <div className="cn-actions cn-actions--ask" data-testid="connect-main-lending">
-        <RequestUsage api={api.lend} team={api.team} devices={api.devices} lend={handle} variant="settings" />
+    <div className="cx-page">
+      <ReachLine pc={pc} />
+      <section className="cx-group cx-first" data-testid="connect-lending-top">
+        <div className="cx-switchrow cx-switchrow--top">
+          <div>
+            <b>{t('connect.lending.switch')}</b>
+            <div className="cx-note" data-testid="connect-status-lending">
+              {!on ? t('connect.lending.offLine') : out + incoming > 0 ? t('connect.lending.status', { out, in: incoming }) : t('connect.lending.none')}
+            </div>
+          </div>
+          <label className="cx-switch">
+            <input type="checkbox" role="switch" checked={on} disabled={settings === null} aria-label={t('connect.lending.switch')} data-testid="connect-lending-switch" onChange={(e) => void patch({ lend_enabled: e.target.checked })} />
+            <span aria-hidden="true" />
+          </label>
+        </div>
+      </section>
+      {/* Borrowing needs no setup, so Ask to borrow shows with the switch off too. */}
+      <div className="cx-actions" data-testid="connect-main-lending">
+        <RequestUsage api={api.lend} team={api.team} devices={api.devices} lend={lend} variant="settings" />
       </div>
-      <Embed>
-        <LendPage api={api.lend} team={api.team} />
-      </Embed>
-    </>
+      {on && (
+        <Embed>
+          <LendPage api={api.lend} team={api.team} />
+        </Embed>
+      )}
+    </div>
   );
 }

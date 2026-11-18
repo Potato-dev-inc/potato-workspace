@@ -221,8 +221,8 @@ mod tests {
     use super::gate_reply;
     use crate::agent_authority::config::{with_config, Config};
 
-    const ASKING: Config = Config { ask_before_agent_control: true, agents_may_merge: true };
-    const TODAY: Config = Config { ask_before_agent_control: false, agents_may_merge: true };
+    const ASKING: Config = Config { ask_before_agent_control: true, agents_may_merge: true, ask_before_helpers_start: false };
+    const TODAY: Config = Config { ask_before_agent_control: false, agents_may_merge: true, ask_before_helpers_start: false };
 
     fn registry() -> std::sync::Arc<parking_lot::Mutex<crate::pty::PaneRegistry>> {
         std::sync::Arc::new(parking_lot::Mutex::new(crate::pty::PaneRegistry::new()))

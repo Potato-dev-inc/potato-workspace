@@ -43,11 +43,18 @@ pub async fn account_devices(webview: tauri::Webview) -> Result<DevicesReply, St
 #[tauri::command(rename_all = "snake_case")]
 pub async fn account_revoke_device(webview: tauri::Webview, id: String, action: String) -> Result<DevicesReply, String> {
     guard(&webview)?;
-    tauri::async_runtime::spawn_blocking(move || service().revoke(&id, &action)).await.map_err(|e| e.to_string())?
+    let target = id.clone();
+    let reply = tauri::async_runtime::spawn_blocking(move || service().revoke(&id, &action)).await.map_err(|e| e.to_string())??;
+    // "Not me" and "Sign out" end this PC's pairing with that device too: a device that is gone from the account must not keep the keys.
+    crate::device_link::app::forget_account_device(&target).await;
+    Ok(reply)
 }
 
 #[tauri::command(rename_all = "snake_case")]
 pub async fn account_sign_out_here(webview: tauri::Webview) -> Result<AccountView, String> {
     guard(&webview)?;
-    tauri::async_runtime::spawn_blocking(|| service().sign_out_here()).await.map_err(|e| e.to_string())
+    let view = tauri::async_runtime::spawn_blocking(|| service().sign_out_here()).await.map_err(|e| e.to_string())?;
+    // This PC is out of the address book now: its door stays shut until the person signs in again.
+    crate::device_link::app::account_changed();
+    Ok(view)
 }

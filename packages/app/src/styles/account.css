@@ -120,3 +120,29 @@
   outline: 2px solid var(--accent);
   outline-offset: 2px;
 }
+
+/* My PCs on my account: the tick for this PC sits under the list. */
+.ac-tick {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  padding-top: 4px;
+  cursor: pointer;
+}
+.ac-tick input {
+  margin-top: 3px;
+  accent-color: var(--accent);
+}
+.ac-tick span {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+.ac-tick small {
+  color: var(--label-3);
+  font-size: 12px;
+}
+.ac-pcs .ac-item > .ck-btn {
+  flex: none;
+}

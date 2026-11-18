@@ -643,7 +643,10 @@ impl Lend {
         // Older builds named a lend sign-in "Lend Claude 3"; it now carries the name of the profile that uses it.
         for p in &saved.profiles {
             if let LendAccount::Account { id } = &p.account {
-                super::signin_pane::relabel_for_profile(&deps.accounts, id, &p.name);
+                let shared = saved.profiles.iter().any(|x| x.id != p.id && matches!(&x.account, LendAccount::Account { id: other } if other == id));
+                if !shared {
+                    super::signin_pane::relabel_for_profile(&deps.accounts, id, &p.name);
+                }
             }
         }
         let svc = Arc::new_cyclic(|me| Self {
@@ -1174,8 +1177,12 @@ impl Lend {
                 return Err("That sign-in belongs to another agent.".into());
             }
         }
+        // A sign-in shared by several profiles keeps its label: renaming it after one profile would relabel the others'.
         if let LendAccount::Account { id } = &p.account {
-            super::signin_pane::relabel_for_profile(&self.deps.accounts, id, &p.name);
+            let shared = lock(&self.inner).saved.profiles.iter().any(|x| x.id != p.id && matches!(&x.account, LendAccount::Account { id: other } if other == id));
+            if !shared {
+                super::signin_pane::relabel_for_profile(&self.deps.accounts, id, &p.name);
+            }
         }
         let mut inner = lock(&self.inner);
         if p.id.is_empty() {

@@ -44,3 +44,6 @@ mod tests;
 pub const DEFAULT_ASK_BEFORE_AGENT_CONTROL: bool = true;
 /// Setting B. Default: off.
 pub const DEFAULT_AGENTS_MAY_MERGE: bool = false;
+/// Setting C "Ask me before other agents start helpers". Default: off. The MCP exists so agents on other
+/// harnesses can use the app; a tap per `run_agent` defeats that. On: a connection nobody can place asks first.
+pub const DEFAULT_ASK_BEFORE_HELPERS_START: bool = false;

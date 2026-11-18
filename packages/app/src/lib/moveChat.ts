@@ -7,8 +7,8 @@
 import { invoke } from '@tauri-apps/api/core';
 import { listen, type UnlistenFn } from '@tauri-apps/api/event';
 import { t } from '../i18n';
-import type { BridgeClient } from './bridge-types';
-import { type Device, type DevicesApi } from './devices';
+import { PcLinkError, type PcLinkClient } from './runtime/pclink';
+import { type Device } from './devices';
 import { errorSentence } from './sayError';
 
 export type MoveMode = 'history' | 'work';
@@ -90,15 +90,14 @@ export function whyNotDevice(d: Device): string | null {
   return null;
 }
 
-/** What the far device offers to start a chat in, from `GET /phone/new-chat`. */
+/** What the far device offers to start a chat in, from its `/pclink/agents` and `/pclink/projects`. */
 export interface FarOptions {
   agents: { id: string; label: string }[];
   projects: { id: string; name: string }[];
 }
 
-export async function farOptions(bridge: BridgeClient): Promise<FarOptions> {
-  if (!bridge.phoneNewChat) throw new Error(t('move.noAgents', { name: '' }).trim());
-  const o = await bridge.phoneNewChat();
+export async function farOptions(client: PcLinkClient): Promise<FarOptions> {
+  const o = await client.agentOptions();
   return {
     agents: o.agents.filter((a) => a.chat).map((a) => ({ id: a.id, label: a.label })),
     projects: o.projects.filter((p) => p.state !== 'missing').map((p) => ({ id: p.id, name: p.name })),
@@ -108,10 +107,9 @@ export async function farOptions(bridge: BridgeClient): Promise<FarOptions> {
 export interface MoveRequest {
   paneId: string;
   mode: MoveMode;
-  /** The far device and its client (a far bridge call goes through the link). */
+  /** The far device and its PC link client (every far call goes through the link; the far PC's levels decide). */
   device: Device;
-  bridge: BridgeClient;
-  devices: Pick<DevicesApi, 'request'>;
+  client: PcLinkClient;
   api: MoveApi;
   /** This PC's own name, so the new agent can say where the chat came from. */
   fromName: string;
@@ -121,9 +119,9 @@ export interface MoveRequest {
 }
 
 /** The sentence a far answer carries (`{ error }`), else a plain fallback. */
-function farSentence(body: unknown, fallback: string): string {
-  const error = (body as { error?: unknown } | null)?.error;
-  return typeof error === 'string' && error.trim() ? error.trim().slice(0, 300) : fallback;
+function farSentence(error: unknown, fallback: string): string {
+  const said = error instanceof PcLinkError ? error.said : null;
+  return said ? said.slice(0, 300) : fallback;
 }
 
 /**
@@ -137,20 +135,22 @@ export async function runMove(r: MoveRequest): Promise<{ farPane: string }> {
     const history = await r.api.history(r.paneId, r.fromName);
     if (r.mode === 'work') {
       const work = await r.api.prepareWork(r.paneId);
-      const sent = await r.devices.request(r.device.node, 'POST', '/phone/move-work', { project: r.project, branch: work.branch, bundle_b64: work.bundleB64 });
-      if (sent.status !== 200) throw new Error(farSentence(sent.body, t('move.failed')));
+      try {
+        await r.client.moveWork({ project: r.project, branch: work.branch, bundle_b64: work.bundleB64 });
+      } catch (error) {
+        throw new Error(farSentence(error, t('move.failed')));
+      }
     }
-    if (!r.bridge.phoneStartChat || !r.bridge.sendPaneMessage) throw new Error(t('move.failed'));
-    farPane = (await r.bridge.phoneStartChat({ agent: r.agent, project: r.project, lane: 'chat' })).pane_id;
+    farPane = (await r.client.startAgent({ agent: r.agent, project: r.project, lane: 'chat' })).pane_id;
     try {
-      await r.bridge.sendPaneMessage(farPane, history.text);
+      await r.client.sendMessage(farPane, history.text);
     } catch {
       throw new Error(t('move.notArrived', { name: r.device.name }));
     }
     await r.api.finish(r.paneId, r.device.node, r.device.name, farPane);
     return { farPane };
   } catch (error) {
-    if (farPane) void r.bridge.killPane(farPane).catch(() => undefined);
+    if (farPane) void r.client.close(farPane).catch(() => undefined);
     await r.api.abort(r.paneId).catch(() => undefined);
     throw new Error(errorSentence(error));
   }

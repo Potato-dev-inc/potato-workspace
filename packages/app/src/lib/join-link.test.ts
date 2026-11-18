@@ -61,3 +61,15 @@ describe('parseJoinLink', () => {
     expect(findJoinLink(`https://localhost/join/${CODE}`)).toBeNull();
   });
 });
+
+describe('one box takes the new link and the old pm:// invite', () => {
+  it('a message with the new link is found; a message with the old link and code is still read', async () => {
+    const { parsePastedInvite } = await import('./team-invite');
+    const nw = `Join my team: https://pm-relay.me.workers.dev/join/${CODE} thanks`;
+    expect(findJoinLink(nw)?.link.code).toBe(CODE);
+    expect(parsePastedInvite(nw).link).toBeNull();
+    const old = 'Join: pm://team/join?v=1&t=abc&n=Acme code KQ7M-4XPD';
+    expect(findJoinLink(old)).toBeNull();
+    expect(parsePastedInvite(old)).toEqual({ link: 'pm://team/join?v=1&t=abc&n=Acme', code: 'KQ7M-4XPD' });
+  });
+});

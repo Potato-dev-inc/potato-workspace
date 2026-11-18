@@ -2,7 +2,7 @@
 // "Set up my relay": the ONE button. Three places open the same flow; the happy path runs with the fake step commands
 // (nothing here touches Cloudflare): the address comes from the deploy output (no paste step), the key is made and kept
 // by the app and is hidden until asked for. Each plain-words problem has one fix button. Rendered through the real
-// Connect page (Phone > Advanced > Your relay, and the offer card) and the real Start-a-team relay card.
+// Connect page (the relay card above the tabs) and the real Start-a-team relay card.
 import { act } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
@@ -19,8 +19,9 @@ import type { TeamApi } from '../../lib/team';
 import type { UpdateApi, StepAnswer } from '../../lib/workerUpdate';
 import type { TunnelApi } from '../settings/TunnelSection';
 import { RelayChoice } from '../settings/blocks/RelayChoice';
-import { BASE_SETTINGS, click, settle } from '../settings/test-utils';
+import { BASE_SETTINGS, click, settle, type } from '../settings/test-utils';
 import { resetRememberedTab } from '../team-page/TeamPage';
+import { fakeAccount } from './connect-test-utils';
 import { ConnectPage, type ConnectApi } from './ConnectPage';
 import type { ConnectTab } from '../../lib/openConnect';
 
@@ -94,10 +95,12 @@ type Script = Partial<Record<string, StepAnswer | StepAnswer[]>>;
 /** A fake step runner: each step answers from `script` (a list is used one answer per run), otherwise it works. */
 function fakeSteps(script: Script = {}) {
   const calls: string[] = [];
+  const names: (string | undefined)[] = [];
   const counts: Record<string, number> = {};
   const updateApi: UpdateApi = {
-    step: async (id, address, confirmed) => {
+    step: async (id, address, confirmed, name) => {
       calls.push(`${id}@${address ?? 'new'}${confirmed ? '!' : ''}`);
+      names.push(name);
       const s = script[id];
       const n = (counts[id] = (counts[id] ?? 0) + 1);
       if (Array.isArray(s)) return s[Math.min(n - 1, s.length - 1)]!;
@@ -106,7 +109,7 @@ function fakeSteps(script: Script = {}) {
     check: async () => ({ reachable: true, features: ['team', 'stable-link'], legacyLink: false }),
     pauseMs: 0,
   };
-  return { updateApi, calls };
+  return { updateApi, calls, names };
 }
 
 function connectApi(tunnel: TunnelApi, updateApi: UpdateApi): Partial<ConnectApi> {
@@ -127,17 +130,18 @@ function connectApi(tunnel: TunnelApi, updateApi: UpdateApi): Partial<ConnectApi
     lend: createFakeLendApi(lendState({ grants: [] })),
     tunnel,
     updateApi,
+    account: fakeAccount(null),
   };
 }
 
-async function mount(a: Partial<ConnectApi>, tab: ConnectTab = 'phone') {
+async function mount(a: Partial<ConnectApi>, tab: ConnectTab = 'devices') {
   await act(async () => root.render(<ConnectPage tab={tab} onTab={() => undefined} api={a} />));
   await settle(8);
 }
 const q = (sel: string) => document.querySelector(sel);
 const text = (sel: string) => q(sel)?.textContent ?? '';
 
-/** Opens the flow from Phone > Advanced > Your relay and waits for the fakes to finish. */
+/** Opens the flow from the relay card above the tabs and waits for the fakes to finish. */
 async function runFromCard(tunnel: TunnelApi, updateApi: UpdateApi) {
   await mount(connectApi(tunnel, updateApi));
   await click(q('[data-testid="relay-set-up"]'));
@@ -145,27 +149,19 @@ async function runFromCard(tunnel: TunnelApi, updateApi: UpdateApi) {
 }
 
 describe('Set up my relay: three places, one flow', () => {
-  it('Phone > Your relay: a prominent card with the one button, and the plain subtitle', async () => {
+  it('Devices > This PC: the one button, and the plain note under it', async () => {
     await mount(connectApi(fakeTunnel(stable('linked')).api, fakeSteps().updateApi));
-    const card = q('[data-testid="relay-card"]')!;
+    const card = q('[data-testid="relay-set-up"]')!;
     expect(card).not.toBeNull();
     expect(q('[data-testid="connect-relay-none"]')).toBeNull();
-    expect(text('[data-testid="relay-set-up"]')).toBe('Set up my relay');
-    expect(card.textContent).toContain('Free. About 2 minutes. You only do it once.');
+    expect(text('[data-testid="relay-set-up"]')).toBe('Make it work anywhere');
+    expect(text('[data-testid="connect-relay"]')).toContain('Free. About 2 minutes.');
     await click(q('[data-testid="relay-set-up"]'));
     await settle(4);
     expect(q('[data-testid="relay-sheet"]')).not.toBeNull();
     expect(q('[data-testid="stable-sheet"]')).toBeNull();
   });
 
-  it('the Phone offer card ("Keep the same link every time" > Set it up) opens the same sheet', async () => {
-    window.localStorage.setItem('pm.connect.firstScanWorked', '1');
-    await mount(connectApi(fakeTunnel(stable('linked')).api, fakeSteps().updateApi), 'team');
-    await click(q('[data-testid="connect-offer-set"]'));
-    await settle(4);
-    expect(q('[data-testid="relay-sheet"]')).not.toBeNull();
-    expect(q('[data-testid="stable-sheet"]')).toBeNull();
-  });
 
   it('Start a team with no relay: the recommended button opens the same sheet; the step-by-step sheet is one quiet press away', async () => {
     const t = fakeTunnel(stable('linked'));
@@ -187,15 +183,15 @@ describe('Set up my relay: the happy path (fake step commands)', () => {
     const s = fakeSteps();
     await runFromCard(t.api, s.updateApi);
 
-    expect(s.calls).toEqual(['prepare@new', 'install@new', 'login@new', 'deploy@new']);
+    expect(s.calls).toEqual(['prepare@new', 'install@new', 'login@new', 'look@new', 'deploy@new']);
     // No "paste your address" step and no field anywhere in the sheet.
     expect(q('[data-testid="relay-sheet"] input')).toBeNull();
     expect(text('[data-testid="relay-sheet"]')).not.toMatch(/paste/i);
     // The app linked this PC with the address it read itself, and let the backend make the key (no secret given).
     expect(t.saved).toEqual([{ mode: 'stable', worker_url: WORKER, secret: null, secret_action: 'keep' }]);
-    expect(text('[data-testid="relay-sheet"]')).toContain('Your relay is ready. Your phone and your team now use it.');
+    expect(text('[data-testid="relay-sheet"]')).toContain('Done. Your phone and your team can now reach this PC from anywhere.');
     expect(text('[data-testid="relay-done-host"]')).toBe('pm-relay.maya.workers.dev');
-    expect(text('[data-testid="relay-done-status"]')).toBe('Ready');
+    expect(text('[data-testid="relay-done-status"]')).toBe('Works anywhere');
     expect([...document.querySelectorAll('[data-testid="relay-steps"] li')].every((li) => li.getAttribute('data-status') === 'done')).toBe(true);
   });
 
@@ -245,7 +241,7 @@ describe('Set up my relay: the happy path (fake step commands)', () => {
     expect(q('[data-testid="relay-sheet"]')).toBeNull();
     expect(cancels).toHaveLength(1);
     expect(t.saved).toEqual([]);
-    expect(q('[data-testid="relay-card"]')).not.toBeNull();
+    expect(q('[data-testid="relay-set-up"]')).not.toBeNull();
   });
 
   it('keeps the sheet on the done screen while the saved relay already flips the page behind it, then shows the status row', async () => {
@@ -257,19 +253,25 @@ describe('Set up my relay: the happy path (fake step commands)', () => {
     await click(q('[data-testid="relay-close"]'));
     await settle(8);
     expect(q('[data-testid="relay-sheet"]')).toBeNull();
-    expect(q('[data-testid="relay-card"]')).toBeNull();
+    expect(q('[data-testid="relay-set-up"]')).toBeNull();
     expect(text('[data-testid="connect-relay-host"]')).toBe('pm-relay.maya.workers.dev');
-    expect(text('[data-testid="connect-relay-status"]')).toBe('Ready');
+    expect(text('[data-testid="connect-relay-status"]')).toBe('Works anywhere');
   });
 
-  it('"Show details" is folded by default and scrubbed', async () => {
+  it('a failure offers Copy report (scrubbed), never a fold', async () => {
     const long = 'A'.repeat(40);
-    const s = fakeSteps({ install: { ok: true, output: `installed ${long}` } });
+    const writes: string[] = [];
+    Object.defineProperty(navigator, 'clipboard', { value: { writeText: async (s: string) => (writes.push(s), undefined) }, configurable: true });
+    const s = fakeSteps({ install: { ok: false, output: `installed ${long}` } });
     await runFromCard(fakeTunnel(stable('linked')).api, s.updateApi);
-    expect(q('[data-testid="relay-details"]')).toBeNull();
-    await click(q('[data-testid="relay-details-toggle"]'));
-    expect(text('[data-testid="relay-details"]')).toContain('installed');
-    expect(text('[data-testid="relay-details"]')).not.toContain(long);
+    expect(q('details')).toBeNull();
+    expect(q('[data-testid="relay-details-toggle"]')).toBeNull();
+    await click(q('[data-testid="relay-copy-report"]'));
+    await settle(4);
+    expect(writes).toHaveLength(1);
+    expect(writes[0]).toContain('installed');
+    expect(writes[0]).not.toContain(long);
+    expect(text('[data-testid="relay-copy-report"]')).toBe('Copied');
   });
 });
 
@@ -421,15 +423,26 @@ describe('Set up my relay: each problem in plain words, with one fix button', ()
     const s = fakeSteps();
     await runFromCard(t.api, s.updateApi);
     expect(q('[data-testid="relay-problem"]')!.getAttribute('data-problem')).toBe('mismatch');
-    expect(text('[data-testid="relay-problem"]')).toContain('Looks like an old relay is in the way');
-    expect(text('[data-testid="relay-fix"]')).toBe('Start fresh on Cloudflare');
+    expect(text('[data-testid="relay-problem"]')).toContain('answers to a different key');
+    // Add this PC comes first (it keeps the other relay); Start fresh is the quiet second choice.
+    expect(text('[data-testid="relay-fix"]')).toBe('Add this PC');
+    expect(text('[data-testid="relay-fresh-open"]')).toBe('Start fresh on Cloudflare');
     // The delete never runs before the person confirms.
-    await click(q('[data-testid="relay-fix"]'));
+    await click(q('[data-testid="relay-fresh-open"]'));
     expect(q('[data-testid="relay-fresh-confirm"]')).not.toBeNull();
     expect(s.calls.some((c) => c.startsWith('delete'))).toBe(false);
     await click(q('[data-testid="relay-fresh-no"]'));
     expect(q('[data-testid="relay-fresh-confirm"]')).toBeNull();
-    await click(q('[data-testid="relay-fix"]'));
+    await click(q('[data-testid="relay-fresh-open"]'));
+    // The plain warning names what is lost and who stops working, and the delete button waits for the typed name.
+    expect(text('[data-testid="relay-fresh-warning"]')).toMatch(/deletes pm-relay/);
+    expect(text('[data-testid="relay-fresh-warning"]')).toMatch(/phone, PC and teammate .* will stop working/);
+    expect((q('[data-testid="relay-fresh-yes"]') as HTMLButtonElement).disabled).toBe(true);
+    await type(q('[data-testid="relay-fresh-type"]') as HTMLInputElement, 'nope');
+    expect((q('[data-testid="relay-fresh-yes"]') as HTMLButtonElement).disabled).toBe(true);
+    await click(q('[data-testid="relay-fresh-yes"]'));
+    expect(s.calls.some((c) => c.startsWith('delete'))).toBe(false);
+    await type(q('[data-testid="relay-fresh-type"]') as HTMLInputElement, 'pm-relay');
     await click(q('[data-testid="relay-fresh-yes"]'));
     await settle(30);
     expect(s.calls).toContain(`delete@${WORKER}!`);
@@ -580,6 +593,122 @@ describe('Set up my relay: safety', () => {
   });
 });
 
+describe('Two PCs, one Cloudflare account', () => {
+  it('a relay of another PC is found: nothing is put online, no Start fresh, one plain button: Add this PC', async () => {
+    const t = fakeTunnel(stable('linked'));
+    const s = fakeSteps({ look: { ok: true, output: 'A relay set up on another PC is already in this account.', taken: true } });
+    await runFromCard(t.api, s.updateApi);
+    expect(q('[data-testid="relay-problem"]')!.getAttribute('data-problem')).toBe('taken');
+    expect(text('[data-testid="relay-problem"]')).toContain('already has a link that another PC set up');
+    expect(text('[data-testid="relay-fix"]')).toBe('Add this PC');
+    expect(q('[data-testid="relay-fresh-yes"]')).toBeNull();
+    expect(text('[data-testid="relay-sheet"]')).not.toContain('Start fresh');
+    expect(s.calls.some((c) => c.startsWith('deploy') || c.startsWith('delete'))).toBe(false);
+    expect(t.saved).toEqual([]);
+  });
+
+  it('Add this PC deploys a separate relay named after this PC, and links to it', async () => {
+    const t = fakeTunnel(stable('linked'));
+    let looks = 0;
+    const base = fakeSteps();
+    const updateApi: UpdateApi = {
+      ...base.updateApi,
+      step: async (id, address, confirmed, name) => {
+        if (id === 'look') return ++looks === 1 ? { ok: true, output: '', taken: true } : { ok: true, output: '' };
+        if (id === 'deploy') return { ok: true, output: '', url: name ? `https://${name}.maya.workers.dev` : WORKER };
+        return base.updateApi.step(id, address, confirmed, name);
+      },
+    };
+    const names: (string | undefined)[] = [];
+    const wrapped: UpdateApi = { ...updateApi, step: async (id, a, c, n) => (names.push(n), updateApi.step(id, a, c, n)) };
+    await runFromCard(t.api, wrapped);
+    await click(q('[data-testid="relay-fix"]'));
+    await settle(30);
+    const used = names.filter((n): n is string => !!n);
+    expect(used.length).toBeGreaterThan(0);
+    expect(new Set(used).size).toBe(1);
+    expect(used[0]).toMatch(/^pm-relay-[a-z]{4}$/);
+    expect(q('[data-testid="relay-sheet"]')!.getAttribute('data-phase')).toBe('done');
+    expect(t.saved).toEqual([{ mode: 'stable', worker_url: `https://${used[0]}.maya.workers.dev`, secret: null, secret_action: 'keep' }]);
+  });
+
+  it('a key mismatch offers Add this PC first and it makes a separate relay, deleting nothing', async () => {
+    let n = 0;
+    const t = fakeTunnel(() => (++n === 1 ? stable('failed', { secret_mismatch: true, error: 'x' }) : stable('linked')));
+    const s = fakeSteps();
+    const inner = s.updateApi.step;
+    s.updateApi.step = async (id, ad, c, nm) => (id === 'deploy' && nm ? { ok: true, output: '', url: `https://${nm}.maya.workers.dev` } : inner(id, ad, c, nm));
+    await runFromCard(t.api, s.updateApi);
+    expect(q('[data-testid="relay-problem"]')!.getAttribute('data-problem')).toBe('mismatch');
+    await click(q('[data-testid="relay-fix"]'));
+    await settle(30);
+    expect(s.calls.some((c) => c.startsWith('delete'))).toBe(false);
+    expect(s.names.filter(Boolean).every((x) => /^pm-relay-[a-z]{4}$/.test(x!))).toBe(true);
+    expect(q('[data-testid="relay-sheet"]')!.getAttribute('data-phase')).toBe('done');
+  });
+
+  it('after our own deploy the check fails: Try again keeps the same name and never mints a second relay', async () => {
+    const t = fakeTunnel(stable('linked'));
+    let looks = 0;
+    let checks = 0;
+    const base = fakeSteps();
+    const names: (string | undefined)[] = [];
+    const updateApi: UpdateApi = {
+      ...base.updateApi,
+      step: async (id, a, c, n) => {
+        names.push(n);
+        if (id === 'look') return { ok: true, output: '', taken: ++looks === 1 };
+        if (id === 'deploy') return { ok: true, output: '', url: n ? `https://${n}.maya.workers.dev` : WORKER };
+        return base.updateApi.step(id, a, c, n);
+      },
+      check: async () => (++checks <= 3 ? { reachable: false, features: [], legacyLink: false } : { reachable: true, features: ['team'], legacyLink: false }),
+    };
+    await runFromCard(t.api, updateApi);
+    await click(q('[data-testid="relay-fix"]')); // Add this PC: deploys, then the check fails 3 times
+    await settle(30);
+    expect(q('[data-testid="relay-problem"]')).not.toBeNull();
+    const minted = new Set(names.filter(Boolean));
+    expect(minted.size).toBe(1);
+    await click(q('[data-testid="relay-fix"]')); // Try again
+    await settle(30);
+    expect(new Set(names.filter(Boolean))).toEqual(minted);
+    expect(q('[data-testid="relay-sheet"]')!.getAttribute('data-phase')).toBe('done');
+  });
+
+  it('when our own relay name holds another key, Add this PC picks a NEW name', async () => {
+    let saves = 0;
+    const t = fakeTunnel(() => (++saves === 1 ? stable('failed', { secret_mismatch: true, error: 'x' }) : stable('linked')));
+    const names: (string | undefined)[] = [];
+    let looks = 0;
+    const base = fakeSteps();
+    const updateApi: UpdateApi = {
+      ...base.updateApi,
+      step: async (id, a, c, n) => {
+        names.push(n);
+        if (id === 'look') return { ok: true, output: '', taken: ++looks === 1 };
+        if (id === 'deploy') return { ok: true, output: '', url: n ? `https://${n}.maya.workers.dev` : WORKER };
+        return base.updateApi.step(id, a, c, n);
+      },
+    };
+    await runFromCard(t.api, updateApi);
+    await click(q('[data-testid="relay-fix"]')); // taken -> Add this PC (name 1); its link then answers with another key
+    await settle(30);
+    expect(q('[data-testid="relay-problem"]')!.getAttribute('data-problem')).toBe('mismatch');
+    await click(q('[data-testid="relay-fix"]')); // Add this PC again: must not reuse name 1
+    await settle(30);
+    const used = [...new Set(names.filter((x): x is string => !!x))];
+    expect(used.length).toBe(2);
+    expect(q('[data-testid="relay-sheet"]')!.getAttribute('data-phase')).toBe('done');
+  });
+
+  it('a look that could not read the account stops with a plain retry, never a deploy', async () => {
+    const s = fakeSteps({ look: { ok: false, output: 'Could not look at your Cloudflare account, so nothing was changed.' } });
+    await runFromCard(fakeTunnel(stable('linked')).api, s.updateApi);
+    expect(s.calls.some((c) => c.startsWith('deploy'))).toBe(false);
+    expect(q('[data-testid="relay-problem"]')!.getAttribute('data-problem')).not.toBe('mismatch');
+  });
+});
+
 describe('Set up my relay: plain words', () => {
   const FORBIDDEN_EN = /worker|tunnel|token|secret|durable/i;
   const FORBIDDEN_ZH = /worker|tunnel|token|secret|durable|通道|權杖|令牌|密鑰/i;
@@ -594,6 +723,7 @@ describe('Set up my relay: plain words', () => {
             'wu.step.prepare',
             'wu.step.install',
             'wu.step.login',
+            'wu.step.look',
             'wu.step.delete',
             'wu.step.deploy',
             'wu.step.check',
@@ -618,7 +748,7 @@ describe('Set up my relay: plain words', () => {
   it('the Chinese screen shows the button in Traditional Chinese', async () => {
     setLanguagePref('zh-TW', false);
     await mount(connectApi(fakeTunnel(stable('linked')).api, fakeSteps().updateApi));
-    expect(text('[data-testid="relay-set-up"]')).toBe('設定我的中繼站');
+    expect(text('[data-testid="relay-set-up"]')).toBe('讓它隨處可用');
   });
 });
 
@@ -626,9 +756,9 @@ describe('Nothing changes when a relay already exists', () => {
   it('no card, no button: just the status row', async () => {
     const tunnel: TunnelApi = { ...fakeTunnel(stable('linked')).api, getStatus: async () => stable('linked') };
     await mount(connectApi(tunnel, fakeSteps().updateApi));
-    expect(q('[data-testid="relay-card"]')).toBeNull();
+    expect(q('[data-testid="relay-set-up"]')).toBeNull();
     expect(q('[data-testid="relay-set-up"]')).toBeNull();
     expect(text('[data-testid="connect-relay-host"]')).toBe('pm-relay.maya.workers.dev');
-    expect(text('[data-testid="connect-relay-status"]')).toBe('Ready');
+    expect(text('[data-testid="connect-relay-status"]')).toBe('Works anywhere');
   });
 });

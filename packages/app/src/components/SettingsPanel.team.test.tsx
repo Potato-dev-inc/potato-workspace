@@ -91,7 +91,7 @@ describe('Settings window > Connect > Team', () => {
     expect(main().querySelector('h1')!.textContent).toBe('Connect');
     expect(main().textContent).toContain('Start a team');
     expect(settingsEntryTarget('?settings=1&tab=team')).toEqual({ page: 'connect', connectTab: 'team' });
-    expect(settingsEntryTarget('?settings=1&tab=phone')).toEqual({ page: 'connect', connectTab: 'phone' });
+    expect(settingsEntryTarget('?settings=1&tab=phone')).toEqual({ page: 'connect', connectTab: 'devices' });
   });
 
   it('Look and feel shows no team rows: not in its rows, not in Labs, not on the page', async () => {

@@ -413,18 +413,16 @@ export function problemText(g: Pick<Grant, 'problem'> & Partial<Pick<Grant, 'pro
 
 /** "12 requests · 3.4k tokens", or null while nothing was used (the borrower's PC may not count). */
 export function usageText(g: Pick<Grant, 'requests' | 'input_tokens' | 'output_tokens'>): string | null {
+  // Requests only: a number of tokens means nothing to most people.
   const requests = g.requests ?? 0;
-  const tokens = (g.input_tokens ?? 0) + (g.output_tokens ?? 0);
-  if (requests === 0 && tokens === 0) return null;
-  const tk = tokens >= 1_000_000 ? `${(tokens / 1_000_000).toFixed(1)}M` : tokens >= 1000 ? `${(tokens / 1000).toFixed(1)}k` : String(tokens);
-  return t('lend.usage', { requests, count: requests, tokens: tk });
+  if (requests === 0) return null;
+  return t('lend.usage', { requests, count: requests });
 }
 
 /** The limits of a profile as one line, or null when it has none. */
 export function limitsText(p: Pick<LendProfile, 'max_requests' | 'max_tokens'>): string | null {
   const parts: string[] = [];
   if (p.max_requests) parts.push(t('lend.limit.requests', { n: p.max_requests }));
-  if (p.max_tokens) parts.push(t('lend.limit.tokens', { n: p.max_tokens.toLocaleString('en-US') }));
   return parts.length > 0 ? t('lend.limit.upTo', { parts: parts.join(t('lend.and')) }) : null;
 }
 

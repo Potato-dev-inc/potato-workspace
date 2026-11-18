@@ -4,7 +4,8 @@
 import { BringChatsLink } from '../../history/BringChatsLink';
 import { useT } from '../../../i18n';
 
-export function Starters({ onUse, onPin }: { onUse: (text: string) => void; onPin?: (text: string) => void }) {
+/** `remote`: the page shows another PC, so "Bring my chats" (about this PC) is left out. */
+export function Starters({ onUse, onPin, remote = false }: { onUse: (text: string) => void; onPin?: (text: string) => void; remote?: boolean }) {
   const t = useT();
   return (
     <div className="ck-na-starters" data-testid="na-starters">
@@ -25,9 +26,11 @@ export function Starters({ onUse, onPin }: { onUse: (text: string) => void; onPi
             )}
           </li>
         ))}
-        <li className="ck-na-starter-row">
-          <BringChatsLink className="ck-na-starter" label={t('newAgent.bringChats')} />
-        </li>
+        {!remote && (
+          <li className="ck-na-starter-row">
+            <BringChatsLink className="ck-na-starter" label={t('newAgent.bringChats')} />
+          </li>
+        )}
       </ul>
     </div>
   );

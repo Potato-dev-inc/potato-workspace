@@ -18,7 +18,8 @@
 //!   (`mobile_pairing::requires_pairing_token`), it needs a paired device's token and never gets here.
 //!   MCP sessions have their own gate (`mcp_sessions::authorize`).
 
-use super::consent::{Action, Ask};
+use super::config;
+use super::consent::{self, Action, Ask};
 use super::gate;
 use crate::audit::{self, Kind, Who};
 use crate::companion::peer::{Peer, TcpOwner};
@@ -82,7 +83,9 @@ fn target_words(segments: &[&str]) -> String {
     match segments {
         ["settings", ..] => "your settings".to_string(),
         ["panes", _, "input" | "key"] => "a window by typing into it".to_string(),
-        ["agents", ..] => "your agent list".to_string(),
+        ["agents", "definitions" | "wizard", ..] => "your agent list".to_string(),
+        ["agents", "answer" | "take-over" | "release"] => "what another agent is doing".to_string(),
+        ["agents", ..] | ["operations", "delegate"] => consent::START_OR_STEER.to_string(),
         ["config", ..] => "your app setup".to_string(),
         ["opencode", ..] => "your OpenCode settings".to_string(),
         _ => "something in the app".to_string(),
@@ -141,6 +144,20 @@ pub fn check_session_call(session: &str, method: &str, segments: &[&str], body: 
         json!({ "route": route, "via": "mcp" }),
     );
     Ok(())
+}
+
+/// The orchestration routes an MCP tool call lands on: `run_agent`, `run_agents`, `quick_ask`, `followup_task`, `send_message`,
+/// `wait_agents`, `close_agent`, `delegate_work`, plus attach/transfer/release-lease and the review route. NOT here: answering a
+/// prompt and take-over/release, which approve or control another agent's window and keep the card whatever the new setting says
+/// (their own gates only apply while setting A is on). They share the `/agents` prefix with the agent-LIST edits
+/// (`/agents/definitions`, `/agents/wizard`), which stay behind the card too.
+pub fn is_orchestration(method: &str, segments: &[&str]) -> bool {
+    method == "POST"
+        && matches!(
+            crate::mobile_pairing::normalize_bridge_segments(segments),
+            ["agents", "run" | "quick" | "followup" | "send" | "wait" | "batch" | "review" | "cancel" | "message-parent" | "attach" | "release-lease" | "transfer"]
+                | ["operations", "delegate"]
+        )
 }
 
 /// `POST /panes`: an agent window starting a pane of its own (a helper, nested under it). It stays free
@@ -295,13 +312,57 @@ pub fn check_session_request_as(
     app_pid: u32,
     fail_closed: bool,
 ) -> Result<(), OperationError> {
+    check_session_request_with(registry, owner, snapshot, peer, headers, method, segments, body, app_pid, fail_closed, crate::mobile_pairing::local_secret::current())
+}
+
+/// `check_session_request_as` with the app's local secret passed in (the tests). A call nobody can place skips the card only
+/// when it presents that secret (the MCP shim reads it from the port file's folder): another Windows user, a low-integrity
+/// process, mirrored WSL or an older shim has none and gets the card as before.
+#[allow(clippy::too_many_arguments)]
+pub fn check_session_request_with(
+    registry: &Registry,
+    owner: &dyn TcpOwner,
+    snapshot: &dyn Fn() -> Option<Vec<ProcEntry>>,
+    peer: Option<Peer>,
+    headers: &str,
+    method: &str,
+    segments: &[&str],
+    body: &Value,
+    app_pid: u32,
+    fail_closed: bool,
+    secret: Option<&str>,
+) -> Result<(), OperationError> {
     if !is_changing(method, segments) && !is_pane_spawn(method, segments) {
         return Ok(());
     }
     match identify_caller(registry, owner, snapshot, peer, headers, app_pid, fail_closed) {
+        // A genuine loopback MCP connection (the router never sends a forwarded or foreign-Host call here) from another
+        // harness is not in any window's tree. Starting and steering helpers is what the MCP is for, so it needs no tap
+        // unless the person turned "Ask me before other agents start helpers" on (`config::ask_before_helpers_start`).
+        Caller::Unknown
+            if is_orchestration(method, segments)
+                && !config::ask_before_helpers_start()
+                && crate::mobile_pairing::local_secret::check_against(headers, secret) == crate::mobile_pairing::local_secret::Check::Valid =>
+        {
+            note_uncarded_orchestration(headers, method, segments);
+            Ok(())
+        }
         Caller::Unknown => check_unknown_call(method, segments, body, gate::questions_now()),
         Caller::Pane(_) | Caller::Claimed(_) | Caller::App => Ok(()),
     }
+}
+
+/// The audit line for a call that skipped the card, with the route and the session id.
+fn note_uncarded_orchestration(headers: &str, method: &str, segments: &[&str]) {
+    let session = crate::mobile_pairing::header_value(headers, "X-Potato-Workspace-Session").unwrap_or_default();
+    let session: String = session.chars().take(64).collect();
+    let route = format!("{method} /{}", crate::mobile_pairing::normalize_bridge_segments(segments).join("/"));
+    audit::record(
+        Kind::Consent,
+        Who::Agent(session.clone()),
+        "A program the app could not place started or steered an agent (the setting that asks first is off)",
+        json!({ "route": route, "session": session, "via": "mcp_no_tap" }),
+    );
 }
 
 /// The router's check for a request from a session-less local caller (not a phone, not a forwarder).
@@ -533,19 +594,20 @@ mod tests {
         let session_call = |owner: u32, headers: &str, method: &str, segments: &[&str]| {
             check_session_request_as(&registry(), &Owner(Some(owner)), &|| Some(table()), peer(), headers, method, segments, &json!({"s": 1}), APP, true)
         };
-        // An orphan with a made-up session and no key: asked, for a change and for starting a pane.
-        pending_id(&session_call(600, &forged, "POST", &["agents", "run"]).unwrap_err());
+        // An orphan with a made-up session and no key: asked for a change to the agent list and for starting a pane.
+        pending_id(&session_call(600, &forged, "POST", &["agents", "definitions", "approve"]).unwrap_err());
+        pending_id(&session_call(600, &forged, "POST", &["settings"]).unwrap_err());
         pending_id(&session_call(600, &forged, "POST", &["panes"]).unwrap_err());
         // Reads are never asked.
         session_call(600, &forged, "GET", &["panes"]).expect("reads pass");
         // The same session id from the app's own tree, or from a window by its key, goes on to the MCP rules as before.
-        session_call(500, &forged, "POST", &["agents", "run"]).expect("the app's own tools");
+        session_call(500, &forged, "POST", &["agents", "definitions", "approve"]).expect("the app's own tools");
         let name = pane();
         let key = pane_keys::mint(&name);
         let keyed = format!("{forged}{}: {key}\r\n", pane_keys::KEY_HEADER);
-        session_call(600, &keyed, "POST", &["agents", "run"]).expect("a keyed window's MCP shim");
+        session_call(600, &keyed, "POST", &["agents", "definitions", "approve"]).expect("a keyed window's MCP shim");
         pane_keys::revoke(&name);
-        pending_id(&session_call(600, &keyed, "POST", &["agents", "run"]).unwrap_err());
+        pending_id(&session_call(600, &keyed, "POST", &["agents", "definitions", "approve"]).unwrap_err());
     }
     #[test]
     fn starting_a_pane_needs_a_key_or_consent() {
@@ -599,5 +661,150 @@ mod tests {
         let spoof = format!("Host: 127.0.0.1:1\r\nX-Forwarded-For: 1.2.3.4\r\n{PANE_HEADER}: p1\r\n");
         assert!(crate::mobile_pairing::requires_pairing_token(&spoof, true));
         assert!(crate::mobile_pairing::authorize_bridge_request(&spoof, true, &settings, "PATCH").is_err());
+    }
+}
+
+#[cfg(test)]
+mod no_tap_tests {
+    use super::*;
+    use crate::agent_authority::config::{with_config, Config};
+    use crate::questions::now_ms;
+
+    struct Owner(Option<u32>);
+    impl TcpOwner for Owner {
+        fn owner_pid(&self, _: &Peer) -> Option<u32> {
+            self.0
+        }
+    }
+
+    const APP: u32 = 7;
+    const SECRET: &str = "test-local-secret";
+
+    fn session_headers(session: &str, with_secret: bool) -> String {
+        let secret = if with_secret { format!("X-Potato-Workspace-Local-Secret: {SECRET}\r\n") } else { String::new() };
+        format!("Host: 127.0.0.1:1\r\nX-Potato-Workspace-Session: {session}\r\n{secret}")
+    }
+
+    fn table() -> Vec<ProcEntry> {
+        vec![ProcEntry { pid: 600, parent: 999, image: "node.exe".into() }]
+    }
+
+    fn peer() -> Option<Peer> {
+        Some(Peer { local: "127.0.0.1:17360".parse().unwrap(), remote: "127.0.0.1:50123".parse().unwrap() })
+    }
+
+    fn mcp_with(secret: Option<&str>, headers: &str, method: &str, segments: &[&str], body: Value) -> Result<(), OperationError> {
+        let registry = Arc::new(Mutex::new(PaneRegistry::new()));
+        check_session_request_with(&registry, &Owner(Some(600)), &|| Some(table()), peer(), headers, method, segments, &body, APP, true, secret)
+    }
+
+    /// A call from a process in nobody's tree (Claude Code's or Codex's MCP shim), with a session and the local secret.
+    fn mcp(headers: &str, method: &str, segments: &[&str], body: Value) -> Result<(), OperationError> {
+        mcp_with(Some(SECRET), headers, method, segments, body)
+    }
+
+    fn ok_headers() -> String {
+        session_headers(&format!("s-{}", uuid::Uuid::new_v4()), true)
+    }
+
+    fn asking(helpers: bool, control: bool) -> Config {
+        Config { ask_before_helpers_start: helpers, ask_before_agent_control: control, ..Config::default() }
+    }
+
+    #[test]
+    fn a_loopback_mcp_run_agent_with_an_unlisted_model_needs_no_tap() {
+        let run = json!({"agent_type": "opencode", "model": "deepseek-v4.1-flash-1017", "project_path": "D:/pm-night", "placement": "grid", "task": "x"});
+        mcp(&ok_headers(), "POST", &["agents", "run"], run).expect("run_agent goes through with no card");
+        for segments in [
+            vec!["agents", "run"], vec!["agents", "quick"], vec!["agents", "followup"], vec!["agents", "send"], vec!["agents", "wait"],
+            vec!["agents", "cancel"], vec!["agents", "review"], vec!["agents", "batch"], vec!["agents", "attach"], vec!["agents", "transfer"],
+            vec!["agents", "release-lease"], vec!["agents", "message-parent"], vec!["operations", "delegate"],
+        ] {
+            assert!(is_orchestration("POST", &segments));
+            mcp(&ok_headers(), "POST", &segments, json!({"k": 1})).unwrap_or_else(|e| panic!("{segments:?}: {}", e.message));
+        }
+    }
+
+    #[test]
+    fn answering_and_taking_over_keep_the_card_with_setting_a_on_and_off() {
+        for control in [true, false] {
+            with_config(asking(false, control), || {
+                for segments in [vec!["agents", "answer"], vec!["agents", "take-over"], vec!["agents", "release"]] {
+                    assert!(!is_orchestration("POST", &segments), "{segments:?}");
+                    let error = mcp(&ok_headers(), "POST", &segments, json!({"k": 3})).unwrap_err();
+                    assert_eq!(error.code, "CONSENT_PENDING", "{segments:?} A={control}");
+                }
+            });
+        }
+    }
+
+    #[test]
+    fn config_edits_stay_behind_the_tap_for_the_same_caller() {
+        for segments in [vec!["agents", "definitions", "approve"], vec!["agents", "wizard", "start"], vec!["settings"], vec!["config", "apply"], vec!["panes"]] {
+            assert!(!is_orchestration("POST", &segments), "{segments:?}");
+            let method = if segments == ["settings"] { "PATCH" } else { "POST" };
+            let error = mcp(&ok_headers(), method, &segments, json!({"k": 2})).unwrap_err();
+            assert_eq!(error.code, "CONSENT_PENDING", "{segments:?}");
+        }
+    }
+
+    #[test]
+    fn without_the_local_secret_the_card_comes_back() {
+        let wrong = "Host: 127.0.0.1:1\r\nX-Potato-Workspace-Session: s-bad\r\nX-Potato-Workspace-Local-Secret: wrong\r\n".to_string();
+        for headers in [session_headers("s-nosecret", false), wrong] {
+            let error = mcp(&headers, "POST", &["agents", "run"], json!({"task": "z"})).unwrap_err();
+            assert_eq!(error.code, "CONSENT_PENDING");
+        }
+        // No secret minted in this process: also the card, never the opening.
+        let error = mcp_with(None, &ok_headers(), "POST", &["agents", "run"], json!({"task": "w"})).unwrap_err();
+        assert_eq!(error.code, "CONSENT_PENDING");
+    }
+
+    #[test]
+    fn turning_the_setting_on_restores_the_tap_with_sensible_words() {
+        with_config(asking(true, true), || {
+            let headers = ok_headers();
+            let error = mcp(&headers, "POST", &["agents", "run"], json!({"task": "y"})).unwrap_err();
+            assert_eq!(error.code, "CONSENT_PENDING");
+            assert!(error.message.contains("whether you may start or steer agents"), "{}", error.message);
+            assert!(!error.message.contains("agent list") && !error.message.contains("change start"), "{}", error.message);
+            let id = error.context["consent_id"].as_str().unwrap().to_string();
+            let card = crate::questions::store().get(&id, now_ms()).unwrap();
+            assert_eq!(card.question, "Allow another agent to start or steer agents?");
+            assert!(crate::questions::store().answer(&id, Some(crate::agent_authority::consent::CHOICE_ONCE), None, "desktop", now_ms()).unwrap().accepted);
+            mcp(&headers, "POST", &["agents", "run"], json!({"task": "y"})).expect("allowed once, as before");
+        });
+        // The agent-list edits keep their own words.
+        assert_eq!(target_words(&["agents", "definitions", "approve"]), "your agent list");
+    }
+
+    #[test]
+    fn every_call_that_skips_the_card_is_written_to_the_audit_log() {
+        let session = format!("s-audit-{}", uuid::Uuid::new_v4());
+        mcp(&session_headers(&session, true), "POST", &["agents", "run"], json!({"task": "a"})).unwrap();
+        let found = crate::audit::global().recent(100).into_iter().any(|e| e.summary.contains("could not place") && format!("{e:?}").contains(&session));
+        assert!(found, "an audit line names the session");
+    }
+
+    #[test]
+    fn forwarded_and_foreign_callers_never_reach_the_opening() {
+        // The router sends only a genuine loopback caller here; every forwarder/foreign shape needs a paired token instead,
+        // even if it carries a (leaked) local secret.
+        for extra in ["X-Forwarded-For: 1.2.3.4\r\n", "Cf-Connecting-Ip: 1.2.3.4\r\n", "Origin: http://localhost:5173\r\n"] {
+            let headers = format!("{}{extra}", session_headers("s-fwd", true));
+            assert!(crate::mobile_pairing::requires_pairing_token(&headers, true), "{headers}");
+            assert!(crate::mobile_pairing::authorize_bridge_request(&headers, true, &["agents", "run"], "POST").is_err(), "{headers}");
+        }
+        let foreign = format!("Host: evil.example\r\nX-Potato-Workspace-Session: s\r\nX-Potato-Workspace-Local-Secret: {SECRET}\r\n");
+        assert!(crate::mobile_pairing::requires_pairing_token(&foreign, true));
+        assert!(crate::mobile_pairing::authorize_bridge_request(&foreign, true, &["agents", "run"], "POST").is_err());
+    }
+
+    #[test]
+    fn the_switch_is_not_reachable_over_the_bridge() {
+        let merged = crate::settings_store::merge_public_settings(&json!({}), &json!({"ask_before_helpers_start": false}));
+        assert!(merged.get("ask_before_helpers_start").is_none());
+        assert!(!Config::default().ask_before_helpers_start, "default off");
+        assert!(!super::super::config::parse(r#"{"ask_before_agent_control":true}"#).ask_before_helpers_start);
     }
 }

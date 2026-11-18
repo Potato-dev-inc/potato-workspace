@@ -4,7 +4,7 @@
 // a bar per window with its reset time, the agent's own usage page, and Refresh.
 // Off with Settings > General > "Show usage bar". Nothing shows until there is a signed-in agent.
 import { openSignInAgain } from '../../lib/agentSignIn';
-import { useEffect, useLayoutEffect, useRef, useState } from 'react';
+import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import {
   chipText,
@@ -14,6 +14,8 @@ import {
   groupSentence,
   forecastOf,
   forecastText,
+  formatLeft,
+  headline,
   formatTokens,
   notePace,
   rowName,
@@ -28,7 +30,9 @@ import {
 } from '../../lib/usage';
 import { AgentLogo } from '../common/AgentLogo';
 import { RoomMeters } from './RoomMeters';
-import type { DevicesApi } from '../../lib/devices';
+import { devicesApi, type DevicesApi } from '../../lib/devices';
+import { makeRemoteClient } from '../../lib/runtime/remote';
+import { spacedUnits, useFarUsage } from '../../lib/runtime/farUsage';
 import { useT } from '../../i18n';
 import { problemsFromUsage, syncProblems } from '../../lib/problems-feed';
 import type { ReactNode } from 'react';
@@ -68,13 +72,16 @@ export function signInSuffix(row: UsageRow, agentHasSeveral: boolean): string | 
 const rowKey = (r: UsageRow) => `${r.agent_id}:${r.account_id ?? ''}`;
 
 /** A chip is a picture inside the strip's one button, not a tab stop. A click on it still says which row it is. */
-function Chip({ row, now, suffix }: { row: UsageRow; now: number; suffix: string | null }) {
+function Chip({ row, now, suffix, farName }: { row: UsageRow; now: number; suffix: string | null; /** The PC this row belongs to, when it is not this one. */ farName?: string }) {
   const t = useT();
   const warn = warns(row);
   const g = groupParts(row, now);
   const full = tooltip(row, now);
   const sentence = groupSentence(row, now);
-  const tip = (sentence ? `${sentence}\n${full.split('\n').slice(1).join('\n')}` : full).replace(t('state.usage.openPage'), t('status.clickForDetails'));
+  const localTip = (sentence ? `${sentence}\n${full.split('\n').slice(1).join('\n')}` : full).replace(t('state.usage.openPage'), t('status.clickForDetails'));
+  // Another PC's chip says whose limit it is: "Claude on REN-LAPTOP: 42% of its limit, resets in 2 h".
+  const top = headline(row);
+  const tip = farName && row.state === 'ok' && top && !top.reset_since ? (top.resets_at_ms ? t('status.far.tipReset', { agent: row.label, name: farName, pct: Math.round(top.used_percent), time: spacedUnits(formatLeft(top.resets_at_ms - now)) }) : t('status.far.tip', { agent: row.label, name: farName, pct: Math.round(top.used_percent) })) : localTip;
   return (
     <span
       className={`ck-usage-chip is-${row.state}${warn ? ' is-warn' : ''} tone-${g.tone}`}
@@ -115,7 +122,7 @@ function Chip({ row, now, suffix }: { row: UsageRow; now: number; suffix: string
   );
 }
 
-function PopRow({ row, now, api, picked }: { row: UsageRow; now: number; api: UsageApi; picked?: boolean }) {
+function PopRow({ row, now, api, picked, far = false }: { row: UsageRow; now: number; api: UsageApi; picked?: boolean; /** The row is another PC's: its sign-in is fixed there, never from here. */ far?: boolean }) {
   const t = useT();
   const fc = forecastOf(row, now);
   return (
@@ -182,7 +189,7 @@ function PopRow({ row, now, api, picked }: { row: UsageRow; now: number; api: Us
         </div>
       )}
       {row.reason && <p className="ck-usage-pop-reason">{row.reason}</p>}
-      {row.state === 'expired' && row.link !== 'borrowed' && (
+      {row.state === 'expired' && row.link !== 'borrowed' && !far && (
         <div className="ck-usage-pop-foot">
           <button
             type="button"
@@ -237,10 +244,13 @@ const PLUS_WIDTH = 34;
  * that do not fit become "+N". Clicking a chip or "+N" opens the Usage popover above the bar. The cockpit root
  * leaves room for it only while it is shown (cockpit-statusbar.css, `:has`).
  */
-export function UsageBar({ api = usageApi, devices, working = 0, needsYou = 0, trailing = null }: { api?: UsageApi; /** The device link (tests give a fake). */ devices?: DevicesApi; working?: number; needsYou?: number; /** The Problems chip: sits with the counts, or floats alone when the bar itself is not shown. */ trailing?: ReactNode }) {
+export function UsageBar({ api = usageApi, devices, working = 0, needsYou = 0, trailing = null, far = null }: { api?: UsageApi; /** The device link (tests give a fake). */ devices?: DevicesApi; working?: number; needsYou?: number; /** The Problems chip: sits with the counts, or floats alone when the bar itself is not shown. */ trailing?: ReactNode; /** The open session runs on this other PC: the bar shows that PC's numbers, tagged with its name, and none of this PC's. */ far?: { node: string; name: string } | null }) {
   const t = useT();
   const { on, loginReads } = useUsageBarOn();
-  const { snap, busy, refresh } = useUsage(api, on === true, loginReads);
+  const farClient = useMemo(() => (far ? makeRemoteClient(far.node, devices ?? devicesApi) : null), [far?.node, devices]); // eslint-disable-line react-hooks/exhaustive-deps
+  const own = useUsage(api, on === true && !far, loginReads);
+  const theirs = useFarUsage(farClient, on === true && !!far);
+  const { snap, busy, refresh } = far ? theirs : own;
   const [now, setNow] = useState(() => Date.now());
   const [open, setOpen] = useState(false);
   /** The row the card scrolls to (a chip was clicked), or null. */
@@ -323,8 +333,9 @@ export function UsageBar({ api = usageApi, devices, working = 0, needsYou = 0, t
 
   // A sign-in that ended is a problem to list (and it is fixed when the row is fine again). Only a real answer counts.
   useEffect(() => {
-    if (snap && Array.isArray(snap.rows)) syncProblems('signin:', problemsFromUsage(snap.rows));
-  }, [snap]);
+    // Another PC's problems are not this PC's: only this PC's own bar feeds the Problems list.
+    if (!far && snap && Array.isArray(snap.rows)) syncProblems('signin:', problemsFromUsage(snap.rows));
+  }, [snap, far]);
 
   // What's new "Try it": open the card, as a click on the strip does. Not shown at all: nothing to open.
   const shownAtAll = on === true && rows.length > 0;
@@ -335,7 +346,7 @@ export function UsageBar({ api = usageApi, devices, working = 0, needsYou = 0, t
   });
 
   // Off, or no signed-in agent, or a malformed answer (an older desktop): no bar and no space.
-  if (on !== true || rows.length === 0) return trailing ? <div className="ck-problems-float">{trailing}</div> : null;
+  if (on !== true || (rows.length === 0 && !(far && theirs.none))) return trailing ? <div className="ck-problems-float">{trailing}</div> : null;
   // The strip is one button. A click on a chip says which row to show; a click anywhere else on it opens or closes the card.
   const toggle = (e: { target: EventTarget; detail?: number }) => {
     // Enter or Space (a click with no pointer): the focus goes into the card.
@@ -367,23 +378,34 @@ export function UsageBar({ api = usageApi, devices, working = 0, needsYou = 0, t
   for (const r of rows) perAgent.set(r.agent_id, (perAgent.get(r.agent_id) ?? 0) + 1);
   const suffixOf = (r: UsageRow) => signInSuffix(r, (perAgent.get(r.agent_id) ?? 0) > 1);
   return (
-    <div className="ck-statusbar" ref={bar} role="group" aria-label={t('status.planUsage')}>
+    <div className={`ck-statusbar${far ? ' is-far' : ''}`} ref={bar} role="group" aria-label={far ? t('status.far.title', { name: far.name }) : t('status.planUsage')} data-far={far?.node}>
       {/* One button, one tab stop: the label, every chip and "+N" are pictures inside it. */}
       <button
         ref={strip}
         type="button"
         className="ck-sb-usage"
         data-testid="usage-strip"
-        aria-label={`${t('status.usage')}. ${rows.map((r) => tooltip(r, now).split('\n')[0]).join('. ')}.`}
+        aria-label={`${far ? t('status.far.title', { name: far.name }) : t('status.usage')}. ${rows.map((r) => tooltip(r, now).split('\n')[0]).join('. ')}.`}
         aria-haspopup="dialog"
         aria-expanded={open}
         onClick={toggle}
       >
         <span className="ck-usage-cap">{t('status.usage')}</span>
+        {far && (
+          <span className="ck-usage-dev" data-testid="usage-far-tag" title={t('status.far.its', { name: far.name })}>
+            {far.name}
+            {theirs.staleSince !== null && <span className="ck-usage-stale" data-testid="usage-far-stale"> · {t('status.far.lastKnown', { time: formatLeftLong(now - theirs.staleSince) })}</span>}
+          </span>
+        )}
         <span className="ck-sb-chips" ref={row}>
           {rows.slice(0, count).map((r) => (
-            <Chip key={key(r)} row={r} now={now} suffix={suffixOf(r)} />
+            <Chip key={key(r)} row={r} now={now} suffix={suffixOf(r)} farName={far?.name} />
           ))}
+          {far && rows.length === 0 && (
+            <span className="ck-usage-text" data-testid="usage-far-none">
+              {t('status.far.none', { name: far.name })}
+            </span>
+          )}
           {hidden > 0 && (
             <span className="ck-sb-more" data-row={rowKey(rows[count])} title={rows.slice(count).map(rowName).join(', ')}>
               +{hidden}
@@ -419,15 +441,15 @@ export function UsageBar({ api = usageApi, devices, working = 0, needsYou = 0, t
             style={place ? { left: place.left, bottom: place.bottom, width: place.width } : { visibility: 'hidden' }}
           >
             <div className="ck-usage-pop-top">
-              <span className="ck-usage-pop-title">{t('status.usage')}</span>
+              <span className="ck-usage-pop-title">{far ? t('status.far.title', { name: far.name }) : t('status.usage')}</span>
               {refreshBtn}
             </div>
             <ul className="ck-usage-pop-list">
               {tightestFirst(rows).map((r) => (
-                <PopRow key={key(r)} row={r} now={now} api={api} picked={flash === key(r)} />
+                <PopRow key={key(r)} row={r} now={now} api={api} picked={flash === key(r)} far={!!far} />
               ))}
             </ul>
-            <RoomMeters rows={rows} now={now} api={devices} />
+            {!far && <RoomMeters rows={rows} now={now} api={devices} />}
           </div>,
           document.querySelector('.cockpit') ?? document.body,
         )}

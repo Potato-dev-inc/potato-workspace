@@ -3,10 +3,10 @@
 // worker_update_step commands run by lib/workerUpdate.ts; nothing here shows a command or a secret.
 import type { UpdateStepId } from './workerUpdate';
 
-export type RelayProblem = 'accounts' | 'signin' | 'offline' | 'subdomain' | 'unverified' | 'install' | 'mismatch' | 'ratelimit' | 'linking' | 'other';
+export type RelayProblem = 'accounts' | 'signin' | 'offline' | 'subdomain' | 'unverified' | 'install' | 'mismatch' | 'taken' | 'ratelimit' | 'linking' | 'other';
 
 /** Which fix button a problem gets (the screen draws the label). */
-export type RelayFix = 'retry' | 'cloudflare' | 'fresh';
+export type RelayFix = 'retry' | 'cloudflare' | 'fresh' | 'add';
 
 export const PROBLEM_FIX: Record<RelayProblem, RelayFix> = {
   accounts: 'cloudflare',
@@ -16,6 +16,7 @@ export const PROBLEM_FIX: Record<RelayProblem, RelayFix> = {
   unverified: 'cloudflare',
   install: 'retry',
   mismatch: 'fresh',
+  taken: 'add',
   ratelimit: 'retry',
   linking: 'retry',
   other: 'retry',
@@ -63,4 +64,12 @@ export function relayAddress(address: string | null | undefined, name?: string):
   const m = ADDRESS.exec((address ?? '').trim().toLowerCase().replace(/\/+$/, ''));
   if (!m || (name !== undefined && m[1] !== name.toLowerCase())) return null;
   return `https://${m[1]}.${m[2]}.workers.dev`;
+}
+
+/** The name a second PC gives its own relay in the same Cloudflare account: `pm-relay-` and four random letters. */
+export function ownRelayName(shipped = 'pm-relay', random: () => number = Math.random): string {
+  const letters = 'abcdefghijkmnpqrstuvwxyz';
+  let tail = '';
+  for (let i = 0; i < 4; i++) tail += letters[Math.floor(random() * letters.length) % letters.length];
+  return `${shipped}-${tail}`;
 }

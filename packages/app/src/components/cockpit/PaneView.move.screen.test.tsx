@@ -242,14 +242,14 @@ describe('Take the conversation', () => {
     window.removeEventListener(OPEN_REMOTE_EVENT, onOpen);
 
     // The far chat started in the far project, and the first message holds an early line of the history.
-    const start = fake.requests.find((r) => r.path === '/phone/chats')!;
+    const start = fake.requests.find((r) => r.path === '/pclink/agents/start')!;
     expect(start.body).toMatchObject({ agent: 'claude', project: 'proj-app', lane: 'chat' });
-    const first = fake.requests.find((r) => /^\/panes\/[^/]+\/messages/.test(r.path) && r.method === 'POST')!;
+    const first = fake.requests.find((r) => /^\/pclink\/sessions\/[^/]+\/messages/.test(r.path) && r.method === 'POST')!;
     const text = (first.body as { text: string }).text;
     expect(text).toContain(EARLY);
     expect(text).toContain('moved to you from Claude on Desk-PC');
     // No work went along, and nothing like a sign-in.
-    expect(fake.requests.some((r) => r.path === '/phone/move-work')).toBe(false);
+    expect(fake.requests.some((r) => r.path === '/pclink/move-work')).toBe(false);
     expect(JSON.stringify(fake.requests)).not.toMatch(/token|password|secret/i);
     // The cockpit is asked to open the far chat.
     expect(opened).toEqual([{ node: NODE_MAC, paneId: 'n1' }]);
@@ -313,10 +313,10 @@ describe('Take the conversation and the work', () => {
     await chooseWork();
     await clickEl(tid('move-go'));
     const order = fake.requests.filter((r) => r.method === 'POST').map((r) => r.path);
-    expect(order.slice(0, 2)).toEqual(['/phone/move-work', '/phone/chats']);
-    const sent = fake.requests.find((r) => r.path === '/phone/move-work')!.body as { project: string; branch: string; bundle_b64: string };
+    expect(order.slice(0, 2)).toEqual(['/pclink/move-work', '/pclink/agents/start']);
+    const sent = fake.requests.find((r) => r.path === '/pclink/move-work')!.body as { project: string; branch: string; bundle_b64: string };
     expect(sent).toEqual({ project: 'proj-app', branch: 'potato/move-abc123def0', bundle_b64: 'QlVORExF' });
-    expect(fake.requests.find((r) => r.path === '/phone/chats')!.body).toMatchObject({ agent: 'claude' });
+    expect(fake.requests.find((r) => r.path === '/pclink/agents/start')!.body).toMatchObject({ agent: 'claude' });
     expect(tid('moved-note')).toBeTruthy();
   });
 
@@ -335,7 +335,7 @@ describe('Take the conversation and the work', () => {
   it('is off when the far device does not have the same agent', async () => {
     const orig = fake.request;
     fake.request = async (node, method, path, body) =>
-      path === '/phone/new-chat' ? { status: 200, body: { agents: [{ id: 'codex', label: 'Codex', chat: true, terminal: true }], projects: [{ id: 'proj-app', name: 'app', state: 'ready' }], terminals: true } } : orig(node, method, path, body);
+      path === '/pclink/agents' ? { status: 200, body: { agents: [{ id: 'codex', label: 'Codex', chat: true, terminal: true }], terminals: true } } : orig(node, method, path, body);
     await mount();
     await openSheet();
     await pickMac();
@@ -350,7 +350,7 @@ describe('Take the conversation and the work', () => {
   it('a far folder with unsaved changes refuses and the chat stays open here', async () => {
     const orig = fake.request;
     fake.request = async (node, method, path, body) =>
-      path === '/phone/move-work' ? { status: 409, body: { code: 'MOVE_REFUSED', error: 'That folder on the other device has changes that are not saved. Save or put them aside there first.' } } : orig(node, method, path, body);
+      path === '/pclink/move-work' ? { status: 409, body: { code: 'MOVE_REFUSED', error: 'That folder on the other device has changes that are not saved. Save or put them aside there first.' } } : orig(node, method, path, body);
     await mount();
     await openSheet();
     await pickMac();
@@ -358,6 +358,6 @@ describe('Take the conversation and the work', () => {
     await clickEl(tid('move-go'));
     expect(tid('move-error')?.textContent).toContain('has changes that are not saved');
     expect(book.entry).toBeNull();
-    expect(fake.requests.some((r) => r.path === '/phone/chats')).toBe(false);
+    expect(fake.requests.some((r) => r.path === '/pclink/agents/start')).toBe(false);
   });
 });

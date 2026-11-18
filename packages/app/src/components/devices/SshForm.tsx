@@ -8,7 +8,8 @@ import { errorSentence } from '../../lib/sayError';
 import { checkLines, sshApi, sshFormReady, sshStateSentence, type SshApi, type SshCheck, type SshParts } from '../../lib/ssh';
 import '../../styles/devices.css';
 
-export function SshForm({ api = sshApi, onSaved, onCancel }: { api?: SshApi; onSaved: () => void; onCancel: () => void }) {
+/** `plain` (the Connect page): only the address and a name; the extra settings stay out. */
+export function SshForm({ api = sshApi, onSaved, onCancel, plain = false }: { api?: SshApi; onSaved: () => void; onCancel: () => void; plain?: boolean }) {
   const t = useT();
   const [target, setTarget] = useState('');
   const [port, setPort] = useState('22');
@@ -52,7 +53,7 @@ export function SshForm({ api = sshApi, onSaved, onCancel }: { api?: SshApi; onS
         setBusy(null);
       });
   };
-  const problem = result ? sshStateSentence(result) : null;
+  const problem = result ? sshStateSentence(result, plain) : null;
   return (
     <div className="dev-form" data-testid="ssh-form">
       {!ok && (
@@ -67,6 +68,7 @@ export function SshForm({ api = sshApi, onSaved, onCancel }: { api?: SshApi; onS
               {t('devices.ssh.badAddress')}
             </p>
           )}
+          {!plain && (
           <details className="dev-more">
             <summary>{t('devices.ssh.more')}</summary>
             <label className="dev-field">
@@ -78,6 +80,7 @@ export function SshForm({ api = sshApi, onSaved, onCancel }: { api?: SshApi; onS
               <input type="text" value={keyFile} placeholder={t('devices.ssh.keyPlaceholder')} spellCheck={false} onChange={edit(setKeyFile)} data-testid="ssh-key" />
             </label>
           </details>
+          )}
           <p className="dev-note">{t('devices.ssh.keyHelp')}</p>
         </>
       )}

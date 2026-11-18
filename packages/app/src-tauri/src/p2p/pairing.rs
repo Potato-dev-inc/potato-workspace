@@ -64,6 +64,9 @@ use super::endpoint::{BiStream, Link, NodeId, P2pError, PeerAddr};
 use super::identity::{verify_node, DeviceIdentity, NodeBinding};
 use super::trust::{clean_name, TrustList};
 use super::P2p;
+
+mod account;
+pub use self::account::{AccountClaim, AccountExpect, AccountIntro, AccountLockStore, AccountMeta, AccountPc};
 use crate::keys::KeyStore;
 
 pub const CODE_TTL_MS: u64 = 120_000;
@@ -162,6 +165,12 @@ pub enum PairError {
     LinkUsed,
     #[error("That was not the matching number. Pairing stopped.")]
     WrongNumber,
+    #[error("That PC is not letting your other PCs open it. Turn on \"Let my other PCs open this PC\" there.")]
+    NotYours,
+    #[error("Opening PCs from your account is paused for a while. Too many wrong numbers or answers.")]
+    AccountLocked(Option<u64>),
+    #[error("Could not reach that PC. Check that Potato Workspace is open there and that it lets your other PCs open it.")]
+    NotReachable,
     #[error("Pick the number that is on both screens.")]
     PickRequired,
     #[error("{0}")]
@@ -436,6 +445,18 @@ struct CheckAsk {
     number: u32,
     choices: [u32; 3],
     fingerprint: String,
+    kind: CheckKind,
+}
+
+/// How a number check is asked.
+/// - `Pick`: three numbers on both screens, each person taps the one that is on both (the link flows).
+/// - `Type`: the PC being opened by an account PC shows NO number; its person TYPES the six digits the other PC shows (1 in a million).
+/// - `Show`: the PC pressing Open shows the six digits and waits for its person to say they typed them on the other PC.
+#[derive(Clone, Copy, PartialEq, Eq)]
+enum CheckKind {
+    Pick,
+    Type,
+    Show,
 }
 
 /// What is shown to make sure both people look at the same exchange.
@@ -449,7 +470,14 @@ enum Shown {
 impl Shown {
     fn check(transcript: &[u8], sig_joiner: &[u8], sig_host: &[u8], device_pub: &[u8; 32]) -> Self {
         let number = far::check_number(transcript, sig_joiner, sig_host);
-        Shown::Check(CheckAsk { number, choices: far::choices(number), fingerprint: far::fingerprint(device_pub) })
+        Shown::Check(CheckAsk { number, choices: far::choices(number), fingerprint: far::fingerprint(device_pub), kind: CheckKind::Pick })
+    }
+
+    fn check_as(transcript: &[u8], sig_joiner: &[u8], sig_host: &[u8], device_pub: &[u8; 32], kind: CheckKind) -> Self {
+        match Self::check(transcript, sig_joiner, sig_host, device_pub) {
+            Shown::Check(c) => Shown::Check(CheckAsk { kind, ..c }),
+            other => other,
+        }
     }
 }
 
@@ -460,6 +488,8 @@ enum Reply {
     No,
     /// Picked a number that is not the matching one.
     Wrong,
+    /// Nobody answered in time (never counted as a wrong answer on the account route).
+    TimedOut,
 }
 
 /// What the Worker route needs while an exchange runs.
@@ -486,6 +516,8 @@ struct PendingAsk {
     check: Option<CheckAsk>,
     expires_at: u64,
     tx: Option<oneshot::Sender<Reply>>,
+    /// A PC of the person's own account (found in its address book).
+    account: Option<AccountMeta>,
 }
 
 #[derive(Default)]
@@ -500,6 +532,8 @@ struct State {
     next_id: u64,
     /// Stops the Worker side of a shown link that nobody has joined yet.
     far_cancel: Option<Arc<tokio::sync::Notify>>,
+    /// The account route has its own, stricter limits (per knocking PC and overall, escalating, kept on disk): see `pairing/account.rs`.
+    account_locks: account::Locks,
 }
 
 /// Called with the new view whenever anything the sheets show changes.
@@ -518,6 +552,12 @@ pub struct PairManager {
     far_relay: Mutex<Option<Arc<dyn PairRelay>>>,
     /// How often a box is polled, milliseconds (tests make it short).
     far_poll_ms: std::sync::atomic::AtomicU64,
+    /// What the account says about a PC that knocks on the account door. None: the door answers nobody.
+    account_intro: Mutex<Option<Arc<dyn AccountIntro>>>,
+    /// Called with the node of a PC that was just paired through the account, and the account's id for that device.
+    on_account_paired: Mutex<Option<Arc<dyn Fn(NodeId, String) + Send + Sync>>>,
+    /// How long a sheet waits for its person, milliseconds (tests make it short).
+    confirm_ms: std::sync::atomic::AtomicU64,
     /// Tests only: 1 = this PC sends a changed node signature, 2 = it sends none.
     #[cfg(test)]
     tamper_sig: std::sync::atomic::AtomicU8,
@@ -567,11 +607,15 @@ impl PairManager {
             notifier: Mutex::new(None),
             far_relay: Mutex::new(None),
             far_poll_ms: std::sync::atomic::AtomicU64::new(1500),
+            account_intro: Mutex::new(None),
+            on_account_paired: Mutex::new(None),
+            confirm_ms: std::sync::atomic::AtomicU64::new(CONFIRM_TIMEOUT.as_millis() as u64),
             #[cfg(test)]
             tamper_sig: std::sync::atomic::AtomicU8::new(0),
         });
         m.p2p.registry().register(Capability::new(capability::PAIR, alpn::PAIR, RelayPolicy::Never, Arc::new(HostHandler(m.clone(), false))))?;
         m.p2p.registry().register(Capability::new(capability::PAIR_LINK, alpn::PAIR_LINK, RelayPolicy::Allowed, Arc::new(HostHandler(m.clone(), true))))?;
+        m.p2p.registry().register(Capability::new(capability::PAIR_ACCOUNT, alpn::PAIR_ACCOUNT, RelayPolicy::Allowed, Arc::new(account::AccountHandler(m.clone()))))?;
         Ok(m)
     }
 
@@ -682,11 +726,25 @@ impl PairManager {
             let pending = s.pending.as_ref().map(|p| {
                 let mut v = json!({ "id": p.id, "role": if p.role == Role::Host { "host" } else { "joiner" }, "name": p.name, "code": display_code(&p.code), "expires_at": p.expires_at, "mode": "code" });
                 if let Some(c) = &p.check {
-                    // The true number is not in the view: the sheet shows three, and the person picks the one on both screens.
-                    v["mode"] = json!("check");
+                    // The true number is not in the view of a sheet that asks for a pick: it shows three, and the person picks the
+                    // one on both screens. A `type` sheet shows no number at all (the person types the six digits the other PC shows);
+                    // a `show` sheet is the other PC's, which shows them.
+                    v["mode"] = json!(match c.kind {
+                        CheckKind::Pick => "check",
+                        CheckKind::Type => "type",
+                        CheckKind::Show => "show",
+                    });
                     v["code"] = json!("");
                     v["fingerprint"] = json!(c.fingerprint);
-                    v["choices"] = json!(c.choices.iter().map(|n| format!("{n:06}")).collect::<Vec<_>>());
+                    match c.kind {
+                        CheckKind::Pick => v["choices"] = json!(c.choices.iter().map(|n| format!("{n:06}")).collect::<Vec<_>>()),
+                        CheckKind::Type => {}
+                        CheckKind::Show => v["number"] = json!(format!("{:06}", c.number)),
+                    }
+                }
+                if let Some(meta) = &p.account {
+                    // Both PCs are on the person's account. That is only who the account says they are: the number decides.
+                    v["account"] = json!({ "first_seen": meta.first_seen });
                 }
                 v
             });
@@ -707,6 +765,7 @@ impl PairManager {
             "joining": joining,
             "message": message,
             "locked_until": lock,
+            "account_locked_until": self.account_locked_until(),
             "tampered": self.trust.tampered(),
             "devices": self.devices_view(),
         })
@@ -1181,16 +1240,52 @@ impl PairManager {
         other: &Hello,
         shown: Shown,
     ) -> Result<(), PairError> {
+        self.confirm_and_finish_as(role, stream, key, transcript, other, shown, None).await
+    }
+
+    /// `account`: the other PC is one of the person's own (its address book entry, when it was added). Its sheet says so, a
+    /// A wrong number or a No at the PC being opened counts against that account device (and overall); a sheet nobody answered counts
+    /// against its device limit and the overall one. No right is ever turned on by this route.
+    #[allow(clippy::too_many_arguments)]
+    async fn confirm_and_finish_as(
+        self: &Arc<Self>,
+        role: Role,
+        stream: &mut BiStream,
+        key: &[u8; 32],
+        transcript: &[u8],
+        other: &Hello,
+        shown: Shown,
+        account: Option<AccountMeta>,
+    ) -> Result<(), PairError> {
         let mine: &[u8] = if role == Role::Host { b"h" } else { b"j" };
         let theirs: &[u8] = if role == Role::Host { b"j" } else { b"h" };
-        let reply = self.ask(role, &other.name, shown).await;
+        let reply = self.ask_with(role, &other.name, shown, account.clone()).await;
+        // On the account route nobody answering is not a wrong answer: it counts nothing against the knocking PC.
+        let reply = if reply == Reply::TimedOut && account.is_none() { Reply::No } else { reply };
         let yes = reply == Reply::Yes;
         let tag = |who: &[u8], yes: bool| mac(key, &[b"decision", who, &[yes as u8], transcript]);
         // Best effort: the other side may already have said no and gone. Its answer is still read below.
         let _sent = send_frame(stream, &json!({ "t": "decision", "yes": yes, "mac": hex(&tag(mine, yes)) })).await;
         if !yes {
-            self.strike(false);
-            return Err(if reply == Reply::Wrong { PairError::WrongNumber } else { PairError::YouDeclined });
+            // A wrong number or a No at the PC being opened counts against the PC that knocked (and overall). The PC pressing Open
+            // locks nobody out by cancelling, and a sheet nobody answered counts nothing.
+            if let Some(meta) = &account {
+                if role == Role::Host {
+                    // A sheet nobody answered counts against the device's sheet limit; a wrong number or a No is a strike.
+                    if reply == Reply::TimedOut {
+                        self.account_unanswered(&meta.device_id);
+                    } else {
+                        self.strike_account(&meta.device_id);
+                    }
+                }
+            } else {
+                self.strike(false);
+            }
+            return Err(match reply {
+                Reply::Wrong => PairError::WrongNumber,
+                Reply::TimedOut => PairError::TimedOut,
+                _ => PairError::YouDeclined,
+            });
         }
         let frame = recv_frame(stream, CONFIRM_TIMEOUT).await?;
         let their_yes = frame.get("yes").and_then(Value::as_bool).ok_or(PairError::Dropped)?;
@@ -1207,6 +1302,17 @@ impl PairManager {
             .add(other.binding.node_id, other.binding.device_pub, &other.name, now_secs)
             .map_err(|e| PairError::Save(e.to_string()))?;
         self.with(|s| s.limiter = Limiter::default());
+        if let Some(meta) = &account {
+            self.account_success(&meta.device_id);
+        }
+        // A PC of the person's own account was paired. Every right stays at the pairing default (off): this route never offers a way to
+        // ask for one, and this file hands out none. The owner turns one on later, on the paired PC's own page.
+        if let Some(meta) = &account {
+            let hook = self.on_account_paired.lock().unwrap_or_else(|p| p.into_inner()).clone();
+            if let Some(hook) = hook {
+                hook(other.binding.node_id, meta.device_id.clone());
+            }
+        }
         // Both said yes: remember where the other one can be reached, so this computer can dial it later.
         self.p2p.addrs().remember(other.binding.node_id, &other.addrs);
         if let Some(relay) = other.relay.as_deref() {
@@ -1217,7 +1323,13 @@ impl PairManager {
 
     /// Puts the question on this computer's screen and waits for the person.
     async fn ask(self: &Arc<Self>, role: Role, name: &str, shown: Shown) -> Reply {
+        self.ask_with(role, name, shown, None).await
+    }
+
+    /// `ask`, for a PC of the person's own account when `account` is set.
+    async fn ask_with(self: &Arc<Self>, role: Role, name: &str, shown: Shown, account: Option<AccountMeta>) -> Reply {
         let (tx, rx) = oneshot::channel();
+        let wait = Duration::from_millis(self.confirm_ms.load(Ordering::SeqCst));
         let now = self.clock.now_ms();
         let (code, check) = match shown {
             Shown::Code(c) => (c, None),
@@ -1233,8 +1345,9 @@ impl PairManager {
                 name: name.to_string(),
                 code,
                 check,
-                expires_at: now + CONFIRM_TIMEOUT.as_millis() as u64,
+                expires_at: now + wait.as_millis() as u64,
                 tx: Some(tx),
+                account,
             });
         });
         self.changed();
@@ -1248,7 +1361,17 @@ impl PairManager {
             }
         }
         let _clear = ClearOnDrop(self.clone());
-        tokio::time::timeout(CONFIRM_TIMEOUT, rx).await.ok().and_then(Result::ok).unwrap_or(Reply::No)
+        match tokio::time::timeout(wait, rx).await {
+            Ok(Ok(r)) => r,
+            Ok(Err(_)) => Reply::No,
+            Err(_) => Reply::TimedOut,
+        }
+    }
+
+    /// How long a sheet waits for its person (tests only: they cannot wait two minutes).
+    #[cfg(test)]
+    pub(crate) fn set_confirm_timeout(&self, wait: Duration) {
+        self.confirm_ms.store(wait.as_millis().max(1) as u64, Ordering::SeqCst);
     }
 
     /// The person's answer to a sheet that shows a code. The only way such a question is answered; the desktop window's
@@ -1257,7 +1380,9 @@ impl PairManager {
     pub fn answer(&self, id: u64, allow: bool) -> Result<(), PairError> {
         let tx = self.with(|s| match s.pending.as_mut() {
             Some(p) if p.id == id => {
-                if allow && p.check.is_some() {
+                // A sheet that asks for a pick or typed digits is never answered by a plain Yes. A `show` sheet (the PC pressing Open) is: it
+                // only says "I typed it on the other PC"; the trust still needs the other PC's person to type the right six digits.
+                if allow && p.check.as_ref().is_some_and(|c| c.kind != CheckKind::Show) {
                     Err(PairError::PickRequired)
                 } else {
                     Ok(p.tx.take())
@@ -1272,11 +1397,13 @@ impl PairManager {
     /// counted like one.
     pub fn answer_pick(&self, id: u64, pick: &str) -> Result<(), PairError> {
         let tx = self.with(|s| match s.pending.as_mut() {
-            Some(p) if p.id == id => p.check.as_ref().map(|c| (p.tx.take(), c.number)),
+            Some(p) if p.id == id && p.check.as_ref().is_some_and(|c| c.kind != CheckKind::Show) => p.check.as_ref().map(|c| (p.tx.take(), c.number)),
             _ => None,
         });
         let (tx, number) = tx.ok_or(PairError::NoSuchQuestion)?;
-        let right = pick.trim().parse::<u32>().map(|n| n == number).unwrap_or(false) && pick.trim().len() == 6;
+        // Typed digits may come with a space or a dash in the middle ("482 913").
+        let pick: String = pick.chars().filter(|c| !c.is_whitespace() && *c != '-').collect();
+        let right = pick.parse::<u32>().map(|n| n == number).unwrap_or(false) && pick.len() == 6;
         tx.ok_or(PairError::NoSuchQuestion)?.send(if right { Reply::Yes } else { Reply::Wrong }).map_err(|_| PairError::NoSuchQuestion)
     }
 
@@ -1315,7 +1442,7 @@ pub fn permissionable() -> BTreeSet<&'static str> {
 /// A plain sentence for the sheet when a link could not use the Worker (the link still works on the other routes).
 fn relay_note(e: &RelayErr) -> &'static str {
     match e {
-        RelayErr::NoFeature => "Your relay needs an update for far-away PCs. This link works on the direct and public route only.",
+        RelayErr::NoFeature => "Your relay needs an update to add PCs on other networks. Press Update on the relay card at the top of Connect. This link works on the direct and public route only.",
         RelayErr::Down => "Could not reach your relay. This link works on the direct and public route only.",
         RelayErr::Full => "Your relay is busy. This link works on the direct and public route only.",
         _ => "Your relay did not accept the link. It works on the direct and public route only.",

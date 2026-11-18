@@ -25,6 +25,12 @@ pub async fn restart_tunnel(app: AppHandle, try_anyway: Option<bool>) -> Result<
         .map_err(|err| err.to_string())?
 }
 
+/// "Permanent link" or "Temporary link" for the phone's address. No restart; the Worker setting stays saved.
+#[tauri::command]
+pub fn set_link_temporary(on: bool) -> Result<TunnelStatus, String> {
+    mobile_tunnel::set_link_temporary(on)
+}
+
 /// Fetch `<public>/bridge/health`. `url: None` tests the tunnel's current public URL.
 #[tauri::command]
 pub async fn test_tunnel_connection(url: Option<String>) -> Result<ConnectionTest, String> {

@@ -84,71 +84,97 @@ test("health tells linked and a time, and never the address or the secret", asyn
   assert.ok(!text.includes("127.0.0.1") && !text.includes(secret));
 });
 
-test("proxy: GET keeps path and query, adds X-Forwarded-Host, passes status and headers", async () => {
-  const base = new URL(MAIN);
-  const res = await call(MAIN, "/hello?a=1&b=two", { headers: { "x-forwarded-host": "spoofed.example", "x-keep": "yes" } });
+test("where: linked gives the tunnel address as JSON, cacheable for a short time, and asks the PC nothing", async () => {
+  const before = pc.seen.length;
+  const res = await call(MAIN, "/_pm/where");
   assert.equal(res.status, 200);
-  assert.equal(res.headers.get("x-from"), "fake-pc");
+  assert.equal(res.headers.get("content-type"), "application/json");
+  assert.match(res.headers.get("cache-control"), /max-age=15/);
+  assert.deepEqual(await res.json(), { ok: true, url: pc.origin });
+  assert.equal(pc.seen.length, before, "no subrequest to the PC");
+  assert.equal((await call(MAIN, "/_pm/where", { method: "POST" })).status, 405);
+});
+
+test("where: a new registration is visible at once, and the answer never holds the secret", async () => {
+  const other = await startFakeOrigin();
+  try {
+    assert.equal((await register(MAIN, other.origin)).status, 200);
+    const text = await (await call(MAIN, "/_pm/where")).text();
+    assert.deepEqual(JSON.parse(text), { ok: true, url: other.origin });
+    assert.ok(!text.includes(secret));
+  } finally {
+    assert.equal((await register(MAIN, pc.origin)).status, 200);
+    await other.close();
+  }
+});
+
+test("where: a quick-tunnel rule violation is never handed out (SSRF): bad origins cannot be registered, so where never shows them", async () => {
+  for (const origin of ["https://169.254.169.254", "https://evil.example.com", "https://a.trycloudflare.com.evil.io"]) {
+    assert.equal((await register(MAIN, origin)).status, 400, origin);
+  }
+  assert.equal((await (await call(MAIN, "/_pm/where")).json()).url, pc.origin);
+});
+
+test("shell: GET of the phone page is served from the PC, with the client's headers kept off", async () => {
+  const base = new URL(MAIN);
+  const res = await call(MAIN, "/hello?a=1&b=two", { headers: { cookie: "s=1", authorization: "Bearer x", "x-forwarded-host": "spoofed.example" } });
+  assert.equal(res.status, 200);
   assert.equal(await res.text(), "hello ?a=1&b=two");
   const seen = pc.seen.findLast((r) => r.path.startsWith("/hello"));
   assert.equal(seen.method, "GET");
-  assert.equal(seen.headers["x-forwarded-host"], base.host, "set by the Worker, a client value is replaced");
-  assert.equal(seen.headers["x-keep"], "yes");
+  assert.equal(seen.headers.cookie, undefined);
+  assert.equal(seen.headers.authorization, undefined);
+  assert.notEqual(seen.headers["x-forwarded-host"], "spoofed.example");
+  assert.ok(!(res.headers.get("cache-control") ?? "").includes("s-maxage"), "a plain-text answer is not an edge-cached page file");
+  assert.ok(base.host);
 });
 
-test("proxy: POST body arrives intact, also a 12 MB upload", async () => {
-  const small = await call(MAIN, "/echo", { method: "POST", headers: { "content-type": "application/json" }, body: '{"hi":1}' });
-  assert.deepEqual(await small.json(), { size: 8, sha256: createHash("sha256").update('{"hi":1}').digest("hex"), method: "POST", type: "application/json" });
-  const big = randomBytes(12 * 1024 * 1024);
-  const res = await call(MAIN, "/echo", { method: "PUT", headers: { "content-type": "application/octet-stream" }, body: big });
-  const got = await res.json();
-  assert.equal(got.size, big.length);
-  assert.equal(got.sha256, createHash("sha256").update(big).digest("hex"));
-  assert.equal(got.method, "PUT");
-});
-
-test("proxy: an event stream arrives in chunks, not all at the end", async () => {
-  const res = await call(MAIN, "/sse");
-  assert.equal(res.headers.get("content-type"), "text/event-stream");
-  const reader = res.body.getReader();
-  const stamps = [];
-  let text = "";
-  const started = Date.now();
-  for (;;) {
-    const { done, value } = await reader.read();
-    if (done) break;
-    stamps.push(Date.now() - started);
-    text += new TextDecoder().decode(value);
+test("shell caching: hashed asset files get the Worker's own cache header; index.html, sw.js and deep links stay uncached", async () => {
+  const asset = await call(MAIN, "/assets/app-abc123.js");
+  assert.equal(asset.status, 200);
+  assert.equal(asset.headers.get("cache-control"), "public, max-age=3600, s-maxage=600", "the PC's no-store is replaced for page files");
+  for (const path of ["/index.html", "/sw.js", "/deep/link"]) {
+    const res = await call(MAIN, path);
+    assert.equal(res.status, 200, path);
+    assert.equal(res.headers.get("cache-control"), "no-store", `${path}: the PC's own header stays`);
   }
-  assert.match(text, /tick 0[\s\S]*tick 3/);
-  assert.ok(stamps.length >= 3, `expected several chunks, got ${stamps.length}`);
-  assert.ok(stamps.at(-1) - stamps[0] >= 600, `chunks spread over time, got ${stamps}`);
+  const before = pc.seen.length;
+  await call(MAIN, "/index.html");
+  await call(MAIN, "/index.html");
+  assert.equal(pc.seen.length - before, 2, "index.html is asked of the PC every time");
 });
 
-test("proxy: a WebSocket upgrade is passed through and echoes", async () => {
-  const wsUrl = MAIN.replace("http://", "ws://") + "/socket?x=1";
-  const ws = new WebSocket(wsUrl);
-  const got = await new Promise((resolve, reject) => {
-    const timer = setTimeout(() => reject(new Error("websocket timeout")), 10000);
-    ws.onopen = () => ws.send("ping");
-    ws.onmessage = (event) => {
+test("the Worker is not a proxy any more: the phone API, bodies, event streams and sockets are refused and never reach the PC", async () => {
+  const before = pc.seen.length;
+  // an older phone page reads a 502 BRIDGE_UNREACHABLE and shows its message: the person is told what to do
+  for (const path of ["/bridge/health", "/bridge/panes", "/bridge"]) {
+    const old = await call(MAIN, path);
+    assert.equal(old.status, 502, path);
+    const body = await old.json();
+    assert.equal(body.code, "BRIDGE_UNREACHABLE");
+    assert.match(body.message, /Update Potato Workspace on your PC/);
+  }
+  assert.equal((await call(MAIN, "/echo", { method: "POST", body: "x" })).status, 405);
+  assert.equal((await call(MAIN, "/echo", { method: "PUT", body: "x" })).status, 405);
+  assert.equal((await call(MAIN, "/__puppet_master_dev__.json")).status, 502);
+  const failed = await new Promise((resolve) => {
+    const ws = new WebSocket(MAIN.replace("http://", "ws://") + "/socket?x=1");
+    const timer = setTimeout(() => resolve(false), 5000);
+    ws.onopen = () => {
       clearTimeout(timer);
-      resolve(String(event.data));
+      ws.close();
+      resolve(false);
     };
-    ws.onerror = () => reject(new Error("websocket error"));
+    ws.onerror = () => {
+      clearTimeout(timer);
+      resolve(true);
+    };
   });
-  assert.equal(got, "echo:ping");
-  ws.close();
-  assert.ok(pc.seen.some((r) => r.method === "UPGRADE" && r.path === "/socket?x=1"));
+  assert.ok(failed, "a WebSocket upgrade is not passed on");
+  assert.equal(pc.seen.length, before, "nothing was forwarded");
 });
 
-test("proxy: a redirect stays on the Worker's address", async () => {
-  const res = await call(MAIN, "/redirect");
-  assert.equal(res.status, 302);
-  assert.equal(res.headers.get("location"), `${MAIN}/hello`);
-});
-
-test("offline: the PC answers 502, or is not reachable at all: 503 page", async () => {
+test("offline: the PC answers 502, or is not reachable at all: 503 page (shell), 503 JSON (where)", async () => {
   const down = await call(MAIN, "/down");
   assert.equal(down.status, 503);
   assert.match(await down.text(), /offline or Potato Workspace is closed/);
@@ -157,7 +183,7 @@ test("offline: the PC answers 502, or is not reachable at all: 503 page", async 
   const dead = closed.origin;
   await closed.close();
   assert.equal((await register(MAIN, dead)).status, 200);
-  const res = await call(MAIN, "/hello");
+  const res = await call(MAIN, "/hello2");
   assert.equal(res.status, 503);
   assert.equal(res.headers.get("retry-after"), "10");
   assert.match(await res.text(), /This page will retry/);
@@ -191,6 +217,13 @@ test("SETUP_SECRET_SHA256: only that secret can register, nobody can claim first
   assert.equal((await register(STRICT, pc.origin, SETUP)).status, 200);
   assert.equal((await call(STRICT, "/hello")).status, 200);
   assert.equal((await register(STRICT, "https://evil.example.com", SETUP)).status, 400);
+});
+
+test("where: rate limited per address (429) without touching the PC", async () => {
+  const statuses = [];
+  for (let i = 0; i < 80; i += 1) statuses.push((await call(STRICT, "/_pm/where")).status);
+  assert.ok(statuses.includes(429), `no 429 in ${statuses}`);
+  assert.ok(statuses.includes(200) || statuses.includes(503));
 });
 
 test("rate limit: more than 30 register/reset tries an hour from one address get 429", async () => {

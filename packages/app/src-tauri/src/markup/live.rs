@@ -16,12 +16,12 @@ use crate::audit;
 use crate::browser::chrome;
 use crate::commands::{refusal, send_with, target_of, with_picture, AppState, LiveOutbox};
 use crate::point::capture;
-use crate::point::message_marks::{self, MarkIn, PageIs};
+use crate::point::message_marks::{self, Intent, MarkIn, PageIs};
 use crate::point::target::{self, TargetFacts};
 use crate::point::window::{ask_text, target_facts};
 use serde_json::{json, Value};
 use std::time::Duration;
-use tauri::{AppHandle, Manager, Webview};
+use tauri::{AppHandle, Emitter, Manager, Webview};
 
 const CAPTURE_WAIT: Duration = Duration::from_secs(8);
 /// A short wait after the bar hides itself, so the picture does not catch it.
@@ -47,7 +47,7 @@ pub fn tick(app: &AppHandle, preview_id: &str, key: &str, window: &Webview, st: 
             Event::Close => closed(preview_id, st),
             Event::NewAgent => new_agent(app),
             Event::Prepare { marks, area, vw } => prepare(app, preview_id, key, window, st, &bar::clean_marks(&marks), area.h, vw),
-            Event::Send { request, marks, to } => send(app, preview_id, key, window, st, &request, &bar::clean_marks(&marks), &to),
+            Event::Send { request, marks, to, fix } => send(app, preview_id, key, window, st, &request, &bar::clean_marks(&marks), &to, fix),
         }
     }
 }
@@ -122,6 +122,9 @@ fn prepare(app: &AppHandle, preview_id: &str, key: &str, window: &Webview, st: &
         tracing::warn!(preview = %preview_id, "markup: no chat to keep the picture for");
         return push(window, key, json!({ "taking": false, "noPicture": true }));
     };
+    // A page the agent made is the project's own: the bar hides its Ask / Fix choice there.
+    let own_page = ask_text(window, "location.href".to_string()).is_some_and(|here| crate::artifacts::owner_of(&here).is_some());
+    push(window, key, json!({ "ownPage": own_page }));
     shown(true);
     std::thread::sleep(HIDE_WAIT);
     let taken = capture::viewport_png(window, CAPTURE_WAIT);
@@ -162,7 +165,7 @@ fn default_target(app: &AppHandle) -> Option<TargetFacts> {
 }
 
 #[allow(clippy::too_many_arguments)]
-fn send(app: &AppHandle, preview_id: &str, key: &str, window: &Webview, st: &mut Loop, request: &str, marks: &[MarkIn], to: &str) {
+fn send(app: &AppHandle, preview_id: &str, key: &str, window: &Webview, st: &mut Loop, request: &str, marks: &[MarkIn], to: &str, fix: bool) {
     let fail = |why: String| push(window, key, json!({ "status": why }));
     let state = app.state::<AppState>();
     // The person's pick wins; with none, the chat that owns the page.
@@ -201,13 +204,15 @@ fn send(app: &AppHandle, preview_id: &str, key: &str, window: &Webview, st: &mut
             m
         })
         .collect();
-    let text = match message_marks::compose_marks(&title, &page, &marks, request) {
-        Ok(t) => t,
+    let composed = match message_marks::compose_parts(&title, &page, &marks, request, if fix { Intent::Fix } else { Intent::Ask }) {
+        Ok(c) => c,
         Err(why) => return fail(why),
     };
     // The picture belongs to the window, not to one agent: it goes with the message to whoever was picked.
     let waiting = st.waiting.as_ref().and_then(|(pane, id)| store::get(pane, id)).map(|w| refile(w, &target.cwd, st.seq));
-    let (text, attachments) = with_picture(&target, waiting.as_ref(), &text);
+    let (text, attachments) = with_picture(&target, waiting.as_ref(), &composed.text);
+    // The chat screen folds this exact message into one card. It is told before the message goes, so the card is ready when the message shows.
+    let _ = app.emit("markup://sent", json!({ "paneId": target.pane_id, "text": text, "head": composed.head, "comment": composed.comment, "page": composed.page, "marks": marks.len() }));
     let host = LiveOutbox { app: app.clone(), registry: state.registry.clone() };
     match send_with(&host, &target.pane_id, &text, &attachments) {
         Ok(_) => {

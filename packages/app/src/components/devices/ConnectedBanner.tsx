@@ -1,5 +1,5 @@
-// The far side's thin banner: another device is using this PC right now ("Desk-PC is connected · Full control") with
-// Disconnect, which turns that device's switch off and closes its link at once. Draws nothing while nobody is connected
+// The far side's thin line: another device is using this PC right now ("Desk-PC is using this PC") with
+// a quiet Disconnect link (no loud bar, no "Full control" word), which turns that device's switch off and closes its link at once. Draws nothing while nobody is connected
 // or the Labs switch is off. The name came from another device: text only.
 import { useT } from '../../i18n';
 import { clipText, deviceLabel, devicesApi, type DevicesApi, type DevicesView } from '../../lib/devices';
@@ -18,10 +18,10 @@ export function ConnectedBanner({ view, api = devicesApi, onDone }: { view: Devi
       {who.map((d) => (
         <div key={d.node} className="dev-connected" role="status">
           <span className="dev-dot is-up" aria-hidden="true" />
-          <span className="dev-grow">{t('devices.connected', { name: clipText(deviceLabel(d), 40), level: d.level === 'full' ? t('devices.level.full') : t('devices.level.watch') })}</span>
+          <span className="dev-grow">{t('devices.connected', { name: clipText(deviceLabel(d), 40) })}</span>
           <button
             type="button"
-            className="dev-btn"
+            className="dev-btn is-plain"
             data-testid={`disconnect-${d.node}`}
             onClick={() =>
               api

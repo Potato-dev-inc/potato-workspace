@@ -5,7 +5,7 @@
 //! and these are the switches that decide what an agent may do without asking. Only the Settings
 //! window, through a Tauri command, writes this file.
 
-use super::{DEFAULT_AGENTS_MAY_MERGE, DEFAULT_ASK_BEFORE_AGENT_CONTROL};
+use super::{DEFAULT_AGENTS_MAY_MERGE, DEFAULT_ASK_BEFORE_AGENT_CONTROL, DEFAULT_ASK_BEFORE_HELPERS_START};
 use once_cell::sync::Lazy;
 use parking_lot::RwLock;
 use serde::{Deserialize, Serialize};
@@ -22,6 +22,13 @@ pub struct Config {
     /// B: an agent may merge a separate copy with `review_worktree`.
     #[serde(default = "default_merge")]
     pub agents_may_merge: bool,
+    /// C: ask a person before an MCP connection nobody can place (another harness) starts or steers helpers.
+    #[serde(default = "default_helpers")]
+    pub ask_before_helpers_start: bool,
+}
+
+fn default_helpers() -> bool {
+    DEFAULT_ASK_BEFORE_HELPERS_START
 }
 
 fn default_ask() -> bool {
@@ -33,7 +40,7 @@ fn default_merge() -> bool {
 
 impl Default for Config {
     fn default() -> Self {
-        Self { ask_before_agent_control: default_ask(), agents_may_merge: default_merge() }
+        Self { ask_before_agent_control: default_ask(), agents_may_merge: default_merge(), ask_before_helpers_start: default_helpers() }
     }
 }
 
@@ -96,6 +103,10 @@ pub fn set(next: Config) -> Result<Config, String> {
 
 pub fn ask_before_agent_control() -> bool {
     current().ask_before_agent_control
+}
+
+pub fn ask_before_helpers_start() -> bool {
+    current().ask_before_helpers_start
 }
 
 pub fn agents_may_merge() -> bool {

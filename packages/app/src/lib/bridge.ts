@@ -30,7 +30,9 @@ const DEFAULT_POLL_INTERVAL_MS = 200;
 function bridgeErrorText(status: number, body: string): string {
   if (status === 502) {
     try {
-      const parsed = JSON.parse(body) as { code?: unknown; message?: unknown };
+      const parsed = JSON.parse(body) as { code?: unknown; message?: unknown; reason?: unknown };
+      // A permanent address that no longer carries the bridge: this page is not out of date, it just has no tunnel yet.
+      if (parsed.reason === 'not_proxied' && parsed.code === 'BRIDGE_UNREACHABLE') return "Can't reach your PC right now. Trying again…";
       if (parsed.code === 'BRIDGE_UNREACHABLE' && typeof parsed.message === 'string') return parsed.message;
     } catch {
       /* not JSON: keep the body as is */

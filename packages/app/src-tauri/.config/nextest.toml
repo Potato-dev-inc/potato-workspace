@@ -30,7 +30,7 @@ priority = 100
 
 # Local profile (`node scripts/dev/flakes.mjs`, or `cargo nextest run --profile local --lib`).
 # A test that fails and then passes on a retry is a FLAKE: the run stays green, and flakes.mjs writes the
-# test's name to the flake ledger (the path in FLAKES_LOG by default) so it gets fixed, not forgotten.
+# test's name to the flake ledger (D:/pm-night/flakes.log by default) so it gets fixed, not forgotten.
 [profile.local]
 retries = 2
 fail-fast = false

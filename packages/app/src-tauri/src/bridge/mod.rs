@@ -75,7 +75,7 @@ pub(crate) use observe::{checkpoint_all_pane_facts, checkpoint_pane_facts, pane_
 pub(crate) use approvals::declined_error as startup_decline_error;
 #[cfg(test)]
 pub(crate) use link::with_node_for_test as link_with_node_for_test;
-pub(crate) use link::{call as link_call, current_node as link_current_node, poll_events as link_poll_events};
+pub(crate) use link::{app_handles as link_app_handles, call as link_call, current_node as link_current_node, poll_events as link_poll_events, poll_events_with as link_poll_events_with, run_after_pclink};
 pub(crate) use sse::push_operation_sse;
 use state::{BRIDGE_APP, BRIDGE_REGISTRY};
 

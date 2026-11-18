@@ -209,6 +209,7 @@ const RequestUsage = lazy(() => import("../../lend/RequestUsage").then((m) => ({
 const MemberLends = lazy(() => import("../../lend/Borrowed").then((m) => ({ default: m.MemberLends })));
 
 const LINK_REFRESH_MS = 3000;
+const JOIN_PASTE_MAX = 4096;
 
 export function TeamPage({
   api = teamApi,
@@ -734,23 +735,10 @@ function InviteBlock({ api, auto, relay, updateApi }: { api: TeamApi; auto: bool
                   onFocus={(e) => e.currentTarget.select()}
                 />
                 <Btn onClick={() => void copy("link")}>
-                  {copied === "link" ? t("teamPage.copied") : t("settings.copy")}
+                  {copied === "link" ? t("teamPage.copied") : invite.joinUrl ? t("teamPage.copyInviteLink") : t("settings.copy")}
                 </Btn>
               </div>
-              {invite.joinUrl ? (
-                <details className="tp-older">
-                  <summary>{t("teamPage.inviteOlder")}</summary>
-                  <div className="st-invite-link">
-                    <input className="st-field is-mono" readOnly value={invite.link} aria-label={t("teamPage.linkAria")} onFocus={(e) => e.currentTarget.select()} />
-                  </div>
-                  <div className="tp-code-line">
-                    <small>{t("teamPage.code")}</small>
-                    <span className="st-invite-code" aria-label={t("teamPage.codeAria")}>
-                      {invite.code}
-                    </span>
-                  </div>
-                </details>
-              ) : (
+              {!invite.joinUrl && (
                 <div className="tp-code-line">
                   <small>{t("teamPage.code")}</small>
                   <span className="st-invite-code" aria-label={t("teamPage.codeAria")}>
@@ -1017,7 +1005,8 @@ export function JoinForm({
 }) {
   const t = useT();
   const [text, setText] = useState("");
-  const [code, setCode] = useState("");
+  // Only for an old invite whose code did not come in the pasted text.
+  const [typedCode, setTypedCode] = useState("");
   const [name, setName] = useState("");
   const [nameEdited, setNameEdited] = useState(false);
   const [github, setGithub] = useState("");
@@ -1027,8 +1016,10 @@ export function JoinForm({
   const [popup, setPopup] = useState(false);
   const shownName = nameEdited ? name : guess;
   const teamName = found.link ? inviteTeamName(found.link) : null;
-  const ready =
-    !!found.link && code.replace("-", "").length === 8 && !!shownName.trim();
+  // An old invite (pm://...) still works: its code is read out of the same text, and asked for only when it is missing.
+  const code = found.code ?? typedCode;
+  const oldInvite = !workerLink && !!found.link;
+  const ready = oldInvite && code.replace("-", "").length === 8 && !!shownName.trim();
 
   return (
     <div className="tp-form">
@@ -1044,21 +1035,24 @@ export function JoinForm({
           className="st-field is-mono"
           rows={3}
           aria-label={t("teamPage.linkAria")}
-          placeholder="pm://team/join?…" // i18n-ok: example
+          placeholder="https://…/join/…" // i18n-ok: example
           spellCheck={false}
           autoFocus
           value={text}
+          maxLength={JOIN_PASTE_MAX}
           onChange={(e) => {
-            setText(e.target.value);
-            const p = parsePastedInvite(e.target.value);
-            if (p.code) setCode(p.code);
+            // Cut before any search, so a huge paste is never scanned for a link.
+            const cut = e.target.value.slice(0, JOIN_PASTE_MAX);
+            setText(cut);
+            // A new link opens the "Join?" card at once; there is nothing else to fill in.
+            setPopup(!!findJoinLink(cut));
           }}
         />
       </label>
       {text.trim() && !found.link && !workerLink && (
         <Note role="alert">{t("teamPage.notInvite")}</Note>
       )}
-      {workerLink && (
+      {workerLink && !popup && (
         <div className="tp-found" role="status" data-testid="join-link-found">
           <span>{t("teamPage.joinLinkFound")} </span>
           <Btn small primary onClick={() => setPopup(true)}>
@@ -1077,62 +1071,66 @@ export function JoinForm({
           />
         </Sheet>
       )}
-      {found.link && (
+      {oldInvite && (
         <p className="tp-found" role="status">
           {teamName ? t("teamPage.inviteFoundFor", { team: teamName }) : t("teamPage.inviteFound")}
         </p>
       )}
-      <label className="st-team-row">
-        <span>{t("teamPage.code")}</span>
-        <FieldInput
-          value={code}
-          className="font-mono"
-          placeholder="ABCD-EFGH" // i18n-ok: example
-          maxLength={9}
-          onChange={(e) => setCode(formatCode(e.target.value))}
-        />
-      </label>
-      {found.link && !code && (
-        <p className="tp-sub">{t("teamPage.typeCode")}</p>
+      {oldInvite && (
+        <>
+        {!found.code && (
+          <label className="st-team-row">
+            <span>{t("teamPage.code")}</span>
+            <FieldInput
+              value={typedCode}
+              className="font-mono"
+              placeholder="ABCD-EFGH" // i18n-ok: example
+              maxLength={9}
+              onChange={(e) => setTypedCode(formatCode(e.target.value))}
+            />
+          </label>
+        )}
+        {!found.code && <p className="tp-sub">{t("teamPage.typeCode")}</p>}
+        <label className="st-team-row">
+          <span>{t("teamPage.yourName")}</span>
+          <FieldInput
+            value={shownName}
+            placeholder="Leo" // i18n-ok: example
+            maxLength={40}
+            onChange={(e) => {
+              setNameEdited(true);
+              setName(e.target.value);
+            }}
+          />
+        </label>
+        <label className="st-team-row">
+          <span>{t("teamPage.githubLogin")}</span>
+          <FieldInput
+            value={github}
+            placeholder={t("teamPage.optional")}
+            maxLength={39}
+            onChange={(e) => setGithub(e.target.value)}
+          />
+        </label>
+        <div className="st-team-row">
+          <span />
+          <Btn
+            primary
+            disabled={busy || !ready}
+            onClick={() =>
+              void onJoin({
+                link: found.link ?? "",
+                code,
+                name: shownName.trim(),
+                github: github.trim() || null,
+              })
+            }
+          >
+            {t("teamPage.joinBtn")}
+          </Btn>
+        </div>
+        </>
       )}
-      <label className="st-team-row">
-        <span>{t("teamPage.yourName")}</span>
-        <FieldInput
-          value={shownName}
-          placeholder="Leo" // i18n-ok: example
-          maxLength={40}
-          onChange={(e) => {
-            setNameEdited(true);
-            setName(e.target.value);
-          }}
-        />
-      </label>
-      <label className="st-team-row">
-        <span>{t("teamPage.githubLogin")}</span>
-        <FieldInput
-          value={github}
-          placeholder={t("teamPage.optional")}
-          maxLength={39}
-          onChange={(e) => setGithub(e.target.value)}
-        />
-      </label>
-      <div className="st-team-row">
-        <span />
-        <Btn
-          primary
-          disabled={busy || !ready}
-          onClick={() =>
-            void onJoin({
-              link: found.link ?? "",
-              code,
-              name: shownName.trim(),
-              github: github.trim() || null,
-            })
-          }
-        >
-          {t("teamPage.joinBtn")}
-        </Btn>
-      </div>
     </div>
   );
 }

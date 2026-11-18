@@ -103,7 +103,7 @@ describe('the live terminal', () => {
     expect(q('[data-testid="remote-screen"]')!.textContent).toBe('$ make dmg');
     await act(async () => fake.emitScreen({ node: NODE_MAC, pane_id: 'p2', content: '$ make dmg\nDone.' }));
     expect(q('[data-testid="remote-screen"]')!.textContent).toContain('Done.');
-    expect(fake.requests.some((r) => r.path.endsWith('/snapshot'))).toBe(false);
+    expect(fake.requests.some((r) => r.path.endsWith('/screen'))).toBe(false);
     expect(fake.screenStops).toEqual([]);
     await act(async () => root.unmount());
     root = createRoot(host);
@@ -116,7 +116,7 @@ describe('the live terminal', () => {
     fake.screenFails = true;
     await live(fake);
     expect(q('[data-testid="remote-screen"]')!.textContent).toContain('make dmg');
-    expect(fake.requests.filter((r) => r.path.endsWith('/snapshot'))).toHaveLength(1);
+    expect(fake.requests.filter((r) => r.path.endsWith('/screen'))).toHaveLength(1);
   });
 
   it('does not start while the device is offline', async () => {
@@ -155,12 +155,12 @@ describe('Settings > Devices > a device', () => {
     const fake = new DevicesFake({ enabled: true, devices: [MAC_MINI] });
     await open(fake);
     const select = q<HTMLSelectElement>('[data-testid="device-route"]')!;
-    expect([...select.options].map((o) => o.textContent)).toEqual(['Same as this PC', 'Automatic', 'Public link only', 'My own address only']);
+    expect([...select.options].map((o) => o.textContent)).toEqual(['Same as this PC', 'Automatic', 'Direct or the shared relay', 'Only my relay']);
     expect(select.value).toBe('same');
     await pickOption(select, 'own');
     await settle(4);
     expect(fake.view.devices[0]!.route_override).toBe('own');
-    expect(q('[data-testid="route-no-web"]')!.textContent).toContain('This PC has no web address for Mac mini yet.');
+    expect(q('[data-testid="route-no-web"]')!.textContent).toContain("This PC cannot use Mac mini's relay yet.");
     await pickOption(q<HTMLSelectElement>('[data-testid="device-route"]')!, 'same');
     await settle(4);
     expect(fake.view.devices[0]!.route_override).toBeNull();
@@ -173,7 +173,7 @@ describe('Settings > Devices > a device', () => {
     await click(q('[data-testid="perm-agents"]'));
     await settle(4);
     const web = q<HTMLInputElement>('[data-testid="perm-web"]')!;
-    expect(web.closest('label')!.textContent).toContain('Also allow it through my web address');
+    expect(web.closest('label')!.textContent).toContain('Reach this PC through my relay when a direct link fails');
     await click(web);
     await settle(4);
     expect(fake.view.devices[0]!.lets_web).toBe(true);
@@ -195,7 +195,6 @@ describe('Settings > Devices > Add a device > Far away', () => {
     await act(async () => root.render(<DevicesPage api={fake} />));
     await settle(6);
     await click(q('[data-testid="add-device"]'));
-    await click(q('[data-testid="add-tab-far"]'));
   };
 
   it('makes a pairing link and shows it with Copy and what to know', async () => {
@@ -206,7 +205,7 @@ describe('Settings > Devices > Add a device > Far away', () => {
     const box = q<HTMLTextAreaElement>('[data-testid="the-link"]')!;
     expect(box.readOnly).toBe(true);
     expect(box.value).toMatch(/^pm1link:/);
-    expect(q('[data-testid="copy-link"]')!.textContent).toBe('Copy');
+    expect(q('[data-testid="copy-link"]')!.textContent).toBe('Copy the link');
     expect(q('[data-testid="far-tab"]')!.textContent).toContain('Valid 10 minutes. Works once. Both people still confirm.');
     // Closing the sheet withdraws the link.
     await click(document.querySelector('.dev-actions .dev-btn'));
@@ -259,8 +258,8 @@ describe('Settings > Devices: routes and phones', () => {
     await act(async () => root.render(<DevicesPage api={fake} />));
     await settle(6);
     const text = q('[data-testid="route-setting"]')!.textContent!;
-    expect(text).toContain('Direct on the same network, otherwise through your own web address');
-    expect(q('[data-testid="route-own-setup"]')!.textContent).toContain('Connect › Phone › Keep one address');
+    expect(text).toContain('Direct on the same network, otherwise through your relay');
+    expect(q('[data-testid="route-own-setup"]')!.textContent).toContain('Set one up at the top of Connect');
     await act(async () => root.unmount());
     root = createRoot(host);
     await act(async () => root.render(<DevicesPage api={new DevicesFake({ enabled: true, route_pref: 'own', own_route_ready: true })} />));
@@ -286,7 +285,7 @@ describe('the far side: Connected banner', () => {
     const fake = new DevicesFake({ enabled: true, devices: [{ ...MAC_MINI, lets_run: true, level: 'full', connected: true }] });
     const done = vi.fn();
     await act(async () => root.render(<ConnectedBanner view={fake.view} api={fake} onDone={done} />));
-    expect(q('[data-testid="connected-banner"]')!.textContent).toContain('Mac mini is connected · Full control');
+    expect(q('[data-testid="connected-banner"]')!.textContent).toContain('Mac mini is using this PC');
     await click(q(`[data-testid="disconnect-${NODE_MAC}"]`));
     await settle(3);
     expect(fake.view.devices[0]!.connected).toBe(false);

@@ -6,7 +6,7 @@
 //! - `op: "hello"`: "who are you" (answered with the name, the version and where to reach this computer).
 //! - `op: "req"`: one bridge request: `method`, `target` (path and query) and `body_len` bytes of JSON.
 //! - `op: "screen"`: like `events`, for one terminal pane: the answerer writes the pane's screen text (the answer of
-//!   `GET /panes/<id>/snapshot`) the moment it changes, and an empty frame now and then so a vanished asker is noticed.
+//!   `GET /pclink/sessions/<id>/screen`) the moment it changes, and an empty frame now and then so a vanished asker is noticed.
 //! - `op: "web"`: "give me your web address and a token for it" (answered only when the person turned that on).
 //! - `op: "events"`: the stream stays open. The answerer writes a header and a body of event text each time there is
 //!   some (`cursor` moves on), and `status: 410` when the asker no longer has a right to them.
@@ -116,10 +116,10 @@ pub fn target_ok(target: &str) -> bool {
         && !target.contains("..")
 }
 
-/// The one route a screen stream reads: `/panes/<id>/snapshot`.
+/// The one route a screen stream reads: `/pclink/sessions/<id>/screen`.
 pub fn screen_target_ok(target: &str) -> bool {
     let segs: Vec<&str> = target.trim_start_matches('/').split('/').collect();
-    target_ok(target) && !target.contains('?') && segs.len() == 3 && segs[0] == "panes" && !segs[1].is_empty() && segs[2] == "snapshot"
+    target_ok(target) && !target.contains('?') && segs.len() == 4 && segs[0] == "pclink" && segs[1] == "sessions" && !segs[2].is_empty() && segs[3] == "screen"
 }
 
 pub fn method_ok(method: &str) -> bool {
@@ -144,10 +144,11 @@ mod tests {
 
     #[test]
     fn a_screen_stream_reads_one_snapshot_route_and_nothing_else() {
-        assert!(screen_target_ok("/panes/p1/snapshot"));
-        assert!(!screen_target_ok("/panes/p1/input"));
-        assert!(!screen_target_ok("/panes/p1/snapshot?x=1"));
-        assert!(!screen_target_ok("/panes//snapshot"));
+        assert!(screen_target_ok("/pclink/sessions/p1/screen"));
+        assert!(!screen_target_ok("/pclink/sessions/p1/input"));
+        assert!(!screen_target_ok("/pclink/sessions/p1/screen?x=1"));
+        assert!(!screen_target_ok("/pclink/sessions//screen"));
+        assert!(!screen_target_ok("/panes/p1/snapshot"), "the phone's snapshot route is not a PC link route");
         assert!(!screen_target_ok("/settings"));
     }
 

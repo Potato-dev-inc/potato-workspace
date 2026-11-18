@@ -6,6 +6,7 @@ use crate::agent_authority::config::{self, Config};
 use crate::audit::{self, Entry, VerifyReport};
 
 const LABEL_ASK: &str = "Ask me before an agent controls a pane it didn't start";
+const LABEL_HELPERS: &str = "Ask me before other tools start agents";
 const LABEL_MERGE: &str = "Let agents merge separate copies";
 
 #[tauri::command]
@@ -18,15 +19,18 @@ pub fn agent_authority_get() -> Config {
 pub fn agent_authority_set(
     ask_before_agent_control: Option<bool>,
     agents_may_merge: Option<bool>,
+    ask_before_helpers_start: Option<bool>,
 ) -> Result<Config, String> {
     let before = config::current();
     let next = Config {
         ask_before_agent_control: ask_before_agent_control.unwrap_or(before.ask_before_agent_control),
         agents_may_merge: agents_may_merge.unwrap_or(before.agents_may_merge),
+        ask_before_helpers_start: ask_before_helpers_start.unwrap_or(before.ask_before_helpers_start),
     };
     config::set(next)?;
     audit::record_setting("ask_before_agent_control", LABEL_ASK, before.ask_before_agent_control, next.ask_before_agent_control);
     audit::record_setting("agents_may_merge", LABEL_MERGE, before.agents_may_merge, next.agents_may_merge);
+    audit::record_setting("ask_before_helpers_start", LABEL_HELPERS, before.ask_before_helpers_start, next.ask_before_helpers_start);
     Ok(next)
 }
 

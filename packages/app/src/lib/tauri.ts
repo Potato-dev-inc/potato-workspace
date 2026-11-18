@@ -352,6 +352,8 @@ export const tauri = {
   getTunnelStatus: () => safeInvoke<TunnelStatus | null>('get_tunnel_status', undefined, null, true),
   setTunnelConfig: (input: TunnelConfigInput) => safeInvoke<TunnelStatus>('set_tunnel_config', { input }),
   restartTunnel: (tryAnyway = false) => safeInvoke<TunnelStatus>('restart_tunnel', tryAnyway ? { tryAnyway: true } : undefined),
+  /** "Temporary link" (true) or "Permanent link" (false). No restart; the saved Worker stays as it is. */
+  setLinkTemporary: (on: boolean) => safeInvoke<TunnelStatus>('set_link_temporary', { on }),
   /** Delete the fixed phone address (OpenTunnel) on the relay and on this computer, then go back to the automatic address. */
   forgetOpenTunnelAddress: () => safeInvoke<TunnelStatus>('forget_opentunnel_address'),
   testTunnelConnection: (url?: string) =>

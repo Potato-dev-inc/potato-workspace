@@ -59,11 +59,45 @@ pub async fn devices_pair_answer(webview: tauri::Webview, id: u64, allow: bool) 
     dl::app_service()?.pair_answer(id, allow)
 }
 
-/// The person's pick of the matching number on the "wants to pair" sheet. Only this window can send it.
+/// The person's pick of the matching number (or the digits they typed) on the "wants to pair" sheet. Only this window can send it.
 #[tauri::command(rename_all = "snake_case")]
 pub async fn devices_pair_pick(webview: tauri::Webview, id: u64, pick: String) -> Result<Value, String> {
     guard(&webview)?;
     dl::app_service()?.pair_pick(id, &pick)
+}
+
+/// The person dismissed the note that a PC was unpaired because the account said it was signed out.
+#[tauri::command(rename_all = "snake_case")]
+pub async fn devices_dismiss_removed_pc(webview: tauri::Webview, id: String) -> Result<(), String> {
+    guard(&webview)?;
+    dl::dismiss_removed_pc(&id);
+    Ok(())
+}
+
+/// "Let my other PCs open this PC": the tick. Only this window can set it (it is not one of the settings a phone, the bridge or an
+/// agent's config plan can patch).
+#[tauri::command(rename_all = "snake_case")]
+pub async fn devices_set_open_from_account(webview: tauri::Webview, on: bool) -> Result<(), String> {
+    guard(&webview)?;
+    dl::set_open_from_account(on).await
+}
+
+/// My other PCs from the account (Connect > My PCs): name, online, and what Open would do. Reads the account.
+#[tauri::command(rename_all = "snake_case")]
+pub async fn devices_account_pcs(webview: tauri::Webview) -> Result<Value, String> {
+    guard(&webview)?;
+    if !dl::enabled() {
+        return Ok(serde_json::json!({ "available": false, "signed_in": false, "open_here": false, "published": false, "pcs": [] }));
+    }
+    let svc = dl::app_service()?;
+    tauri::async_runtime::spawn_blocking(move || svc.account_pcs()).await.map_err(|e| e.to_string())?
+}
+
+/// "Open" on a PC of my account: the first time the two PCs pair (both people pick the number); after that it only checks the PC answers.
+#[tauri::command(rename_all = "snake_case")]
+pub async fn devices_open_account_pc(webview: tauri::Webview, id: String) -> Result<Value, String> {
+    guard(&webview)?;
+    dl::app_service()?.open_account_pc(&id).await
 }
 
 #[tauri::command(rename_all = "snake_case")]
@@ -79,6 +113,20 @@ pub async fn devices_set_permission(webview: tauri::Webview, node: String, capab
         return Err("That cannot be turned on here.".into());
     }
     dl::app_service()?.set_permission(&node, on, level.as_deref())
+}
+
+/// The cards "<PC> asks to work on this PC", waiting for this PC's person.
+#[tauri::command(rename_all = "snake_case")]
+pub async fn devices_full_asks(webview: tauri::Webview) -> Result<Value, String> {
+    guard(&webview)?;
+    Ok(dl::app_service()?.full_asks())
+}
+
+/// The person tapped Allow or No on one card. Only this window can do it.
+#[tauri::command(rename_all = "snake_case")]
+pub async fn devices_full_ask_answer(webview: tauri::Webview, id: String, allow: bool) -> Result<Value, String> {
+    guard(&webview)?;
+    dl::app_service()?.answer_full_ask(&id, allow)
 }
 
 #[tauri::command(rename_all = "snake_case")]

@@ -1083,6 +1083,14 @@ impl AcpChat {
     }
 
     /// The person answered or dismissed a card: the choice goes back to the agent.
+    /// What a choice on a permission card stands for in the agent's own words (`allow_once`, `allow_always`, `reject_once` ...).
+    /// `None`: no such card or choice (the caller then treats it as an approval).
+    pub fn card_choice_kind(&self, question_id: &str, choice_id: &str) -> Option<String> {
+        let cards = self.cards.lock();
+        let card = cards.values().find(|card| card.question_id == question_id)?;
+        card.option_for_choice(choice_id).map(|o| o.kind.clone())
+    }
+
     fn card_resolved(&self, question: &Question) {
         enum Send {
             Option(u64, String),

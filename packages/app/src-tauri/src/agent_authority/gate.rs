@@ -60,10 +60,11 @@ fn pending(ask: &Ask, id: &str) -> OperationError {
     let what = match ask.action {
         Action::TakeOver => format!("control {}", ask.target),
         Action::AnswerPrompt => format!("answer a question in {}", ask.target),
-        Action::ConfigChange => format!("change {}", ask.target),
+        Action::ConfigChange => consent::change_phrase(&ask.target),
         Action::BackgroundCommand => format!("run {} in the background", ask.target),
     };
     let (why, instead) = match ask.action {
+        Action::ConfigChange if ask.target == consent::START_OR_STEER => ("a program the app could not place needs a person's yes to do that", ""),
         Action::ConfigChange => ("a command from an agent window may not change the app by itself", ""),
         Action::BackgroundCommand => ("a command that keeps running needs the person's yes (once, or for this whole chat)", ""),
         _ => ("that pane was not started by you", " If you do not need that pane, start your own agent with run_agent instead."),

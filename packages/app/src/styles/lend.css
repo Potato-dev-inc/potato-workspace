@@ -730,3 +730,15 @@
   gap: 8px;
   margin-top: 4px;
 }
+
+.lend-showusage .lend-muted {
+  display: block;
+  margin-top: 2px;
+  color: var(--label-3, currentColor);
+}
+
+.lend-showusage-line {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}

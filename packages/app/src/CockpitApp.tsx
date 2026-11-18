@@ -13,6 +13,7 @@ import { useAttention } from './hooks/useAttention';
 import { useComfortRoot } from './lib/comfort/root';
 import { useSpeakFinished } from './lib/comfort/speak';
 import { useHandoff } from './hooks/useHandoff';
+import { useMarkupSendRecorder } from './hooks/useMarkupSends';
 import { useAway } from './hooks/useAway';
 import { LastTurnContext } from './components/cockpit/away-context';
 import { AwayDigest } from './components/cockpit/AwayDigest';
@@ -36,6 +37,7 @@ import { remoteId, type Device } from './lib/devices';
 import { ConnectedBanner } from './components/devices/ConnectedBanner';
 import { RemotePaneView } from './components/devices/RemotePaneView';
 import { OPEN_REMOTE_EVENT } from './lib/moveChat';
+import { focusDeviceGroup } from './lib/openDevice';
 import { useDeviceGroups, type RemoteRow } from './components/devices/useDeviceGroups';
 import { CompanionAssist } from './components/cockpit/companion/CompanionAssist';
 import { paneHeading } from './components/cockpit/titles';
@@ -64,6 +66,7 @@ import { SpawnView } from './components/cockpit/SpawnView';
 import { ChatStartingView } from './components/cockpit/ChatStartingView';
 import { PanicSheet } from './components/cockpit/PanicSheet';
 import { ControlAskNotice } from './components/cockpit/ControlAskNotice';
+import { FullAskNotice } from './components/devices/FullAskNotice';
 import { DeskAwayChip, DeskAwayHost } from './components/cockpit/DeskAway';
 import { IndividualSheet } from './components/cockpit/IndividualSheet';
 import { TellTeamToast } from './components/cockpit/team/TellTeam';
@@ -138,7 +141,7 @@ import { AgentBoard } from './components/cockpit/board/AgentBoard';
 import { useSpacesEnabled } from './lib/spaces';
 import { useLend } from './components/lend/useLend';
 import { ConnectPage } from './components/connect/ConnectPage';
-import { registerConnectOpener, connectTabFor, type ConnectTab } from './lib/openConnect';
+import { registerConnectOpener, connectTabFor, rememberedConnectTab, type ConnectTab } from './lib/openConnect';
 import { CockpitJoinLink } from './components/team-page/CockpitJoinLink';
 import { PassTaskHost } from './components/team-page/PassTaskHost';
 import { useTeamPresenceReport } from './components/team-page/useTeamPresenceReport';
@@ -186,15 +189,21 @@ export default function CockpitApp() {
   const todayOn = useTimelineEnabled();
   // Devices (Labs): the other PCs' groups in the sidebar, and the chat or terminal of one of them in the main area.
   const deviceGroups = useDeviceGroups();
+  // Connect > Devices > Open: that PC's section in the sidebar, unfolded and scrolled to. false: it has no section yet (its own sheet opens).
+  const openPcInSidebar = (node: string): boolean => {
+    if (!deviceGroups.groups.some((g) => g.device.node === node)) return false;
+    focusDeviceGroup(node);
+    return true;
+  };
   const [remoteRow, setRemoteRow] = useState<RemoteRow | null>(null);
   const where: WhereProps | undefined = deviceGroups.enabled
     ? {
         view: deviceGroups.view,
-        onAddDevice: () => openConnectPage('pcs'),
+        onAddDevice: () => openConnectPage('devices'),
         onStartedHere: (paneId: string) => c.select(paneId),
         onStarted: (device: Device, paneId: string, chat: boolean) => {
           deviceGroups.refresh();
-          setRemoteRow({ key: remoteId(device.node, paneId), node: device.node, paneId, title: '', agent: '', status: 'idle', cwd: '', chat });
+          setRemoteRow({ key: remoteId(device.node, paneId), node: device.node, paneId, title: '', agent: '', status: 'idle', cwd: '', project: '', chat });
           setView('device');
         },
       }
@@ -205,7 +214,7 @@ export default function CockpitApp() {
       const d = (e as CustomEvent<{ node: string; paneId: string }>).detail;
       if (!d?.node || !d.paneId) return;
       deviceGroups.refresh();
-      setRemoteRow({ key: remoteId(d.node, d.paneId), node: d.node, paneId: d.paneId, title: '', agent: '', status: 'idle', cwd: '', chat: true });
+      setRemoteRow({ key: remoteId(d.node, d.paneId), node: d.node, paneId: d.paneId, title: '', agent: '', status: 'idle', cwd: '', project: '', chat: true });
       setView('device');
     };
     window.addEventListener(OPEN_REMOTE_EVENT, open);
@@ -278,7 +287,7 @@ export default function CockpitApp() {
   };
   const closeOverlay = () => setView(homeView(c.spawn !== null, c.selectedId));
   // Connect: the phone, other PCs, the team and lending. It opens on the tab last used.
-  const [connectTab, setConnectTab] = useState<ConnectTab>('phone');
+  const [connectTab, setConnectTab] = useState<ConnectTab>(rememberedConnectTab);
   const openConnectPage = (tab?: ConnectTab) => {
     if (tab) setConnectTab(tab);
     setView('connect');
@@ -424,6 +433,8 @@ export default function CockpitApp() {
   };
   // "Handoff from here": the sidebar's row menu and the pane's "Hand off" button share one (it opens the new agent through nav).
   const handoff = useHandoff(nav);
+  // A mark-up sent from the agent browser becomes one "Marked up" card in the chat (see lib/markupCard.ts).
+  useMarkupSendRecorder();
   // The crew canvas's Live tab opens a helper like the crew chip does: a minion as the read-only view in its parent's chat, any other as a chat.
   const navRef = useRef(nav);
   navRef.current = nav;
@@ -1056,7 +1067,7 @@ export default function CockpitApp() {
         ) : view === 'connect' ? (
           // The page is taller than a small window and .ck-main does not scroll, so this wrapper does (Settings did it before Connect moved here).
           <div className="ck-connect-scroll" data-testid="connect-scroll">
-            <ConnectPage tab={connectTab} onTab={setConnectTab} team={team} lend={lend} paneNames={c.names} />
+            <ConnectPage tab={connectTab} onTab={setConnectTab} team={team} lend={lend} paneNames={c.names} onOpenPc={openPcInSidebar} onOpenPane={(paneId) => nav.select(paneId)} />
           </div>
         ) : view === 'routines' ? (
           <RoutinesPage onClose={closeOverlay} defaultProject={c.selectedId ? projectOfCwd(c.registry.panes.get(c.selectedId)?.info.cwd)?.path : undefined} />
@@ -1101,7 +1112,7 @@ export default function CockpitApp() {
           </ErrorBoundary>
         ) : view === 'device' && remoteRow && deviceGroups.enabled && deviceGroups.view?.devices.find((d) => d.node === remoteRow.node) ? (
           <ErrorBoundary where="Device pane" resetKeys={[remoteRow.key]}>
-            <RemotePaneView key={remoteRow.key} device={deviceGroups.view!.devices.find((d) => d.node === remoteRow.node)!} row={remoteRow} onRetry={deviceGroups.refresh} />
+            <RemotePaneView key={remoteRow.key} device={deviceGroups.view!.devices.find((d) => d.node === remoteRow.node)!} row={deviceGroups.groups.flatMap((g) => g.rows).find((r) => r.key === remoteRow.key) ?? remoteRow} onRetry={deviceGroups.refresh} />
           </ErrorBoundary>
         ) : c.chatStarting ? (
           // Before the pane views, so the skeleton shows over the inbox or the pane that was open.
@@ -1283,6 +1294,7 @@ export default function CockpitApp() {
       {/* "Sign in again" (Usage card, Problems, startup check): a small sheet; the sign-in runs in a hidden pane. */}
       <SignInAgainHost />
       <ControlAskNotice names={c.names} />
+      <FullAskNotice />
       <DeskAwayHost />
       {/* The "Used" bar along the bottom edge; the root leaves room for it only while it shows. */}
       <CompanionAssist
@@ -1306,6 +1318,8 @@ export default function CockpitApp() {
         onNudge={(id) => void tauri.writeInput(id, NUDGE_TEXT, true)}
       />
       <UsageBar
+        // A session that runs on another PC: that PC's usage and limits, tagged with its name (never this PC's numbers).
+        far={view === 'device' && remoteRow && deviceGroups.enabled ? { node: remoteRow.node, name: deviceGroups.view?.devices.find((d) => d.node === remoteRow.node)?.name ?? '' } : null}
         working={c.registry.paneList.filter((p) => p.status === 'running' && !needsYou.some((n) => n.paneId === p.info.id)).length}
         needsYou={needsYou.length}
         trailing={
