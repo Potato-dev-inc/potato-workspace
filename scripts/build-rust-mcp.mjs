@@ -16,7 +16,11 @@ const pathKey = process.platform === 'win32' ? 'Path' : 'PATH';
 const sep = process.platform === 'win32' ? ';' : ':';
 const env = { ...process.env };
 
-if (!existsSync(cargoExe)) {
+// Rust may live elsewhere (CI runners, package managers): accept any cargo already on PATH.
+const haveHomeCargo = existsSync(cargoExe);
+const onPath = !haveHomeCargo && spawnSync('cargo', ['--version'], { env, stdio: 'ignore' }).status === 0;
+const cargoCmd = haveHomeCargo ? cargoExe : 'cargo';
+if (!haveHomeCargo && !onPath) {
   console.error(
     `[build-rust-mcp] cargo not found at ${cargoExe} — skipping Rust MCP binary\n` +
       'Install Rust from https://rustup.rs/ or use the legacy TypeScript MCP server.',
@@ -36,7 +40,7 @@ if (profile === 'release') {
   cargoArgs.push('--release');
 }
 
-const result = spawnSync(cargoExe, cargoArgs, {
+const result = spawnSync(cargoCmd, cargoArgs, {
   cwd: crateDir,
   stdio: 'inherit',
   env,
