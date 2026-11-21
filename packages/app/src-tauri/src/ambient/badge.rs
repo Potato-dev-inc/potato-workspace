@@ -29,7 +29,7 @@ pub fn notify_changed() {
 /// Forgets the titles of panes that are gone.
 fn retain_live_titles(app: &AppHandle) {
     let Some(state) = app.try_state::<AppState>() else { return };
-    let live: Vec<String> = state.registry.lock().list().iter().map(|p| p.id.clone()).collect();
+    let live: Vec<String> = state.registry.lock().list_including_remote().iter().map(|p| p.id.clone()).collect();
     super::store::retain_live(&live);
 }
 
@@ -64,7 +64,7 @@ fn run(app: AppHandle) {
             *dirty = false;
         }
         retain_live_titles(&app);
-        let count = crate::attention::counts().blocking;
+        let count = crate::attention::counts_including_remote().blocking;
         let cockpit_present = app.get_webview_window(crate::app_windows::COCKPIT_LABEL).is_some();
         if last != Some((count, cockpit_present)) {
             set_badge(&app, count);

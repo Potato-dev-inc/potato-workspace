@@ -4,13 +4,12 @@
 
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::Arc;
-use std::time::Duration;
 
 use async_trait::async_trait;
 use parking_lot::Mutex;
 use serde_json::{json, Value};
 
-use super::tests::{ask_blocking, instance, instance_with, memory, pair, until, real_now, Instance};
+use super::tests::{instance, instance_with, memory, pair, until, real_now, Instance};
 use super::web::{WebCall, WebGrant};
 use super::Options;
 use crate::mobile_pairing::link_caps;
@@ -353,64 +352,6 @@ async fn tokens_an_older_version_gave_a_pc_are_revoked_at_every_level_change() {
     w.grant.revoked.lock().clear();
     w.b.link.set_permission(&a_node, true, Some("watch")).unwrap();
     assert!(w.grant.revoked.lock().contains(&a_node), "revoked when Full was lowered to Watch");
-}
-
-// ----- the live terminal -----
-
-#[tokio::test(flavor = "multi_thread", worker_threads = 4)]
-async fn a_terminal_is_pushed_the_moment_it_changes_and_stops_when_asked() {
-    let (_net, a, b) = memory();
-    pair(&b, &a).await;
-    let (a_node, b_node) = (a.node(), b.node());
-    b.link.set_permission(&a_node, true, Some("watch")).unwrap();
-    *b.bridge.screen.lock() = "first screen".into();
-    let got: Arc<Mutex<Vec<(String, String, String)>>> = Arc::default();
-    let sink = got.clone();
-    a.link.set_screen_sink(Arc::new(move |n, p, c| sink.lock().push((n.to_string(), p.to_string(), c.to_string()))));
-    a.link.screen_start(&b_node, "p1").unwrap();
-    until("the first frame", || got.lock().iter().any(|(n, p, c)| *n == b_node && p == "p1" && c == "first screen")).await;
-    // Only a change is sent, and it arrives without anybody asking again.
-    *b.bridge.screen.lock() = "second screen".into();
-    until("the change", || got.lock().iter().any(|(_, _, c)| c == "second screen")).await;
-    let frames = got.lock().len();
-    tokio::time::sleep(Duration::from_millis(800)).await;
-    assert_eq!(got.lock().len(), frames, "an unchanged screen sends nothing");
-    assert!(b.bridge.calls.lock().iter().filter(|c| c.as_str() == "GET /pclink/sessions/p1/screen").count() >= 2);
-    // Stop: no more frames, and the far side stops reading.
-    a.link.screen_stop(&b_node, "p1").unwrap();
-    tokio::time::sleep(Duration::from_millis(300)).await;
-    let calls = b.bridge.calls.lock().len();
-    *b.bridge.screen.lock() = "after stop".into();
-    tokio::time::sleep(Duration::from_millis(800)).await;
-    assert!(!got.lock().iter().any(|(_, _, c)| c == "after stop"));
-    assert!(b.bridge.calls.lock().len() <= calls + 2, "the far side stopped reading the screen");
-    // A thing that is not a terminal is refused here, before anything is sent.
-    assert!(a.link.screen_start(&b_node, "../settings").is_err());
-    assert!(a.link.screen_start(&b_node, "").is_err());
-}
-
-#[tokio::test(flavor = "multi_thread", worker_threads = 4)]
-async fn a_live_terminal_needs_the_right_to_watch_and_ends_when_the_pane_is_gone() {
-    let (_net, a, b) = memory();
-    pair(&b, &a).await;
-    let (a_node, b_node) = (a.node(), b.node());
-    let got: Arc<Mutex<Vec<String>>> = Arc::default();
-    let sink = got.clone();
-    a.link.set_screen_sink(Arc::new(move |_, _, c| sink.lock().push(c.to_string())));
-    // The switch is off on B: not a single frame.
-    a.link.screen_start(&b_node, "p1").unwrap();
-    tokio::time::sleep(Duration::from_millis(600)).await;
-    assert!(got.lock().is_empty());
-    // On: frames start (the stream reconnects by itself), and a pane that does not exist ends the loop.
-    b.link.set_permission(&a_node, true, Some("watch")).unwrap();
-    *b.bridge.screen.lock() = "hello".into();
-    until("frame after switch on", || !got.lock().is_empty()).await;
-    a.link.screen_stop(&b_node, "p1").unwrap();
-    a.link.screen_start(&b_node, "nope").unwrap();
-    tokio::time::sleep(Duration::from_millis(600)).await;
-    assert!(!got.lock().iter().any(|c| c == "nope"));
-    // The request helper still works on the same link (one link carries requests and the stream).
-    assert!(ask_blocking(&a.link, &b_node, "GET", "/panes").is_some());
 }
 
 // ----- agents sending work to another device -----

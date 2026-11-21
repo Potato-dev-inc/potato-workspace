@@ -10,6 +10,8 @@ export const LINUX_LABEL_NAME = 'Linux';
 /** The chip text, for example `Linux · Ubuntu` or `SSH · Build box` (`distro` carries the machine's name for ssh). Null for a Windows pane. */
 export function placeLabel(place: PanePlace | null | undefined): string | null {
   if (place?.kind === 'ssh') return t('devices.ssh.chip', { name: place.distro });
+  // Another Potato PC: its name (`distro` carries it, as it does for ssh), the one small badge a far chat has.
+  if (place?.kind === 'device') return place.distro;
   if (!place || place.kind !== 'linux') return null;
   return `${LINUX_LABEL_NAME} · ${place.distro}`;
 }
@@ -17,6 +19,7 @@ export function placeLabel(place: PanePlace | null | undefined): string | null {
 /** The chip tooltip: where it runs, then one line per warning. Empty for a Windows pane. */
 export function placeTooltip(place: PanePlace | null | undefined): string {
   if (place?.kind === 'ssh') return t('devices.ssh.chipTip', { name: place.distro });
+  if (place?.kind === 'device') return t('devices.onDevice', { name: place.distro });
   if (!place || place.kind !== 'linux') return '';
   const lines = [t('state.place.runsIn', { distro: place.distro, cwd: place.cwd })];
   for (const warning of place.warnings ?? []) lines.push(warning);

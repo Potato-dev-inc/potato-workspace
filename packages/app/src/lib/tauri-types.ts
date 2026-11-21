@@ -244,14 +244,67 @@ export interface TunnelStatus {
   secret_not_reset?: string | null;
   /** Why no quick address is coming (the screen has the words for each). */
   problem?: 'rate_limited' | 'slow_start' | 'too_soon' | null;
+  /** What the app is really doing right now (a real step with a counter); absent when nothing is in progress. */
+  step?: TunnelStep | null;
+  /** The last few real events (oldest first) for the Details list. Closed codes only; a host is a bare host name. */
+  events?: TunnelEvent[];
   /** With a problem: seconds until the tunnel may be started again. */
   retry_in_secs?: number | null;
   /** The port the phone server really listens on (what an own domain must point at); null when it is not running. */
   local_port?: number | null;
+  /** The port the person chose for the phone server (used from the next start); null or absent: automatic. */
+  chosen_port?: number | null;
   /** `moved`: the usual port was busy; `not_running`: the phone server could not start. */
   port_problem?: 'moved' | 'not_running' | null;
   /** "Temporary link": phones get the plain quick address and the Worker is left out (it stays saved and linked). */
   link_temporary?: boolean;
+  /** Which link is on: permanent (the Worker), temporary (quick address) or domain (the person's own address). */
+  link_mode?: 'permanent' | 'temporary' | 'domain';
+  /** How the chosen link carries traffic: book (the address only says where this PC is) or direct (the address carries it). */
+  link_route?: 'book' | 'direct';
+  /** The person's own https address, kept saved while another link is on. */
+  own_domain?: string | null;
+  /** The own address passed a Check made by the app, so phones are given it. False or absent: "Not checked yet". */
+  own_domain_verified?: boolean;
+  /** "My domain" + Address book: where this PC stands with the person's Worker. Absent for every other link. */
+  book?: TunnelBookStatus | null;
+}
+
+/** "My domain" + Address book as the backend reports it. */
+export interface TunnelBookStatus {
+  domain: string;
+  /** This PC runs a quick tunnel. False for a named, custom or fixed-address tunnel: there is no quick address to register. */
+  supported: boolean;
+  /** A quick address exists to register. */
+  has_address: boolean;
+  /** The name has proven it is the Worker. False: this PC sends it nothing yet (a typo or a look-alike never gets a key). */
+  armed?: boolean;
+  link: 'waiting' | 'linking' | 'linked' | 'failed';
+  /** Why registering failed: secret_mismatch | worker_gone | over_quota | offline | worker_too_old (the name is not an Address book Worker). */
+  reason?: 'secret_mismatch' | 'worker_gone' | 'over_quota' | 'offline' | 'worker_too_old' | null;
+}
+
+/** The Worker files for "My domain" + Address book: the source and a settings file with the name and the key's hash filled in. */
+export interface DomainBookFiles {
+  host: string;
+  worker_js: string;
+  wrangler_toml: string;
+}
+
+export interface TunnelEvent {
+  at_ms: number;
+  code: 'phone_server_up' | 'tunnel_started' | 'tunnel_stopped' | 'tunnel_off' | 'address' | 'relay_linked' | 'relay_failed' | 'book_linked' | 'book_failed' | 'outside_ok' | 'outside_failed';
+  host?: string | null;
+  reason?: string | null;
+}
+
+export interface TunnelStep {
+  code: 'starting_phone_server' | 'starting_tunnel' | 'waiting_for_address' | 'address_ready' | 'registering' | 'checking_outside' | 'connected' | 'not_reached' | 'tunnel_off';
+  /** Seconds this step has lasted when the status was read. */
+  elapsed_secs: number;
+  /** Registering only: the failed tries so far, and the seconds until the next one. */
+  retry?: number | null;
+  next_in_secs?: number | null;
 }
 
 export interface TunnelStableStatus {
@@ -261,6 +314,8 @@ export interface TunnelStableStatus {
   error: string | null;
   /** The Worker holds another secret than the one saved here. */
   secret_mismatch?: boolean;
+  /** Why the link failed: worker_gone (removed from Cloudflare) | over_quota (free daily limit) | offline | secret_mismatch | worker_too_old. */
+  reason?: 'worker_gone' | 'over_quota' | 'offline' | 'secret_mismatch' | 'worker_too_old' | null;
 }
 
 export type TunnelConfigInput =
@@ -286,6 +341,35 @@ export interface TunnelConnectionTest {
   http_status: number | null;
   latency_ms: number;
   message: string;
+  /** Own address Check: why it did or did not reach this PC. */
+  reason?:
+    | 'reached'
+    | 'not_this_pc'
+    | 'dns'
+    | 'timeout'
+    | 'unreachable'
+    | 'redirect'
+    | 'bad_gateway'
+    | 'other_http'
+    /** Address book only: */
+    | 'no_quick_tunnel'
+    | 'no_address'
+    | 'no_worker'
+    | 'not_linked'
+    | 'stale'
+    | 'tunnel_down'
+    | 'over_quota'
+    | 'busy'
+    /** Newer Address book checks (the backend may send more fields next to these; read them defensively): */
+    | 'is_direct'
+    | 'other_key'
+    | 'unconfigured'
+    | 'dns_taken'
+    | 'zone_missing'
+    | null;
+  /** dns_taken: the record that holds the name (type and target), when the backend says. */
+  dns_type?: string | null;
+  dns_target?: string | null;
 }
 
 /** One file of the diagnostic zip (Settings > General > Save a diagnostic file). */

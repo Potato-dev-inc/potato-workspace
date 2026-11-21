@@ -733,7 +733,7 @@ impl LiveIo for RealIo {
         guard
             .panes
             .iter()
-            .filter(|(_, pane)| crate::project_path::comparable_project_path(Path::new(&pane.info.cwd)) == key)
+            .filter(|(id, pane)| !crate::acp::chat::is_remote_pane(id) && crate::project_path::comparable_project_path(Path::new(&pane.info.cwd)) == key)
             .map(|(id, pane)| (id.clone(), crate::bridge::pane_facts(pane)))
             .collect()
     }

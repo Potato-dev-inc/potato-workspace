@@ -1,6 +1,7 @@
 // Which chat is which box of a crew. "Start crew" says it (role + pane id); this remembers it on this computer so the
 // Inbox can offer "Show in crew". A chat that was not started from a crew is simply not here, and gets no button.
-import { useSyncExternalStore } from 'react';
+import { useEffect, useSyncExternalStore } from 'react';
+import { invoke } from '@tauri-apps/api/core';
 
 const KEY = 'pm.crew.members';
 const MAX = 200;
@@ -51,7 +52,19 @@ const subscribe = (l: () => void) => {
 
 /** Re-renders the caller whenever a chat is marked (or the marks change in another window). Returns an opaque version. */
 export function useCrewMarks(): string | null {
-  return useSyncExternalStore(subscribe, rawMarks);
+  const raw = useSyncExternalStore(subscribe, rawMarks);
+  // The marks are this PC's to say: its PC-link rows carry them (`crew_marks_sync`), so another PC draws the same workflow row.
+  useEffect(mirrorCrewMarks, [raw]);
+  return raw;
+}
+
+/** Tells the app which chats are workflow fronts and crew boxes (it keeps them in memory; the window is where they are made and saved). */
+export function mirrorCrewMarks(): void {
+  try {
+    invoke('crew_marks_sync', { marks: read() }).catch(() => undefined);
+  } catch {
+    /* no app behind the page (a browser or a test): nothing to tell */
+  }
 }
 
 /** A crew just started: remember each role's chat. The newest MAX are kept. */

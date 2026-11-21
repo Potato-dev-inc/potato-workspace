@@ -28,12 +28,10 @@ describe('PC link client', () => {
     await c.sessions();
     await c.transcript('p1', 3);
     await c.transcriptEarlier('p1', 'i9', 20);
-    await c.screen('p2');
     await c.agentOptions();
     await c.messages('p1');
     await c.sendMessage('p1', 'hi');
     await c.interrupt('p1');
-    await c.input('p2', 'ls');
     await c.modelOptions('claude');
     await c.warm({ agent: 'claude', project: 'proj-app' });
     const started = await c.startAgent({ agent: 'claude', project: 'proj-app', lane: 'chat' });

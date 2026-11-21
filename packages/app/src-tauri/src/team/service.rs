@@ -1528,6 +1528,8 @@ pub struct TeamView {
     pub transport: Option<&'static str>,
     /// `live`, `polling`, `connecting`, `denied` or `offline`.
     pub link: Option<&'static str>,
+    /// What the link is doing right now (relay only): host, step, last failure kind, retry countdown.
+    pub link_detail: Option<transport::LinkDetail>,
     pub error: Option<String>,
     /// Messages from teammates known to be missing (gap detection).
     pub missing: u64,
@@ -1628,7 +1630,7 @@ fn config_view(svc: &Service, inner: &Inner) -> ConfigView {
 
 pub fn view() -> Result<TeamView, String> {
     let svc = service()?;
-    let (config, store, transport, link, error, names, presence_views) = {
+    let (config, store, transport, link, link_detail, error, names, presence_views) = {
         let mut inner = svc.inner.lock();
         // People who are no longer on the roster do not show.
         let on_roster: HashSet<String> = inner.session.as_ref().map(|s| s.roster.members.iter().map(|m| m.id.clone()).collect()).unwrap_or_default();
@@ -1644,6 +1646,7 @@ pub fn view() -> Result<TeamView, String> {
             inner.store.clone(),
             inner.transport.as_ref().map(|t| t.kind()),
             inner.transport.as_ref().map(|t| t.status()),
+            inner.transport.as_ref().and_then(|t| t.detail()),
             inner.error.clone().or_else(|| inner.read_error.clone()),
             names,
             inner.presence.views(now_ms()),
@@ -1681,6 +1684,7 @@ pub fn view() -> Result<TeamView, String> {
         members: names,
         transport,
         link,
+        link_detail,
         error,
         missing: store.seq.missing(),
         drafts: store.drafts.iter().rev().cloned().collect(),
@@ -1711,6 +1715,58 @@ fn save_config(svc: &Service, next: TeamConfig) -> Result<(), String> {
     inner.config = next;
     inner.read_error = None;
     Ok(())
+}
+
+/// "Try again" on the Team page's link line: start the relay link again. The team's admin whose relay has forgotten the team first
+/// sets it up there again (`membership::set_up_again`). Returns the state the page reads next.
+pub fn reconnect() -> Result<TeamView, String> {
+    let svc = service()?;
+    let (session, transport) = {
+        let inner = svc.inner.lock();
+        (inner.session.clone(), inner.transport.clone())
+    };
+    let mut failed = None;
+    if let (Some(session), Some(transport)) = (session, transport) {
+        match membership::set_up_again(&session.roster, &svc.keystore, transport.as_ref()) {
+            Ok(true) => {
+                tracing::info!(team = %session.roster.team, "team: the relay had forgotten the team; set it up there again");
+                audit::record(Kind::TeamRoleChanged, Who::Desktop, "You set the team up again on its relay", json!({ "team": session.roster.team }));
+            }
+            Ok(false) => {}
+            Err(error) => {
+                tracing::warn!(%error, "team: could not set the team up again on the relay");
+                failed = Some(error);
+            }
+        }
+    }
+    svc.restart();
+    // The link is started again either way; a failed repair is told to the person (the page shows it).
+    match failed {
+        Some(error) => Err(error),
+        None => view(),
+    }
+}
+
+/// "Move this team to <relay>" (admin): the team's relay is gone, so the saved address is changed to a relay that answers its health
+/// check, and the team is registered there with the same steps as "set the team up again". Teammates keep the old address until they
+/// get a fresh invite from the new relay (there is no automatic move for them).
+pub fn move_relay(relay: &str) -> Result<TeamView, String> {
+    let svc = service()?;
+    admin_session(svc)?;
+    let base = super::transport::relay::check_health(relay)?;
+    let mut next = svc.inner.lock().config.clone();
+    if next.relay.trim().is_empty() {
+        return Err("This team does not use a relay.".into());
+    }
+    if next.relay == base {
+        return Err("The team is already on that relay.".into());
+    }
+    next.relay = base;
+    let next = next.normalized()?;
+    save_config(svc, next)?;
+    // The new address is in use before the team is set up on it: `reconnect` registers the team on the running transport.
+    svc.restart();
+    reconnect()
 }
 
 /// The Labs switch and the extra project folders.
@@ -1837,7 +1893,7 @@ pub fn create_invite() -> Result<InviteView, String> {
             Err(e) if e == transport::UPDATE_WORKER => view.join_url_note = Some(transport::UPDATE_WORKER.to_string()),
             Err(e) => {
                 tracing::info!(error = %e, "team: no one-time invite link; the pasted invite still works");
-                view.join_url_note = Some("The relay could not make a one-time link. The invite below still works.".into());
+                view.join_url_note = Some("The relay could not make a one-time link. This invite still works.".into());
             }
         }
     }
@@ -1925,6 +1981,9 @@ pub fn leave() -> Result<ConfigView, String> {
     next.enabled = false;
     save_config(svc, next)?;
     svc.keystore.forget_team(&team, epoch);
+    for invite in svc.inner.lock().store.invites.iter() {
+        let _ = svc.keystore.forget_invite(&team, &invite.id); // old per-invite entries never leave on their own
+    }
     let _ = std::fs::remove_file(roster_path(&svc.dir));
     {
         let mut inner = svc.inner.lock();

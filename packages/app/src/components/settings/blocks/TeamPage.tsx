@@ -217,12 +217,15 @@ export function TeamPage({
   displayName = "",
   onSaved,
   workers,
+  hideStatus = false,
 }: {
   api?: TeamApi;
   /** Share an agent (Labs): Request usage and the lends on each person's row. */
   lend?: LendApi;
   displayName?: string;
   onSaved?: () => void;
+  /** The Team page already says how the link is (its header does, with the one button that fixes it): no second line here. A paused team still gets its Turn on. */
+  hideStatus?: boolean;
   /** Worker addresses: the one saved for the phone link, and a way to ask a Worker what it can do (tests give their own). */
   workers?: { savedLink?: () => Promise<string | null>; check?: (address: string) => Promise<WorkerHealth | null>; update?: UpdateApi; tunnel?: TunnelApi };
 }) {
@@ -412,11 +415,13 @@ export function TeamPage({
               : t("teamPage.people", { count: view.members.length })}
           </span>
         </div>
-        <StatusLine
-          view={view}
-          busy={busy}
-          onAction={(a) => void save(a === "on" ? true : view.enabled)}
-        />
+        {!(hideStatus && view.enabled) && (
+          <StatusLine
+            view={view}
+            busy={busy}
+            onAction={(a) => void save(a === "on" ? true : view.enabled)}
+          />
+        )}
         {view.admin && (
           <InviteBlock
             api={api}

@@ -261,8 +261,7 @@ impl Host for LiveHost {
     fn finished_turns(&self, since_ms: i64) -> Vec<FinishedTurn> {
         // Remember who each live pane's parent is, and what agent the parent runs.
         {
-            let registry = self.registry.lock();
-            let panes = registry.list();
+            let panes = crate::acp::chat::external_panes(&self.registry);
             let mut parents = self.parents.lock();
             for pane in &panes {
                 if let Some(parent) = &pane.parent_pane_id {

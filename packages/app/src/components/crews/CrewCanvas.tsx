@@ -8,12 +8,13 @@
 //   - Crew on the phone: a crew card on the phone (view and control only; editing stays here).
 //   - Templates and sharing: built (CrewGallery and ImportSheet on CrewsPage; "Share" below writes the crew as one file).
 import { useEffect, useMemo, useRef, useState } from 'react';
+import { useHost } from '../../lib/host/context';
 import { isSettingsEntry } from '../../lib/settings-entry';
 import { liveWord, eventText, frontPaneOf, liveHelpers, roleStates, useLiveFeed, useLivePanes, useNow, workflowStatus, type LivePane } from '../../lib/workflow-live';
 import { requestOpenHelper } from '../../lib/openHelper';
 import { useT } from '../../i18n';
 import { Menu } from '../common/Floating';
-import { DEFAULT_AGENT, crewErrorText, crewsApi, type Crew, type CrewAgents, type CrewOpened, type CrewProblem, type CrewsApi } from '../../lib/crews-api';
+import { DEFAULT_AGENT, crewErrorText, crewsApiFor, type Crew, type CrewAgents, type CrewOpened, type CrewProblem, type CrewsApi } from '../../lib/crews-api';
 import { shipApi, type ShipApi } from '../../lib/ship-api';
 import type { CrewTalkApi } from '../../lib/crew-talk-api';
 import { ApplySheet } from './ApplySheet';
@@ -35,7 +36,7 @@ type Tab = 'role' | 'try' | 'follow' | 'talk' | 'live';
 
 export function CrewCanvas({
   slug,
-  api = crewsApi,
+  api: apiProp,
   ship = shipApi,
   defaultFolder,
   onClose,
@@ -68,6 +69,8 @@ export function CrewCanvas({
   liveSource?: { frontId: string; panes: ReadonlyArray<LivePane>; asking: ReadonlySet<string> };
 }) {
   const t = useT();
+  const host = useHost();
+  const api = useMemo(() => apiProp ?? crewsApiFor(host), [apiProp, host]);
   const [opened, setOpened] = useState<CrewOpened | null>(null);
   const [failed, setFailed] = useState(false);
   const [agents, setAgents] = useState<CrewAgents | null>(null);

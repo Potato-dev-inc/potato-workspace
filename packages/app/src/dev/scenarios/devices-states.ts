@@ -17,8 +17,8 @@ const s: HarnessScenario = {
     ],
   },
   after: async (dom) => {
-    await dom.waitFor(`[data-testid="device-group-${NODE_MAC}"][data-state="asleep"]`, 8000);
-    await dom.waitFor(`[data-testid="device-group-${NODE_LAPTOP}"][data-state="closed"]`, 8000);
+    await dom.waitFor(`[data-remote-node="${NODE_MAC}"][data-state="asleep"]`, 8000);
+    await dom.waitFor(`[data-remote-node="${NODE_LAPTOP}"][data-state="closed"]`, 8000);
     await dom.sleep(300);
   },
 };

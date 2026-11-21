@@ -10,6 +10,11 @@ import { ResizeHandle } from '../ResizeHandle';
 import { useSessionChat } from '../../../hooks/useSessionChat';
 import { useFinishedCommands, usePaneJobs } from '../../../lib/pane-jobs';
 import { FilesCard } from '../../files/FilesCard';
+import { useRemotePane } from '../../../lib/remotePanes';
+import { remoteFsApi, useTurnEnds, type RemoteFsApi } from '../../../lib/remoteFs';
+import { useHost } from '../../../lib/host/context';
+import { RailSection } from './RailSection';
+import { RemoteChangesSection, RemoteEnvSection, RemoteFilesSection, useRemoteStatus } from './RemoteSections';
 import { BackgroundSection, type HelperRow } from './BackgroundSection';
 import { TaskColumn } from './TaskColumn';
 import { openMinionView, openTasksPage, openTerminalView, useClearedTasks } from '../../../lib/task-view';
@@ -80,6 +85,19 @@ export interface SessionRailProps {
   workflow?: WorkflowModel | null;
   onOpenWorkflowHelper?: (helperId: string) => void;
   onOpenWorkflowBig?: () => void;
+  /** Reads of a project on another computer (tests give their own). */
+  remoteFs?: RemoteFsApi;
+}
+
+/** A section of the panel whose data this place cannot give yet: the same header, one plain line. */
+function NotHere({ id, title, reason }: { id: 'out' | 'chg' | 'files'; title: string; reason: string }) {
+  return (
+    <RailSection id={id} title={title} testId={`rail-not-here-${id}`}>
+      <div className="rp-row is-empty">
+        <span className="rp-name">{reason}</span>
+      </div>
+    </RailSection>
+  );
 }
 
 export function SessionRail({
@@ -113,11 +131,22 @@ export function SessionRail({
   workflow = null,
   onOpenWorkflowHelper,
   onOpenWorkflowBig,
+  remoteFs = remoteFsApi,
 }: SessionRailProps) {
   const t = useT();
+  // The sections that read this PC's disk and git for the pane (outputs, changes, files, Remote control) are answered by the place the screen
+  // shows; where a place cannot yet, the same sections are drawn with its one reason.
+  const host = useHost();
+  const here = host.can?.('files_list') !== false;
+  const notYet = host.notYet ?? '';
   const { railPx } = useLayout();
   const chat = useSessionChat(paneId, readsChat);
-  const branch = usePaneBranch(paneId, status, true);
+  // A chat on another computer over SSH: this PC's disk and git say nothing about its folder, so none of it is read.
+  const remote = useRemotePane(paneId);
+  const branch = usePaneBranch(paneId, status, !remote);
+  // The branch and the changes of a project on another computer: read over ssh when the panel opens and when a turn ends, never polled.
+  const turnEnds = useTurnEnds(status);
+  const remoteStatus = useRemoteStatus(paneId, turnEnds, remoteFs, !!remote);
   const allJobs = usePaneJobs();
   const allFinished = useFinishedCommands();
   const commandOwners = useMemo<readonly CommandOwner[]>(() => owners ?? [{ id: paneId, name: '', agentType: null, status, self: true }], [owners, paneId, status]);
@@ -171,7 +200,16 @@ export function SessionRail({
           ask={ask}
           onAnswer={onAnswer ?? (() => undefined)}
         />
-        <EnvironmentSection paneId={paneId} cwd={cwd} runsOn={runsOn} branch={branch} copy={copy} onOpenCopy={onOpenCopy} />
+        {remote ? (
+          <>
+            <RemoteEnvSection name={remote.name} cwd={cwd} far={remoteStatus} />
+            <section className="rp-sec" aria-label={t('devices.ssh.modeChat')} data-testid="rail-remote-note">
+              <p className="ck-sub">{t('devices.ssh.remoteNoPanel', { name: remote.name })}</p>
+            </section>
+          </>
+        ) : (
+          <EnvironmentSection paneId={paneId} cwd={cwd} runsOn={runsOn} branch={branch} copy={copy} onOpenCopy={onOpenCopy} blocked={here ? null : notYet} />
+        )}
         <ContextSection usage={chat.usage} fresh={fresh} />
         <PlanSection plan={chat.plan} />
         <ConnectorsSection
@@ -180,8 +218,11 @@ export function SessionRail({
           reconnecting={drift.busy === paneId}
           onReconnect={() => (canReconnect ? void drift.reconnect(paneId, t('rail.con.reconnect')) : undefined)}
         />
-        <OutputsSection paneId={paneId} cwd={cwd} outputs={chat.outputs} />
-        <ChangesSection paneId={paneId} status={status} cwd={cwd} outputs={chat.outputs} canCreatePr={canCreatePr} showDone={readsChat} onOpenChanges={onOpenChanges} onNotify={onNotify} worktree={worktree} />
+        {!remote && here && <OutputsSection paneId={paneId} cwd={cwd} outputs={chat.outputs} />}
+        {!remote && !here && <NotHere id="out" title={t('rail.out.title')} reason={notYet} />}
+        {remote && <RemoteChangesSection name={remote.name} far={remoteStatus} />}
+        {!remote && !here && <NotHere id="chg" title={t('rail.chg.title')} reason={notYet} />}
+        {!remote && here && <ChangesSection paneId={paneId} status={status} cwd={cwd} outputs={chat.outputs} canCreatePr={canCreatePr} showDone={readsChat} onOpenChanges={onOpenChanges} onNotify={onNotify} worktree={worktree} />}
         <BackgroundSection
           helpers={rows}
           readyCount={readyMinions}
@@ -203,7 +244,8 @@ export function SessionRail({
           handTargets={handTargets}
           onHand={onHandMinion}
         />
-        <FilesCard paneId={paneId} cwd={cwd} canMention={readsChat} refreshKey={status} />
+        {!remote && !here && <NotHere id="files" title={t('files.title')} reason={notYet} />}
+        {remote ? <RemoteFilesSection paneId={paneId} name={remote.name} refreshKey={turnEnds} api={remoteFs} /> : here && <FilesCard paneId={paneId} cwd={cwd} canMention={readsChat} refreshKey={status} />}
       </aside>
       <TaskColumn paneId={paneId} agentName={agentName} agentType={agentType} rows={rows} owners={commandOwners} usage={usage} onOpenPane={onOpenPane} onStopHelper={onStopHelper} onStopJob={stopOwnJob} jobsApi={jobsApi} workflow={workflow} onOpenWorkflowHelper={onOpenWorkflowHelper} onOpenWorkflowBig={onOpenWorkflowBig} />
     </>

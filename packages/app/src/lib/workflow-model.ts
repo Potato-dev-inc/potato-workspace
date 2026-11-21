@@ -5,7 +5,8 @@
 import { useEffect, useMemo, useState } from 'react';
 import { t as translate } from '../i18n';
 import type { Crew } from './crews-api';
-import { crewsApi } from './crews-api';
+import { crewsApiFor, type CrewsApi } from './crews-api';
+import { useHost } from './host/context';
 import { crewMembers, crewCounts, type CrewMember as Member } from './crew-chip';
 import { crewOf, useCrewMarks, type CrewMember as Mark } from './crew-members';
 import { liveHelpers, roleStates, useLiveFeed, workflowStatus, type LiveFeed, type LiveHelper, type LivePane, type RoleLive } from './workflow-live';
@@ -75,11 +76,30 @@ export function useWorkflowModel(
   enabled: boolean,
   agentNameOf: (p: LivePane) => string,
   asking?: ReadonlySet<string>,
-  api: Pick<typeof crewsApi, 'get'> = crewsApi,
+  api?: Pick<CrewsApi, 'get'>,
 ): WorkflowModel | null {
   useCrewMarks();
+  // The crew is read from the place the chat runs: this PC's saved crews, or the far PC's own (a far project shows its workflows).
+  const host = useHost();
+  const hostApi = useMemo(() => crewsApiFor(host), [host]);
+  const crewApi = api ?? hostApi;
+  // The far PC says when this workflow gained helpers (a `workflow-state` event): read the crew again.
+  const [rev, setRev] = useState(0);
   const mark = workflowMark(paneId, enabled);
   const slug = mark?.slug ?? null;
+  useEffect(() => {
+    if (!slug) return undefined;
+    let live = true;
+    let off: (() => void) | null = null;
+    host.listen('workflow-state', () => setRev((n) => n + 1)).then(
+      (un) => (live ? (off = un) : un()),
+      () => undefined,
+    );
+    return () => {
+      live = false;
+      off?.();
+    };
+  }, [host, slug]);
   const [crew, setCrew] = useState<Crew | null>(null);
   // The log starts once the crew is known (or could not be read), so it names agents by their box from its first line.
   const [settled, setSettled] = useState(false);
@@ -91,7 +111,7 @@ export function useWorkflowModel(
     }
     let live = true;
     Promise.resolve()
-      .then(() => api.get(slug))
+      .then(() => crewApi.get(slug))
       .then(
         (c) => {
           if (!live) return;
@@ -103,7 +123,7 @@ export function useWorkflowModel(
     return () => {
       live = false;
     };
-  }, [slug, api]);
+  }, [slug, crewApi, rev]);
   const front = slug ? panes.find((p) => p.info.id === paneId) : undefined;
   // The helpers change only when a pane, a status, a title or a question changes: a signature keeps the memo steady.
   const sig = slug ? [...panes.filter((p) => p.info.parent_pane_id || p.info.id === paneId).map((p) => `${p.info.id}:${p.info.parent_pane_id ?? ''}:${p.status}:${p.info.title ?? ''}`), ...(asking ? [...asking] : [])].join('|') : '';

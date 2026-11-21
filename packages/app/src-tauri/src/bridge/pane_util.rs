@@ -284,5 +284,5 @@ pub(crate) fn note_pane_parent(registry: &Arc<Mutex<PaneRegistry>>, session: Opt
 }
 
 pub(super) fn registry_pane_ids(registry: &Arc<Mutex<PaneRegistry>>) -> Vec<String> {
-    registry.lock().panes.keys().cloned().collect()
+    crate::acp::chat::resolvable_pane_ids(registry.lock().panes.keys().cloned().collect::<Vec<_>>())
 }

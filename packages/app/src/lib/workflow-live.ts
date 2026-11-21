@@ -9,6 +9,7 @@ import { crewMembers, type CrewMember, type CrewState } from './crew-chip';
 import { crewOf } from './crew-members';
 import { cockpitApi } from './cockpit-api';
 import { loadSettings } from './settings';
+import { useHost } from './host/context';
 import { tauri, type PaneInfo } from './tauri';
 import { formatElapsed } from '../components/cockpit/model';
 import { frontOf, isCalled, keyOf } from '../components/crews/model';
@@ -242,11 +243,21 @@ export function useNow(on: boolean): number {
   return at;
 }
 
-/** Labs "Workflows" on? (read from the saved settings). */
+/** Labs "Workflows" on? Read from the saved settings of the place the chat runs: on another PC that PC's own switch (it lists no workflows when off). */
 export function useWorkflowsEnabled(): boolean {
+  const host = useHost();
   const [on, setOn] = useState(false);
   useEffect(() => {
     let live = true;
+    if (host.place.kind === 'pc') {
+      host.invoke<unknown[] | null>('workflows_list').then(
+        (list) => live && setOn(Array.isArray(list)),
+        () => live && setOn(false),
+      );
+      return () => {
+        live = false;
+      };
+    }
     void loadSettings().then(
       (s) => {
         if (live) setOn((s as { workflows_enabled?: boolean }).workflows_enabled === true);
@@ -256,7 +267,7 @@ export function useWorkflowsEnabled(): boolean {
     return () => {
       live = false;
     };
-  }, []);
+  }, [host]);
   return on;
 }
 

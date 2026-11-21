@@ -85,6 +85,8 @@ export const SettingsSchema = z.object({
   devices_enabled: z.boolean().optional(),
   /** Far-away PCs (Settings > General > Labs): pair a PC that is not on your network through your own relay. Off unless chosen. Rust: settings_store. */
   far_pcs_enabled: z.boolean().optional(),
+  /** The device door (Labs): an already-paired PC may also make signed read-only calls through this PC's public tunnel address, for devices the person switched it on for. Off unless chosen. Not patchable over the bridge. Rust: device_link::pcdoor. */
+  pcdoor_enabled: z.boolean().optional(),
   /** Potato account (Settings > General > Labs): sign in once and see your devices on each other. Off unless chosen. Rust: account. */
   account_enabled: z.boolean().optional(),
   /** Desktop Potato (Settings > General > Labs): a small pet window on the desktop. Off unless chosen. Rust: pet. */
@@ -118,6 +120,8 @@ export const SettingsSchema = z.object({
   workflow_reply_style: z.enum(['translator', 'router']).optional(),
   /** Fixed phone address (Settings > Early features): an address from the third-party OpenTunnel relay. Off unless chosen. Rust: mobile_tunnel/opentunnel. */
   opentunnel_stable_link: z.boolean().optional(),
+  // Chat on an SSH machine (Labs, development builds; not patchable over the bridge).
+  ssh_chat_enabled: z.boolean().optional(),
   /** The version whose small update failed (written by the app); that version takes the full package. */
   app_only_failed_for: z.string().optional(),
   /** The first-switch sheet for Individual mode was shown and (with "Don't show again") dismissed for good. Absent: show it. */

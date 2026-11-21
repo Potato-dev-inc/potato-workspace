@@ -35,7 +35,7 @@ import { TaskMainView } from './components/cockpit/TaskMainView';
 import type { WhereProps } from './components/devices/NewAgentWhere';
 import { remoteId, type Device } from './lib/devices';
 import { ConnectedBanner } from './components/devices/ConnectedBanner';
-import { RemotePaneView } from './components/devices/RemotePaneView';
+import { FarPane } from './components/devices/FarPane';
 import { OPEN_REMOTE_EVENT } from './lib/moveChat';
 import { focusDeviceGroup } from './lib/openDevice';
 import { useDeviceGroups, type RemoteRow } from './components/devices/useDeviceGroups';
@@ -155,6 +155,9 @@ import './styles/cockpit-routines.css';
 import './styles/night-chip.css';
 import './styles/cockpit-board.css';
 
+import { deviceLocation } from './lib/projectLocation';
+import { loadRemotePanes } from './lib/remotePanes';
+
 export type { MainView } from './components/cockpit/main-view';
 
 /** True inside a pane's terminal, where `?` is typed text. */
@@ -184,6 +187,10 @@ export default function CockpitApp() {
       }),
     [],
   );
+  // Chats that run on an SSH machine (the backend keeps them across a window reload): they must never be taken for local ones.
+  useEffect(() => {
+    void loadRemotePanes();
+  }, []);
   const spacesOn = useSpacesEnabled();
   // The Today page (Labs `timeline_day_enabled`): one line for the whole day, and a way back to any point on it.
   const todayOn = useTimelineEnabled();
@@ -203,7 +210,7 @@ export default function CockpitApp() {
         onStartedHere: (paneId: string) => c.select(paneId),
         onStarted: (device: Device, paneId: string, chat: boolean) => {
           deviceGroups.refresh();
-          setRemoteRow({ key: remoteId(device.node, paneId), node: device.node, paneId, title: '', agent: '', status: 'idle', cwd: '', project: '', chat });
+          setRemoteRow({ key: remoteId(device.node, paneId), node: device.node, paneId, title: '', agent: '', status: 'idle', cwd: '', project: '', chat, location: deviceLocation(device.node, device.name) });
           setView('device');
         },
       }
@@ -214,7 +221,7 @@ export default function CockpitApp() {
       const d = (e as CustomEvent<{ node: string; paneId: string }>).detail;
       if (!d?.node || !d.paneId) return;
       deviceGroups.refresh();
-      setRemoteRow({ key: remoteId(d.node, d.paneId), node: d.node, paneId: d.paneId, title: '', agent: '', status: 'idle', cwd: '', project: '', chat: true });
+      setRemoteRow({ key: remoteId(d.node, d.paneId), node: d.node, paneId: d.paneId, title: '', agent: '', status: 'idle', cwd: '', project: '', chat: true, location: deviceLocation(d.node, '') });
       setView('device');
     };
     window.addEventListener(OPEN_REMOTE_EVENT, open);
@@ -226,7 +233,7 @@ export default function CockpitApp() {
   const [paletteMode, setPaletteMode] = useState<PaletteMode>('commands');
   // The one thing the main area shows (see main-view.ts): the last click wins.
   // The project the New agent page starts with (from a project's "+"); null: the page picks its own.
-  const [newAgentProject, setNewAgentProject] = useState<{ path: string; name: string } | null>(null);
+  const [newAgentProject, setNewAgentProject] = useState<{ path: string; name: string; node?: string } | null>(null);
   const [view, setView] = useState<MainView>(() => homeView(c.spawn !== null, c.selectedId));
   // A new selection or spawn state (a pane closing, an agent starting, a digest opening a pane)
   // returns to the resting view. Done while rendering, so no frame shows a stale view.
@@ -1112,7 +1119,19 @@ export default function CockpitApp() {
           </ErrorBoundary>
         ) : view === 'device' && remoteRow && deviceGroups.enabled && deviceGroups.view?.devices.find((d) => d.node === remoteRow.node) ? (
           <ErrorBoundary where="Device pane" resetKeys={[remoteRow.key]}>
-            <RemotePaneView key={remoteRow.key} device={deviceGroups.view!.devices.find((d) => d.node === remoteRow.node)!} row={deviceGroups.groups.flatMap((g) => g.rows).find((r) => r.key === remoteRow.key) ?? remoteRow} onRetry={deviceGroups.refresh} />
+            <FarPane
+              key={remoteRow.key}
+              device={deviceGroups.view!.devices.find((d) => d.node === remoteRow.node)!}
+              row={deviceGroups.groups.flatMap((g) => g.rows).find((r) => r.key === remoteRow.key) ?? remoteRow}
+              rows={deviceGroups.groups.find((g) => g.device.node === remoteRow.node)?.rows ?? [remoteRow]}
+              c={c}
+              openRow={(key) => {
+                const next = deviceGroups.groups.flatMap((g) => g.rows).find((r) => r.key === key);
+                if (next) setRemoteRow(next);
+              }}
+              onRetry={deviceGroups.refresh}
+              extras={{ onWhatBroke: setWhatBrokePane, onSeeDay: todayOn ? () => setView('today') : undefined, handoff }}
+            />
           </ErrorBoundary>
         ) : c.chatStarting ? (
           // Before the pane views, so the skeleton shows over the inbox or the pane that was open.
@@ -1278,7 +1297,6 @@ export default function CockpitApp() {
         />
       )}
       {welcome.open && c.mode !== 'individual' && <FirstRun key={welcome.openKey} c={nav} seed={welcome.seed} onFinish={welcome.finish} />}
-      {!welcome.open && welcome.pending && c.mode !== 'individual' && view !== 'settings' && <FinishSetupChip onOpen={welcome.reopen} />}
       {c.mode !== 'individual' && <TellTeamToast />}
       <ImportHost c={nav} />
       <AddAgentActionHost c={nav} />
@@ -1324,6 +1342,7 @@ export default function CockpitApp() {
         needsYou={needsYou.length}
         trailing={
           <>
+            {!welcome.open && welcome.pending && c.mode !== 'individual' && view !== 'settings' && <FinishSetupChip onOpen={welcome.reopen} />}
             <DeskAwayChip />
             <ProblemsChip
               actions={{

@@ -34,7 +34,7 @@ export const MOVED_FILES: readonly string[] = [
   // round 3: the Settings pages (zh-TW phase 2)
   'components/MobilePairingPanel.tsx',
   'components/settings/sections/PhoneSection.tsx',
-  'components/connect/ConnectPage.tsx', 'components/connect/ThisPc.tsx', 'components/connect/DevicesTab.tsx', 'components/connect/PhoneGroup.tsx', 'components/connect/PcGroup.tsx',
+  'components/connect/ConnectPage.tsx', 'components/connect/ThisPc.tsx', 'components/connect/BookSetup.tsx', 'components/connect/DevicesTab.tsx', 'components/connect/PhoneGroup.tsx', 'components/connect/PcGroup.tsx',
   'components/settings/blocks/PairedDevices.tsx',
   'components/settings/TunnelSection.tsx',
   'components/settings/tunnel-model.ts',

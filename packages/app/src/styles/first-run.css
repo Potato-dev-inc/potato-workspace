@@ -90,15 +90,18 @@
   font-weight: 500;
 }
 .cockpit .fr-chip--button {
-  position: fixed;
-  right: 16px;
-  bottom: 16px;
-  z-index: 40;
-  min-height: 28px;
-  padding: 4px 12px;
+  /* Lives in the status bar (CockpitApp `trailing`), in the flow: it never floats over a screen. */
+  flex: 0 0 auto;
+  margin-left: 0;
+  height: 20px;
+  padding: 0 10px;
+  box-sizing: border-box;
+  display: inline-flex;
+  align-items: center;
+  line-height: 1;
+  white-space: nowrap;
   background: var(--bg-raised);
   color: var(--label);
-  box-shadow: var(--raise-hi);
   cursor: pointer;
 }
 .cockpit .fr-chip--button:hover {

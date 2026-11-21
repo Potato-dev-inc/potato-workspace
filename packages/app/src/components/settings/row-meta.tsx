@@ -70,6 +70,8 @@ export const ROW_META: Record<string, Meta> = {
   'lend-labs': { keys: ['lend_enabled'] },
   'devices-labs': { keys: ['devices_enabled'] },
   'far-pcs-labs': { keys: ['far_pcs_enabled'] },
+  'ssh-chat-labs': { keys: ['ssh_chat_enabled'] },
+  'pcdoor-labs': { keys: ['pcdoor_enabled'] },
   'account-labs': { keys: ['account_enabled'] },
   'desktop-potato-labs': { keys: ['desktop_pet_enabled'] },
   'agent-browser-labs': { keys: ['agent_browser_enabled'] },

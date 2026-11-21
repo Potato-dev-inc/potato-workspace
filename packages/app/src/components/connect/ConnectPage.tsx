@@ -177,7 +177,9 @@ export function ConnectPage({ tab, onTab, team, lend, paneNames, displayName, on
             {id === 'team' && (
               <div className="cx-page">
                 <ReachLine pc={pc} />
-                <TeamHost api={api.team} lendClient={api.lend} team={team ?? ownTeam} lend={lendHandle} paneNames={paneNames} displayName={displayName} />
+                <Embed>
+                  <TeamHost api={api.team} lendClient={api.lend} team={team ?? ownTeam} lend={lendHandle} paneNames={paneNames} displayName={displayName} />
+                </Embed>
               </div>
             )}
             {id === 'lending' && <LendingTab api={api} lend={lendHandle} settings={settings} patch={patch} pc={pc} />}

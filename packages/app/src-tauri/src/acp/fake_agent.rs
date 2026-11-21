@@ -93,7 +93,7 @@ pub const ROLE_ENV: &str = "PM_FAKE_ACP_ROLE";
 pub const OPTS_ENV: &str = "PM_FAKE_ACP";
 pub const STORE_ENV: &str = "PM_FAKE_ACP_STORE";
 
-const HARNESS_ARGS: [&str; 4] = ["--exact", "acp::fake_agent::tests::child_entry", "--nocapture", "--test-threads=1"];
+pub(crate) const HARNESS_ARGS: [&str; 4] = ["--exact", "acp::fake_agent::tests::child_entry", "--nocapture", "--test-threads=1"];
 
 /// A config that starts the fake agent.
 pub fn agent_config(opts: &str, store: &Path) -> AgentConfig {
@@ -1169,7 +1169,56 @@ mod tests {
                 std::process::exit(0);
             }
             Ok("host") => host_role(),
+            // A stand-in for `ssh` (the chat over SSH tests): says what a real `ssh` says when the host key is not known.
+            Ok("fakessh_unknown_key") => {
+                eprintln!("No ED25519 host key is known for build.local and you have requested strict checking.");
+                eprintln!("Host key verification failed.");
+                std::process::exit(255);
+            }
             _ => {}
         }
+    }
+
+    /// A host whose `ssh` is this test program playing the `fakessh_unknown_key` role.
+    struct FakeSshHost {
+        dir: PathBuf,
+    }
+
+    impl super::super::config::HostEnv for FakeSshHost {
+        fn var(&self, _: &str) -> Option<std::ffi::OsString> {
+            None
+        }
+        fn which(&self, _: &str) -> Option<PathBuf> {
+            None
+        }
+        fn adapters_dir(&self) -> PathBuf {
+            self.dir.join("adapters")
+        }
+        fn homes_dir(&self) -> PathBuf {
+            self.dir.join("homes")
+        }
+        fn ssh_program(&self) -> Option<super::super::config::SshProgram> {
+            // `--` makes the real ssh arguments plain filters for the test harness.
+            let mut pre: Vec<std::ffi::OsString> = HARNESS_ARGS.iter().map(std::ffi::OsString::from).collect();
+            pre.push("--".into());
+            Some(super::super::config::SshProgram { exe: std::env::current_exe().expect("test exe"), pre, env: vec![(ROLE_ENV.into(), "fakessh_unknown_key".into())] })
+        }
+    }
+
+    /// End to end through a real session: `ssh` refuses an unknown host key, and the chat says the one plain sentence
+    /// (the stderr of `ssh` reaches the start failure; nothing of it is copied into the sentence).
+    #[test]
+    fn a_remote_chat_on_an_unknown_host_key_says_to_connect_once_in_a_terminal() {
+        if std::env::var(ROLE_ENV).is_ok() {
+            return;
+        }
+        let dir = std::env::temp_dir().join(format!("pm-ssh-chat-{}", std::process::id()));
+        let host: Arc<dyn super::super::config::HostEnv> = Arc::new(FakeSshHost { dir: dir.clone() });
+        let cfg = super::super::config::for_remote(&super::super::config::find_builtin("claude").unwrap()).unwrap();
+        let ssh = crate::ssh::model::SshHost::parse("h1", "Build box", "dev@build.local", None, None).unwrap();
+        let session = super::super::session::AcpSession::new_remote(Arc::new(cfg), host, super::super::session::SessionParams { key: "ssh-fail".into(), cwd: PathBuf::from("\0ssh://h1/srv/app"), resume_session_id: None }, ssh, "/srv/app".into());
+        assert!(session.ensure_running().is_err());
+        assert_eq!(session.last_exit_reason().as_deref(), Some("Connect once in a terminal first so this computer's key is remembered."));
+        let _ = std::fs::remove_dir_all(&dir);
     }
 }

@@ -52,6 +52,9 @@ pub async fn plain_start(app: AppHandle, state: State<'_, AppState>, input: Star
 }
 
 fn pane_cwd(state: &State<'_, AppState>, pane_id: &str) -> Option<std::path::PathBuf> {
+    if crate::acp::chat::is_remote_pane(pane_id) {
+        return None;
+    }
     let cwd = state.registry.lock().list().into_iter().find(|p| p.id == pane_id)?.cwd;
     let path = std::path::PathBuf::from(cwd);
     path.is_dir().then_some(path)

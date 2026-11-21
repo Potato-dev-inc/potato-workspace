@@ -10,7 +10,7 @@
 //! - **Receiving:** a WebSocket (`/ws?after=`); when it can't connect, long-polling
 //!   (`/envelopes?after=&wait=`) for a while, then the WebSocket is tried again.
 
-use super::{now_ms, Inbound, TeamTransport, TransportError};
+use super::{now_ms, problem_kind, Inbound, LinkDetail, TeamTransport, TransportError};
 use crate::team::crypto::SigningKey;
 use parking_lot::Mutex;
 use pm_relay_protocol::{auth_header, Batch, Delivered, Envelope, JoinBox, Resync, SignedAcl, SignedBlob, TeamRegistration, AUTH_HEADER};
@@ -29,6 +29,8 @@ const POLL_BEFORE_WS_RETRY: Duration = Duration::from_secs(60);
 const WS_PING_EVERY: Duration = Duration::from_secs(45);
 /// Pause after a failed request.
 const BACKOFF: Duration = Duration::from_secs(3);
+/// Pause after "this relay is gone".
+const GONE_BACKOFF: Duration = Duration::from_secs(60);
 
 const MODE_OFFLINE: u8 = 0;
 const MODE_LIVE: u8 = 1;
@@ -50,8 +52,38 @@ pub struct RelayTransport {
     agent: ureq::Agent,
     stops: Mutex<Vec<Arc<AtomicBool>>>,
     mode: Arc<AtomicU8>,
+    /// What the reader is doing now, for the Team page.
+    live: Arc<Mutex<Live>>,
     /// Test switch: never try the WebSocket (exercise the poll fallback).
     poll_only: bool,
+}
+
+/// The reader's current step and the last failure (kind only).
+#[derive(Default)]
+struct Live {
+    step: &'static str,
+    attempting: bool,
+    problem: Option<&'static str>,
+    retry_at: Option<std::time::Instant>,
+}
+
+impl Live {
+    fn trying(&mut self, step: &'static str) {
+        self.step = step;
+        self.attempting = true;
+        self.retry_at = None;
+    }
+    fn ok(&mut self) {
+        self.attempting = false;
+        self.problem = None;
+        self.retry_at = None;
+    }
+    fn failed(&mut self, error: &TransportError, retry_in: Duration) {
+        self.step = "waiting";
+        self.attempting = false;
+        self.problem = Some(problem_kind(error));
+        self.retry_at = Some(std::time::Instant::now() + retry_in);
+    }
 }
 
 /// `base` with a scheme the relay speaks, or why not.
@@ -133,6 +165,7 @@ impl RelayTransport {
             agent,
             stops: Mutex::new(Vec::new()),
             mode: Arc::new(AtomicU8::new(MODE_CONNECTING)),
+            live: Arc::new(Mutex::new(Live::default())),
             poll_only: false,
         })
     }
@@ -162,6 +195,10 @@ impl RelayTransport {
             Ok(r) => r,
             Err(ureq::Error::Status(code, r)) => {
                 let text = r.into_string().unwrap_or_default();
+                // Nothing answers the health path at this address: there is no relay here (a Potato relay always answers it).
+                if code == 404 && path.ends_with("/v1/health") {
+                    return Err(TransportError::new(super::RELAY_GONE));
+                }
                 return Err(TransportError(relay_error(code, &text)));
             }
             Err(e) => return Err(TransportError(format!("Can't reach the relay: {e}"))),
@@ -189,6 +226,7 @@ impl RelayTransport {
             ws_path: self.team_path("/ws"),
             device: self.device.clone(),
             mode: self.mode.clone(),
+            live: self.live.clone(),
             poll_only: self.poll_only,
             cursor: Arc::new(AtomicU64::new(after)),
             pending_reset: AtomicBool::new(false),
@@ -202,6 +240,7 @@ impl RelayTransport {
             agent: self.agent.clone(),
             stops: Mutex::new(Vec::new()),
             mode: self.mode.clone(),
+            live: self.live.clone(),
             poll_only: self.poll_only,
         };
         std::thread::Builder::new()
@@ -212,18 +251,43 @@ impl RelayTransport {
     }
 }
 
+/// Ask an address whether it is a Potato relay (its `/v1/health`), before anything is moved to it. Returns the address to save.
+pub fn check_health(raw: &str) -> Result<String, String> {
+    let base = normalize_relay_url(raw)?;
+    let agent = ureq::AgentBuilder::new().timeout_connect(Duration::from_secs(5)).timeout(Duration::from_secs(10)).build();
+    match agent.get(&format!("{base}/v1/health")).set("x-pm-relay", pm_relay_protocol::PROTOCOL).call() {
+        Ok(r) => {
+            use std::io::Read;
+            let mut bytes = Vec::new();
+            let _ = r.into_reader().take(65_536).read_to_end(&mut bytes);
+            let ok = serde_json::from_slice::<serde_json::Value>(&bytes).ok().and_then(|v| v.get("ok").and_then(|o| o.as_bool()));
+            if ok == Some(true) { Ok(base) } else { Err("That address answered, but it is not a Potato relay.".into()) }
+        }
+        Err(ureq::Error::Status(404, _)) => Err(super::RELAY_GONE.into()),
+        Err(ureq::Error::Status(code, r)) => Err(relay_error(code, &r.into_string().unwrap_or_default())),
+        Err(e) => Err(format!("Can't reach the relay: {e}")),
+    }
+}
+
 fn relay_error(code: u16, body: &str) -> String {
+    // What the relay says is untrusted: short, and without control characters, before it reaches a log or an error sentence.
     let said = serde_json::from_str::<serde_json::Value>(body)
         .ok()
-        .and_then(|v| v.get("error").and_then(|e| e.as_str()).map(str::to_string));
+        .and_then(|v| v.get("error").and_then(|e| e.as_str()).map(|s| s.chars().filter(|c| !c.is_control()).take(200).collect::<String>()));
     match code {
-        403 => format!("{} yet{}.", super::DENIED, said.map(|s| format!(" ({s})")).unwrap_or_default()),
-        401 => format!("The relay refused this computer's signature{}.", said.map(|s| format!(" ({s})")).unwrap_or_default()),
-        404 => "The relay doesn't know this team.".into(),
+        // Cloudflare's reply when no Worker is deployed at the address any more.
+        // Asked with `Accept-Encoding: gzip` (as this app does), Cloudflare sends its HTML "Page not found" page instead of the plain code.
+        404 if body.contains("error code: 1042") || (body.contains("workers.cloudflare.com") && body.contains("There is nothing here yet")) => super::RELAY_GONE.into(),
+        403 => format!("{} yet{}.", super::DENIED, said.as_deref().map(|s| format!(" ({s})")).unwrap_or_default()),
+        401 => format!("{}{}.", super::BAD_SIGNATURE, said.as_deref().map(|s| format!(" ({s})")).unwrap_or_default()),
+        // Only the relay's own "unknown team" is a relay that lost the team. Any other 404 is a server that is not a relay at all.
+        404 if said.as_deref() == Some("unknown team") => super::UNKNOWN_TEAM.into(),
+        404 => "That address answered 404. It may not be a Potato relay (unreadable).".into(),
         409 => "The relay already has a newer copy.".into(),
         413 => "That's too large for the relay.".into(),
-        507 => "The team's mailbox on the relay is full. Try again later.".into(),
-        429 => "The relay asks to slow down. Try again in a minute.".into(),
+        507 => format!("{} Try again later.", super::MAILBOX_FULL),
+        429 => format!("{} Try again in a minute.", super::SLOW_DOWN),
+        500..=599 => format!("{} (HTTP {code}).", super::TROUBLE),
         _ => format!("The relay said {code}{}.", said.map(|s| format!(": {s}")).unwrap_or_default()),
     }
 }
@@ -233,6 +297,7 @@ struct ReaderCtx {
     ws_path: String,
     device: SigningKey,
     mode: Arc<AtomicU8>,
+    live: Arc<Mutex<Live>>,
     poll_only: bool,
     cursor: Arc<AtomicU64>,
     /// The relay said our cursor was past its counter; the next delivered envelope tells the
@@ -266,7 +331,11 @@ impl ReaderCtx {
                 match self.websocket(tx, stop) {
                     WsEnd::Stopped => break,
                     WsEnd::ReceiverGone => break,
-                    WsEnd::Failed(why) => tracing::debug!(%why, "team: relay WebSocket unavailable, polling"),
+                    WsEnd::Failed(why) => {
+                        tracing::debug!(%why, "team: relay WebSocket unavailable, polling");
+                        // A dropped live connection is not "live" any more while the poll below finds out.
+                        let _ = self.mode.compare_exchange(MODE_LIVE, MODE_CONNECTING, Ordering::SeqCst, Ordering::SeqCst);
+                    }
                 }
             }
             // Long-poll until it is time to try the WebSocket again.
@@ -276,9 +345,11 @@ impl ReaderCtx {
                     self.mode.store(MODE_OFFLINE, Ordering::SeqCst);
                     return;
                 }
+                self.live.lock().trying("poll");
                 match poller.fetch_batch(self.cursor.load(Ordering::SeqCst), POLL_WAIT_S) {
                     Ok(batch) => {
                         self.mode.store(MODE_POLLING, Ordering::SeqCst);
+                        self.live.lock().ok();
                         if batch.reset {
                             self.resync(batch.head.unwrap_or(0));
                         }
@@ -294,7 +365,13 @@ impl ReaderCtx {
                     Err(error) => {
                         self.mode.store(mode_after_error(&error), Ordering::SeqCst);
                         tracing::debug!(%error, "team: relay poll failed");
-                        std::thread::sleep(BACKOFF);
+                        // A relay that is gone never comes back by itself: ask rarely, and let the page show it once.
+                        let wait = if problem_kind(&error) == "relay_gone" { GONE_BACKOFF } else { BACKOFF };
+                        self.live.lock().failed(&error, wait);
+                        let until = std::time::Instant::now() + wait;
+                        while std::time::Instant::now() < until && !stop.load(Ordering::SeqCst) {
+                            std::thread::sleep(Duration::from_millis(500).min(wait));
+                        }
                     }
                 }
             }
@@ -305,6 +382,7 @@ impl ReaderCtx {
     fn websocket(&self, tx: &Sender<Inbound>, stop: &AtomicBool) -> WsEnd {
         use tungstenite::client::IntoClientRequest;
         use tungstenite::http::HeaderValue;
+        self.live.lock().trying("socket");
         let path = format!("{}?after={}", self.ws_path, self.cursor.load(Ordering::SeqCst));
         let host_part = self.base.split_once("://").map(|(_, r)| r.split('/').next().unwrap_or("")).unwrap_or("");
         let scheme = if self.base.starts_with("https://") { "wss" } else { "ws" };
@@ -326,6 +404,7 @@ impl ReaderCtx {
         };
         set_read_timeout(socket.get_ref(), Duration::from_millis(800));
         self.mode.store(MODE_LIVE, Ordering::SeqCst);
+        self.live.lock().ok();
         let mut last_ping = std::time::Instant::now();
         loop {
             if stop.load(Ordering::SeqCst) {
@@ -468,6 +547,13 @@ impl TeamTransport for RelayTransport {
         }
     }
 
+    fn detail(&self) -> Option<LinkDetail> {
+        let live = self.live.lock();
+        let host = self.origin.split_once("://").map(|(_, h)| h.to_string());
+        let retry_in_s = live.retry_at.map(|at| at.saturating_duration_since(std::time::Instant::now()).as_secs() + 1);
+        Some(LinkDetail { host, step: if live.step.is_empty() { "idle" } else { live.step }, attempting: live.attempting, problem: live.problem, retry_in_s })
+    }
+
     fn lost_access(&self) -> bool {
         self.mode.load(Ordering::SeqCst) == MODE_DENIED
     }
@@ -519,5 +605,140 @@ mod tests {
         assert!(!t.lost_access());
         t.mode.store(MODE_LIVE, Ordering::SeqCst);
         assert_eq!(t.status(), "live");
+    }
+
+    #[test]
+    fn detail_names_the_host_and_the_kind_of_failure_only() {
+        let t = transport();
+        let d = t.detail().unwrap();
+        assert_eq!(d.host.as_deref(), Some("relay.example.com"));
+        assert_eq!((d.step, d.attempting, d.problem), ("idle", false, None));
+        t.live.lock().trying("poll");
+        assert!(t.detail().unwrap().attempting);
+        t.live.lock().failed(&TransportError::new("Can't reach the relay: Connection Failed: dns error: no such host"), Duration::from_secs(3));
+        let d = t.detail().unwrap();
+        assert_eq!((d.step, d.attempting, d.problem), ("waiting", false, Some("dns")));
+        assert!(d.retry_in_s.unwrap() >= 1);
+        t.live.lock().ok();
+        assert_eq!(t.detail().unwrap().problem, None);
+    }
+
+    #[test]
+    fn problem_kinds_are_plain() {
+        let k = |s: &str| problem_kind(&TransportError::new(s));
+        assert_eq!(k("Can't reach the relay: timed out reading response"), "timeout");
+        assert_eq!(k("Can't reach the relay: Connection Failed: Connect error: tcp connect error: connection refused"), "refused");
+        assert_eq!(k("Can't reach the relay: Connection Failed: dns error: no such host"), "dns");
+        assert_eq!(k("The relay sent something unreadable."), "unreadable");
+    }
+
+    /// Every status the app tells apart gets its own kind, made from the status and not from guessing at words.
+    #[test]
+    fn each_relay_status_has_its_own_kind() {
+        let kind = |code: u16, body: &str| problem_kind(&TransportError::new(relay_error(code, body)));
+        assert_eq!(kind(403, r#"{"error":"device not on this team"}"#), "refused_by_relay");
+        assert_eq!(kind(404, r#"{"error":"unknown team"}"#), "unknown_team", "a relay that lost the team");
+        assert_eq!(kind(404, r#"{"error":"not found"}"#), "unreadable", "a server that is not a relay");
+        assert_eq!(kind(404, "<html>not found</html>"), "unreadable");
+        assert_eq!(kind(404, "error code: 1042"), "relay_gone", "Cloudflare: no Worker at this address");
+        assert_eq!(kind(404, "error code: 1042
+"), "relay_gone");
+        assert_eq!(kind(500, "error code: 1042"), "down");
+        assert_eq!(kind(401, r#"{"error":"stale request"}"#), "signature", "a wrong clock or key is not the access list");
+        assert_eq!(kind(429, ""), "busy");
+        assert_eq!(kind(507, ""), "busy");
+        assert_eq!(kind(502, ""), "down");
+        assert_eq!(kind(530, ""), "down");
+        assert_eq!(kind(418, ""), "other");
+    }
+
+    /// One canned HTTP answer on loopback; returns the address.
+    fn answer_once(status: &str, body: &'static str) -> String {
+        use std::io::{Read, Write};
+        let listener = std::net::TcpListener::bind("127.0.0.1:0").unwrap();
+        let addr = listener.local_addr().unwrap();
+        let head = format!("HTTP/1.1 {status}
+content-length: {}
+connection: close
+
+", body.len());
+        std::thread::spawn(move || {
+            if let Ok((mut c, _)) = listener.accept() {
+                let mut buf = [0u8; 2048];
+                let _ = c.read(&mut buf);
+                let _ = c.write_all(format!("{head}{body}").as_bytes());
+            }
+        });
+        format!("http://{addr}")
+    }
+
+    /// What Cloudflare really answers for a deleted Worker, as an HTTP client that accepts gzip sees it (kept short; the real page is 20 KB of artwork).
+    const CLOUDFLARE_NO_WORKER_HTML: &str = "<!DOCTYPE html>
+<html class=\"no-js\" lang=\"en-US\">
+  <head>
+    <meta charSet=\"utf-8\"/>
+    <title>Page not found</title>
+    <link rel=\"icon\" type=\"image/png\" href=\"https://workers.cloudflare.com/favicon.ico\" sizes=\"48x48\"/>
+  </head>
+  <body>
+    <h1>There is nothing here yet</h1>
+    <p>If you expect something to be here, it may take some time.<br/>Please check back again later.</p>
+  </body>
+</html>
+";
+
+    /// The real dead address answers a client that accepts gzip (as the app's does) with an HTML page, not with "error code: 1042".
+    #[test]
+    fn the_real_dead_relay_replies_are_read_as_gone_through_the_polling_call() {
+        for (ctype, body) in [("text/html; charset=UTF-8", CLOUDFLARE_NO_WORKER_HTML), ("text/plain; charset=UTF-8", "error code: 1042
+")] {
+            let url = answer_once_typed("404 Not Found", ctype, body);
+            let t = RelayTransport::new(&url, "abc", crate::team::crypto::new_signing_key()).unwrap();
+            let e = t.fetch_batch(0, 1).unwrap_err();
+            assert_eq!(problem_kind(&e), "relay_gone", "{ctype}: {}", e.0);
+        }
+        // An ordinary web server's 404 page is still "not a relay", not "gone".
+        let url = answer_once_typed("404 Not Found", "text/html", "<html><title>Page not found</title>nothing</html>");
+        let t = RelayTransport::new(&url, "abc", crate::team::crypto::new_signing_key()).unwrap();
+        assert_eq!(problem_kind(&t.fetch_batch(0, 1).unwrap_err()), "unreadable");
+    }
+
+    /// Like `answer_once`, with a content type.
+    fn answer_once_typed(status: &str, ctype: &str, body: &'static str) -> String {
+        use std::io::{Read, Write};
+        let listener = std::net::TcpListener::bind("127.0.0.1:0").unwrap();
+        let addr = listener.local_addr().unwrap();
+        let head = format!("HTTP/1.1 {status}
+content-type: {ctype}
+content-length: {}
+connection: close
+
+", body.len());
+        std::thread::spawn(move || {
+            if let Ok((mut c, _)) = listener.accept() {
+                let mut buf = [0u8; 4096];
+                let _ = c.read(&mut buf);
+                let _ = c.write_all(format!("{head}{body}").as_bytes());
+            }
+        });
+        format!("http://{addr}")
+    }
+
+    #[test]
+    fn health_check_tells_a_gone_relay_from_a_working_one() {
+        let gone = check_health(&answer_once("404 Not Found", "error code: 1042")).unwrap_err();
+        assert_eq!(problem_kind(&TransportError::new(gone)), "relay_gone");
+        let other = check_health(&answer_once("200 OK", "<html>hi</html>")).unwrap_err();
+        assert!(other.contains("not a Potato relay"), "{other}");
+        let url = answer_once("200 OK", r#"{"ok":true,"features":["team"]}"#);
+        assert_eq!(check_health(&url).unwrap(), url);
+    }
+
+    #[test]
+    fn what_the_relay_says_is_cut_short_and_has_no_control_characters() {
+        let body = format!(r#"{{"error":"{}[31m{}"}}"#, "a".repeat(300), "b");
+        let text = relay_error(418, &body);
+        assert!(!text.chars().any(|c| c.is_control()), "{text:?}");
+        assert!(text.chars().count() < 260, "{}", text.chars().count());
     }
 }

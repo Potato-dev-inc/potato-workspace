@@ -6,6 +6,8 @@ import { spawnSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
 
 const repoRoot = join(dirname(fileURLToPath(import.meta.url)), '..');
+// The lab's test builds build the Rust MCP exe themselves (only when it changed): skip it here.
+if (process.env.LAB_SKIP_RUST_MCP === '1') process.exit(0);
 const crateDir = join(repoRoot, 'packages', 'app', 'src-tauri');
 const outDir = join(repoRoot, 'packages', 'mcp-server', 'dist');
 const binaryName = process.platform === 'win32' ? 'puppet-master-mcp.exe' : 'puppet-master-mcp';

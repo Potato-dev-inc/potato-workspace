@@ -17,6 +17,9 @@ export const BUILD_BOX: SshHost = {
   ],
 };
 
+/** The same machine, but its agents can chat there (the saved machine's `chatAgents` come from the backend). */
+export const CHAT_BOX: SshHost = { ...BUILD_BOX, chatAgents: [{ id: 'claude', label: 'Claude' }, { id: 'codex', label: 'Codex' }] };
+
 export const CHECK_OK: SshCheck = {
   state: 'ok',
   message: 'Connected.',
@@ -54,13 +57,21 @@ export function sshMock(s: SshScenario | undefined, cmd: string, args: Record<st
       return { handled: true, value: true };
     case 'ssh_open':
       return { handled: true, value: 'ssh-pane-1' };
+    case 'ssh_chat_start':
+      return { handled: true, value: 'ssh-chat-1' };
+    case 'ssh_fs_list':
+      return { handled: true, value: { path: String(args.path ?? ''), more: false, skipped: 0, entries: [{ name: 'src', kind: 'dir' }, { name: 'README.md', kind: 'file' }] } };
+    case 'ssh_fs_read':
+      return { handled: true, value: { path: String(args.path ?? ''), size: 14, text: 'Hello from far\n' } };
+    case 'ssh_git_status':
+      return { handled: true, value: { branch: 'main', detached: false, unborn: false, ahead: 0, behind: 0, gone: false, more: false, changes: [{ path: 'README.md', kind: 'modified', staged: false }] } };
     default:
       return { handled: false };
   }
 }
 
 export interface SshCall {
-  method: 'check' | 'add' | 'checkSaved' | 'remove' | 'open';
+  method: 'check' | 'add' | 'checkSaved' | 'remove' | 'open' | 'chat';
   args: unknown[];
 }
 
@@ -70,6 +81,9 @@ export class SshFake implements SshApi {
   checkResult: SshCheck;
   calls: SshCall[] = [];
   opened: { id: string; agent: string; folder?: string }[] = [];
+  chats: { id: string; agent: string; folder: string }[] = [];
+  /** When set, the next chat start fails with this sentence. */
+  chatError: string | null = null;
   constructor(opts: { hosts?: SshHost[]; check?: SshCheck } = {}) {
     this.hostList = [...(opts.hosts ?? [])];
     this.checkResult = opts.check ?? CHECK_OK;
@@ -111,5 +125,11 @@ export class SshFake implements SshApi {
     this.calls.push({ method: 'open', args: [id, agent, folder] });
     this.opened.push({ id, agent, ...(folder ? { folder } : {}) });
     return `ssh-pane-${this.opened.length}`;
+  }
+  async chat(id: string, agent: string, folder: string) {
+    this.calls.push({ method: 'chat', args: [id, agent, folder] });
+    if (this.chatError) throw new Error(this.chatError);
+    this.chats.push({ id, agent, folder });
+    return `ssh-chat-${this.chats.length}`;
   }
 }

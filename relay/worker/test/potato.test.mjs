@@ -41,7 +41,7 @@ test("health advertises what this Worker can do, on both health routes", async (
     assert.equal(body.ok, true);
     assert.equal(body.protocol, "pm-relay/1");
     assert.equal(body.worker, "potato-worker/1");
-    assert.deepEqual([...body.features].sort(), ["invites", "rooms", "stable-link", "team"]);
+    assert.deepEqual([...body.features].sort(), ["invites", "link-rotate", "rooms", "stable-link", "team"]);
   }
   assert.equal((await raw(STRICT, "/_pm/health", { method: "POST" })).status, 405);
 });
@@ -80,7 +80,8 @@ test("a linked PC does not take over the relay's routes, and a link secret is ne
     const { api, team } = await newTeam(HOOKS);
     assert.equal((await api.call("GET", `/v1/teams/${team}/envelopes?after=0`, { device })).status, 200);
   } finally {
-    await raw(HOOKS, "/_pm/link/reset", { method: "POST", headers: { authorization: `Bearer ${secret}` } });
+    // a reset is a rotate: to the same secret it only clears the link
+    await raw(HOOKS, "/_pm/link/reset", { method: "POST", headers: { authorization: `Bearer ${secret}` }, body: JSON.stringify({ new_secret: secret }) });
     await pc.close();
   }
 });

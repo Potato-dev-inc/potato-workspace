@@ -2,13 +2,91 @@
    tokens. Three chip shapes carry the meaning, never colour: yes = filled + tick, no = solid outline + cross,
    not seen yet = dashed outline. */
 
-.settings .ag-row {
-  cursor: pointer;
+.settings .ag-cards {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
   gap: 12px;
+  padding: 12px 14px;
+}
+.settings .ag-card {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding: 16px;
+  min-width: 0;
+  border-radius: 12px;
+  background: var(--fill);
+  box-shadow: inset 0 0 0 1px var(--sep);
   transition: background-color 160ms var(--ease, ease-out);
 }
-.settings .ag-row:hover {
-  background: var(--fill);
+/* The sign-in terminal needs room to be read in full: the card takes the whole row while it is open. */
+.settings .ag-cards {
+  align-items: start;
+}
+.settings .ag-card[data-signin='open'] {
+  grid-column: 1 / -1;
+}
+.settings .ag-card:hover {
+  background: var(--fill-hover);
+}
+.settings .ag-card .ag-open {
+  width: 100%;
+}
+.settings .ag-go {
+  flex: none;
+  margin-left: auto;
+  color: var(--label-3);
+  font-size: 18px;
+  line-height: 1;
+}
+.settings .ag-card-mark {
+  width: 40px;
+  height: 40px;
+  border-radius: 10px;
+}
+.settings .ag-card-facts {
+  display: grid;
+  gap: 4px;
+  margin: 0;
+  font-size: 12.5px;
+}
+.settings .ag-card-facts > div {
+  display: flex;
+  gap: 8px;
+}
+.settings .ag-card-facts dt {
+  flex: none;
+  width: 64px;
+  color: var(--label-3);
+}
+.settings .ag-card-facts dd {
+  margin: 0;
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+.settings .ag-card-chips {
+  min-width: 0;
+  overflow: hidden;
+}
+.settings .ag-card-chips .ag-chips-text {
+  display: block;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.settings .ag-card-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  margin-top: auto;
+}
+.settings .ag-card-ask {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  font-size: 12.5px;
 }
 .settings .ag-open {
   display: flex;
@@ -59,13 +137,10 @@
   font-size: 11.5px;
   color: var(--label-3);
 }
-.settings .ag-row-chips {
-  flex: 0 1 auto;
-  min-width: 0;
-  max-width: 60%;
-}
+
 .settings .ag-go {
   flex: none;
+  margin-left: auto;
   color: var(--label-3);
   font-size: 16px;
   line-height: 1;
@@ -162,16 +237,6 @@
   padding: 0 8px;
   font-size: 11.5px;
 }
-@media (max-width: 640px) {
-  .settings .ag-row-chips {
-    display: none;
-  }
-}
-@media (prefers-reduced-motion: reduce) {
-  .settings .ag-row {
-    transition: none;
-  }
-}
 
 /* the list: plain grey words instead of pills, and the one next step as a small button */
 .settings .ag-chips-text {
@@ -184,8 +249,13 @@
 .settings .ag-step {
   flex: none;
 }
-.settings .ag-row[data-installed='false'] .ag-name {
+.settings .ag-card[data-installed='false'] .ag-name {
   color: var(--label-2);
+}
+@media (prefers-reduced-motion: reduce) {
+  .settings .ag-card {
+    transition: none;
+  }
 }
 /* the page: the name is the window title, so the heading is only for screen readers */
 .settings .ag-head .ag-title {
@@ -199,4 +269,28 @@
 .settings .ag-hint {
   margin: 0;
   padding: 6px 14px;
+}
+
+.settings .ag-card-why {
+  margin: 0;
+  font-size: 12px;
+  color: var(--label-3);
+}
+
+.settings .ag-card-state-why {
+  display: block;
+  margin-top: 2px;
+  color: var(--label-3);
+  font-size: 12px;
+}
+.settings .ag-card-signin {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  min-width: 0;
+}
+.settings .ag-card-signin-line {
+  margin: 0;
+  font-size: 13px;
+  color: var(--label-2);
 }

@@ -28,6 +28,8 @@ pub struct Door {
     /// What this PC lets that node do now (read from the trust list at every request).
     pub level_of: LevelOf,
     pub name_of: NameOf,
+    /// Whether that node carries the account marker (it is the person's own PC): no press and hold is asked of it.
+    pub marked_of: Arc<dyn Fn(&str) -> bool + Send + Sync>,
     /// Whether this PC lets that node borrow its agent sign-ins (the lend right, its own switch).
     pub lend_ok: Arc<dyn Fn(&str) -> bool + Send + Sync>,
     pub now_ms: Arc<dyn Fn() -> u64 + Send + Sync>,
@@ -54,10 +56,10 @@ impl HostBridge for Door {
         let segs: Vec<&str> = path.split('/').filter(|s| !s.is_empty()).collect();
         if segs.first() == Some(&"pclink") {
             let (node, method, target) = (node.to_string(), method.to_string(), target.to_string());
-            let (services, asks, level_of, name_of, now_ms) = (self.services.clone(), self.asks.clone(), self.level_of.clone(), self.name_of.clone(), self.now_ms.clone());
+            let (services, asks, level_of, name_of, marked_of, now_ms) = (self.services.clone(), self.asks.clone(), self.level_of.clone(), self.name_of.clone(), self.marked_of.clone(), self.now_ms.clone());
             let done = tokio::task::spawn_blocking(move || {
                 let name = name_of(&node);
-                let who = Caller { node: &node, name: &name, level: level_of(&node), now_ms: now_ms() };
+                let who = Caller { node: &node, name: &name, level: level_of(&node), marked: marked_of(&node), now_ms: now_ms() };
                 handle(&who, services.as_ref(), &asks, &method, &target, &body)
             })
             .await;
@@ -94,10 +96,17 @@ impl HostBridge for Door {
     async fn poll(&self, node: &str, cursor: Option<u64>, wait: Duration) -> Option<(u64, String)> {
         (self.level_of)(node)?;
         let (node, services, level_of) = (node.to_string(), self.services.clone(), self.level_of.clone());
+        let services_of = services.clone();
         let done = tokio::task::spawn_blocking(move || {
             let view = higher(|payload: &str| {
                 let level = level_of(&node)?;
-                events::view(level, payload).map(|c| std::borrow::Cow::Owned(c.into_owned()))
+                let seen = events::view(level, payload)?;
+                // A session switched off for other PCs on its own PC shows no frame either.
+                if events::app_pane(&seen).is_some_and(|pane| services_of.ceiling(&pane).is_none()) {
+                    return None;
+                }
+                // Terminal output is metered per PC (a flood becomes "redraw from the screen").
+                super::terminal::throttle(&node, seen.into_owned()).map(std::borrow::Cow::Owned)
             });
             let out = services.events(cursor, wait, &view);
             level_of(&node).map(|_| out)

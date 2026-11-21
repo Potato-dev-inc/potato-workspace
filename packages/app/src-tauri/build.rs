@@ -74,7 +74,11 @@ fn main() {
     // build. Debug builds keep the cheaper rule above so `cargo test` is not recompiled each run;
     // set PM_FORCE_NEW_BUILD_ID=1 to force it there too.
     println!("cargo:rerun-if-env-changed=PM_FORCE_NEW_BUILD_ID");
-    let release = std::env::var("PROFILE").is_ok_and(|profile| profile == "release");
+    // The lab's test builds (profile `lab`, which inherits release, so PROFILE says "release") set PM_LAB_BUILD: they
+    // keep the cheap rule, or every no-change rebuild would recompile the whole crate. The id still changes
+    // whenever source, git HEAD or the Tauri config changes (rerun-if-changed above).
+    println!("cargo:rerun-if-env-changed=PM_LAB_BUILD");
+    let release = std::env::var("PROFILE").is_ok_and(|profile| profile == "release") && std::env::var_os("PM_LAB_BUILD").is_none();
     if release || std::env::var_os("PM_FORCE_NEW_BUILD_ID").is_some() {
         println!("cargo:rerun-if-changed=.pm-always-new-build-id");
     }

@@ -109,7 +109,7 @@ pub fn open_primary_window(app: &AppHandle) {
 /// starts in Orchestration for this launch only (the saved choice stays) and the cockpit says so.
 pub fn open_startup_windows(app: &AppHandle) {
     let saved = crate::ui_mode::current();
-    let panes = app.state::<crate::AppState>().registry.lock().list().into_iter().filter(|p| gets_window_on_switch(&p.id)).collect::<Vec<_>>();
+    let panes = app.state::<crate::AppState>().registry.lock().list_including_remote().into_iter().filter(|p| gets_window_on_switch(&p.id)).collect::<Vec<_>>();
     match crate::mini_bar::launch_decision(saved, panes.len()) {
         crate::mini_bar::Launch::Cockpit => open_cockpit(app, None),
         crate::mini_bar::Launch::IndividualWindows => {
@@ -147,7 +147,7 @@ pub fn startup_window(args: &[String], worker: bool, no_window_env: Option<&str>
 /// The switch to Individual opens a pop-out for each live pane except a background one (a companion).
 /// The live panes that get a window on the switch, in layout order (the cockpit's order: active pane first).
 pub(crate) fn panes_for_switch(app: &AppHandle) -> Vec<crate::pty::PaneInfo> {
-    let panes = app.state::<crate::AppState>().registry.lock().list().into_iter().filter(|p| gets_window_on_switch(&p.id)).collect();
+    let panes = app.state::<crate::AppState>().registry.lock().list_including_remote().into_iter().filter(|p| gets_window_on_switch(&p.id)).collect();
     crate::window_layout::order_panes(panes, |p: &crate::pty::PaneInfo| p.id.as_str())
 }
 

@@ -374,6 +374,10 @@ pub static NOTIFIED_QUESTIONS: Mutex<Vec<String>> = Mutex::new(Vec::new());
 /// Hook for `ask_user`: a question was just created. Fires once per question (the caller only
 /// invokes it on creation). Tapping the notification opens the phone's question list.
 pub fn notify_question(question: &crate::questions::Question) {
+    // A card of a chat on another computer never reaches a lock screen (`acp::chat::is_remote_pane`).
+    if question.pane_id.as_deref().is_some_and(crate::acp::chat::is_remote_pane) {
+        return;
+    }
     // A question from a Night Shift pane waits for the morning report; it sends nothing now.
     if question.pane_id.as_deref().is_some_and(crate::night_shift::quiet::is_quiet_pane) {
         return;

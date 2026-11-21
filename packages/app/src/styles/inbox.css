@@ -205,3 +205,10 @@
 .cockpit .ib-crew-btn {
   margin: 2px 0 0 12px;
 }
+
+/* Where a card's chat runs when it is on another computer: a small neutral line above the card. */
+.cockpit .ib-where {
+  margin: 0 0 4px;
+  font-size: 12px;
+  color: var(--label-3);
+}

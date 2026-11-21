@@ -10,6 +10,8 @@ export interface AttachMenuProps {
   onPickImage: () => void;
   /** The box cannot take anything now (blocked, busy, or still preparing files): the button stays but does nothing. */
   disabled?: boolean;
+  /** Why the button is off when this place cannot take files yet (its one plain line); shown as the button's title. */
+  reason?: string | null;
 }
 
 function Svg({ children }: { children: React.ReactNode }) {
@@ -45,7 +47,7 @@ const ImageIcon = () => (
   </Svg>
 );
 
-export function AttachMenu({ onPickFiles, onPickFolder, onPickImage, disabled = false }: AttachMenuProps) {
+export function AttachMenu({ onPickFiles, onPickFolder, onPickImage, disabled = false, reason = null }: AttachMenuProps) {
   const [open, setOpen] = useState(false);
   const wrap = useRef<HTMLDivElement>(null);
   const trigger = useRef<HTMLButtonElement>(null);
@@ -68,7 +70,7 @@ export function AttachMenu({ onPickFiles, onPickFolder, onPickImage, disabled = 
         className="ck-chat-attach"
         data-testid="chat-composer-attach"
         aria-label="Add to your message"
-        title="Add files, a folder or an image (or drop them here, or type @ to add a project file)"
+        title={reason ?? 'Add files, a folder or an image (or drop them here, or type @ to add a project file)'}
         aria-haspopup="menu"
         aria-expanded={open}
         aria-disabled={disabled || undefined}

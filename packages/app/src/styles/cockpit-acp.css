@@ -372,9 +372,15 @@
   color: var(--label-2);
 }
 .cockpit .ck-acp-card-details .lend-term {
-  height: 200px;
-  min-width: 320px;
   margin-top: 6px;
+}
+/* With the terminal open the card stacks (text, terminal, then the buttons) so the terminal has the card's whole width. */
+.cockpit .ck-acp-card:has(.ck-acp-card-details[open]) {
+  flex-direction: column;
+  align-items: stretch;
+}
+.cockpit .ck-acp-card:has(.ck-acp-card-details[open]) .ck-acp-card-actions {
+  justify-content: flex-start;
 }
 /* Force yes: a chip in the pane header. Off it is a quiet word; on it takes the risk tone (see chips.css). The warning is
    a small solid card under the chip, in the same place the lend chip opens its own. */

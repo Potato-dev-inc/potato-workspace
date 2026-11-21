@@ -77,6 +77,36 @@ pub fn create_team(
     Ok(roster)
 }
 
+/// The admin's repair for a relay that forgot the team (its Cloudflare Worker was set up again, which empties it): when the relay
+/// answers "I don't know this team" the team is registered there again and the roster, key grant and access list are published
+/// again, the same steps as when the team was made. Nothing else is touched. `Ok(true)` when it did that, `Ok(false)` when there was
+/// nothing to repair (not the admin, or the relay knows the team, or it cannot be asked). If the publishing fails after the registration, the
+/// next call finishes it.
+pub fn set_up_again(roster: &Roster, keys: &KeyStore, transport: &dyn TeamTransport) -> Result<bool, String> {
+    let root = keys.member()?;
+    if key_id(&root) != roster.root {
+        return Ok(false);
+    }
+    // 404: the relay forgot the team (register, then publish). An empty roster slot: an earlier repair registered the team but stopped
+    // before publishing (429, network), so only the publishing is left.
+    let register = match transport.get_state("roster") {
+        Err(error) if super::transport::problem_kind(&error) == "unknown_team" => true,
+        Ok(None) => false,
+        _ => return Ok(false),
+    };
+    if register {
+        let registration = TeamRegistration {
+            team: roster.team.clone(),
+            root: roster.root.clone(),
+            salt: roster.salt.clone(),
+            acl: SignedAcl::signed(&roster.team, roster.seq() + 1, roster.device_ids(), &root),
+        };
+        transport.register(&registration).map_err(|e| e.0)?;
+    }
+    publish(roster, keys, transport)?;
+    Ok(true)
+}
+
 /// The link for an invite I made.
 pub fn invite_link(roster: &Roster, keys: &KeyStore, relay: Option<&str>, folder: Option<&str>, invite_id: &str) -> Result<InviteLink, String> {
     Ok(InviteLink {

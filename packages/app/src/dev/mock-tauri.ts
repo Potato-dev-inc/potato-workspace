@@ -63,6 +63,7 @@ import { filesMock } from './files-fixtures';
 import { artifactsMock } from './artifacts-fixtures';
 import { addAgentMock } from './add-agent-fixtures';
 import { agentCapsMock } from './agent-caps-fixtures';
+import { createLocalAcpChatMock, localAcpPane } from './local-acp-chat-mock';
 
 const DOCTOR_ROWS = [
   { id: 'claude', label: 'Claude', state: 'unchecked', installed: true, version: '2.1.4 (Claude Code)', reason: 'Installed. Press Test to check it can answer.', install_hint: 'winget install Anthropic.ClaudeCode', install_fallback: 'npm i -g @anthropic-ai/claude-code', login_hint: 'Open Claude and type /login', can_test: true, hooks: { state: 'connected', mode: 'shadow', sentence: 'Connected. Claude tells Potato Workspace when it starts, asks and finishes. Watch only: Potato Workspace still decides from the screen.' } },
@@ -131,7 +132,8 @@ export function installTauriMock(scenario: HarnessScenario): void {
   const accountMock = createAccountMock(scenario.account);
   const closedState: { chats: ClosedChat[] | null } = { chats: null };
   const bringState = newBringChatsState();
-  const panes = scenario.panes ?? EXAMPLE_PANES;
+  const localAcp = createLocalAcpChatMock(scenario.localAcpChat);
+  const panes = [...(scenario.panes ?? EXAMPLE_PANES), ...(scenario.localAcpChat ? [localAcpPane(scenario.localAcpChat)] : [])];
   // In-memory plugin-store (one store, rid 1), keyed as the app writes it.
   // The two agent-authority switches, at the shipped defaults unless the scenario says otherwise.
   let authority = scenario.authority ?? { ask_before_agent_control: true, agents_may_merge: false, ask_before_helpers_start: false };
@@ -204,6 +206,7 @@ export function installTauriMock(scenario: HarnessScenario): void {
       if (ssh.handled) return ssh.value;
       const whatBroke = whatBrokeItMock(scenario.whatBroke, cmd, a);
       if (whatBroke.handled) return whatBroke.value;
+      const localChat = localAcp(cmd, a); if (localChat.handled) return localChat.value;
       const wbResult = whatBrokeItResultMock(scenario.whatBrokeItResult, cmd, a); if (wbResult.handled) return wbResult.value;
       switch (cmd) {
         // No phone has asked for control in the preview (a null answer crashed the control-ask notice).
@@ -815,6 +818,10 @@ export function installTauriMock(scenario: HarnessScenario): void {
         case 'team_default_name':
           return 'Maya';
         case 'team_state':
+        case 'team_reconnect':
+          return scenario.team ?? null;
+        case 'team_move_relay':
+          if (scenario.team) scenario.team = { ...scenario.team, link: 'live', linkDetail: null };
           return scenario.team ?? null;
         case 'team_tasks_state':
           return scenario.tasks ?? { sent: [], received: [], handoverOn: false, lendOn: false, repoCapBytes: 2 * 1024 * 1024 };

@@ -22,6 +22,8 @@ export interface AccountView {
   message: string | null;
   account: AccountInfo | null;
   device_id: string | null;
+  /** This computer keeps its key in a private file (Linux). */
+  key_in_file?: boolean;
 }
 
 export interface AccountDevice {
@@ -132,8 +134,8 @@ export const accountApi: AccountApi = {
 export const NEW_DEVICE_SECS = 24 * 60 * 60;
 
 /** The devices that signed in during the last 24 hours, other than this one, not yet signed out, and not already dismissed. */
-export function newDevices(devices: AccountDevice[], nowSecs: number, dismissed: ReadonlySet<string>): AccountDevice[] {
-  return devices.filter((d) => !d.is_this && !d.revoked && !dismissed.has(d.id) && nowSecs - d.created_at < NEW_DEVICE_SECS && d.created_at <= nowSecs + 60);
+export function newDevices(devices: AccountDevice[], nowSecs: number, dismissed: ReadonlySet<string>, ownId: string | null = null): AccountDevice[] {
+  return devices.filter((d) => !d.is_this && d.id !== ownId && !d.revoked && !dismissed.has(d.id) && nowSecs - d.created_at < NEW_DEVICE_SECS && d.created_at <= nowSecs + 60);
 }
 
 const DISMISSED_KEY = 'pm.account.dismissed-new-devices';

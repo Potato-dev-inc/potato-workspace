@@ -1,0 +1,37 @@
+#!/usr/bin/env node
+// A tiny stand-in for the `claude-agent-acp` adapter: minimal ACP over stdio (one JSON object per line).
+// It answers initialize, session/new and session/prompt, and the one message chunk it streams says what it saw:
+// the prompt, the folder it runs in, and its own command-line arguments (as JSON). TEST ONLY. It is not Claude.
+const readline = require('readline');
+const send = (o) => process.stdout.write(JSON.stringify(o) + '\n');
+let n = 0;
+const rl = readline.createInterface({ input: process.stdin });
+rl.on('line', (line) => {
+  if (!line.trim()) return;
+  let m;
+  try { m = JSON.parse(line); } catch { return; }
+  if (m.id === undefined || m.method === undefined) return;
+  const ok = (result) => send({ jsonrpc: '2.0', id: m.id, result });
+  switch (m.method) {
+    case 'initialize':
+      return ok({
+        protocolVersion: 1,
+        agentInfo: { name: 'pm-ssh-test-echo', title: 'Echo test agent', version: '0.0.1' },
+        agentCapabilities: { loadSession: false, promptCapabilities: { image: false, embeddedContext: false } },
+        authMethods: [],
+      });
+    case 'session/new':
+      globalThis.requestedCwd = (m.params || {}).cwd;
+      return ok({ sessionId: 'echo-' + process.pid + '-' + ++n });
+    case 'session/prompt': {
+      const sid = m.params.sessionId;
+      const prompt = (m.params.prompt || []).map((b) => b.text || '').join('');
+      const text = JSON.stringify({ prompt, cwd: process.cwd(), requestedCwd: globalThis.requestedCwd, argv: process.argv.slice(2), shell: process.env.SHELL || '' });
+      send({ jsonrpc: '2.0', method: 'session/update', params: { sessionId: sid, update: { sessionUpdate: 'agent_message_chunk', content: { type: 'text', text } } } });
+      return ok({ stopReason: 'end_turn' });
+    }
+    default:
+      return send({ jsonrpc: '2.0', id: m.id, error: { code: -32601, message: 'method not found: ' + m.method } });
+  }
+});
+rl.on('close', () => process.exit(0));

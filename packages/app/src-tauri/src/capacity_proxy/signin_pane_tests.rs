@@ -301,3 +301,19 @@ fn the_standalone_sign_in_commands_never_present_a_pane() {
     let src = include_str!("../commands/chat_signin.rs");
     assert!(!src.contains("present_pane") && !src.contains("cockpit://select") && !src.contains("emit_select"));
 }
+
+#[test]
+fn the_start_time_is_kept_before_the_agent_runs_and_after_its_pane_ends() {
+    let (store, root) = store("started-at");
+    let acc = store.add_lend("claude", "Lend Claude").unwrap();
+    let (panes, fake) = (SigninPanes::new(), Arc::new(Fake::default()));
+    assert!(panes.started_at(&acc.id).is_none(), "nothing started yet: nothing to prove a sign-in against");
+    let before = std::time::SystemTime::now();
+    panes.start(fake.clone(), &acc, root.join("lend").join("signin")).unwrap();
+    let started = panes.started_at(&acc.id).expect("kept");
+    assert!(started >= before && started <= std::time::SystemTime::now());
+    // The pane ends; the start time stays, so a credential file written meanwhile still counts as a sign-in made after the start.
+    panes.stop(&acc.id);
+    assert_eq!(panes.started_at(&acc.id), Some(started));
+    let _ = std::fs::remove_dir_all(&root);
+}

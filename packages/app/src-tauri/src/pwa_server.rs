@@ -147,8 +147,10 @@ pub fn start_pwa_server(
     }
 
     let profile = crate::app_paths::profile();
-    let wanted = crate::app_paths::pwa_port_for(profile.as_deref());
-    let listener = bind_first_free(&crate::app_paths::pwa_port_candidates(profile.as_deref()))
+    // The port the person chose in "My domain" goes first; if it is busy the usual ones follow, so the app always starts.
+    let chosen = crate::phone_port::saved();
+    let wanted = chosen.unwrap_or_else(|| crate::app_paths::pwa_port_for(profile.as_deref()));
+    let listener = bind_first_free(&crate::phone_port::candidates(chosen, crate::app_paths::pwa_port_candidates(profile.as_deref())))
         .map_err(|err| format!("bind PWA server on {HOST}:{wanted}: {err}"))?;
     if listener.local_addr().map(|a| a.port()).ok() != Some(wanted) {
         PORT_MOVED.store(true, std::sync::atomic::Ordering::SeqCst);
@@ -299,6 +301,15 @@ fn handle_connection(
         return write_json(&mut stream, 200, &payload);
     }
 
+    // The device door: signed read-only calls from an already-paired PC. Served ONLY on the tunnel listener (where the host and the
+    // remoteness come from the PROXY header, never from a header the visitor wrote); anywhere else it does not exist, and it is never
+    // forwarded to the bridge.
+    if path == crate::device_link::pcdoor::PATH {
+        let Some(remote) = remote else { return write_text(&mut stream, 404, "Not Found") };
+        let (status, reply) = serve_pcdoor(remote, method, target, body);
+        return write_bytes(&mut stream, status, "application/json; charset=utf-8", &reply, false);
+    }
+
     if path == "/bridge" || path.starts_with("/bridge/") {
         let bridge_path = path.strip_prefix("/bridge").unwrap_or("");
         let bridge_path = if bridge_path.is_empty() {
@@ -335,6 +346,13 @@ fn handle_connection(
     }
 
     serve_static(&mut stream, dist_root, path, method)
+}
+
+/// `POST /bridge/pcdoor` on the tunnel listener. The answer is always JSON; a failure to prove who asks is the same flat 401 every time.
+fn serve_pcdoor(remote: &tunnel_listener::RemoteCtx, method: &str, target: &str, body: &[u8]) -> (u16, Vec<u8>) {
+    use crate::device_link::pcdoor;
+    let Some(door) = crate::device_link::app::pcdoor() else { return pcdoor::handle_unbuilt(remote.peer()) };
+    tauri::async_runtime::block_on(door.handle(pcdoor::Hit { host: remote.host(), peer: remote.peer(), method, target, body }))
 }
 
 /// One read that waits at most `READ_STEP` and never past `deadline` (counted from `started`), so a client that
@@ -769,6 +787,7 @@ fn write_bytes(
         200 => "OK",
         400 => "Bad Request",
         403 => "Forbidden",
+        401 => "Unauthorized",
         404 => "Not Found",
         405 => "Method Not Allowed",
         413 => "Payload Too Large",
@@ -1022,6 +1041,16 @@ mod tests {
 
     fn post(path: &str, extra: &str, len: usize) -> String {
         format!("POST {path} HTTP/1.1\r\nHost: 127.0.0.1\r\n{extra}Content-Length: {len}\r\nConnection: close\r\n\r\n")
+    }
+
+    #[test]
+    fn the_device_door_does_not_exist_on_the_main_port_and_is_never_forwarded_to_the_bridge() {
+        let pwa = bridge_rig("pcdoor-main", tiny_upstream("bridge"));
+        for extra in ["", FROM_OUTSIDE] {
+            let reply = send_raw(pwa, &post("/bridge/pcdoor", extra, 0), 0);
+            assert!(reply.starts_with("HTTP/1.1 404"), "{reply}");
+            assert!(!reply.contains("\"from\":\"bridge\""), "forwarded to the bridge: {reply}");
+        }
     }
 
     #[test]

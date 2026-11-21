@@ -180,6 +180,16 @@ describe('Potato account on the Connect page', () => {
     expect(text('[data-testid="account-not-ready"]')).toBe('The account service is not set up yet.');
   });
 
+  it('says so in one line when this computer keeps its key in a private file', async () => {
+    await mount(connectApi(fakeAccount({ ...SIGNED_OUT, key_in_file: true })));
+    expect(text('[data-testid="account-key-in-file"]')).toBe('This computer keeps its key in a private file.');
+  });
+
+  it('does not show the private-file line elsewhere', async () => {
+    await mount(connectApi(fakeAccount(SIGNED_OUT)));
+    expect(q('[data-testid="account-key-in-file"]')).toBeNull();
+  });
+
   it('shows the error sentence the backend gave', async () => {
     await mount(connectApi(fakeAccount({ ...SIGNED_OUT, message: 'Could not reach the account service. Check your connection and try again.' })));
     expect(text('[data-testid="account-error"]')).toContain('Could not reach the account service');
@@ -222,6 +232,12 @@ describe('Potato account on the Connect page', () => {
       expect(banners[0]!.textContent).toContain('New device');
       expect(banners[0]!.textContent).toContain('Laptop');
       expect(banners[0]!.textContent).toContain('Not me?');
+    });
+
+    it('this PC never asks "is this you?" about itself, even when the list does not flag its own row', async () => {
+      // The row of this PC (the session's device id) is new today but the account did not mark it as the caller.
+      await mount(connectApi(fakeAccount(SIGNED_IN, [dev({ id: ME, name: 'pm-sandbox (sandbox-test)', created_at: NOW - HOUR, is_this: false })])));
+      expect(q('[data-testid="account-new-device"]')).toBeNull();
     });
 
     it('Not me? signs that device out for good and gives the advice', async () => {

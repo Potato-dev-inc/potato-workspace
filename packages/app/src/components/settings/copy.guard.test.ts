@@ -43,6 +43,8 @@ const COPY: Record<string, [string, string]> = {
   'project-guide-labs': ['Project guide', 'Your agent writes a short guide to a project, only when you ask.'],
   'smaller-updates-labs': ['Smaller updates', 'Updates download only the app, about a third of the size. Built-in tools stay.'],
   'far-pcs-labs': ['Far-away PCs through my relay', 'Pair a PC on another network through your relay (needs Devices on).'],
+  'ssh-chat-labs': ['SSH agent chat', 'Chat with an agent on another computer over SSH. Experimental.'],
+  'pcdoor-labs': ['Device door over my web address', 'A paired PC can make read-only calls through your web address. Experimental.'],
   'opentunnel-labs': ['Fixed phone address', 'A fixed phone address from a third-party relay (OpenTunnel). It may change.'],
   'opencode-automation': ['Switch OpenCode keys at the limit', "Uses your other key when one is limited. Check your provider's terms."],
 };

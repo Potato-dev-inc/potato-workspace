@@ -6,7 +6,7 @@ import { act } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { ChatSignIn } from '../../lib/chatMore';
-import { closeSignInAgain, peekSignInAgain } from '../../lib/agentSignIn';
+import { closeSignInAgain, peekSignInAgain, signedInNow } from '../../lib/agentSignIn';
 import type { UsageApi, UsageSnapshot } from '../../lib/usage';
 
 const invoke = vi.fn();
@@ -103,6 +103,8 @@ describe('Sign in again from the Usage card', () => {
     expect(peekSignInAgain()).toMatchObject({ agentId: 'claude', accountId: null });
     expect(sheet()).not.toBeNull();
     expect(sheet()!.closest('.lend-sheet')).not.toBeNull();
+    // The sheet that holds the sign-in terminal is the wide one (about 80 columns), and it scrolls when the window is small.
+    expect(sheet()!.closest('.lend-sheet')!.getAttribute('data-size')).toBe('term');
     // Two steps, no terminal in the main workspace: the sign-in's own terminal is folded away until it asks something.
     await act(async () => text('Sign in')!.click());
     expect(f.driver.start).toHaveBeenCalledTimes(1);
@@ -136,5 +138,61 @@ describe('Sign in again from the Usage card', () => {
     await mount(f);
     await act(async () => host.querySelector<HTMLButtonElement>('[data-testid="usage-strip"]')!.click());
     expect(host.querySelector('[data-testid="usage-sign-in-again"]')).toBeNull();
+  });
+});
+
+describe('Sign in again for an agent nothing can check', () => {
+  it('says plainly the app cannot check it and offers only Close, not a Try again promise', async () => {
+    const f = fakes();
+    f.usage.snapshot = async () => ({ refreshed_at_ms: 0, rows: [{ ...row('ok'), account_id: 'acc-1', state: 'unknown' as const, windows: [] }] });
+    const real = (agentId: string, accountId?: string | null) => signedInNow(agentId, accountId, f.usage, async () => ({ signed_in: null }));
+    await act(async () => {
+      root.render(<SignInAgainHost driver={() => f.driver} check={real} pollMs={30} lookMs={30} giveUpMs={5000} closeMs={200} />);
+    });
+    await act(async () => {
+      (await import('../../lib/agentSignIn')).openSignInAgain({ agentId: 'claude', label: 'Claude', accountId: 'acc-1' });
+    });
+    await act(async () => text('Sign in')!.click());
+    await wait(150);
+    expect(sheet()!.querySelector('[data-testid="signin-cannot-check"]')!.textContent).toContain('cannot check whether Claude is signed in');
+    expect(text('Try again')).toBeUndefined();
+    expect(text('Close')).toBeTruthy();
+    expect(sheet()!.textContent).not.toContain('Signed in.');
+  });
+});
+
+describe('Sign in again for an account: complete only when the sign-in really is', () => {
+  // The Settings > Accounts case: one extra sign-in whose folder the agent has just started writing into. Its usage row is `unknown`
+  // from then on, which used to be taken for "signed in" a few seconds later, before anything was typed.
+  it('a row that is only `unknown` never says signed in; after the waiting ends it says not finished with Try again, and a real sign makes it done', async () => {
+    const f = fakes();
+    let credentialWritten = false;
+    f.usage.snapshot = async () => ({ refreshed_at_ms: 0, rows: [{ ...row('ok'), account_id: 'acc-1', account_label: 'Work', state: 'unknown' as const, windows: [] }] });
+    const real = (agentId: string, accountId?: string | null) => signedInNow(agentId, accountId, f.usage, async () => ({ signed_in: credentialWritten }));
+    await act(async () => {
+      root.render(<SignInAgainHost driver={() => f.driver} check={real} pollMs={30} lookMs={30} giveUpMs={200} closeMs={200} />);
+    });
+    await act(async () => {
+      (await import('../../lib/agentSignIn')).openSignInAgain({ agentId: 'claude', label: 'Claude', accountId: 'acc-1' });
+    });
+    await act(async () => text('Sign in')!.click());
+    // Far longer than a poll: nothing was typed, so the sheet must still be waiting.
+    await wait(120);
+    expect(sheet()!.textContent).toContain('Waiting for you to finish');
+    expect(sheet()!.textContent).not.toContain('Signed in');
+    // The waiting runs out: it says so plainly, never success, and offers Try again.
+    await wait(300);
+    expect(sheet()!.textContent).toContain('Not finished yet');
+    expect(sheet()!.textContent).not.toContain('Signed in. You can close this.');
+    expect(text('Try again')).toBeTruthy();
+    await act(async () => text('Try again')!.click());
+    expect(sheet()!.textContent).not.toContain('Signed in. You can close this.');
+    // The person finishes signing in: the credential file is written, the next look sees it.
+    credentialWritten = true;
+    await wait(120);
+    expect(sheet()!.textContent).toContain('Signed in. You can close this.');
+    // The "still out" line of the earlier Try again does not stay next to "Signed in".
+    expect(sheet()!.textContent).not.toContain('still out');
+    expect(f.driver.stop).toHaveBeenCalled();
   });
 });

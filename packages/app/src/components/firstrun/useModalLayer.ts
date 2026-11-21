@@ -65,6 +65,22 @@ export function useModalLayer({
     return () => document.removeEventListener('focusin', keepIn);
   }, [active, layer, shell]);
 
+  // Esc when focus is not inside the welcome (the page has focus but nothing in the modal does): it still leaves.
+  // Esc inside the welcome is the key handler below; Esc inside a palette or sheet on top belongs to that one.
+  useEffect(() => {
+    if (!active) return;
+    const onDocKey = (e: globalThis.KeyboardEvent) => {
+      const target = e.target;
+      if (e.key !== 'Escape' || e.defaultPrevented) return;
+      if (target instanceof Node && (layer.current?.contains(target) || (target instanceof Element && target.closest('[role="dialog"], [aria-modal="true"]')))) return;
+      e.preventDefault();
+      e.stopPropagation();
+      escape.current();
+    };
+    document.addEventListener('keydown', onDocKey);
+    return () => document.removeEventListener('keydown', onDocKey);
+  }, [active, layer]);
+
   // Closing hands focus back.
   useEffect(
     () => () => {
@@ -87,6 +103,7 @@ export function useModalLayer({
         return;
       }
       e.preventDefault();
+      e.stopPropagation(); // nothing behind the welcome (window listeners) also reacts to this Esc
       escape.current();
       return;
     }

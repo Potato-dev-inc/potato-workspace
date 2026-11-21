@@ -2,6 +2,8 @@
 // of the "+" menu, the Copies presets of a project, Create PR and the GitHub checks that come back.
 import { invoke } from '@tauri-apps/api/core';
 
+import type { ProjectLocation } from './projectLocation';
+
 export type GitState = 'repo' | 'no_commits' | 'folder' | 'missing';
 
 export interface RecentProject {
@@ -9,6 +11,8 @@ export interface RecentProject {
   name: string;
   state: GitState;
   last_used_ms: number;
+  /** Where the folder lives; absent in older data means this PC. */
+  location?: ProjectLocation;
 }
 
 export interface GitInitPlan {

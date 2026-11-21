@@ -396,6 +396,11 @@ pub fn apply_settings(public: &Value) {
 }
 
 /// The app's service, built the first time it is needed while the switch is on. Never while it is off.
+/// The device door (`pcdoor.rs`), if the service is built. The pwa server's tunnel listener serves `POST /bridge/pcdoor` through it.
+pub fn pcdoor() -> Option<Arc<super::pcdoor::PcDoor>> {
+    SERVICE.get().map(|s| s.pcdoor())
+}
+
 pub fn app_service() -> Result<Arc<DeviceLink>, String> {
     if !enabled() {
         return Err(OFF.into());
@@ -429,7 +434,10 @@ pub fn app_service() -> Result<Arc<DeviceLink>, String> {
         account_lock: store("account-lock.json"),
         account_links: store("account-links.json"),
         account_removed: store("account-removed.json"),
-        pclink: Some(Arc::new(super::pclink::app_services::AppServices::new(Arc::new(computer_name)))),
+        pclink: Some({
+            super::pclink::calls_chat::install();
+            Arc::new(super::pclink::app_services::AppServices::new(Arc::new(computer_name)))
+        }),
     };
     let deps = Deps {
         keys: KeyStore::app_scoped("devices"),
@@ -456,12 +464,8 @@ pub fn app_service() -> Result<Arc<DeviceLink>, String> {
         svc.set_notifier(Arc::new(move |view: &Value| {
             let _ = changed_app.emit("devices://changed", view);
         }));
-        let screen_app = app.clone();
         svc.set_event_sink(Arc::new(move |node: &str, frame: &str| {
             let _ = app.emit("device://event", serde_json::json!({ "node": node, "frame": frame }));
-        }));
-        svc.set_screen_sink(Arc::new(move |node: &str, pane: &str, content: &str| {
-            let _ = screen_app.emit("device://screen", serde_json::json!({ "node": node, "pane_id": pane, "content": content }));
         }));
     }
     if let Some(public) = LAST_SETTINGS.lock().ok().and_then(|l| l.clone()) {

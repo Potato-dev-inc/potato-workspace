@@ -1,0 +1,17 @@
+# Disposable SSH test host (Alpine): /bin/sh is busybox ash.
+FROM node:20-alpine
+ARG PUBKEY
+RUN apk add --no-cache openssh-server git \
+ && adduser -D -s /bin/sh tester && echo "tester:$(head -c24 /dev/urandom | base64)" | chpasswd \
+ && mkdir -p /etc/ssh/sshd_config.d \
+ && (grep -q '^Include' /etc/ssh/sshd_config || echo 'Include /etc/ssh/sshd_config.d/*.conf' >> /etc/ssh/sshd_config) \
+ && printf 'PasswordAuthentication no\nKbdInteractiveAuthentication no\nPubkeyAuthentication yes\nPermitRootLogin no\nAllowUsers tester\n' > /etc/ssh/sshd_config.d/pm.conf
+USER tester
+RUN mkdir -p ~/.ssh ~/.local/bin && echo "$PUBKEY" > ~/.ssh/authorized_keys && chmod 700 ~/.ssh && chmod 600 ~/.ssh/authorized_keys \
+ && printf 'export PATH="$HOME/.local/bin:$PATH"\n' > ~/.profile
+COPY --chown=tester:tester claude-agent-acp /home/tester/.local/bin/claude-agent-acp
+COPY --chown=tester:tester mk-folders.js /home/tester/mk-folders.js
+RUN chmod 755 /home/tester/.local/bin/claude-agent-acp
+USER root
+EXPOSE 22
+CMD ["sh", "-c", "ssh-keygen -A && exec /usr/sbin/sshd -D -e"]

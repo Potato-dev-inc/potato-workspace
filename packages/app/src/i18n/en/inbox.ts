@@ -55,6 +55,8 @@ export const inbox = {
   'inbox.pinnedLabel': 'Ask first',
   'inbox.showInCrew': 'Show in crew',
   'inbox.showInCrewNamed': 'Show {name} in its crew',
+  'inbox.onHost': 'On {name}',
+  'inbox.onAnotherComputer': 'On another computer',
   'inbox.workingShowFewer': "Show fewer",
   'inbox.doneToday': "Done today",
   'inbox.doneClear': "Clear",

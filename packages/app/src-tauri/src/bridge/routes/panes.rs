@@ -156,7 +156,8 @@ fn stop_all(cx: &Ctx) -> RouteResult {
 
 fn list(cx: &Ctx) -> RouteResult {
     let registry = cx.registry;
-    let panes = registry.lock().list();
+    // A chat on another computer is the app window's alone: it is not offered to a phone or an agent.
+    let panes = crate::acp::chat::external_panes(registry);
     Ok((200, serde_json::to_value(panes).unwrap()))
 }
 

@@ -25,34 +25,41 @@ pub struct Opened {
 /// The ready-made crews (read-only).
 #[tauri::command]
 pub async fn crews_templates() -> Result<Vec<store::Summary>, String> {
-    tauri::async_runtime::spawn_blocking(|| templates::summaries(&live::agent_state)).await.map_err(internal)
+    tauri::async_runtime::spawn_blocking(templates_now).await.map_err(internal)
+}
+
+// The read-only commands' bodies, shared with a paired PC's far call (`pclink/calls_workflows.rs`).
+
+pub(crate) fn templates_now() -> Vec<store::Summary> {
+    templates::summaries(&live::agent_state)
 }
 
 /// Open a saved crew or a template by slug, with its rules and its problems.
 #[tauri::command]
 pub async fn crews_open(slug: String) -> Result<Opened, String> {
-    tauri::async_runtime::spawn_blocking(move || {
-        let dir = store::dir();
-        // A ready-made crew (a template or a starter) is read-only until the person saves a copy.
-        let (kind, crew, routing_text) = match (templates::lookup(&slug), starters::lookup(&slug)) {
-            (Some(crew), _) => ("template", crew, templates::routing_text(&slug).unwrap_or_default().to_string()),
-            (None, Some(crew)) => ("template", crew, String::new()),
-            (None, None) => ("saved", store::load(&dir, &slug)?, store::load_routing(&dir, &slug).unwrap_or_default()),
-        };
-        let problems = validate::validate_with(&validate::normalized(&crew), &live::agent_state, &live::model_ok);
-        Ok(Opened { slug, kind, crew, routing_text, problems })
-    })
-    .await
-    .map_err(internal)?
-    .map_err(|e: CrewError| e.to_string())
+    tauri::async_runtime::spawn_blocking(move || open_now(slug)).await.map_err(internal)?
+}
+
+pub(crate) fn open_now(slug: String) -> Result<Opened, String> {
+    let dir = store::dir();
+    // A ready-made crew (a template or a starter) is read-only until the person saves a copy.
+    let (kind, crew, routing_text) = match (templates::lookup(&slug), starters::lookup(&slug)) {
+        (Some(crew), _) => ("template", crew, templates::routing_text(&slug).unwrap_or_default().to_string()),
+        (None, Some(crew)) => ("template", crew, String::new()),
+        (None, None) => ("saved", store::load(&dir, &slug).map_err(|e: CrewError| e.to_string())?, store::load_routing(&dir, &slug).unwrap_or_default()),
+    };
+    let problems = validate::validate_with(&validate::normalized(&crew), &live::agent_state, &live::model_ok);
+    Ok(Opened { slug, kind, crew, routing_text, problems })
 }
 
 /// Every problem of a crew as it is on the canvas now (the model and the hand-offs included). Nothing is saved.
 #[tauri::command]
 pub async fn crews_check(crew: Crew) -> Result<Vec<CrewError>, String> {
-    tauri::async_runtime::spawn_blocking(move || validate::validate_with(&validate::normalized(&crew), &live::agent_state, &live::model_ok))
-        .await
-        .map_err(internal)
+    tauri::async_runtime::spawn_blocking(move || check_now(&crew)).await.map_err(internal)
+}
+
+pub(crate) fn check_now(crew: &Crew) -> Vec<CrewError> {
+    validate::validate_with(&validate::normalized(crew), &live::agent_state, &live::model_ok)
 }
 
 #[derive(Serialize)]
@@ -85,7 +92,11 @@ pub async fn crews_save_canvas(crew: Crew, routing_text: String, replace: Option
 /// Try a task: where would it go? A dry run; nothing runs. `None` when the rules name no role of the crew.
 #[tauri::command]
 pub async fn crews_try_task(crew: Crew, routing_text: String, task: String) -> Result<Option<routing::Preview>, String> {
-    tauri::async_runtime::spawn_blocking(move || routing::preview(&validate::normalized(&crew), &routing_text, &task)).await.map_err(internal)
+    tauri::async_runtime::spawn_blocking(move || try_task_now(&crew, &routing_text, &task)).await.map_err(internal)
+}
+
+pub(crate) fn try_task_now(crew: &Crew, routing_text: &str, task: &str) -> Option<routing::Preview> {
+    routing::preview(&validate::normalized(crew), routing_text, task)
 }
 
 #[derive(Serialize)]
@@ -152,7 +163,11 @@ pub async fn crews_apply(crew: Crew, folder: String, raise_limit: Option<bool>) 
 #[tauri::command]
 pub async fn crews_follow(state: State<'_, AppState>, crew: Crew) -> Result<Vec<follow::Task>, String> {
     let registry = state.registry.clone();
-    tauri::async_runtime::spawn_blocking(move || follow::build(&validate::normalized(&crew), &follow::live_facts(&registry))).await.map_err(internal)
+    tauri::async_runtime::spawn_blocking(move || follow_now(&registry, &crew)).await.map_err(internal)
+}
+
+pub(crate) fn follow_now(registry: &std::sync::Arc<parking_lot::Mutex<crate::pty::PaneRegistry>>, crew: &Crew) -> Vec<follow::Task> {
+    follow::build(&validate::normalized(crew), &follow::live_facts(registry))
 }
 
 /// Share: write the crew and its rules to the file the person chose. Nothing else is written.

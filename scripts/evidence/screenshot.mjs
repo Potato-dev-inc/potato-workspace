@@ -67,8 +67,8 @@ function windowSizeFor(name) {
   return '1440,900';
 }
 
-// PM_EVIDENCE_THEME=light|dark renders every scenario in that theme (the harness reads &theme=).
-const themeQuery = ['light', 'dark', 'dim'].includes(process.env.PM_EVIDENCE_THEME ?? '') ? `&theme=${process.env.PM_EVIDENCE_THEME}` : '';
+// PM_EVIDENCE_THEME=light|dark renders every scenario in that theme (the harness reads &theme=); PM_EVIDENCE_LANG=en|zh-TW likewise (&lang=).
+const themeQuery = (['light', 'dark', 'dim'].includes(process.env.PM_EVIDENCE_THEME ?? '') ? `&theme=${process.env.PM_EVIDENCE_THEME}` : '') + (['en', 'zh-TW'].includes(process.env.PM_EVIDENCE_LANG ?? '') ? `&lang=${process.env.PM_EVIDENCE_LANG}` : '');
 const NARROW_PX = 500;
 const isNarrow = (name) => process.env.PM_EVIDENCE_CDP === '1' || Number(windowSizeFor(name).split(',')[0]) < NARROW_PX;
 

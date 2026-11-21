@@ -79,7 +79,7 @@ pub fn stop_running_with(
 }
 
 fn candidates(registry: &Arc<Mutex<PaneRegistry>>) -> Vec<Candidate> {
-    let panes = registry.lock().list();
+    let panes = registry.lock().list_including_remote();
     panes
         .into_iter()
         .map(|p| Candidate {

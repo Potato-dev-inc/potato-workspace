@@ -166,6 +166,10 @@ impl Host for LiveHost {
 /// `event: pane-outbox` for paired phones. The text goes through `redact` first; the stream filter
 /// (`mobile_pairing::caps::project`) leaves it out for a device that cannot watch.
 fn publish_sse(pane_id: &str, messages: &[OutboxMessage]) {
+    // A chat on another computer is the window's alone (the Tauri emit stays).
+    if crate::acp::chat::is_remote_pane(pane_id) {
+        return;
+    }
     let shown: Vec<OutboxMessage> = messages.iter().map(redacted).collect();
     if let Ok(body) = serde_json::to_string(&json!({ "paneId": pane_id, "messages": shown })) {
         crate::bridge::push_sse(format!("event: pane-outbox\ndata: {body}\n\n"));

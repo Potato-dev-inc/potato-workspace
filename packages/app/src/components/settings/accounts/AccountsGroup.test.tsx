@@ -43,6 +43,10 @@ function fakeApi(initial: Account[] = [], savedHelperLogins: Record<string, stri
       accounts = accounts.filter((a) => a.id !== id);
       return false;
     }),
+    signOut: vi.fn(async (id: string) => {
+      accounts = accounts.map((a) => (a.id === id ? { ...a, login_state: 'signed_out' as const } : a));
+      return 1;
+    }),
     openLoginPane: vi.fn(async () => 'pane-1'),
   };
   return api satisfies AccountsApi;
@@ -80,6 +84,60 @@ describe('AccountsGroup', () => {
     expect(host.querySelector('[data-testid="accounts-codex"]')).toBeTruthy();
     expect(host.querySelector('[data-testid="accounts-opencode"]')).toBeNull();
     expect(host.querySelector('.st-tip')?.getAttribute('title')).toContain('never reads or shares');
+  });
+
+  it('Sign out asks first, then signs that one account out and keeps it listed', async () => {
+    const api = fakeApi([
+      { id: 'acc_1', agent_id: 'claude', label: 'Work', home: 'C:/a', login_state: 'signed_in' },
+      { id: 'acc_2', agent_id: 'claude', label: 'Home', home: 'C:/b', login_state: 'signed_in' },
+    ]);
+    await render(api);
+    const claude = host.querySelector('[data-testid="accounts-claude"]') as HTMLElement;
+    expect(claude.querySelector('[data-testid="state-acc_1"]')?.textContent).toBe('Signed in');
+    await act(async () => {
+      (claude.querySelector('[data-testid="signout-acc_1"]') as HTMLElement).click();
+    });
+    expect(api.signOut).not.toHaveBeenCalled();
+    expect(claude.textContent).toContain('Sign out of Work?');
+    await act(async () => {
+      button(claude, 'Cancel')!.click();
+    });
+    expect(api.signOut).not.toHaveBeenCalled();
+    await act(async () => {
+      (claude.querySelector('[data-testid="signout-acc_1"]') as HTMLElement).click();
+    });
+    await act(async () => {
+      (claude.querySelector('[data-testid="signout-yes-acc_1"]') as HTMLElement).click();
+    });
+    expect(api.signOut).toHaveBeenCalledTimes(1);
+    expect(api.signOut).toHaveBeenCalledWith('acc_1');
+    expect(claude.querySelector('input[aria-label="Name of Work"]')).toBeTruthy();
+    expect(host.textContent).toContain('keep working until you close them');
+    expect(claude.querySelector('[data-testid="state-acc_1"]')?.textContent).toBe('Signed out');
+    expect((claude.querySelector('[data-testid="signout-acc_1"]') as HTMLButtonElement).disabled).toBe(true);
+    expect((claude.querySelector('[data-testid="signout-acc_2"]') as HTMLButtonElement).disabled).toBe(false);
+  });
+
+  it('says nothing was removed when the login is kept elsewhere, and disables Sign out for it', async () => {
+    const api = fakeApi([{ id: 'acc_1', agent_id: 'claude', label: 'Work', home: 'C:/a', login_state: 'unknown' }, { id: 'acc_3', agent_id: 'claude', label: 'Odd', home: 'C:/c' }]);
+    api.signOut.mockResolvedValueOnce(0);
+    await render(api);
+    const claude = host.querySelector('[data-testid="accounts-claude"]') as HTMLElement;
+    expect((claude.querySelector('[data-testid="signout-acc_1"]') as HTMLButtonElement).disabled).toBe(true);
+    await act(async () => {
+      (claude.querySelector('[data-testid="signout-acc_3"]') as HTMLElement).click();
+    });
+    await act(async () => {
+      (claude.querySelector('[data-testid="signout-yes-acc_3"]') as HTMLElement).click();
+    });
+    expect(host.textContent).toContain('Nothing to remove for Odd');
+    expect(host.textContent).not.toContain('Signed out of Odd');
+  });
+
+  it('a lend-only sign-in has no Sign out button', async () => {
+    const api = fakeApi([{ id: 'acc_7', agent_id: 'claude', label: 'Lend Claude 1', home: 'C:/l', lend_only: true, login_state: 'signed_in' }]);
+    await render(api);
+    expect(host.querySelector('[data-testid="signout-acc_7"]')).toBeNull();
   });
 
   it('headings show the agent display name, not the raw id', async () => {

@@ -96,6 +96,14 @@ pub struct AgentConfig {
     pub command: String,
     /// Arguments. `{adapters}` is the folder the adapters are installed in.
     pub args: Vec<String>,
+    /// The program and arguments that start this agent's chat adapter on ANOTHER computer over SSH (`["claude-agent-acp"]`,
+    /// `["opencode", "acp"]`). The first word is a bare program name the far login shell finds on its PATH; the adapter
+    /// is NOT installed by this app there. Empty: this agent has no chat over SSH yet.
+    pub remote_command: Vec<String>,
+    /// Fixed, NON-SECRET variables the adapter needs on the other computer (`INITIAL_AGENT_MODE = "read-only"`). Sent as
+    /// `env NAME=VALUE` words in front of the program, so they are visible in that computer's process list: never a key.
+    /// Names are variable names; values hold only letters, digits and `. _ - :`.
+    pub remote_env: BTreeMap<String, String>,
     /// What the program runs on, when that changes how it must be started. `"python"`: the child gets `PYTHONUTF8=1`
     /// and `PYTHONUNBUFFERED=1` (a Python adapter on a Windows pipe otherwise writes in the console code page and
     /// buffers its output, which garbles or stalls the protocol). Empty (the default): nothing is added. A variable the
@@ -113,6 +121,12 @@ pub struct AgentConfig {
     /// that is in no group is required on its own. Names only.
     #[serde(skip)]
     pub adapter_key_groups: Vec<Vec<String>>,
+    /// A built-in profile's optional key: a key from the app's credential store (Settings > Keys) that is passed to the adapter
+    /// ONLY when the person saved one. Nothing is asked and nothing fails when it is not saved (the agent's own login
+    /// is used then). Names only (the variable and the slot), never a value. Set in code by a built-in profile only
+    /// (`serde(skip)`): a definition file, a wizard definition or a store definition can never ask for a saved secret.
+    #[serde(skip)]
+    pub optional_keys: Vec<OptionalKey>,
     /// `NAME -> program`: sets NAME to where `program` is on PATH (when found).
     pub env_which: BTreeMap<String, String>,
     /// A folder owned by this lane, so the agent does not read the user's own config (which, for some
@@ -204,6 +218,13 @@ pub struct DefaultModel {
     pub credit_patterns: Vec<String>,
     /// The sentence shown for such an error. `{model}` is the model in use.
     pub credit_message: String,
+}
+
+/// An optional key of a built-in profile: the variable the adapter gets and the credential-store slot it is read from.
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+pub struct OptionalKey {
+    pub env: String,
+    pub slot: String,
 }
 
 /// One approved key of a reviewed adapter: the variable the child gets and the credential-store slot it is read from.
@@ -424,6 +445,36 @@ impl Timeouts {
     }
 }
 
+/// The program that is started for a chat over SSH: `exe`, the words put before the `ssh` arguments (none for the real `ssh`),
+/// and extra environment (none for the real `ssh`).
+#[derive(Debug, Clone)]
+pub struct SshProgram {
+    pub exe: PathBuf,
+    pub pre: Vec<OsString>,
+    pub env: Vec<(OsString, OsString)>,
+}
+
+/// A `remote_env` value: letters, digits and `. _ - :` only, so nothing in it is special to any shell.
+pub fn valid_remote_env_value(v: &str) -> bool {
+    !v.is_empty() && v.len() <= 64 && v.chars().all(|c| c.is_ascii_alphanumeric() || matches!(c, '.' | '_' | '-' | ':'))
+}
+
+/// The words started on the far machine: `[env NAME=VALUE ...] program args...`.
+pub fn remote_words(cfg: &AgentConfig) -> Result<Vec<String>, AcpError> {
+    let mut words: Vec<String> = Vec::new();
+    if !cfg.remote_env.is_empty() {
+        words.push("env".into());
+        for (name, value) in &cfg.remote_env {
+            if !valid_env_name(name) || !valid_remote_env_value(value) {
+                return Err(AcpError::Spawn(format!("{} has a setting for another computer that cannot be sent.", cfg.label)));
+            }
+            words.push(format!("{name}={value}"));
+        }
+    }
+    words.extend(cfg.remote_command.iter().cloned());
+    Ok(words)
+}
+
 // ---- host environment ------------------------------------------------------------------------------
 
 /// Everything the spawn needs from the machine, behind a trait so tests never read the real environment.
@@ -434,6 +485,10 @@ pub trait HostEnv: Send + Sync {
     fn adapters_dir(&self) -> PathBuf;
     /// Where private agent homes live; one folder per agent id.
     fn homes_dir(&self) -> PathBuf;
+    /// What starts `ssh` for a chat on another computer: this PC's `ssh` program. Tests give a stand-in.
+    fn ssh_program(&self) -> Option<SshProgram> {
+        crate::ssh::run::ssh_exe().map(|exe| SshProgram { exe, pre: Vec::new(), env: Vec::new() })
+    }
     /// The value saved in a credential-store slot. Asked only for an approved adapter key, by slot name.
     fn secret_value(&self, _slot: &str) -> Option<String> {
         None
@@ -581,6 +636,8 @@ pub fn build_env(cfg: &AgentConfig, host: &dyn HostEnv, private_home: Option<&Pa
 /// Points the adapter at an account's login: the account's variables replace what the app's own environment would
 /// pass on (`env_allow`), and a variable the account removes is not passed at all. Pure.
 pub fn with_account_env(cfg: &mut AgentConfig, launch: &crate::tui::LaunchEnv) {
+    // A chat on a chosen account uses that account's own login: the key saved for the main login never goes along.
+    cfg.optional_keys.clear();
     let same = |a: &str, b: &str| if cfg!(windows) { a.eq_ignore_ascii_case(b) } else { a == b };
     for (name, value) in &launch.set {
         cfg.env_allow.retain(|n| !same(n, name));
@@ -597,6 +654,8 @@ pub fn with_account_env(cfg: &mut AgentConfig, launch: &crate::tui::LaunchEnv) {
 pub fn with_borrowed_chat(cfg: &mut AgentConfig, chat: &crate::capacity_proxy::service::BorrowedChat) {
     with_account_env(cfg, &chat.env);
     cfg.args.extend(chat.args.iter().cloned());
+    // A borrowed sign-in carries its own placeholder key: the person's real key never goes with it.
+    cfg.optional_keys.clear();
     cfg.authenticate_with = chat.authenticate.clone();
 }
 
@@ -656,6 +715,12 @@ pub fn resolve_spawn(cfg: &AgentConfig, host: &dyn HostEnv, cwd: &Path) -> Resul
             return Err(AcpError::Spawn(format!("{} is needed by this chat and is not saved: add the key for this adapter", key.env)));
         }
     }
+    // A key the person saved in Settings > Keys for this agent's provider: passed when there, skipped when not.
+    for key in &cfg.optional_keys {
+        let Some(value) = host.secret_value(&key.slot).filter(|v| !v.trim().is_empty()) else { continue };
+        env.retain(|(n, _)| !n.to_string_lossy().eq_ignore_ascii_case(&key.env));
+        env.push((OsString::from(&key.env), OsString::from(value.trim())));
+    }
     if let Some((name, value)) = mcp_isolation(cfg, host, cwd, &env)? {
         env.retain(|(n, _)| !n.to_string_lossy().eq_ignore_ascii_case(&name.to_string_lossy()));
         env.push((name, value));
@@ -666,6 +731,46 @@ pub fn resolve_spawn(cfg: &AgentConfig, host: &dyn HostEnv, cwd: &Path) -> Resul
         env,
         cwd: Some(cwd.to_path_buf()),
     })
+}
+
+/// The config of a chat that runs on another computer over SSH (`ssh::acp`). Nothing of this PC crosses over: no adapter
+/// key, no own tool server, no private home, no tool-server listing (that asks the LOCAL CLI), no environment. Fails
+/// plainly when the agent has no remote chat program.
+pub fn for_remote(cfg: &AgentConfig) -> Result<AgentConfig, AcpError> {
+    if cfg.disabled {
+        return Err(AcpError::Spawn(format!("chat for {:?} is off in this build", cfg.id)));
+    }
+    if cfg.remote_command.is_empty() {
+        return Err(AcpError::Spawn(format!("{} has no chat over SSH yet. Use its terminal on that computer.", cfg.label)));
+    }
+    let mut out = cfg.clone();
+    out.adapter_keys.clear();
+    out.adapter_key_groups.clear();
+    out.optional_keys.clear();
+    out.mcp_servers.clear();
+    out.private_home = None;
+    // "Open in terminal" would start THIS PC's program with the far machine's session id.
+    out.resume_command.clear();
+    out.env.clear();
+    out.env_allow.clear();
+    out.env_which.clear();
+    out.mcp_config = McpConfig::default();
+    out.pins.clear();
+    out.pin_policy = PinPolicy::Off;
+    out.authenticate_with = None;
+    Ok(out)
+}
+
+/// What `ssh` is started with for a remote chat: this PC's `ssh` program and the fixed argument list (`ssh::acp`).
+pub fn resolve_remote_spawn(cfg: &AgentConfig, host: &dyn HostEnv, ssh: &crate::ssh::model::SshHost, folder: &str) -> Result<SpawnSpec, AcpError> {
+    let program = host.ssh_program().ok_or_else(|| AcpError::Spawn("SSH is not installed on this PC. Turn on the OpenSSH Client in Windows optional features.".into()))?;
+    let spawn = crate::ssh::acp::remote_spawn(program.exe.clone(), ssh, folder, &remote_words(cfg)?).map_err(|e| AcpError::Spawn(e.sentence()))?;
+    // Only what `ssh` itself needs here (its config, known hosts, keys, agent socket). Nothing of the agent's setup.
+    let mut env: Vec<(OsString, OsString)> = crate::ssh::acp::SSH_ENV.iter().filter_map(|name| host.var(name).map(|v| (OsString::from(*name), v))).collect();
+    env.extend(program.env.iter().cloned());
+    let mut args = program.pre.clone();
+    args.extend(spawn.args);
+    Ok(SpawnSpec { program: spawn.exe.into_os_string(), args, env, cwd: None })
 }
 
 /// A bare program name (no folder) is looked up on PATH the way a shell does (PATHEXT on Windows). Rust's own
@@ -976,6 +1081,14 @@ pub fn problems(cfg: &AgentConfig) -> Vec<(String, String)> {
     if cfg.args.len() > 64 || !cfg.args.iter().all(|a| plain_text(a)) {
         add("args", "at most 64 arguments of at most 512 characters, no control characters".into());
     }
+    if let Some((program, rest)) = cfg.remote_command.split_first() {
+        if !crate::ssh::model::valid_program(program) || rest.len() > 15 || !rest.iter().all(|a| plain_text(a)) {
+            add("remote_command", "a bare program name, then at most 15 arguments of at most 512 characters".into());
+        }
+    }
+    if cfg.remote_env.len() > 8 || cfg.remote_env.iter().any(|(k, v)| !valid_env_name(k) || !valid_remote_env_value(v)) {
+        add("remote_env", "at most 8 variables; values hold only letters, digits and . _ - : (it is not for secrets)".into());
+    }
     for name in cfg.env_allow.iter().chain(cfg.env.keys()).chain(cfg.env_which.keys()) {
         if !valid_env_name(name) {
             add("env", format!("{name:?} is not a variable name"));
@@ -1199,6 +1312,8 @@ mod tests {
         /// What the agent's listing command prints (None = it fails).
         listing: Option<String>,
         asked: std::sync::Mutex<Vec<Vec<String>>>,
+        /// No `ssh` program on this PC.
+        no_ssh: bool,
     }
 
     impl Host {
@@ -1215,6 +1330,7 @@ mod tests {
                 root: std::env::temp_dir().join(format!("pm-acp-config-{}", uuid::Uuid::new_v4())),
                 listing: Some(r#"[{"name":"chrome-devtools","enabled":true},{"name":"potato-workspace","enabled":true}]"#.into()),
                 asked: std::sync::Mutex::new(Vec::new()),
+                no_ssh: false,
             }
         }
     }
@@ -1231,6 +1347,9 @@ mod tests {
         }
         fn homes_dir(&self) -> PathBuf {
             self.root.join("homes")
+        }
+        fn ssh_program(&self) -> Option<SshProgram> {
+            (!self.no_ssh).then(|| SshProgram { exe: PathBuf::from("ssh.exe"), pre: Vec::new(), env: Vec::new() })
         }
         fn capture(&self, _program: &Path, args: &[String], _cwd: &Path, _env: &[(OsString, OsString)]) -> Option<String> {
             self.asked.lock().unwrap().push(args.to_vec());
@@ -1431,6 +1550,73 @@ mod tests {
         assert_eq!(value["mcp_servers"]["potato-workspace"]["enabled"], false);
     }
 
+    struct KeyHost(Option<&'static str>);
+    impl HostEnv for KeyHost {
+        fn var(&self, _: &str) -> Option<OsString> {
+            None
+        }
+        fn which(&self, _: &str) -> Option<PathBuf> {
+            None
+        }
+        fn adapters_dir(&self) -> PathBuf {
+            "adapters".into()
+        }
+        fn homes_dir(&self) -> PathBuf {
+            "homes".into()
+        }
+        fn secret_value(&self, slot: &str) -> Option<String> {
+            (slot == "anthropic_api_key").then(|| self.0.map(str::to_string)).flatten()
+        }
+    }
+
+    #[test]
+    fn a_saved_anthropic_key_reaches_the_claude_chat_and_nothing_fails_without_one() {
+        let cfg = find_builtin("claude").unwrap();
+        assert_eq!(cfg.optional_keys.len(), 1);
+        let with = resolve_spawn(&cfg, &KeyHost(Some("sk-ant-test-fake-0000")), Path::new(".")).unwrap();
+        assert_eq!(lookup(&with.env, "ANTHROPIC_API_KEY").as_deref(), Some("sk-ant-test-fake-0000"));
+        let without = resolve_spawn(&cfg, &KeyHost(None), Path::new(".")).unwrap();
+        assert!(lookup(&without.env, "ANTHROPIC_API_KEY").is_none());
+        // Never over SSH, never on a chosen account or a borrowed sign-in.
+        assert!(for_remote(&cfg).unwrap().optional_keys.is_empty());
+        let mut on_account = cfg.clone();
+        with_account_env(&mut on_account, &crate::tui::LaunchEnv { set: vec![("CLAUDE_CONFIG_DIR".into(), "C:/acc".into())], remove: Vec::new() });
+        let spawn = resolve_spawn(&on_account, &KeyHost(Some("sk-ant-test-fake-0000")), Path::new(".")).unwrap();
+        assert!(lookup(&spawn.env, "ANTHROPIC_API_KEY").is_none(), "no key on a chat under an account");
+        assert!(find_builtin("codex").unwrap().optional_keys.is_empty());
+    }
+
+    #[test]
+    fn a_definition_cannot_ask_for_a_saved_secret() {
+        // The field is not read from text: it is ignored (or refused), and the spawn never reads the slot.
+        let text = "command = \"node\"
+[[optional_keys]]
+env = \"OPENAI_API_KEY\"
+slot = \"openai_api_key\"
+";
+        match from_toml_text("mine", "Mine", text) {
+            Err(_) => {}
+            Ok(cfg) => {
+                assert!(cfg.optional_keys.is_empty());
+                struct Spy(std::sync::Mutex<Vec<String>>);
+                impl HostEnv for Spy {
+                    fn var(&self, _: &str) -> Option<OsString> { None }
+                    fn which(&self, _: &str) -> Option<PathBuf> { None }
+                    fn adapters_dir(&self) -> PathBuf { "adapters".into() }
+                    fn homes_dir(&self) -> PathBuf { "homes".into() }
+                    fn secret_value(&self, slot: &str) -> Option<String> {
+                        self.0.lock().unwrap().push(slot.to_string());
+                        Some("sk-test-fake".into())
+                    }
+                }
+                let spy = Spy(Default::default());
+                let spawn = resolve_spawn(&cfg, &spy, Path::new(".")).unwrap();
+                assert!(spy.0.lock().unwrap().is_empty(), "no secret slot was read");
+                assert!(lookup(&spawn.env, "OPENAI_API_KEY").is_none());
+            }
+        }
+    }
+
     #[test]
     fn the_codex_table_hands_our_server_over_with_its_approval_and_checks_the_path() {
         let m = codex().mcp_config;
@@ -1600,6 +1786,84 @@ mod tests {
     fn builtin_lookup_ignores_case_and_unknown_ids() {
         assert!(find_builtin("Codex").is_some());
         assert!(find_builtin("nope").is_none());
+    }
+
+    fn ssh_box() -> crate::ssh::model::SshHost {
+        crate::ssh::model::SshHost::parse("h1", "Build box", "dev@build.local", None, None).unwrap()
+    }
+
+    #[test]
+    fn a_remote_chat_has_a_chat_program_for_the_agents_that_can_do_it() {
+        for id in ["claude", "codex", "opencode"] {
+            let cfg = find_builtin(id).unwrap();
+            assert!(!cfg.remote_command.is_empty(), "{id}");
+            assert!(crate::ssh::model::valid_program(&cfg.remote_command[0]), "{id}");
+            assert!(problems(&cfg).is_empty(), "{id}: {:?}", problems(&cfg));
+        }
+    }
+
+    #[test]
+    fn a_remote_chat_gets_nothing_of_this_pc() {
+        let host = Host::new();
+        let mut cfg = find_builtin("codex").unwrap();
+        cfg.adapter_keys = vec![AdapterKey { env: "OPENAI_API_KEY".into(), slot: "slot".into() }];
+        cfg.adapter_key_groups = vec![vec!["OPENAI_API_KEY".into()]];
+        cfg.private_home = Some(PrivateHome { env_var: "X_HOME".into(), config_file: "c".into(), config_text: "t".into() });
+        cfg.authenticate_with = Some("api-key".into());
+        let remote = for_remote(&cfg).unwrap();
+        assert!(remote.adapter_keys.is_empty() && remote.adapter_key_groups.is_empty());
+        assert!(remote.mcp_servers.is_empty(), "the own tool server points at this PC");
+        assert!(remote.private_home.is_none() && remote.authenticate_with.is_none());
+        assert_eq!(remote.mcp_config.mode, McpMode::AgentDefault, "no listing is asked of the local CLI");
+        assert!(remote.env.is_empty() && remote.env_allow.is_empty() && remote.env_which.is_empty());
+        assert_eq!(remote.pin_policy, PinPolicy::Off);
+        assert!(remote.resume_command.is_empty(), "no terminal hand-over of a far session");
+        let spec = resolve_remote_spawn(&remote, &host, &ssh_box(), "/srv/my app").unwrap();
+        assert!(spec.program.to_string_lossy().ends_with("ssh.exe"));
+        assert!(spec.cwd.is_none(), "nothing is checked or entered on this PC");
+        let args = spec.args.iter().map(|a| a.to_string_lossy().into_owned()).collect::<Vec<_>>().join(" ");
+        // The local adapter file, the local PATH lookup result and every secret stay out of the argument list and the env.
+        for needle in ["node_modules", "adapters", "codex.exe","sk-secret", "sk-other", "ghp_secret"] {
+            assert!(!args.contains(needle), "{needle}");
+        }
+        assert!(args.contains("BatchMode=yes") && args.contains("StrictHostKeyChecking=yes"));
+        for (name, value) in &spec.env {
+            let (name, value) = (name.to_string_lossy(), value.to_string_lossy());
+            assert!(crate::ssh::acp::SSH_ENV.contains(&name.as_ref()), "{name}");
+            assert!(!value.contains("sk-") && !value.contains("ghp_"), "{name}");
+        }
+        assert!(lookup(&spec.env, "ANTHROPIC_API_KEY").is_none() && lookup(&spec.env, "GITHUB_TOKEN").is_none());
+    }
+
+    #[test]
+    fn codex_keeps_its_read_only_start_on_the_far_machine_through_env_words() {
+        let cfg = find_builtin("codex").unwrap();
+        assert_eq!(cfg.remote_env.get("INITIAL_AGENT_MODE").map(String::as_str), Some("read-only"));
+        let remote = for_remote(&cfg).unwrap();
+        assert_eq!(remote_words(&remote).unwrap(), vec!["env".to_string(), "INITIAL_AGENT_MODE=read-only".to_string(), "codex-acp".to_string()]);
+        // Only the table's own non-secret setting is sent; a bad value is refused, never passed through.
+        let mut bad = remote.clone();
+        bad.remote_env.insert("X".into(), "a b".into());
+        assert!(remote_words(&bad).is_err());
+        assert!(!problems(&AgentConfig { remote_env: bad.remote_env.clone(), command: "x".into(), ..AgentConfig::default() }).is_empty());
+        let args = resolve_remote_spawn(&remote, &Host::new(), &ssh_box(), "/x").unwrap().args.iter().map(|a| a.to_string_lossy().into_owned()).collect::<Vec<_>>().join(" ");
+        assert!(!args.contains("INITIAL_AGENT_MODE"), "the setting travels encoded, not as text");
+    }
+
+    #[test]
+    fn a_remote_chat_without_a_chat_program_says_so_and_ssh_must_exist() {
+        let cfg = AgentConfig { id: "x".into(), label: "Xagent".into(), command: "x".into(), ..AgentConfig::default() };
+        let err = for_remote(&cfg).unwrap_err().to_string();
+        assert!(err.contains("Xagent has no chat over SSH yet"), "{err}");
+        let mut with = cfg.clone();
+        with.remote_command = vec!["xagent".into()];
+        let remote = for_remote(&with).unwrap();
+        let mut no_ssh = Host::new();
+        no_ssh.no_ssh = true;
+        let err = resolve_remote_spawn(&remote, &no_ssh, &ssh_box(), "/x").unwrap_err().to_string();
+        assert!(err.contains("SSH is not installed"), "{err}");
+        let err = resolve_remote_spawn(&remote, &Host::new(), &ssh_box(), "relative").unwrap_err().to_string();
+        assert!(err.contains("folder"), "{err}");
     }
 }
 

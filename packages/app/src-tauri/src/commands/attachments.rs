@@ -8,6 +8,9 @@ use tauri::State;
 
 /// The folder of a pane; without a pane (an older window) the default project folder.
 fn pane_cwd(state: &AppState, pane_id: &str) -> String {
+    if crate::acp::chat::is_remote_pane(pane_id) {
+        return crate::acp::chat::NOT_ON_THIS_PC.to_string();
+    }
     let registry = state.registry.lock();
     registry.get(pane_id).map(|pane| pane.info.cwd.clone()).unwrap_or_else(|| registry.project_path.clone())
 }

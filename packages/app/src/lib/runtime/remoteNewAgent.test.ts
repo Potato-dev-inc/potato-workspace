@@ -1,7 +1,7 @@
 // The far PC's answers as the sources of the New agent page: pseudo folders, agents, and what Start does on the far side.
 import { describe, expect, it, vi } from 'vitest';
 import { PcLinkError, type PcLinkClient, type PcNewAgentOptions } from './pclink';
-import { buildRemoteNewAgent, remotePathOf, remoteProjectId, remoteRecents } from './remoteNewAgent';
+import { buildRemoteNewAgent, gitStateOf, remotePathOf, remoteProjectId } from './remoteNewAgent';
 
 const OPTIONS: PcNewAgentOptions = {
   agents: [
@@ -29,28 +29,35 @@ function fakeClient(extra: Partial<PcLinkClient> = {}): PcLinkClient {
 }
 
 describe('remote New agent sources', () => {
-  it('maps a far project id to a pseudo folder and back, skipping missing ones and unknown states', () => {
+  it('maps a far project id to a pseudo folder and back, and keeps unknown states as a plain folder', () => {
     expect(remoteProjectId(remotePathOf('p1'))).toBe('p1');
     expect(remoteProjectId('/Users/me/app')).toBeNull();
-    expect(remoteRecents(OPTIONS).map((p) => [p.path, p.state])).toEqual([
-      ['remote:p1', 'repo'],
-      ['remote:p3', 'folder'],
-    ]);
+    expect(gitStateOf('something-new')).toBe('folder');
+    expect(gitStateOf('repo')).toBe('repo');
   });
 
-  it('lists the far agents as chat or terminal lanes, never the local ones', async () => {
-    const r = buildRemoteNewAgent(OPTIONS, { client: fakeClient(), node: 'n', deviceName: 'Mac mini', canControl: () => true, onStarted: () => {} });
-    expect(r.agents.map((a) => a.id)).toEqual(['claude', 'plain']);
-    expect(await r.api.lanes()).toEqual({ labsEnabled: true, agents: [{ id: 'claude', lane: 'acp', disabled: false }, { id: 'plain', lane: 'terminal', disabled: false }] });
-    expect(await r.api.pickFolder()).toBeNull();
-    expect(await r.api.accounts()).toEqual([]);
+  it('says whether the far PC shows terminals (an older PC that does not say allows them)', () => {
+    const deps = { client: fakeClient(), node: 'n', deviceName: 'Mac mini', canControl: () => true, onStarted: () => {} };
+    expect(buildRemoteNewAgent(OPTIONS, deps).terminals).toBe(true);
+    expect(buildRemoteNewAgent({ ...OPTIONS, terminals: false }, deps).terminals).toBe(false);
+  });
+
+  it('a plain shell on a far project is the far PC login shell by spawn_pane: no chat, no message', async () => {
+    const call = vi.fn(async () => 's1');
+    const client = fakeClient({ call: call as never });
+    const onStarted = vi.fn();
+    const r = buildRemoteNewAgent(OPTIONS, { client, node: 'n', deviceName: 'Mac mini', canControl: () => true, onStarted });
+    expect(await r.onStart({ agentId: 'bash', folder: 'remote:p1', isolated: false, runAs: 'terminal', prompt: '' })).toBe('s1');
+    expect(call).toHaveBeenCalledWith('spawn_pane', { args: { agent_type: 'shell', cwd: 'p1' } });
+    expect(client.startAgent).not.toHaveBeenCalled();
+    expect(client.sendMessage).not.toHaveBeenCalled();
+    expect(onStarted).toHaveBeenCalledWith('s1', false);
   });
 
   it('Start starts the chat through the PC link, sets the model with the far option id, sends the first message, then opens it', async () => {
     const client = fakeClient();
     const onStarted = vi.fn();
     const r = buildRemoteNewAgent(OPTIONS, { client, node: 'n', deviceName: 'Mac mini', canControl: () => true, onStarted });
-    await r.modelApi.get('claude');
     const pane = await r.onStart({ agentId: 'claude', folder: 'remote:p1', isolated: true, runAs: 'chat', prompt: 'hi', model: 'b' });
     expect(pane).toBe('n1');
     expect(client.startAgent).toHaveBeenCalledWith({ agent: 'claude', project: 'p1', lane: 'chat' });
@@ -88,8 +95,8 @@ describe('remote New agent sources', () => {
     await expect(r.onStart({ agentId: 'claude', folder: 'remote:p1', isolated: false, runAs: 'chat', prompt: 'hi' })).rejects.toThrow('REN-LAPTOP lets this PC watch only.');
   });
 
-  it('never guesses the model setting name: without a loaded far list the model is not set and the person is told', async () => {
-    const client = fakeClient();
+  it('never guesses the model setting name: when the far list cannot be read the model is not set and the person is told', async () => {
+    const client = fakeClient({ modelOptions: vi.fn(async () => { throw new Error('offline'); }) as never });
     const notify = vi.fn();
     const r = buildRemoteNewAgent(OPTIONS, { client, node: 'n', deviceName: 'Mac', canControl: () => true, onStarted: () => {}, notify });
     await r.onStart({ agentId: 'claude', folder: 'remote:p1', isolated: false, runAs: 'chat', prompt: 'hi', model: 'b' });
@@ -116,7 +123,6 @@ describe('remote New agent sources', () => {
     const client = fakeClient({ modelOptions: vi.fn(async () => ({ models: ['a', 'b'] })) as never });
     const notify = vi.fn();
     const r = buildRemoteNewAgent(OPTIONS, { client, node: 'n', deviceName: 'Mac', canControl: () => true, onStarted: () => {}, notify });
-    await r.modelApi.get('claude');
     await r.onStart({ agentId: 'claude', folder: 'remote:p1', isolated: false, runAs: 'chat', prompt: 'hi', model: 'b' });
     expect(client.setConfig).not.toHaveBeenCalled();
     expect(notify).toHaveBeenCalledWith('b was not set. The chat uses its default model.');

@@ -21,3 +21,17 @@ pub async fn usage_snapshot(app: AppHandle, refresh: Option<bool>, login_reads: 
     }
     Ok(snap)
 }
+
+/// How each agent's own login stands (signed in, signed out, can't tell) for the cards in Settings > Agents.
+/// An agent with no way to be checked is left out; the card then says it cannot tell.
+#[tauri::command]
+pub async fn agent_login_states(fresh: Option<bool>) -> Result<Vec<crate::usage::OwnSignIn>, String> {
+    tauri::async_runtime::spawn_blocking(move || login_states(fresh.unwrap_or(false))).await.map_err(|e| format!("INTERNAL: {e}"))
+}
+
+/// The body of `agent_login_states` (blocking); a paired PC's call runs the same one.
+pub(crate) fn login_states(fresh: bool) -> Vec<crate::usage::OwnSignIn> {
+    let env = |key: &str| std::env::var(key).ok();
+    let probe = crate::usage::HiddenProbe { reuse: !fresh };
+    crate::usage::own_sign_ins(&crate::usage::live_agents(), &env, crate::project_path::home_dir().as_deref(), &probe)
+}

@@ -176,6 +176,15 @@ impl RemoteCtx {
         Self { host, peer, throttle }
     }
 
+    /// The hostname this listener verified from the PROXY header (never from a request header).
+    pub(crate) fn host(&self) -> &str {
+        &self.host
+    }
+
+    pub(crate) fn peer(&self) -> Option<IpAddr> {
+        self.peer
+    }
+
     /// Checked before a request is forwarded or served. `Some((status, text))` is the whole reply.
     pub(crate) fn gate(&self, method: &str, path: &str, headers_raw: &str) -> Option<(u16, &'static str)> {
         let mut hosts = headers_raw
@@ -400,6 +409,25 @@ mod tests {
 
     fn get(path: &str, host: &str, extra: &str) -> String {
         format!("GET {path} HTTP/1.1\r\nHost: {host}\r\n{extra}Connection: close\r\n\r\n")
+    }
+
+    #[test]
+    fn the_device_door_on_the_tunnel_listener_answers_a_flat_401_and_is_never_forwarded() {
+        let (listener, _dir) = rig("pcdoor", HOST_A);
+        let post = |host: &str, body: &str| format!("POST /bridge/pcdoor HTTP/1.1\r\nHost: {host}\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{body}", body.len());
+        let header = v2_header([203, 0, 113, 9], HOST_A);
+        // No service is built in this test, so the door is shut: the same flat 401 a stranger gets, and the echo upstream (the bridge) never answers.
+        for body in ["", "junk", "{\"v\":1}"] {
+            let reply = exchange(listener.port(), &header, &post(HOST_A, body));
+            assert!(reply.starts_with("HTTP/1.1 401"), "{reply}");
+            assert!(reply.ends_with("{\"error\":\"unauthorized\"}"), "{reply}");
+            assert!(!reply.contains("POST /pcdoor"), "forwarded to the bridge: {reply}");
+        }
+        // A request for another host is still stopped by the listener's own host check first.
+        assert!(exchange(listener.port(), &header, &post("other.example", "")).starts_with("HTTP/1.1 421"));
+        // Even a loopback-looking Host or a forwarder header changes nothing: it is the same flat answer.
+        let sneaky = format!("POST /bridge/pcdoor HTTP/1.1\r\nHost: {HOST_A}\r\nX-Forwarded-For: 127.0.0.1\r\nX-Potato-Workspace-Proxied: 0\r\nContent-Length: 0\r\nConnection: close\r\n\r\n");
+        assert!(exchange(listener.port(), &header, &sneaky).starts_with("HTTP/1.1 401"));
     }
 
     #[test]

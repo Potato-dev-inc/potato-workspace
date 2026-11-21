@@ -35,7 +35,8 @@ impl GuideBackend for LiveGuide<'_> {
     fn known_projects(&self) -> Vec<PathBuf> {
         let registry = self.registry.lock();
         let mut out = vec![PathBuf::from(&registry.project_path)];
-        out.extend(registry.panes.values().map(|pane| PathBuf::from(&pane.info.cwd)));
+        // A chat on another computer has no folder on this PC (its marker is no path): never handed to a tool.
+        out.extend(registry.panes.values().filter(|pane| !crate::acp::chat::is_remote_pane(&pane.info.id)).map(|pane| PathBuf::from(&pane.info.cwd)));
         out.retain(|p| !p.as_os_str().is_empty());
         out
     }

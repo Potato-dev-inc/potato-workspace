@@ -45,6 +45,9 @@ fn stat_path(path: &Path) -> HandoffFileStat {
 
 /// The pane's folder (the default project folder for an unknown pane).
 fn pane_folder(state: &AppState, pane_id: &str) -> String {
+    if crate::acp::chat::is_remote_pane(pane_id) {
+        return crate::acp::chat::NOT_ON_THIS_PC.to_string();
+    }
     let registry = state.registry.lock();
     registry.get(pane_id).map(|pane| pane.info.cwd.clone()).unwrap_or_else(|| registry.project_path.clone())
 }

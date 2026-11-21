@@ -34,7 +34,8 @@ function decode(buffer) {
   return [frames, buffer.subarray(offset)];
 }
 
-export function startFakeOrigin() {
+/** `label` names the origin in the JS a generic `/assets/*.js` file answers with, so two fake PCs can be told apart. */
+export function startFakeOrigin(label = "A") {
   const seen = [];
   const server = createServer(async (req, res) => {
     const url = new URL(req.url, "http://fake");
@@ -71,6 +72,10 @@ export function startFakeOrigin() {
       const html = url.pathname === "/index.html" || url.pathname === "/deep/link";
       res.writeHead(200, { "content-type": html ? "text/html" : "text/javascript", "cache-control": "no-store" });
       res.end(html ? "<html></html>" : "console.log(1)");
+    } else if (url.pathname.startsWith("/assets/") && url.pathname.endsWith(".js")) {
+      // any other page file: served like the phone server does (no-store), body names this origin
+      res.writeHead(200, { "content-type": "text/javascript", "cache-control": "no-store" });
+      res.end(`console.log("${label}")`);
     } else if (url.pathname === "/down") {
       res.writeHead(502);
       res.end("bad gateway");

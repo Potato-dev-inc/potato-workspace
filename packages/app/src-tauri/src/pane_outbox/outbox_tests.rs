@@ -233,6 +233,21 @@ fn a_message_may_have_no_text_when_it_has_files() {
 }
 
 #[test]
+fn a_chat_on_another_computer_takes_a_message_from_the_window_only() {
+    crate::acp::chat::mark_remote_for_tests("pane-on-another-computer");
+    let host = Fake::new(ready());
+    let outbox = outbox(&host);
+    // A channel, a companion, a second opinion, a PC link, a phone: every caller of the default send is refused.
+    for refused in [outbox.send("pane-on-another-computer", "hi"), outbox.send_with("pane-on-another-computer", "hi", &[]), outbox.send_from("pane-on-another-computer", "hi", &[], Some("dev"))] {
+        assert_eq!(refused.unwrap_err(), crate::acp::chat::REMOTE_PANE_REFUSED);
+    }
+    assert!(outbox.list("pane-on-another-computer").is_empty(), "nothing was queued");
+    assert!(host.published.lock().is_empty(), "nothing was published");
+    // The app window's own command still may.
+    assert!(outbox.send_including_remote("pane-on-another-computer", "hi", &[]).is_ok());
+}
+
+#[test]
 fn a_message_for_a_ready_agent_is_sent_once() {
     let host = Fake::new(ready());
     let outbox = outbox(&host);

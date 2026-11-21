@@ -12,7 +12,8 @@
     "build:wasm": "node scripts/build-wasm.mjs",
     "test": "node scripts/run-tests.mjs",
     "test:worker": "node scripts/run-tests.mjs --worker-only",
-    "test:app": "node scripts/run-tests.mjs --app-only"
+    "test:app": "node scripts/run-tests.mjs --app-only",
+    "usage": "node scripts/usage-check.mjs"
   },
   "devDependencies": {
     "@cloudflare/workers-types": "^5.20261006.1",

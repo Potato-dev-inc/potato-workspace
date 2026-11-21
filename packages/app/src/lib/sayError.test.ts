@@ -7,6 +7,14 @@ describe('sayError', () => {
     expect(sayError('Too many waiting messages.').text).toBe('Too many waiting messages.');
   });
 
+  it('says plainly when the relay or the key store cannot be used, and keeps the raw text under details', () => {
+    const down = sayError("Can't reach the relay: http://127.0.0.1:8798/v1/teams: Connection Failed (os error 10061)");
+    expect(down.text).toBe('Could not reach the relay at 127.0.0.1:8798. Check the address and your internet, then try again.');
+    expect(down.details).toContain('os error 10061');
+    expect(sayError('Platform secure storage failure: Windows error code 8').text).toContain('no room left');
+    expect(sayError('Platform secure storage failure: Windows error code 5').text).toContain('Windows would not open its store');
+  });
+
   it('reads a backend { code, message } object', () => {
     const said = sayError({ code: 'NOPE', message: 'That name is taken.' }, 'saving');
     expect(said.text).toBe('That name is taken.');

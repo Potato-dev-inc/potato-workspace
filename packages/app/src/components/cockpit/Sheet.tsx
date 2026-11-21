@@ -15,7 +15,8 @@ export function useSheetKeys(onClose: (() => void) | undefined, paused = false) 
   useEffect(() => {
     const opener = document.activeElement instanceof HTMLElement ? document.activeElement : null;
     const onKey = (event: KeyboardEvent) => {
-      if (pausedRef.current) return;
+      // A sheet under a modal layer (the first-run welcome makes the rest of the page inert) keeps its hands off the keys.
+      if (pausedRef.current || ref.current?.closest('[inert]')) return;
       if (event.key === 'Escape') {
         if (!closeRef.current) return;
         event.preventDefault();

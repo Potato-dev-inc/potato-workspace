@@ -7,6 +7,10 @@
 command = "node"
 args = ["{adapters}/claude/node_modules/@agentclientprotocol/claude-agent-acp/dist/index.js"]
 
+# The same adapter on ANOTHER computer over SSH (Over SSH chat): its program name, found by the far login shell's PATH. This app
+# installs nothing there; the person installs the adapter (`npm i -g @agentclientprotocol/claude-agent-acp`) and signs in there.
+remote_command = ["claude-agent-acp"]
+
 # CLAUDE_CONFIG_DIR: the person's own login and sessions are used (that is what makes "Open in terminal"
 # work), so a custom folder must reach the adapter too.
 env_allow = ["CLAUDE_CONFIG_DIR"]

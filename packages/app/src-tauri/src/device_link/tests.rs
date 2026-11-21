@@ -55,8 +55,6 @@ pub(super) struct TestBridge {
     deps: StartDeps,
     pub(super) calls: Mutex<Vec<String>>,
     pub(super) event: Mutex<Option<String>>,
-    /// What the terminal `p1` shows (the snapshot route answers it).
-    pub(super) screen: Mutex<String>,
 }
 
 impl TestBridge {
@@ -69,7 +67,7 @@ impl TestBridge {
             env: Arc::new(Env(dir.clone())),
             conversations: None,
         };
-        Arc::new(Self { dir, chats: Mutex::new(Vec::new()), deps, calls: Mutex::new(Vec::new()), event: Mutex::new(None), screen: Mutex::new(String::new()) })
+        Arc::new(Self { dir, chats: Mutex::new(Vec::new()), deps, calls: Mutex::new(Vec::new()), event: Mutex::new(None) })
     }
 
     fn chat(&self, id: &str) -> Option<Arc<AcpChat>> {
@@ -127,7 +125,6 @@ impl HostBridge for TestBridge {
                 },
                 None => Self::answer(404, json!({ "error": "no such pane" })),
             },
-            ("GET", ["pclink", "sessions", "p1", "screen"]) => Self::answer(200, json!({ "content": self.screen.lock().clone(), "view": "screen" })),
             ("GET", ["panes", id, "chat"]) => match self.chat(id) {
                 Some(chat) => Self::answer(200, json!({ "items": chat.items().iter().map(|i| serde_json::to_value(i).unwrap()).collect::<Vec<_>>() })),
                 None => Self::answer(404, json!({ "error": "no such pane" })),

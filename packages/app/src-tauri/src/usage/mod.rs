@@ -310,12 +310,14 @@ fn expand(path: &str, home: Option<&Path>) -> PathBuf {
     }
 }
 
+fn main_login(agent: &AgentUsage, env: &dyn Fn(&str) -> Option<String>, home: Option<&Path>) -> Login {
+    let env_home = agent.scheme.as_ref().and_then(|s| env(&s.home_env)).filter(|v| !v.trim().is_empty());
+    let main_home = env_home.map(PathBuf::from).or_else(|| agent.source.main_home.as_deref().map(|h| expand(h, home)));
+    Login { account: None, home: main_home, env: Vec::new() }
+}
+
 fn logins(agent: &AgentUsage, inputs: &Inputs<'_>) -> Vec<Login> {
-    let env_home = agent.scheme.as_ref().and_then(|s| (inputs.env)(&s.home_env)).filter(|v| !v.trim().is_empty());
-    let main_home = env_home
-        .map(PathBuf::from)
-        .or_else(|| agent.source.main_home.as_deref().map(|h| expand(h, inputs.home.as_deref())));
-    let mut out = vec![Login { account: None, home: main_home, env: Vec::new() }];
+    let mut out = vec![main_login(agent, inputs.env, inputs.home.as_deref())];
     if let Some(scheme) = &agent.scheme {
         for account in inputs.accounts.iter().filter(|a| a.agent_id.eq_ignore_ascii_case(&agent.id)) {
             // A lend sign-in is a row only when its profile asks for one; its name is the profile's, never "Lend Claude 3".
@@ -488,6 +490,42 @@ fn row_for(agent: &AgentUsage, login: &Login, inputs: &Inputs<'_>) -> Option<Usa
         }
     }
     Some(row)
+}
+
+/// How an agent's own (main) login stands, for its card in Settings > Agents. `state`: `signed_in`, `signed_out`, `unknown`.
+/// `why` is a plain sentence only when `state` is `unknown`. Reads file names or a status command's two booleans; never a token.
+#[derive(Debug, Clone, PartialEq, Serialize)]
+pub struct OwnSignIn {
+    pub agent_id: String,
+    pub state: &'static str,
+    pub why: Option<String>,
+}
+
+pub fn own_sign_ins(agents: &[AgentUsage], env: &dyn Fn(&str) -> Option<String>, home: Option<&Path>, probe: &dyn Probe) -> Vec<OwnSignIn> {
+    agents
+        .iter()
+        .map(|agent| {
+            let login = main_login(agent, env, home);
+            let (state, why) = match sign_in(agent, &login, probe) {
+                Signed::In => ("signed_in", None),
+                Signed::Out => ("signed_out", None),
+                // An expired status answer still means a login exists; the usage row says it ran out.
+                Signed::Expired => ("signed_in", None),
+                Signed::Unknown => (
+                    "unknown",
+                    Some(match &agent.source.reader {
+                        Reader::StatusJson { .. } => format!("{} did not answer when asked.", agent.label),
+                        // Its folder is there but holds no login file: it may keep the login somewhere else (a keychain).
+                        _ if agent.scheme.as_ref().is_some_and(|sc| !sc.credential_files.is_empty()) => {
+                            format!("No sign-in file for {} was found. It may keep its sign-in somewhere this app cannot look.", agent.label)
+                        }
+                        _ => format!("{} keeps its sign-in where this app cannot look.", agent.label),
+                    }),
+                ),
+            };
+            OwnSignIn { agent_id: agent.id.clone(), state, why }
+        })
+        .collect()
 }
 
 /// Every row, agents in registry order, the main login before the accounts.

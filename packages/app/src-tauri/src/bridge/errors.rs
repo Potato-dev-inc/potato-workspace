@@ -112,6 +112,7 @@ pub(super) fn enrich_handle_error(
             guard
                 .panes
                 .iter()
+                .filter(|(id, _)| !crate::acp::chat::is_remote_pane(id))
                 .map(|(id, pane)| (id.clone(), pane.info.cwd.clone()))
                 .collect::<std::collections::HashMap<_, _>>(),
         )

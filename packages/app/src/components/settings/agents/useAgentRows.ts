@@ -1,9 +1,10 @@
 // The data the Agents list and an agent's page draw: the registered agents, how each stands (installed, signed in)
 // and what the app has proof each can do. Each source fails on its own: no desktop shell means no chips, not no list.
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
+import { useHost } from '../../../lib/host/context';
 import { t } from '../../../i18n';
 import { agentCapsApi, type AgentCaps, type AgentCapsApi } from '../../../lib/agentCaps';
-import { agentHealthApi, type AgentHealth, type AgentHealthApi, type HealthState } from '../../../lib/agent-health';
+import { agentHealthApi, agentHealthApiFor, type AgentHealth, type AgentHealthApi, type HealthState } from '../../../lib/agent-health';
 import { useAgentRegistry } from '../../../lib/agentRegistry';
 
 export interface AgentRow {
@@ -19,6 +20,8 @@ export interface AgentRow {
   /** A deep check is possible (the "Check" button). */
   canTest: boolean;
   caps: AgentCaps | null;
+  /** A deep check of this agent is running right now. */
+  checking?: boolean;
 }
 
 export interface AgentRowsApi {
@@ -33,7 +36,8 @@ export const defaultRowsApi: AgentRowsApi = {
 };
 
 /** One short phrase for how the agent stands. "Ready" is not "signed in": the check only says it can start. */
-export function standingWords(row: Pick<AgentRow, 'installed' | 'state'>): string {
+export function standingWords(row: Pick<AgentRow, 'installed' | 'state' | 'checking'>): string {
+  if (row.checking) return t('agentPage.checking');
   if (!row.installed || row.state === 'not_installed') return t('keepGoing.notInstalled');
   switch (row.state) {
     case 'ready':
@@ -57,10 +61,16 @@ export function nextStep(row: Pick<AgentRow, 'installed' | 'state' | 'canTest'>)
   return null;
 }
 
+/** The last deep-check answer per agent, kept while the app runs so leaving and reopening the page still shows it. */
+const lastChecked = new Map<string, AgentHealth>();
+
 /** The agents, one row each. Shells are not agents and are left out. */
-export function useAgentRows(api: AgentRowsApi = defaultRowsApi): { rows: AgentRow[]; refreshCaps: (agentId: string) => void; recheck: (agentId: string) => Promise<void> } {
+export function useAgentRows(given?: AgentRowsApi): { rows: AgentRow[]; refreshCaps: (agentId: string) => void; recheck: (agentId: string) => Promise<void> } {
   const registry = useAgentRegistry();
+  const host = useHost();
+  const api = useMemo<AgentRowsApi>(() => given ?? { ...defaultRowsApi, health: agentHealthApiFor(host) }, [given, host]);
   const [health, setHealth] = useState<AgentHealth[]>([]);
+  const [checking, setChecking] = useState<string[]>([]);
   const [caps, setCaps] = useState<Record<string, AgentCaps>>({});
 
   useEffect(() => {
@@ -95,14 +105,23 @@ export function useAgentRows(api: AgentRowsApi = defaultRowsApi): { rows: AgentR
 
   // "Check now": the deep check of one agent; its answer replaces that agent's line.
   const recheck = async (agentId: string): Promise<void> => {
-    const fresh = await api.health.test(agentId);
+    setChecking((cur) => [...cur, agentId]);
+    let fresh: AgentHealth;
+    try {
+      fresh = await api.health.test(agentId);
+    } finally {
+      setChecking((cur) => cur.filter((id) => id !== agentId));
+    }
+    lastChecked.set(agentId, fresh);
     setHealth((cur) => (cur.some((h) => h.id === agentId) ? cur.map((h) => (h.id === agentId ? fresh : h)) : [...cur, fresh]));
   };
 
   const rows = registry.agents
     .filter((a) => a.kind !== 'shell')
     .map<AgentRow>((a) => {
-      const h = health.find((x) => x.id === a.id);
+      const quick = health.find((x) => x.id === a.id);
+      // The quick check never says if it is signed in; keep what the last deep check said.
+      const h = !quick || quick.state === 'unchecked' ? (lastChecked.get(a.id) ?? quick) : quick;
       return {
         id: a.id,
         label: a.label,
@@ -113,6 +132,7 @@ export function useAgentRows(api: AgentRowsApi = defaultRowsApi): { rows: AgentR
         loginHint: h?.login_hint ?? null,
         canTest: h?.can_test ?? false,
         caps: caps[a.id] ?? null,
+        checking: checking.includes(a.id),
       };
     });
   return { rows, refreshCaps, recheck };

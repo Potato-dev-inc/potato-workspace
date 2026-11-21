@@ -92,6 +92,93 @@ export function linkWords(state: Pick<TeamState, 'transport' | 'link' | 'enabled
   }
 }
 
+export type LinkIcon = 'ok' | 'warn' | 'bad' | 'busy' | 'idle';
+export interface LinkStatus {
+  icon: LinkIcon;
+  /** The line next to the icon. */
+  title: string;
+  /** Why, in plain words, and when the next try is; null when there is nothing to add. */
+  reason: string | null;
+  /** Only why (no countdown), for the failure sentence and the note to the person's agent. */
+  why: string | null;
+  /** The one button that fixes it: connect again (for the team's owner, with a relay that forgot the team: set the team up there again). */
+  action: 'reconnect' | 'move' | null;
+  /** For the move button: the relay address to move the team to. */
+  moveTo?: string | null;
+  /** The label of that button. */
+  actionLabel: string | null;
+  /** Why the last try failed (the kind, not words), for the fix run and the note to the person's agent. */
+  problem: TeamLinkProblem | null;
+  /** The relay's host, or a plain stand-in when there is none. */
+  host: string;
+}
+
+export type TeamLinkProblem = NonNullable<NonNullable<TeamState['linkDetail']>['problem']>;
+
+const PROBLEM_REASON = {
+  dns: 'teamHub.link.why.dns',
+  refused: 'teamHub.link.why.refused',
+  timeout: 'teamHub.link.why.timeout',
+  tls: 'teamHub.link.why.tls',
+  refused_by_relay: 'teamHub.link.why.refusedByRelay',
+  unknown_team: 'teamHub.link.why.unknownTeam',
+  signature: 'teamHub.link.why.signature',
+  busy: 'teamHub.link.why.busy',
+  down: 'teamHub.link.why.down',
+  unreadable: 'teamHub.link.why.unreadable',
+  relay_gone: 'teamHub.link.why.relayGone',
+  other: 'teamHub.link.why.other',
+} as const;
+
+/**
+ * The link under the team name, with what it is doing now. The icon spins only while a try is really going on
+ * (the first connect); a wait, a failure or a refusal is a still icon with the reason and what to do.
+ */
+export function linkStatus(state: Pick<TeamState, 'transport' | 'link' | 'enabled' | 'linkDetail' | 'error'> | null, opts: { admin?: boolean; workingRelay?: { address: string; host: string } | null } = {}): LinkStatus {
+  const base = { reason: null, why: null, action: null, actionLabel: null, problem: null, host: t('teamHub.link.hostFallback') };
+  const plain = (icon: LinkIcon, title: string): LinkStatus => ({ ...base, icon, title });
+  if (!state || !state.enabled) return plain('idle', t('teamHub.link.paused'));
+  if (state.transport === 'folder') return plain('ok', t('teamHub.link.folder'));
+  if (state.link === 'live') return plain('ok', t('teamHub.link.live'));
+  if (state.link === 'polling') return plain('ok', t('teamHub.link.polling'));
+  const tryAgain = t('teamHub.link.tryAgain');
+  if (state.link === null) {
+    // Team is on but no connection exists: nothing is trying, so nothing spins. Connecting again starts it.
+    return { ...base, icon: 'warn', title: t('teamHub.link.notRunning'), reason: state.error ?? t('teamHub.link.notRunning.why'), action: 'reconnect', actionLabel: tryAgain };
+  }
+  const d = state.linkDetail ?? null;
+  const host = d?.host ?? t('teamHub.link.hostFallback');
+  const problemKind = d?.problem ?? null;
+  // The relay turned this computer away: nothing here can fix that, the team owner has to add it again.
+  if (state.link === 'denied') return { ...base, host, icon: 'bad', title: t('teamHub.link.denied'), reason: t('teamHub.link.why.refusedByRelay', { host }), why: t('teamHub.link.why.refusedByRelay', { host }), problem: 'refused_by_relay' };
+  // A relay that is gone can never answer again: no retry words, no "try again"; the owner may move the team to a relay that works.
+  if (problemKind === 'relay_gone' && (state.link === 'connecting' || state.link === 'offline')) {
+    const move = opts.admin === true ? opts.workingRelay ?? null : null;
+    const who = opts.admin !== true ? t('teamHub.link.who.goneMember') : move ? t('teamHub.link.who.goneMove', { to: move.host }) : t('teamHub.link.who.goneNone');
+    const why = t('teamHub.link.why.relayGone', { host, who });
+    return { ...base, host, icon: 'warn', title: t('teamHub.link.offline.host', { host }), reason: why, why, problem: problemKind, action: move ? 'move' : null, moveTo: move?.address ?? null, actionLabel: move ? t('teamHub.link.moveTo', { host: move.host }) : null };
+  }
+  const problem = problemKind ? t(PROBLEM_REASON[problemKind], { host, who: opts.admin === true ? t('teamHub.link.who.owner') : t('teamHub.link.who.member') }) : null;
+  // The button says what it will do: a relay that forgot the team is set up again by the team's owner, anything else is just tried again.
+  const fixLabel = problemKind === 'unknown_team' && opts.admin === true ? t('teamHub.link.setUpAgain') : tryAgain;
+  if (state.link === 'connecting') {
+    if (!d) return plain('idle', t('teamHub.link.connecting'));
+    const doing = d.step === 'poll' ? t('teamHub.link.step.poll', { host }) : d.step === 'socket' ? t('teamHub.link.step.socket', { host }) : t('teamHub.link.step.start', { host });
+    // A failed try before the first success is the same as offline: show the reason, still.
+    if (problemKind) return { ...base, host, problem: problemKind, icon: 'warn', title: t('teamHub.link.offline.host', { host }), reason: [problem, retryWords(d)].filter(Boolean).join(' '), why: problem, action: 'reconnect', actionLabel: fixLabel };
+    return { ...base, host, icon: d.attempting ? 'busy' : 'idle', title: t('teamHub.link.connecting'), reason: doing };
+  }
+  // offline
+  if (!d) return { ...base, icon: 'warn', title: t('teamHub.link.offline'), action: 'reconnect', actionLabel: tryAgain };
+  return { ...base, host, problem: problemKind, icon: 'warn', title: t('teamHub.link.offline.host', { host }), reason: [problem, retryWords(d)].filter(Boolean).join(' ') || null, why: problem, action: 'reconnect', actionLabel: fixLabel };
+}
+
+function retryWords(d: NonNullable<TeamState['linkDetail']>): string | null {
+  if (d.attempting) return t('teamHub.link.retry.now');
+  if (d.retryInS != null) return t('teamHub.link.retry.in', { count: d.retryInS });
+  return null;
+}
+
 /** What I share, from the backend; an older backend means the default (here only). */
 export const shareOf = (state: Pick<TeamState, 'share'> | null): ShareView => state?.share ?? DEFAULT_SHARE;
 

@@ -134,7 +134,7 @@ fn a_stale_claude_project_file_is_flagged() {
 const INSTALLED: &str = "C:/Program Files/Potato Workspace/puppet-master-mcp.exe";
 
 fn dev_current() -> McpLaunchSpec {
-    McpLaunchSpec { command: "D:/pm-wt/x/resources/bin/puppet-master-mcp.exe".into(), args: vec![] }
+    McpLaunchSpec { command: "D:/work/x/resources/bin/puppet-master-mcp.exe".into(), args: vec![] }
 }
 
 fn host_home(name: &str) -> PathBuf {
@@ -201,7 +201,7 @@ fn an_installed_build_refreshes_its_own_stale_codex_entry_but_not_the_dev_one() 
 #[test]
 fn only_a_release_exe_outside_a_target_folder_counts_as_installed() {
     let installed = Path::new("C:/Program Files/Potato Workspace/potato-workspace.exe");
-    let dev = Path::new("E:/pm-cargo/x/target/release/potato-workspace.exe");
+    let dev = Path::new("E:/cargo-out/x/target/release/potato-workspace.exe");
     assert_eq!(running_from_installed_location(Some(installed)), !cfg!(debug_assertions));
     assert!(!running_from_installed_location(Some(dev)));
     assert!(!running_from_installed_location(None));

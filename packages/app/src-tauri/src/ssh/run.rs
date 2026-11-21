@@ -24,6 +24,10 @@ pub struct Output {
 
 pub trait Runner {
     fn run(&self, argv: &[String], deadline: Duration) -> Result<Output, String>;
+    /// The same with a bigger (or smaller) stdout cap in bytes. A runner that has no cap of its own (a fake) answers as `run`.
+    fn run_capped(&self, argv: &[String], deadline: Duration, _cap: usize) -> Result<Output, String> {
+        self.run(argv, deadline)
+    }
 }
 
 /// The system `ssh`, looked for in `path_var` (the process `PATH` when `None`), then in the Windows OpenSSH folder.
@@ -58,7 +62,7 @@ pub struct LiveRunner {
     pub pre: Vec<String>,
 }
 
-fn read_capped(mut r: impl Read + Send + 'static) -> std::thread::JoinHandle<String> {
+fn read_capped(mut r: impl Read + Send + 'static, cap: usize) -> std::thread::JoinHandle<String> {
     std::thread::spawn(move || {
         let mut buf = Vec::new();
         let mut chunk = [0u8; 4096];
@@ -66,8 +70,8 @@ fn read_capped(mut r: impl Read + Send + 'static) -> std::thread::JoinHandle<Str
             if n == 0 {
                 break;
             }
-            if buf.len() < OUTPUT_CAP {
-                buf.extend_from_slice(&chunk[..n.min(OUTPUT_CAP - buf.len())]);
+            if buf.len() < cap {
+                buf.extend_from_slice(&chunk[..n.min(cap - buf.len())]);
             }
         }
         String::from_utf8_lossy(&buf).into_owned()
@@ -76,11 +80,15 @@ fn read_capped(mut r: impl Read + Send + 'static) -> std::thread::JoinHandle<Str
 
 impl Runner for LiveRunner {
     fn run(&self, argv: &[String], deadline: Duration) -> Result<Output, String> {
+        self.run_capped(argv, deadline, OUTPUT_CAP)
+    }
+
+    fn run_capped(&self, argv: &[String], deadline: Duration, cap: usize) -> Result<Output, String> {
         let mut cmd = crate::proc_util::hidden_command(&self.exe);
         cmd.args(&self.pre).args(argv).stdin(Stdio::null()).stdout(Stdio::piped()).stderr(Stdio::piped());
         let mut child = cmd.spawn().map_err(|e| format!("ssh did not start: {e}"))?;
-        let out = read_capped(child.stdout.take().ok_or("no stdout")?);
-        let err = read_capped(child.stderr.take().ok_or("no stderr")?);
+        let out = read_capped(child.stdout.take().ok_or("no stdout")?, cap);
+        let err = read_capped(child.stderr.take().ok_or("no stderr")?, OUTPUT_CAP);
         let started = Instant::now();
         let (ok, timed_out) = loop {
             match child.try_wait() {

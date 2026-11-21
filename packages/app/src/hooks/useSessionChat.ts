@@ -1,6 +1,8 @@
 // Read-only chat of one terminal pane: opens the backend's session-file reader while `enabled`, merges the
 // item batches for this pane, and closes the reader again on unmount or when disabled.
 import { errorSentence } from '../lib/sayError';
+import { useHost } from '../lib/host/context';
+import type { Host } from '../lib/host/host';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { chatEarlier } from '../lib/chatMore';
 import { clearChatTiming, finishChatOpen, markChat } from '../lib/chatTiming';
@@ -54,7 +56,9 @@ interface Status {
 
 const LOADING: Status = { state: 'loading', reason: null, waitingFor: null, source: null };
 
-export function useSessionChat(paneId: string, enabled: boolean): SessionChatHook {
+export function useSessionChat(paneId: string, enabled: boolean, given?: Host): SessionChatHook {
+  const ctx = useHost();
+  const host = given ?? ctx;
   // This view's own id for the backend: it holds the pane's reader until this view lets go (not the window's).
   const surfaceRef = useRef<string | null>(null);
   surfaceRef.current ??= `s-${Math.random().toString(36).slice(2, 10)}`;
@@ -84,7 +88,7 @@ export function useSessionChat(paneId: string, enabled: boolean): SessionChatHoo
         markChat('view:items');
       }
       setItems((prev) => mergeItems(prev, event.items, event.reset));
-    })
+    }, host)
       .then((off) => {
         if (live) unlisten = off;
         else off();
@@ -94,7 +98,7 @@ export function useSessionChat(paneId: string, enabled: boolean): SessionChatHoo
     void onSessionChatStatus((event) => {
       if (!live || event.paneId !== paneId) return;
       setStatus((prev) => ({ ...prev, waitingFor: event.waitingFor }));
-    })
+    }, host)
       .then((off) => {
         if (live) unlistenStatus = off;
         else off();
@@ -104,14 +108,14 @@ export function useSessionChat(paneId: string, enabled: boolean): SessionChatHoo
     void onSessionChatSource((event) => {
       if (!live || event.paneId !== paneId) return;
       setStatus((prev) => (prev.state === 'ready' ? { ...prev, source: event.source } : prev));
-    })
+    }, host)
       .then((off) => {
         if (live) unlistenSource = off;
         else off();
       })
       .catch(() => undefined);
 
-    openSessionChat(paneId, surface)
+    openSessionChat(paneId, surface, host)
       .then((snapshot) => {
         if (!live) return;
         // A backend that answers with nothing must not crash the view: show the chat as unavailable.
@@ -146,12 +150,12 @@ export function useSessionChat(paneId: string, enabled: boolean): SessionChatHoo
       unlistenStatus?.();
       unlistenSource?.();
       clearChatTiming();
-      void closeSessionChat(paneId, surface).catch(() => undefined);
+      void closeSessionChat(paneId, surface, host).catch(() => undefined);
     };
-  }, [paneId, enabled, surface]);
+  }, [paneId, enabled, surface, host]);
 
   // Older messages, a page at a time (an ACP chat has a journal on the PC; any other chat shows no row).
-  const fetchEarlier = useCallback((before: string, limit: number) => chatEarlier(paneId, before, limit), [paneId]);
+  const fetchEarlier = useCallback((before: string, limit: number) => chatEarlier(paneId, before, limit, host), [paneId, host]);
   const earlier = useEarlier({ key: paneId, ready: status.state === 'ready', supported: status.source === 'acp', items, setItems, fetchPage: enabled ? fetchEarlier : null });
 
   // The last result goes back in, so a turn that did not change stays the same object (the view skips it).

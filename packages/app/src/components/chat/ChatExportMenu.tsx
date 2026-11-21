@@ -13,6 +13,7 @@ import { SegTabs } from '../cockpit/SegTabs';
 import { Sheet } from '../cockpit/Sheet';
 import { FloatingMenu } from '../cockpit/FloatingMenu';
 import { useT } from '../../i18n';
+import { useHost } from '../../lib/host/context';
 
 /** What the menu needs from the desktop shell (a fake in tests). */
 export interface ChatExportApi {
@@ -57,6 +58,9 @@ interface Made {
 
 export function ChatExportMenu({ paneId, api = tauriChatExportApi, variant = 'icon', onMove }: { paneId: string; api?: ChatExportApi; /** "Move to…" in the menu (Devices): absent hides the entry. */ onMove?: () => void; /** `text`: a quiet "Share" button (the pane header), so it is not a second ⋯. */ variant?: 'icon' | 'text' }) {
   const t = useT();
+  // A place that cannot build the file yet draws the same menu with every entry off and its one reason.
+  const host = useHost();
+  const off = host.can?.('chat_export_html') === false ? (host.notYet ?? null) : null;
   const [menuOpen, setMenuOpen] = useState(false);
   const [preview, setPreview] = useState<ExportFormat | null>(null);
   const btn = useRef<HTMLButtonElement>(null);
@@ -85,6 +89,8 @@ export function ChatExportMenu({ paneId, api = tauriChatExportApi, variant = 'ic
                 type="button"
                 className="ck-menu-item"
                 role="menuitem"
+                disabled={off !== null}
+                title={off ?? undefined}
                 onClick={() => {
                   setMenuOpen(false);
                   setPreview(item.format);
@@ -97,6 +103,8 @@ export function ChatExportMenu({ paneId, api = tauriChatExportApi, variant = 'ic
               type="button"
               className="ck-menu-item"
               role="menuitem"
+              disabled={off !== null}
+              title={off ?? undefined}
               onClick={() => {
                 setMenuOpen(false);
                 requestGoLive(paneId);
@@ -110,6 +118,8 @@ export function ChatExportMenu({ paneId, api = tauriChatExportApi, variant = 'ic
                 className="ck-menu-item"
                 role="menuitem"
                 data-testid="chat-menu-move"
+                disabled={off !== null}
+                title={off ?? undefined}
                 onClick={() => {
                   setMenuOpen(false);
                   onMove();

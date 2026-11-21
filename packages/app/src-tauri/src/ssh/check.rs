@@ -2,14 +2,8 @@
 //! finds. Nothing is installed, written or started on the far machine. The program names are bare names from our own
 //! list (git, node, and each agent's Linux program), checked with `valid_program`; no text from a person is in it.
 //!
-//! CHAT_LAB (chat over SSH): the idea was to start an agent's chat adapter through `ssh` stdio. It did not pass, so
-//! SSH places offer terminals only:
-//! * the chat adapters run as local child processes whose file and terminal requests are answered on THIS PC, and
-//!   the folder they are given must exist here. An adapter started through `ssh` would read and write the far
-//!   files while this PC answers for its own, so every path in a request would point at the wrong machine;
-//! * the adapter must be installed on the far machine, and this feature installs nothing there;
-//! * no real SSH host was available at build time, so a live stdio run could not be shown to work either.
-//! Revisit with a real host and a remote file/terminal bridge.
+//! Chat over SSH is built in `acp.rs` (the old note here, that file and terminal requests would be answered on this PC, no longer
+//! applies: the handshake advertises no file or terminal support, so the agent uses its own tools on the far machine).
 
 use crate::ssh::model::valid_program;
 use serde::Serialize;

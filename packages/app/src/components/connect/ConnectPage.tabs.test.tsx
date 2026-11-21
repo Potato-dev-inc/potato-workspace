@@ -38,7 +38,14 @@ afterEach(async () => {
 
 const FORBIDDEN = /relay|worker|tunnel|\bports?\b|\bnodes?\b|pairing|\bpair(?:ed)?\b|pm:|domain|subdomain/i;
 const NO_FOLDS = /advanced|more options|technical details/i;
-const pageText = () => text('[data-testid="connect-page"]');
+// The live checklist under This PC names the real parts on purpose (relay, tunnel program); the plain-words rule covers the rest.
+const pageText = () => {
+  const page = q('[data-testid="connect-page"]');
+  if (!page) return '';
+  const copy = page.cloneNode(true) as HTMLElement;
+  copy.querySelectorAll('[data-testid="connect-steps"]').forEach((n) => n.remove());
+  return copy.textContent ?? '';
+};
 
 function Screen({ api, start = 'devices' }: { api: Partial<ConnectApi>; start?: ConnectTab }) {
   const [tab, setTab] = useState<ConnectTab>(start);
@@ -227,7 +234,8 @@ describe('Connect > Team and Lending', () => {
     expect(pageText()).not.toMatch(NO_FOLDS);
     await mountScreen(makeApi({ tunnel: fakeTunnel(stable('failed')).api, team: fakeTeam(true) }), 'team');
     const line = [...document.querySelectorAll('[data-testid="connect-reach"]')].pop()!;
-    expect(line.textContent).toContain("This PC can't be reached right now.");
+    // The line says the true reason (here the plain one: a restart can still help), not a generic sentence.
+    expect(line.textContent).toContain("Your phone and other PCs can't reach this PC.");
     expect(line.textContent).toContain('Fix it');
   });
 
@@ -279,6 +287,7 @@ describe('Connect > plain words on every screen', () => {
       await h.mount(s.api(), s.tab);
       const shown = pageText();
       expect(shown.length).toBeGreaterThan(20);
+      expect(shown).not.toContain('Getting ready');
       const bad = shown.replace(/pm-relay\.maya\.workers\.dev/g, '').match(FORBIDDEN);
       expect(bad, `found "${bad?.[0]}" in: ${shown}`).toBeNull();
       expect(shown).not.toMatch(NO_FOLDS);

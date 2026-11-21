@@ -163,7 +163,7 @@ fn probe(answer: Option<&'static str>) -> FakeProbe {
 }
 
 fn scheme(home_env: &str, file: &str) -> crate::tui::AccountScheme {
-    crate::tui::AccountScheme { home_env: home_env.into(), extra_env: Vec::new(), login_hint: String::new(), credential_files: vec![file.into()] }
+    crate::tui::AccountScheme { home_env: home_env.into(), extra_env: Vec::new(), login_hint: String::new(), credential_files: vec![file.into()], default_home: String::new() }
 }
 
 fn agent(id: &str, label: &str, toml: &str, scheme: Option<crate::tui::AccountScheme>) -> AgentUsage {
@@ -466,5 +466,35 @@ fn borrowed_accounts_whose_lender_shares_nothing_say_so_once() {
     assert_eq!(snap.rows.len(), 2, "main and ONE not-shared row, not one per grant");
     assert_eq!(snap.rows[1].state, "unknown");
     assert!(snap.rows[1].reason.as_deref().unwrap_or("").contains("does not share"));
+    let _ = std::fs::remove_dir_all(user);
+}
+
+#[test]
+fn own_sign_ins_tell_signed_in_signed_out_and_cannot_tell() {
+    let (user, _) = codex_homes();
+    let codex = agent("codex", "Codex", CODEX_TOML, Some(scheme("CODEX_HOME", "auth.json")));
+    let mut cursor = agent("cursor", "Cursor", CURSOR_TOML, None);
+    cursor.source.command = Some(("cursor-agent".into(), vec!["status".into()]));
+    let none = |_: &str| None;
+    // Codex: its login file is there. Cursor: its status command says it is signed in.
+    let yes = probe(Some(r#"{"isAuthenticated":true,"hasRefreshToken":true}"#));
+    let rows = own_sign_ins(&[codex.clone(), cursor.clone()], &none, Some(&user), &yes);
+    assert_eq!((rows[0].agent_id.as_str(), rows[0].state), ("codex", "signed_in"));
+    assert_eq!((rows[1].agent_id.as_str(), rows[1].state), ("cursor", "signed_in"));
+    // Login file gone and the folder empty: signed out. Cursor says no: signed out.
+    std::fs::remove_dir_all(user.join(".codex")).unwrap();
+    let no = probe(Some(r#"{"isAuthenticated":false,"hasRefreshToken":false}"#));
+    let rows = own_sign_ins(&[codex.clone(), cursor.clone()], &none, Some(&user), &no);
+    assert_eq!(rows[0].state, "signed_out");
+    assert_eq!(rows[1].state, "signed_out");
+    // A folder with other files but no login file, and a status command that never answers: cannot tell, and says why.
+    std::fs::create_dir_all(user.join(".codex")).unwrap();
+    std::fs::write(user.join(".codex").join("config.toml"), "").unwrap();
+    let silent = probe(None);
+    let rows = own_sign_ins(&[codex, cursor], &none, Some(&user), &silent);
+    assert_eq!(rows[0].state, "unknown");
+    assert!(rows[0].why.as_deref().unwrap().contains("Codex"));
+    assert_eq!(rows[1].state, "unknown");
+    assert!(rows[1].why.as_deref().unwrap().contains("did not answer"));
     let _ = std::fs::remove_dir_all(user);
 }

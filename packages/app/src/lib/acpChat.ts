@@ -2,14 +2,15 @@
 // event, and the pure rules the views use. The conversation itself is the ordinary session chat (`sessionChat.ts`,
 // source `acp`); a question the agent asks is an ordinary question card (kind `acp_permission`). This file is only
 // what is new: stop, the session's state, and which cards belong to a pane.
-import { invoke } from '@tauri-apps/api/core';
-import { listen, type UnlistenFn } from '@tauri-apps/api/event';
+import type { UnlistenFn } from '@tauri-apps/api/event';
+import { localHost } from './host/local';
+import type { Host } from './host/host';
 import type { Question } from './questions';
 import type { AcpInitCheck } from './agentWizardAcp';
 import { blockOf } from './acpAddon';
 import { RUN_WAYS } from './glossary';
 import { t } from '../i18n';
-import { sendPaneMessage } from './paneOutbox';
+import { paneOutboxTransport } from './paneOutbox';
 import { desktopSignIn, type ChatSignIn } from './chatMore';
 
 /** `PaneInfo.lane` of a chat session. */
@@ -450,15 +451,15 @@ export interface AcpChatApi {
   continueTurn?: (paneId: string) => Promise<unknown>;
 }
 
-const isTauri = (): boolean => typeof window !== 'undefined' && '__TAURI_INTERNALS__' in window;
 const noopUnlisten: UnlistenFn = () => {};
 
-async function call<T>(command: string, args?: Record<string, unknown>): Promise<T> {
-  if (!isTauri()) throw new Error(`Desktop shell required: ${command}`);
-  return invoke<T>(command, args);
-}
-
-export const tauriAcpChatApi: AcpChatApi = {
+/** The chat-session calls of one place. Every call is `host.invoke(<same command>, <same args>)`. */
+export function acpChatApi(host: Host): AcpChatApi {
+  const call = <T,>(command: string, args?: Record<string, unknown>): Promise<T> => host.invoke<T>(command, args);
+  const invoke = call;
+  const listen = host.listen;
+  const isTauri = (): boolean => host.live;
+  return {
   state: async (paneId) => {
     if (!isTauri()) return null;
     return (await invoke<AcpChatState | null>('acp_chat_state', { paneId })) ?? null;
@@ -473,10 +474,10 @@ export const tauriAcpChatApi: AcpChatApi = {
     if (!isTauri()) throw new Error('Desktop shell required: acp_chat_retry_sign_in');
     await invoke<void>('acp_chat_retry_sign_in', { paneId });
   },
-  signIn: (paneId) => desktopSignIn(paneId),
+  signIn: (paneId) => desktopSignIn(paneId, host),
   watch: async (cb) => {
     if (!isTauri()) return noopUnlisten;
-    return listen<{ paneId: string; state: AcpChatState }>('acp-chat-state', (e) => cb(e.payload.paneId, e.payload.state));
+    return listen<{ paneId: string; state: AcpChatState }>('acp-chat-state', (p) => cb(p.paneId, p.state));
   },
   setConfig: (paneId, optionId, value) => call<AcpChatState>('acp_chat_set_config', { paneId, optionId, value }),
   setAgentAnswering: (paneId, allowed) => call<AcpChatState>('acp_chat_set_agent_answering', { paneId, allowed }),
@@ -490,7 +491,7 @@ export const tauriAcpChatApi: AcpChatApi = {
   },
   watchConversations: async (cb) => {
     if (!isTauri()) return noopUnlisten;
-    return listen('acp-conversations-changed', () => cb());
+    return listen<unknown>('acp-conversations-changed', () => cb());
   },
   laneGet: async () => normalizeLaneView(await call<AcpLaneView>('agent_lane_get')),
   laneSet: async (agentId, lane) => normalizeLaneView(await call<AcpLaneView>('agent_lane_set', { id: agentId, lane })),
@@ -503,9 +504,9 @@ export const tauriAcpChatApi: AcpChatApi = {
   adapterKeySet: (adapterId, env, value) => call<void>('acp_adapter_key_set', { adapterId, env, value }),
   overlayProgress: async (agent, cb) => {
     if (!isTauri()) return noopUnlisten;
-    return listen<{ agent: string; status?: { state?: string; lines?: unknown; detail?: unknown } }>('acp-addon-changed', (e) => {
-      if (String(e.payload?.agent ?? '').toLowerCase() !== agent.toLowerCase()) return;
-      const st = e.payload?.status;
+    return listen<{ agent: string; status?: { state?: string; lines?: unknown; detail?: unknown } }>('acp-addon-changed', (payload) => {
+      if (String(payload?.agent ?? '').toLowerCase() !== agent.toLowerCase()) return;
+      const st = payload?.status;
       const state = st?.state === 'installing' || st?.state === 'installed' || st?.state === 'failed' ? st.state : 'not_installed';
       cb({ state, lines: Array.isArray(st?.lines) ? st!.lines.filter((l): l is string => typeof l === 'string') : [], detail: typeof st?.detail === 'string' ? st.detail : '' });
     });
@@ -519,8 +520,11 @@ export const tauriAcpChatApi: AcpChatApi = {
     return { ...normalizeLaneView(view), removal: view.removal };
   },
   restart: (paneId) => call<AcpChatState>('acp_chat_restart', { paneId }),
-  continueTurn: (paneId) => sendPaneMessage(paneId, CONTINUE_TEXT),
-};
+  continueTurn: (paneId) => paneOutboxTransport(host).send(paneId, CONTINUE_TEXT),
+  };
+}
+
+export const tauriAcpChatApi: AcpChatApi = acpChatApi(localHost);
 
 /** The permission cards that belong to `paneId`, oldest first. */
 export function permissionCards(questions: readonly Question[], paneId: string): Question[] {
@@ -708,7 +712,7 @@ export function terminalChatCapable(view: AcpLaneView | null): TerminalChatAgent
 
 /** Start an agent as Chat (terminal) (`terminal_chat_start`): a normal terminal pane. Resolves to the new pane id. */
 export function startTerminalChat(agentId: string, cwd?: string, accountId?: string): Promise<string> {
-  return call<string>('terminal_chat_start', accountId ? { agent: agentId, cwd: cwd ?? null, accountId } : { agent: agentId, cwd: cwd ?? null });
+  return localHost.invoke<string>('terminal_chat_start', accountId ? { agent: agentId, cwd: cwd ?? null, accountId } : { agent: agentId, cwd: cwd ?? null });
 }
 
 // ---- The app closed during a turn (P-29) --------------------------------------------------------------------------

@@ -18,7 +18,7 @@ pub async fn pane_message_send(
 ) -> Result<OutboxMessage, String> {
     let registry = state.registry.clone();
     let attachments = attachments.unwrap_or_default();
-    tauri::async_runtime::spawn_blocking(move || pane_outbox::global(&registry, &app).send_with(&pane_id, &text, &attachments))
+    tauri::async_runtime::spawn_blocking(move || pane_outbox::global(&registry, &app).send_including_remote(&pane_id, &text, &attachments))
         .await
         .map_err(|e| format!("INTERNAL: {e}"))?
 }

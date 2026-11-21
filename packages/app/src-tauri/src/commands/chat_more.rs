@@ -25,13 +25,14 @@ pub async fn chat_earlier(state: State<'_, AppState>, pane_id: String, before: S
 #[tauri::command(rename_all = "camelCase")]
 pub async fn chat_picture(state: State<'_, AppState>, pane_id: String, path: String) -> Result<Value, String> {
     let cwd = cwd_of(&state, &pane_id)?;
-    tauri::async_runtime::spawn_blocking(move || {
-        picture::read(&path, &cwd, &picture::roots_for(&cwd), picture::MAX_BYTES)
-            .map(|found| serde_json::to_value(found).unwrap_or(Value::Null))
-            .map_err(|refused| format!("{}: {}", refused.code, refused.message))
-    })
-    .await
-    .map_err(|e| format!("INTERNAL: {e}"))?
+    tauri::async_runtime::spawn_blocking(move || chat_picture_of(&cwd, &path, picture::MAX_BYTES)).await.map_err(|e| format!("INTERNAL: {e}"))?
+}
+
+/// The body of `chat_picture`, also run for a paired PC (`pclink::calls_chat`).
+pub(crate) fn chat_picture_of(cwd: &str, path: &str, max_bytes: u64) -> Result<Value, String> {
+    picture::read(path, cwd, &picture::roots_for(cwd), max_bytes)
+        .map(|found| serde_json::to_value(found).unwrap_or(Value::Null))
+        .map_err(|refused| format!("{}: {}", refused.code, refused.message))
 }
 
 /// The draft of this chat that the PC holds (`{ text, at }`, empty text when there is none).

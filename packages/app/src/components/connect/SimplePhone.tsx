@@ -5,6 +5,7 @@ import { buildPairingInviteUrl, encodePairingQrContent, PairingQrPayloadSchema, 
 import QRCode from 'qrcode';
 import { useEffect, useRef, useState } from 'react';
 import { useT } from '../../i18n';
+import type { MessageKey } from '../../i18n/en';
 import { firstScanWorked, markFirstScan } from '../../lib/connect-offer';
 import { watchTunnelDevInfo } from '../../lib/load-tunnel-dev-info';
 import { resolvePhoneAddress } from '../../lib/phone-address';
@@ -204,7 +205,7 @@ export function SimplePhone({ tunnel, phones, publicPwaUrl, devServerPort, ready
         : rescan
           ? t('connect.simple.scanAgain')
           : waiting
-            ? t('connect.simple.starting')
+            ? waitingLine(status, primary.blocked?.reason ?? null, t)
             : count > 0
               ? t('connect.simple.connected')
               : t('connect.simple.ready');
@@ -264,6 +265,19 @@ export function SimplePhone({ tunnel, phones, publicPwaUrl, devServerPort, ready
       )}
     </div>
   );
+}
+
+/** Why the phone address is not there yet, from what the app really knows (never a bare "Getting ready"). */
+function waitingLine(status: TunnelStatus | null | undefined, blocked: string | null, t: ReturnType<typeof useT>): string {
+  if (status?.step?.code === 'tunnel_off') return t('connect.thisPc.tunnelOff');
+  if (blocked) return blocked;
+  if (status && !status.local_port) return t('connect.thisPc.nothingServer');
+  const step = status?.step;
+  if (step && step.code !== 'connected') {
+    const withRetry = step.code === 'registering' && step.retry ? '.retry' : '';
+    return t(`connect.step.${step.code}${withRetry}` as MessageKey, { s: step.elapsed_secs, retry: step.retry ?? 0, next: step.next_in_secs ?? 0 });
+  }
+  return status?.state === 'stopped' ? t('connect.thisPc.nothingStopped') : t('connect.thisPc.waitAddr');
 }
 
 /** The plain wait time after a restart was refused. */

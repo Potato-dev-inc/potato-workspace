@@ -31,6 +31,71 @@ pub fn set_link_temporary(on: bool) -> Result<TunnelStatus, String> {
     mobile_tunnel::set_link_temporary(on)
 }
 
+/// "Permanent link", "Temporary link" or "My domain" (`mode`: permanent | temporary | domain). `domain` is what the person typed
+/// (validated and kept saved even when another link is on). `route` (book | direct) is optional: none keeps the link's own
+/// route. A route this app does not build for the link is refused. No restart; the saved Worker stays.
+#[tauri::command]
+pub fn set_link_mode(mode: String, domain: Option<String>, route: Option<String>) -> Result<TunnelStatus, String> {
+    mobile_tunnel::set_link_mode(&mode, domain, route.as_deref())
+}
+
+/// "Port on this PC": the port the phone server asks for first (`None` = automatic). Validated here (1024 to 65535, free now),
+/// saved, and used from the next start. Only the app window can call this; the phone side has no route to it.
+#[tauri::command]
+pub fn set_phone_port(port: Option<i64>) -> Result<TunnelStatus, String> {
+    crate::phone_port::save(port, crate::pwa_server::bound_pwa_port())?;
+    Ok(mobile_tunnel::tunnel_status())
+}
+
+/// "Check": does this address really reach THIS PC? A fresh nonce goes out and the answer must carry the proof only this
+/// running app can make. No token, no redirects, public addresses only. A pass is recorded here (never on the UI's say-so),
+/// and only then may the address be given to phones.
+#[tauri::command]
+pub async fn check_own_domain(raw: String) -> Result<ConnectionTest, String> {
+    tauri::async_runtime::spawn_blocking(move || {
+        use crate::own_domain::Verdict;
+        // The route and the name this Check STARTS with: a pass is written only if both still hold when it ends.
+        let mode = crate::worker_origins::link_mode();
+        let route = mode.route;
+        let origin = crate::own_domain::normalize(&raw)?;
+        let (result, verdict) = if mode.choice == crate::worker_origins::LinkChoice::Domain && route == crate::worker_origins::LinkRoute::Book {
+            // Address book: the name is a small Worker. The Check takes the phone's path (ask the Worker where this PC is and
+            // make it prove itself, then prove that address is THIS app), so a pass means a phone that opens the name arrives here.
+            let (quick, supported) = mobile_tunnel::book_facts();
+            // The name is the Worker deployed with this name's key: from now on this PC may tell it where it is, and one press waits
+            // (up to 12 s) until it has, so it ends on a pass.
+            let arm_it = || {
+                if crate::domain_book::arm(&origin).is_ok() {
+                    mobile_tunnel::kick_book();
+                }
+            };
+            let checked = crate::domain_book::check_armed(&raw, quick, supported, &crate::bridge::identity::own_domain_proof, &arm_it)?;
+            if crate::domain_book::should_disarm(&checked) {
+                let _ = crate::domain_book::disarm(&origin);
+            }
+            (checked.test, checked.verdict)
+        } else {
+            crate::own_domain::check(&raw, &crate::bridge::identity::own_domain_proof)?
+        };
+        match verdict {
+            Verdict::Pass => crate::worker_origins::mark_verified(&raw, route)?,
+            // Another server answers there now: stop handing the address to phones. A timeout or error keeps an earlier pass.
+            Verdict::NotThisPc => crate::worker_origins::unmark_verified_for_route(&raw, route)?,
+            Verdict::Unreached => {}
+        }
+        Ok(result)
+    })
+    .await
+    .map_err(|err| err.to_string())?
+}
+
+/// "My domain" + Address book: the Worker files for the person's own Cloudflare (the source, and a settings file with the name
+/// and the HASH of this PC's key filled in). The key itself never leaves this PC. Only the app window can call this.
+#[tauri::command]
+pub fn domain_book_files(domain: String) -> Result<crate::domain_book::WorkerFiles, String> {
+    crate::domain_book::files(&domain)
+}
+
 /// Fetch `<public>/bridge/health`. `url: None` tests the tunnel's current public URL.
 #[tauri::command]
 pub async fn test_tunnel_connection(url: Option<String>) -> Result<ConnectionTest, String> {

@@ -20,17 +20,17 @@ describe('which agents can chat', () => {
 
 describe('offeredAgents', () => {
   const entries = [{ type: 'claude' }, { type: 'aider' }, { type: 'kilo' }, { type: 'headless-only', disabled: true }, { type: 'bash', shell: true }];
-  it('keeps the agents that can chat, counts the ones that need a terminal, and never offers a shell', () => {
+  it('keeps the agents that can chat, counts the ones that need a terminal, and always offers a shell', () => {
     const { offered, needTerminals } = offeredAgents(entries, view());
-    expect(offered.map((e) => e.type)).toEqual(['claude']);
+    expect(offered.map((e) => e.type)).toEqual(['claude', 'bash']);
     // aider and kilo (its chat is off). The headless-only agent cannot open a pane at all, and a shell is not an agent.
     expect(needTerminals).toBe(2);
   });
-  it('hides nothing but the shells while the lanes are unknown', () => {
+  it('hides nothing while the lanes are unknown', () => {
     const { offered, needTerminals } = offeredAgents(entries, null);
-    expect(offered.map((e) => e.type)).toEqual(['claude', 'aider', 'kilo', 'headless-only']);
+    expect(offered.map((e) => e.type)).toEqual(['claude', 'aider', 'kilo', 'headless-only', 'bash']);
     expect(needTerminals).toBe(0);
-    expect(splitByChat(entries, null).offered).toHaveLength(4);
+    expect(splitByChat(entries, null).offered).toHaveLength(5);
   });
 });
 

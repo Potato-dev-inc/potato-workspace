@@ -37,13 +37,14 @@ export function AddAgentFound({
   return (
     <div className="aa-found" role="group" aria-label={t('addAgent.found.title')}>
       <div className="aa-found-head">
-        <p className="aa-found-title">{t('addAgent.found.title')}</p>
-        {found.length > 1 && (
-          <button type="button" className="aa-link" disabled={disabled} onClick={() => onAddAll(found.map((f) => f.id))}>
-            {t('addAgent.found.addAll')}
-          </button>
-        )}
+        <span className="aa-found-title">{t('addAgent.found.title')}</span>
+        <span className="aa-quiet">{found.length}</span>
       </div>
+      {found.length > 1 && (
+        <button type="button" className="aa-link" disabled={disabled} onClick={() => onAddAll(found.map((f) => f.id))}>
+          {t('addAgent.found.addAll')}
+        </button>
+      )}
       <ul className="aa-found-list">
         {found.map((f) => (
           <li key={f.id} className="aa-found-row" data-found={f.id}>

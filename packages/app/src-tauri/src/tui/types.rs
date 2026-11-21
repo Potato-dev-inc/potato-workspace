@@ -263,6 +263,9 @@ pub struct AccountScheme {
     /// (`.credentials.json`, `auth.json`). Empty when the agent keeps its login somewhere else (a keychain),
     /// in which case a signed-in state cannot be read from the folder.
     pub credential_files: Vec<String>,
+    /// The folder the agent uses when no account is chosen (`~/.claude`), written with a leading `~`. Empty when the
+    /// profile does not say. An account folder that is, holds or sits inside it is refused (it is the person's own login).
+    pub default_home: String,
 }
 
 /// A TUI that draws a fixed-width sidebar on the right once the pane is wider than `min_cols`

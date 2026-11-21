@@ -582,3 +582,99 @@ fn a_second_correct_code_for_one_invite_flags_both_requests() {
     assert_eq!(store.joins.len(), 2);
     assert!(store.joins.iter().all(|j| j.warning.as_deref() == Some(super::store::CODE_SHARED)), "both are flagged");
 }
+
+// ------------------------------------------------------------------ a relay that forgot the team (Set up again / Start fresh)
+
+/// The Worker is set up again and loses its data: every call is "unknown team" (404) for ever, and it used to say "ask the owner to
+/// add this computer again". Now the kind is `unknown_team`, and the owner's Try again registers and publishes the team on the
+/// empty relay (a real local relay, the same protocol as the Worker); a member cannot, and an empty relay is only repaired once.
+#[test]
+fn a_relay_that_forgot_the_team_is_told_about_it_again_by_the_owner() {
+    let t = relay_team();
+    // A second, empty relay answers at a new address for the same team: what a Worker set up again looks like.
+    let (empty_addr, _empty) = pm_relay::spawn_local(pm_relay::Config::default());
+    let owner_on_empty = relay_transport(empty_addr, &t.roster.team, &t.maya);
+    let member_on_empty = relay_transport(empty_addr, &t.roster.team, &t.leo);
+
+    let error = owner_on_empty.get_state("roster").unwrap_err();
+    assert_eq!(super::transport::problem_kind(&error), "unknown_team", "{error}");
+    assert!(!error.is_denied(), "a forgotten team is not the same as being refused");
+
+    // A member cannot set the team up: only the root key can register it.
+    assert_eq!(membership::set_up_again(&t.leo_roster, &t.leo, member_on_empty.as_ref()), Ok(false));
+    assert!(owner_on_empty.get_state("roster").is_err());
+
+    // The owner can, once; the roster and the key grant are back and the relay answers for the team.
+    assert_eq!(membership::set_up_again(&t.roster, &t.maya, owner_on_empty.as_ref()), Ok(true));
+    assert!(owner_on_empty.get_state("roster").unwrap().is_some());
+    assert!(member_on_empty.get_state("keys").unwrap().is_some(), "Leo is on the access list again");
+    assert_eq!(membership::set_up_again(&t.roster, &t.maya, owner_on_empty.as_ref()), Ok(false), "nothing left to repair");
+    // A relay that already knows the team is never touched.
+    assert_eq!(membership::set_up_again(&t.roster, &t.maya, t.maya_wire.as_ref()), Ok(false));
+}
+
+/// Wraps a transport and fails the access-list write once: the registration worked and the publishing then hit a 429 or the network.
+struct FailsOnce {
+    inner: Arc<dyn TeamTransport>,
+    fail: std::sync::atomic::AtomicBool,
+}
+
+impl TeamTransport for FailsOnce {
+    fn kind(&self) -> &'static str {
+        self.inner.kind()
+    }
+    fn send(&self, e: &pm_relay_protocol::Envelope) -> Result<(), super::transport::TransportError> {
+        self.inner.send(e)
+    }
+    fn subscribe(&self, after: u64) -> Result<std::sync::mpsc::Receiver<Inbound>, super::transport::TransportError> {
+        self.inner.subscribe(after)
+    }
+    fn put_state(&self, b: &pm_relay_protocol::SignedBlob) -> Result<(), super::transport::TransportError> {
+        self.inner.put_state(b)
+    }
+    fn get_state(&self, slot: &str) -> Result<Option<pm_relay_protocol::SignedBlob>, super::transport::TransportError> {
+        self.inner.get_state(slot)
+    }
+    fn post_join(&self, j: &pm_relay_protocol::JoinBox) -> Result<(), super::transport::TransportError> {
+        self.inner.post_join(j)
+    }
+    fn joins(&self) -> Result<Vec<pm_relay_protocol::JoinBox>, super::transport::TransportError> {
+        self.inner.joins()
+    }
+    fn register(&self, r: &pm_relay_protocol::TeamRegistration) -> Result<(), super::transport::TransportError> {
+        self.inner.register(r)
+    }
+    fn set_acl(&self, a: &pm_relay_protocol::SignedAcl) -> Result<(), super::transport::TransportError> {
+        if self.fail.swap(false, std::sync::atomic::Ordering::SeqCst) {
+            return Err(super::transport::TransportError::new("The relay asks to slow down. Try again in a minute."));
+        }
+        self.inner.set_acl(a)
+    }
+    fn stop(&self) {
+        self.inner.stop()
+    }
+}
+
+/// The registration worked but the publishing failed: the next press sees an empty roster slot (not a 404) and must finish the job,
+/// without registering a second time.
+#[test]
+fn a_repair_that_stopped_after_registering_is_finished_by_the_next_press() {
+    let t = relay_team();
+    let (empty_addr, _empty) = pm_relay::spawn_local(pm_relay::Config::default());
+    let flaky = FailsOnce { inner: relay_transport(empty_addr, &t.roster.team, &t.maya), fail: std::sync::atomic::AtomicBool::new(true) };
+
+    let first = membership::set_up_again(&t.roster, &t.maya, &flaky);
+    assert!(first.unwrap_err().contains("slow down"), "the failure is returned, not swallowed");
+    // Registered, nothing published: the slot is empty now, no longer a 404.
+    std::thread::sleep(Duration::from_millis(20));
+    assert!(matches!(flaky.get_state("roster"), Ok(None)));
+
+    // The relay refuses a signed request it has already seen (same path, same millisecond): real presses are seconds apart, so the test is too.
+    let pause = || std::thread::sleep(Duration::from_millis(20));
+    pause();
+    assert_eq!(membership::set_up_again(&t.roster, &t.maya, &flaky), Ok(true), "the second press publishes");
+    pause();
+    assert!(flaky.get_state("roster").unwrap().is_some());
+    pause();
+    assert_eq!(membership::set_up_again(&t.roster, &t.maya, &flaky), Ok(false), "and then there is nothing left to do");
+}

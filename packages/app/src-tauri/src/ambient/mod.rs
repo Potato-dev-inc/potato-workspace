@@ -43,7 +43,7 @@ pub fn announce_title_change(app: &AppHandle, pane_id: &str) {
     if let Some(window) = app.get_webview_window(&crate::pane_windows::window_label(pane_id)) {
         let agent = app
             .try_state::<crate::AppState>()
-            .and_then(|s| s.registry.lock().list().into_iter().find(|p| p.id == pane_id).map(|p| p.agent_type));
+            .and_then(|s| s.registry.lock().list_including_remote().into_iter().find(|p| p.id == pane_id).map(|p| p.agent_type));
         if let Some(agent) = agent {
             let _ = window.set_title(&window_title(&agent, pane_id, store::get(pane_id).as_deref()));
         }

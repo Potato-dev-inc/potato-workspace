@@ -13,6 +13,7 @@ import { insertAtCursor } from '../../lib/voice';
 import { pickFolder, pickImages, prepareAttachments, savePastedImage, type ChatAttachment } from '../../lib/attachFiles';
 import { fileClipboard } from '../../lib/pasteFiles';
 import { AttachMenu } from './AttachMenu';
+import { useHost } from '../../lib/host/context';
 import { AttachmentChips } from './AttachmentChips';
 import { ContextMeter } from './ContextMeter';
 import { MyMessages } from './MyMessages';
@@ -102,8 +103,15 @@ export function ChatComposer(props: ChatComposerProps) {
   return <ChatComposerBox key={props.draftKey ?? ''} {...props} />;
 }
 
+function useAttachOff(): string | null {
+  // A place that cannot take a file yet draws the same + button, off, with its one reason.
+  const host = useHost();
+  return host.can?.('attachment_prepare') === false ? (host.notYet ?? null) : null;
+}
+
 function ChatComposerBox({ onSend, blockedReason, voice = false, draftKey, draft: pointDraft, remoteDraft, slashCommands, slashLoading = false, onWarm, toolbar, running = false, onStop, status, attachFiles, contextUsage, footnote, history }: ChatComposerProps) {
   const stoppable = running && !!onStop;
+  const attachOff = useAttachOff();
   const [restored] = useState(() => (draftKey ? readDraftState(draftKey) : { text: '', attachments: [] as ChatAttachment[] }));
   const [text, setText] = useState(restored.text);
   useRemoteDraft(remoteDraft, text, setText);
@@ -649,7 +657,8 @@ function ChatComposerBox({ onSend, blockedReason, voice = false, draftKey, draft
         <div className="ck-chat-composer-foot">
           {attachFiles && (
             <AttachMenu
-              disabled={blocked || busy || preparing > 0}
+              disabled={blocked || busy || preparing > 0 || !!attachOff}
+              reason={attachOff}
               onPickFiles={() => void addFiles()}
               onPickFolder={() => void addPicked(pickFolder)}
               onPickImage={() => void addPicked(pickImages)}

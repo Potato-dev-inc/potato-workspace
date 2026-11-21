@@ -47,13 +47,40 @@ const mocks = vi.hoisted(() => ({
   capsList: [] as AgentCaps[],
   definitions: [] as { id: string; file: string; source: string; state: string }[],
   recheck: vi.fn(async (_agentId: string) => undefined),
+  claudeState: 'ready',
+  logins: [] as { agent_id: string; state: string; why: string | null }[],
+  proof: false,
+  signInStops: 0,
+  loginAsks: [] as boolean[],
+  healthTest: (async (_id: string) => undefined) as unknown as (id: string) => Promise<unknown>,
+  accounts: [] as Record<string, unknown>[],
+  signOut: vi.fn(async (_id: string) => 2),
   remove: vi.fn(async () => ({ ok: true, id: 'claude', label: 'Claude', removed_id: 'r1', fixtures: false, wizard: false, was_approved: true })),
 }));
 
 vi.mock('@tauri-apps/api/core', async (importOriginal) => {
   const real = await importOriginal<typeof import('@tauri-apps/api/core')>();
-  return { ...real, invoke: (cmd: string, args?: { agentId?: string }) => (cmd === 'agent_caps_recheck' ? mocks.recheck(String(args?.agentId)) : real.invoke(cmd, args as never)) };
+  return {
+    ...real,
+    invoke: (cmd: string, args?: { agentId?: string; fresh?: boolean }) => {
+      if (cmd === 'agent_caps_recheck') return mocks.recheck(String(args?.agentId));
+      if (cmd === 'agent_login_states') {
+        mocks.loginAsks.push(args?.fresh === true);
+        return Promise.resolve(mocks.logins);
+      }
+      if (cmd === 'agent_signin_start') return Promise.resolve({ pane_id: 'hidden-1' });
+      if (cmd === 'agent_signin_status') return Promise.resolve({ alive: true, asking: false, pane_id: 'hidden-1', signed_in: mocks.proof });
+      if (cmd === 'agent_signin_stop') {
+        mocks.signInStops += 1;
+        return Promise.resolve();
+      }
+      return real.invoke(cmd, args as never);
+    },
+  };
 });
+// The real terminal needs xterm and the pane stream; the card only has to give it the hidden pane's id.
+vi.mock('../../lend/SignInTerminal', () => ({ SignInTerminal: ({ paneId }: { paneId: string }) => <div data-testid="fake-signin-terminal" data-pane={paneId} /> }));
+vi.mock('../../acp/SignInFixCard', async (importOriginal) => ({ ...(await importOriginal<typeof import('../../acp/SignInFixCard')>()), SIGNIN_POLL_MS: 40, SIGNIN_LOOK_MS: 40 }));
 vi.mock('../../../lib/agentCaps', async (importOriginal) => {
   const real = await importOriginal<typeof import('../../../lib/agentCaps')>();
   return {
@@ -68,10 +95,10 @@ vi.mock('../../../lib/agentCaps', async (importOriginal) => {
 vi.mock('../../../lib/agent-health', () => ({
   agentHealthApi: {
     check: async () => [
-      { id: 'claude', label: 'Claude', state: 'ready', installed: true, version: '2.1.0', reason: '', install_hint: null, login_hint: null, can_test: true },
+      { id: 'claude', label: 'Claude', state: mocks.claudeState, installed: true, version: '2.1.0', reason: '', install_hint: null, login_hint: null, can_test: true },
       { id: 'kimi', label: 'Kimi', state: 'needs_login', installed: true, version: null, reason: '', install_hint: null, login_hint: 'Run kimi once and sign in.', can_test: false },
     ],
-    test: vi.fn(),
+    test: (id: string) => mocks.healthTest(id),
   },
 }));
 vi.mock('../../../lib/agentRegistry', async (importOriginal) => {
@@ -88,7 +115,12 @@ vi.mock('../../../lib/agentDefinitions', async (importOriginal) => {
 vi.mock('../../../lib/accounts', async (importOriginal) => {
   const real = await importOriginal<typeof import('../../../lib/accounts')>();
   const agents = ['claude', 'kimi'].map((agent_id) => ({ agent_id, home_env: 'X', login_hint: 'Sign in once.' }));
-  return { ...real, tauriAccountsApi: { ...real.tauriAccountsApi, list: async () => ({ agents, accounts: [], helper_logins: {} }) } };
+  return { ...real, tauriAccountsApi: { ...real.tauriAccountsApi, list: async () => ({ agents, accounts: mocks.accounts, helper_logins: {} }), signOut: (id: string) => mocks.signOut(id) } };
+});
+vi.mock('../../../lib/usage', async (importOriginal) => {
+  const real = await importOriginal<typeof import('../../../lib/usage')>();
+  const row = { agent_id: 'claude', label: 'Claude', account_id: 'a1', account_label: 'Work', state: 'ok', reason: null, windows: [{ name: 'Weekly', used_percent: 41.6, reset_since: false }], plan: null, observed_at_ms: null, limited_until_ms: null, page: null };
+  return { ...real, usageApi: { ...real.usageApi, snapshot: async () => ({ rows: [row], refreshed_at_ms: 0 }) } };
 });
 vi.mock('../../../lib/modelOptions', async (importOriginal) => {
   const real = await importOriginal<typeof import('../../../lib/modelOptions')>();
@@ -125,6 +157,13 @@ beforeEach(() => {
   ];
   mocks.definitions = [{ id: 'claude', file: 'C:/agents/claude.toml', source: 'user', state: 'active' }];
   mocks.remove.mockClear();
+  mocks.accounts = [];
+  mocks.claudeState = 'ready';
+  mocks.signOut.mockClear();
+  mocks.logins = [];
+  mocks.proof = false;
+  mocks.signInStops = 0;
+  mocks.loginAsks = [];
 });
 afterEach(async () => {
   localStorage.removeItem(LS_ADDED_AGENTS);
@@ -145,7 +184,7 @@ describe('Settings > Agents', () => {
   it('agents list shows one row per agent with chips', async () => {
     await mount();
     expect(listRow).toHaveLength(1);
-    const rows = [...m.host.querySelectorAll('.ag-row')];
+    const rows = [...m.host.querySelectorAll('.ag-card')];
     expect(rows.map((r) => r.getAttribute('data-agent'))).toEqual(['claude', 'kimi']);
     const claude = q('[data-testid="agent-row-claude"]')!;
     expect(claude.textContent).toContain('Claude');
@@ -160,12 +199,109 @@ describe('Settings > Agents', () => {
     expect(chipsOf(kimi)).toHaveLength(0);
   });
 
+  it('each card shows its account and usage, and Sign out asks first', async () => {
+    mocks.accounts = [{ id: 'a1', agent_id: 'claude', label: 'Work', home: 'x', login_state: 'signed_in' }];
+    await mount();
+    expect(q('[data-testid="card-account-claude"]')?.textContent).toBe('Work · Signed in');
+    expect(q('[data-testid="card-usage-claude"]')?.textContent).toBe('Weekly: 42% used');
+    // Kimi has no extra account: it uses its own sign-in and Sign out is off.
+    expect(q('[data-testid="card-account-kimi"]')?.textContent).toBe('Its own sign-in');
+    expect((q('[data-testid="card-signout-kimi"]') as HTMLButtonElement).disabled).toBe(true);
+    await click(q('[data-testid="card-signout-claude"]'));
+    expect(mocks.signOut).not.toHaveBeenCalled();
+    await click(q('[data-testid="card-signout-yes-claude"]'));
+    expect(mocks.signOut).toHaveBeenCalledWith('a1');
+    expect(q('[data-testid="agent-row-claude"]')?.textContent).toContain('Signed out of Work');
+  });
+
+  it('each card says Signed in, Not signed in or Cannot tell for the agent own login, with the reason', async () => {
+    mocks.logins = [
+      { agent_id: 'kimi', state: 'signed_in', why: null },
+      { agent_id: 'claude', state: 'unknown', why: 'Claude keeps its sign-in where this app cannot look.' },
+    ];
+    await mount();
+    expect(q('[data-testid="card-state-kimi"]')?.textContent).toBe('Signed in');
+    expect(q('[data-testid="card-state-claude"]')?.textContent).toBe("Can't tellClaude keeps its sign-in where this app cannot look.");
+    await m.unmount();
+    mocks.logins = [{ agent_id: 'claude', state: 'signed_out', why: null }];
+    await mount();
+    expect(q('[data-testid="card-state-claude"]')?.textContent).toBe('Not signed in');
+    // No answer for kimi at all: it says so, it never guesses.
+    expect(q('[data-testid="card-state-kimi"]')?.textContent).toContain("Can't tell");
+  });
+
+  it('nothing on the cards folds away', async () => {
+    await mount();
+    expect(m.host.querySelector('details')).toBeNull();
+    expect(m.host.querySelector('[aria-expanded]')).toBeNull();
+  });
+
+  it('Sign in shows the sign-in terminal inside the card, and the card flips to Signed in when the proof arrives', async () => {
+    mocks.logins = [{ agent_id: 'claude', state: 'signed_out', why: null }];
+    await mount();
+    expect(q('[data-testid="card-state-claude"]')?.textContent).toBe('Not signed in');
+    expect(q('[data-testid="card-signin-panel-claude"]')).toBeNull();
+    await click(q('[data-testid="card-signin-claude"]'));
+    await settle(12);
+    const card = q('[data-testid="agent-row-claude"]')!;
+    const panel = card.querySelector('[data-testid="card-signin-panel-claude"]');
+    expect(panel).not.toBeNull();
+    expect(panel?.querySelector('[data-testid="fake-signin-terminal"]')?.getAttribute('data-pane')).toBe('hidden-1');
+    expect(panel?.textContent).toContain('Finish signing in below');
+    // Not proven yet: it still says Not signed in. Then the credential file is written.
+    expect(q('[data-testid="card-state-claude"]')?.textContent).toBe('Not signed in');
+    mocks.proof = true;
+    mocks.logins = [{ agent_id: 'claude', state: 'signed_in', why: null }];
+    await act(async () => new Promise((r) => setTimeout(r, 150)));
+    await settle(12);
+    expect(q('[data-testid="card-state-claude"]')?.textContent).toBe('Signed in');
+    expect(card.textContent).toContain('Signed in. You can close this.');
+    expect(card.querySelector('[data-testid="fake-signin-terminal"]')).toBeNull();
+    expect(mocks.signInStops).toBeGreaterThan(0);
+    // The list was read again with fresh=true (nothing old reused).
+    expect(mocks.loginAsks).toContain(true);
+    await click(q('[data-testid="card-signin-close-claude"]'));
+    expect(q('[data-testid="card-signin-panel-claude"]')).toBeNull();
+  });
+
+  it('Close stops the sign-in and removes the terminal', async () => {
+    await mount();
+    await click(q('[data-testid="card-signin-claude"]'));
+    await settle(12);
+    expect(q('[data-testid="fake-signin-terminal"]')).not.toBeNull();
+    await click(q('[data-testid="card-signin-close-claude"]'));
+    expect(q('[data-testid="fake-signin-terminal"]')).toBeNull();
+    expect(mocks.signInStops).toBeGreaterThan(0);
+  });
+
+  it('Check shows busy at once, and the answer is still there after leaving and reopening', async () => {
+    mocks.claudeState = 'unchecked';
+    let finish: (v: unknown) => void = () => undefined;
+    mocks.healthTest = () => new Promise((r) => (finish = r));
+    await mount();
+    const card = () => q('[data-testid="agent-row-claude"]')!;
+    const checkBtn = () => [...card().querySelectorAll<HTMLButtonElement>('button')].find((b) => /^(Check|Checking)/.test(b.textContent ?? ''))!;
+    expect(card().textContent).toContain('Not checked yet');
+    await click(checkBtn());
+    expect(card().textContent).toContain('Checking…');
+    expect(checkBtn().disabled).toBe(true);
+    await act(async () => finish({ id: 'claude', label: 'Claude', state: 'needs_login', installed: true, version: null, reason: '', install_hint: null, login_hint: null, can_test: true }));
+    await settle(4);
+    expect(card().textContent).toContain('Not signed in');
+    // Leave the page and come back: the check answer is remembered.
+    await m.unmount();
+    await mount();
+    expect(card().textContent).toContain('Not signed in');
+    // An agent with only its own sign-in says so on the card, not only in a tooltip.
+    expect(q('[data-testid="card-why-claude"]')?.textContent).toContain('own sign-in');
+  });
+
   it('clicking an agent opens its page', async () => {
     await mount();
     expect(page()).toBeNull();
     await click(q('[data-testid="agent-row-claude"] .ag-open'));
     expect(page()?.getAttribute('data-agent')).toBe('claude');
-    expect(q('.ag-row')).toBeNull();
+    expect(q('.ag-card')).toBeNull();
     expect(page()?.querySelector('.ag-title')?.textContent).toBe('Claude');
     // The window's title carries the name now; the page has no Status row and no Back button of its own.
     expect(page()?.textContent).not.toContain('Status');
@@ -259,7 +395,7 @@ describe('Settings > Agents', () => {
     expect(page()).not.toBeNull();
     await act(async () => setOpenAgent(null)); // the Settings window's "Agents" in the title does this
     expect(page()).toBeNull();
-    expect(m.host.querySelectorAll('.ag-row')).toHaveLength(2);
+    expect(m.host.querySelectorAll('.ag-card')).toHaveLength(2);
   });
 
   it('remove asks to confirm', async () => {

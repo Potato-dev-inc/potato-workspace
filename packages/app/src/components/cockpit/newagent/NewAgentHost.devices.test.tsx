@@ -15,6 +15,18 @@ import type { WslApi } from '../../../lib/wsl';
 import { click, settle, type as typeInto } from '../../settings/test-utils';
 import type { WhereProps } from '../../devices/NewAgentWhere';
 import { NewAgentHost } from './NewAgentHost';
+import { NewAgentPage } from './NewAgentPage';
+import { HostProvider } from '../../../lib/host/context';
+import { farHost } from '../../../lib/host/far';
+import { localHost } from '../../../lib/host/local';
+import { makePcLinkClient } from '../../../lib/runtime/pclink';
+import { resetAgentRegistryCache } from '../../../lib/agentRegistry';
+import { forceShowTerminals } from '../../../lib/showTerminals';
+
+// This PC's commands, answered by the same fake that answers the far PC's call rows: the page must draw the same DOM from either host.
+const tauri = vi.hoisted(() => ({ answer: null as null | ((cmd: string, args: unknown) => Promise<unknown>) }));
+vi.mock('@tauri-apps/api/core', () => ({ invoke: (cmd: string, args: unknown) => (tauri.answer ? tauri.answer(cmd, args) : Promise.reject(new Error('no desktop shell'))) }));
+vi.mock('@tauri-apps/api/event', () => ({ listen: async () => () => {} }));
 
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 (globalThis as { ResizeObserver?: unknown }).ResizeObserver ??= class {
@@ -134,7 +146,10 @@ describe('New agent project picker grouped by device', () => {
     await settle(8);
     expect(q('[data-testid="na-on-device"]')!.textContent).toBe('on Mac mini');
     expect(q('[data-testid="na-folder"]')!.textContent).toContain('billing-service');
-    expect(q('[data-testid="where-pill"]')).toBeNull();
+    // The Run in pill stays, now on the PC the project is on.
+    expect(q('[data-testid="where-pill"]')!.textContent).toContain('Run in: Mac mini');
+    // Another PC's start is a chat: no Chat/Terminal switch (its terminal is only a plain screen).
+    expect(q('.ck-na-seg')).toBeNull();
     await typeInto(q<HTMLTextAreaElement>('textarea.ck-na-input')!, 'Fix the invoice total');
     await click(q('button.ck-na-send'));
     await settle(8);
@@ -257,3 +272,77 @@ describe('New agent project picker grouped by device', () => {
     expect(q('[data-testid="na-groups"]')).toBeNull();
   });
 });
+
+
+// P2.1: the page reads its agents, lanes, folders, models, default models and pins through `useHost()`.
+describe('New agent page through a host', () => {
+  const html = () => host.innerHTML;
+  const render = async (hostValue: typeof localHost) => {
+    await act(async () => root.render(<HostProvider host={hostValue}><NewAgentPage panes={[]} needs={[]} onStart={async () => undefined} onOpenPane={() => {}} /></HostProvider>));
+    await settle(10);
+  };
+  const farOf = (fake: DevicesFake) => farHost(makePcLinkClient(NODE_MAC, fake), fake, { name: 'Mac mini' });
+  /** This PC's side: its Tauri commands are answered by the call rows of `fake`, so only the host differs. */
+  const localOf = (fake: DevicesFake) => {
+    (window as unknown as Record<string, unknown>).__TAURI_INTERNALS__ = {};
+    tauri.answer = async (cmd, args) => {
+      const r = await fake.request(NODE_MAC, 'POST', `/pclink/call/${cmd}`, args);
+      if (r.status !== 200) throw new Error(`${cmd}: ${r.status}`);
+      return r.body;
+    };
+    resetAgentRegistryCache();
+  };
+  beforeEach(() => forceShowTerminals(false));
+  afterEach(() => {
+    forceShowTerminals(null);
+    tauri.answer = null;
+    delete (window as unknown as Record<string, unknown>).__TAURI_INTERNALS__;
+    resetAgentRegistryCache();
+  });
+
+  it('draws the same page from this PC and from a far PC that answers the same rows', async () => {
+    const fake = laptop();
+    localOf(fake);
+    await render(localHost);
+    const here = html();
+    const agentsHere = names(await openAgentMenu());
+    await act(async () => root.render(<div />));
+    resetAgentRegistryCache();
+    await render(farOf(fake));
+    expect(html()).toBe(here);
+    expect(names(await openAgentMenu())).toEqual(agentsHere);
+    expect(agentsHere).toEqual(['Claude', 'Codex']);
+    // It all came through the call rows; the old list routes are not used.
+    const asked = fake.requests.filter((r) => r.path.startsWith('/pclink/call/')).map((r) => r.path.replace('/pclink/call/', ''));
+    expect(asked).toEqual(expect.arrayContaining(['agents_list', 'agent_lane_get', 'project_recent', 'agent_default_models']));
+    expect(fake.requests.some((r) => r.path === '/pclink/agents' || r.path === '/pclink/projects')).toBe(false);
+  });
+
+  it('a far PC with only Codex and OpenCode ready has exactly those ready; the others are listed with the same "not installed" note as here, never hidden', async () => {
+    const fake = laptop();
+    // The registry of that PC, as `agents_list` answers it: every agent, installed or not.
+    fake.agentsOf[NODE_MAC] = [{ id: 'claude', label: 'Claude', installed: false }, { id: 'codex', label: 'Codex' }, { id: 'opencode', label: 'OpenCode' }, { id: 'cursor_agent', label: 'Cursor', installed: false }];
+    await render(farOf(fake));
+    expect(names(await openAgentMenu())).toEqual(['Claude', 'Codex', 'OpenCode', 'Cursor']);
+    const rows = [...document.querySelectorAll('.ck-na-item')].filter((e) => e.getAttribute('role') === 'menuitemradio');
+    const ready = rows.filter((e) => e.querySelector('.ck-na-item-hint')?.textContent === 'ready').map((e) => e.querySelector('.ck-na-item-main')?.textContent);
+    expect(ready).toEqual(['Codex', 'OpenCode']);
+    expect(rows.filter((e) => e.querySelector('.ck-na-item-hint')?.textContent === 'not installed').map((e) => e.querySelector('.ck-na-item-main')?.textContent)).toEqual(['Claude', 'Cursor']);
+    // The page starts on the first ready one, like here.
+    expect(q('[data-testid="na-agent"]')!.textContent).toContain('Codex');
+  });
+
+  it('starts on the far PC newest folder, read by handle (never a path)', async () => {
+    const fake = laptop();
+    await render(farOf(fake));
+    expect(q('[data-testid="na-folder"]')!.textContent).toContain('billing-service');
+    expect(fake.requests.find((r) => r.path === '/pclink/call/project_recent')).toMatchObject({ node: NODE_MAC, method: 'POST' });
+    expect(host.textContent).not.toMatch(/[A-Za-z]:[\/]|\/Users\//);
+  });
+});
+
+async function openAgentMenu() {
+  await click(q('[data-testid="na-agent"]'));
+  await settle(6);
+  return document.body;
+}

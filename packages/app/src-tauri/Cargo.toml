@@ -224,3 +224,18 @@ opt-level = 2
 opt-level = 2
 [profile.dev.package.vt100]
 opt-level = 2
+
+# The lab's test builds (`node scripts/lab/build-test.mjs`): a build you run and look at, never one you ship. Like
+# release (no debug assertions, real tauri assets) but with little optimisation, no LTO, many codegen units and
+# incremental compilation, so an edit rebuilds in seconds-to-a-minute instead of re-optimising the whole crate.
+# Release builds (`cargo build --release`, release-build.sh) do not read this profile.
+[profile.lab]
+inherits = "release"
+opt-level = 1
+lto = false
+codegen-units = 256
+incremental = true
+debug = false
+# The app crate itself is not optimised in test builds: LLVM time on a 220k-line crate is most of an incremental rebuild.
+[profile.lab.package.puppet_master_app]
+opt-level = 0

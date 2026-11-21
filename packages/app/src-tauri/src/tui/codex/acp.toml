@@ -4,6 +4,11 @@
 command = "node"
 args = ["{adapters}/codex/node_modules/@agentclientprotocol/codex-acp/dist/index.js"]
 
+# The same adapter on ANOTHER computer over SSH (Over SSH chat): found by the far login shell's PATH, not installed by this app.
+remote_command = ["codex-acp"]
+# Start read-only there too: a write asks (session/request_permission), as it does on this PC.
+remote_env = { INITIAL_AGENT_MODE = "read-only" }
+
 # CODEX_HOME: the person's own login and sessions are used (that is what makes "Open in terminal" work),
 # so a custom home must reach the adapter too.
 env_allow = ["CODEX_HOME"]

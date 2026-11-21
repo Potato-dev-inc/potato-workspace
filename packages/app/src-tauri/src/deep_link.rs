@@ -161,7 +161,7 @@ mod tests {
     fn only_an_installed_release_registers_the_scheme() {
         use std::path::Path;
         let installed = Some(Path::new("C:/Program Files/Potato Workspace/puppet_master_app.exe"));
-        let built = Some(Path::new("E:/pm-cargo/x/release/target/puppet_master_app.exe"));
+        let built = Some(Path::new("E:/cargo-out/x/release/target/puppet_master_app.exe"));
         assert!(should_register_scheme(false, installed, None, None, None));
         assert!(!should_register_scheme(false, built, None, None, None));
         assert!(!should_register_scheme(true, installed, None, None, None));

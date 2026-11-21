@@ -13,6 +13,7 @@ export const chatMore = {
   'chat.earlier.loading': 'Loading earlier messages…',
   'chat.earlier.failed': 'Could not load earlier messages.',
   'chat.signin.step1': 'Your browser opens.',
+  'chat.signin.step1.far': 'The sign-in runs on the other PC. Open the link it shows below in your browser.',
   'chat.signin.step2': 'Come back here.',
   'chat.signin.start': 'Sign in',
   'chat.signin.starting': 'Starting…',

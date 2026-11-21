@@ -124,7 +124,12 @@ try {
       cwd: worker,
       env: { ...process.env, PM_RELAY_TEST_URL: hooked, PM_RELAY_STRICT_URL: strict },
     });
-    // The stable phone link: a Worker that only accepts a setup secret (nobody can claim it first).
+    // The stable phone link: its own Worker (a link secret, once set, can only be rotated, never cleared, so no other test may own it first).
+    const linkMain = await startWorker("link-main", {
+      ALLOWED_ORIGIN_RE: "^http://127\\.0\\.0\\.1:[0-9]+$",
+      RATE_LIMIT_PER_HOUR: "100000",
+    });
+    // ...and a Worker that only accepts a setup secret (nobody can claim it first).
     const linkSecret = "setup-secret-for-the-strict-test-worker";
     const linkStrict = await startWorker("link-strict", {
       ALLOWED_ORIGIN_RE: "^http://127\\.0\\.0\\.1:[0-9]+$",
@@ -136,7 +141,7 @@ try {
     });
     run("Stable link tests (node)", process.execPath, ["--test", "--test-concurrency=1", join(worker, "test", "stable.test.mjs")], {
       cwd: worker,
-      env: { ...process.env, PM_LINK_URL: hooked, PM_LINK_STRICT_URL: linkStrict, PM_LINK_SETUP_SECRET: linkSecret },
+      env: { ...process.env, PM_LINK_URL: linkMain, PM_LINK_STRICT_URL: linkStrict, PM_LINK_SETUP_SECRET: linkSecret },
     });
     // Far-away pairing: one Worker with the owner key set (a small box cap), one without (the feature is off).
     const pairOn = await startWorker("pair-on", { PAIR_OWNER: pairOwnerId(), LIMIT_PAIR_MAX_OPEN: "3" });

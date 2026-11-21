@@ -42,6 +42,7 @@ import type {
   StandbyStatus,
   TunnelConfigInput,
   TunnelConnectionTest,
+  DomainBookFiles,
   TunnelStatus,
 } from './tauri-types';
 
@@ -354,6 +355,15 @@ export const tauri = {
   restartTunnel: (tryAnyway = false) => safeInvoke<TunnelStatus>('restart_tunnel', tryAnyway ? { tryAnyway: true } : undefined),
   /** "Temporary link" (true) or "Permanent link" (false). No restart; the saved Worker stays as it is. */
   setLinkTemporary: (on: boolean) => safeInvoke<TunnelStatus>('set_link_temporary', { on }),
+  /** "permanent" | "temporary" | "domain". A typed `domain` is kept saved whichever is chosen; no restart. `route` ("book" | "direct") is optional. */
+  setLinkMode: (mode: 'permanent' | 'temporary' | 'domain', domain?: string | null, route?: 'book' | 'direct' | null) =>
+    safeInvoke<TunnelStatus>('set_link_mode', { mode, domain: domain ?? null, route: route ?? null }),
+  /** "Port on this PC" for the phone server: a number 1024-65535 or null for automatic. Used from the next start. */
+  setPhonePort: (port: number | null) => safeInvoke<TunnelStatus>('set_phone_port', { port }),
+  /** Does the typed address really reach this app? (no token, no redirects, public addresses only) */
+  checkOwnDomain: (raw: string) => safeInvoke<TunnelConnectionTest>('check_own_domain', { raw }),
+  /** "My domain" + Address book: the Worker files to put on the person's own Cloudflare (the key itself is never in them). */
+  domainBookFiles: (domain: string) => safeInvoke<DomainBookFiles>('domain_book_files', { domain }),
   /** Delete the fixed phone address (OpenTunnel) on the relay and on this computer, then go back to the automatic address. */
   forgetOpenTunnelAddress: () => safeInvoke<TunnelStatus>('forget_opentunnel_address'),
   testTunnelConnection: (url?: string) =>

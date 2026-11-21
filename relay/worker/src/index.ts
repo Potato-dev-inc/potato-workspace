@@ -430,6 +430,18 @@ async function readOrigin(request: Request): Promise<unknown> {
   }
 }
 
+/** The new secret of a rotate (`{"new_secret": "..."}`), as its SHA-256; null when missing or not a usable secret. */
+async function readNewSecretHash(request: Request): Promise<string | null> {
+  try {
+    const text = await request.text();
+    if (text.length > MAX_REGISTER_BODY) return null;
+    const next = (JSON.parse(text) as { new_secret?: unknown }).new_secret;
+    return typeof next === "string" && /^[!-~]{16,200}$/.test(next) ? await sha256Hex(next) : null;
+  } catch {
+    return null;
+  }
+}
+
 /** `/_pm/health`, `/_pm/link/health`, `/_pm/link/register`, `/_pm/link/reset`. The link secret only ever arrives here. */
 async function pmRoute(request: Request, env: Env, path: string): Promise<Response> {
   if (path === "where") return whereRoute(request, env);
@@ -449,7 +461,7 @@ async function pmRoute(request: Request, env: Env, path: string): Promise<Respon
   if (!token) return stableJson(401, { error: "secret_required" });
   const hash = await sha256Hex(token);
   const address = request.headers.get("cf-connecting-ip") ?? "unknown";
-  const outcome = name === "reset" ? await stub.reset(hash, address) : await stub.register(hash, await readOrigin(request), address);
+  const outcome = name === "reset" ? await stub.reset(hash, await readNewSecretHash(request), address) : await stub.register(hash, await readOrigin(request), address);
   if (outcome.status === 200) forgetWhere();
   return outcome.status === 200 ? stableJson(200, { ok: true }) : stableJson(outcome.status, { error: outcome.error });
 }
@@ -492,14 +504,19 @@ function forgetWhere(): void {
   whereMemo = null;
 }
 
+/** The linked PC's address through the 5 s in-isolate memo, shared by `where` and the page files: a page open is not one Durable Object call per file. */
+async function currentOrigin(env: Env, now: number): Promise<string | null> {
+  if (!whereMemo || now - whereMemo.at >= WHERE_MEMO_MS) whereMemo = { at: now, origin: await linkOf(env).origin() };
+  return whereMemo.origin;
+}
+
 async function whereRoute(request: Request, env: Env): Promise<Response> {
   if (request.method !== "GET" && request.method !== "HEAD") return stableJson(405, { error: "method_not_allowed" });
   const now = Date.now();
   if (!whereAllowed(request.headers.get("cf-connecting-ip") ?? "unknown", now)) {
     return new Response('{"ok":false}', { status: 429, headers: { "content-type": "application/json", "cache-control": "no-store", "retry-after": "30" } });
   }
-  if (!whereMemo || now - whereMemo.at >= WHERE_MEMO_MS) whereMemo = { at: now, origin: await linkOf(env).origin() };
-  const origin = whereMemo.origin;
+  const origin = await currentOrigin(env, now);
   // The stored origin passed the quick-tunnel rule when it was registered; check again so nothing else is ever handed out.
   if (!origin || !originRule(env).test(origin)) {
     return new Response('{"ok":false}', { status: 503, headers: { "content-type": "application/json", "cache-control": "no-store", "retry-after": "10" } });
@@ -520,11 +537,20 @@ const OLD_PAGE_SENTENCE = "This phone page is out of date. Update Potato Workspa
 function refuseProxyCall(request: Request, path: string): Response | undefined {
   if (path === "/bridge" || path.startsWith("/bridge/") || path.startsWith("/__puppet_master_dev__")) {
     return new Response(JSON.stringify({ code: "BRIDGE_UNREACHABLE", error: OLD_PAGE_SENTENCE, message: OLD_PAGE_SENTENCE, reason: "not_proxied" }), {
-      status: 502,
-      headers: { "content-type": "application/json", "cache-control": "no-store" },
+      // 410 Gone, not 502: an old page that retries on 5xx in a tight loop burned the free daily quota. `Clear-Site-Data` makes a
+      // browser drop this page's cache, storage and service worker (the stale copy that keeps calling), and `retry-after` slows the rest.
+      status: 410,
+      headers: {
+        "content-type": "application/json",
+        "cache-control": "no-store",
+        "retry-after": "3600",
+        "clear-site-data": '"cache", "storage"',
+      },
     });
   }
-  if ((request.headers.get("upgrade") ?? "").toLowerCase() === "websocket") return stableJson(404, { error: "not_proxied" });
+  if ((request.headers.get("upgrade") ?? "").toLowerCase() === "websocket") {
+    return new Response(JSON.stringify({ error: "not_proxied" }), { status: 410, headers: { "content-type": "application/json", "cache-control": "no-store", "retry-after": "3600" } });
+  }
   return undefined;
 }
 
@@ -533,26 +559,48 @@ const CACHEABLE_TYPE = new RegExp("^(text/css|text/javascript|application/javasc
 /** These two must always be asked fresh: a new app version replaces the page and its service worker. The PC's own cache headers stay as they are. */
 const ALWAYS_FRESH = new Set(["/", "/index.html", "/sw.js", "/registerSW.js"]);
 
+/** Page files by path shape. Only these paths are kept at the edge, and only these drop the query string on the PC fetch. */
+const PAGE_FILE_PATH = /\.(m?js|css|webmanifest|json|wasm|png|jpe?g|gif|webp|avif|svg|ico|woff2?|ttf|otf|eot)$/i;
+
+/** Every page-file answer says `nosniff`: a browser must not sniff a cached script or style into another type. */
+function withNosniff(res: Response): Response {
+  res.headers.set("x-content-type-options", "nosniff");
+  return res;
+}
+
 /**
  * The phone page itself (index.html, scripts, icons): the only thing still fetched from the PC, GET only, with none of
  * the client's headers. Page files (html/js/css/images/fonts/manifest/wasm) are kept at the edge so a load costs this Worker
  * one request and the PC none; `index.html` and `sw.js` pass through with the PC's own cache headers and are never kept.
+ *
+ * The edge key is the path plus the registered tunnel host (the host of the address `currentOrigin` returns, read through
+ * the same 5 s memo). A file cached under one tunnel address can therefore never be served after another address is
+ * registered. With no address (unlinked) nothing is served from the cache at all.
  */
-async function shellFromPc(request: Request, env: Env, origin: string, self: URL): Promise<Response> {
-  if (request.method !== "GET" && request.method !== "HEAD") return stableJson(405, { error: "method_not_allowed" });
-  // The stored address passed the quick-tunnel rule when it was registered; check again before any fetch (as `where` does).
-  if (!originRule(env).test(origin)) return offlineResponse();
+async function shellFromPc(request: Request, env: Env, self: URL): Promise<Response | undefined> {
+  const isRead = request.method === "GET" || request.method === "HEAD";
   const fresh = ALWAYS_FRESH.has(self.pathname);
-  const key = new Request(`${self.origin}${self.pathname}${self.search}`, { method: "GET" });
-  const cache = fresh ? undefined : (globalThis as { caches?: { default?: Cache } }).caches?.default;
-  const hit = await cache?.match(key).catch(() => undefined);
-  if (hit) return request.method === "HEAD" ? new Response(null, hit) : hit;
+  // Page-file paths are fetched and cached without the query string, so the key and the PC's answer always agree.
+  const cacheable = !fresh && isRead && PAGE_FILE_PATH.test(self.pathname);
+  const origin = await currentOrigin(env, Date.now());
+  // Not linked yet: the caller falls through to the relay's own front page, and nothing is served from the cache.
+  if (!origin) return undefined;
+  if (!isRead) return stableJson(405, { error: "method_not_allowed" });
+  // The stored address passed the quick-tunnel rule when it was registered; check again before any fetch or cache use (as `where` does).
+  if (!originRule(env).test(origin)) return offlineResponse();
+  const cache = cacheable ? (globalThis as { caches?: { default?: Cache } }).caches?.default : undefined;
+  const key = cache
+    ? new Request(`${self.origin}${self.pathname}?pm-tunnel=${encodeURIComponent(new URL(origin).host)}`, { method: "GET" })
+    : undefined;
+  // A hit is answered with no Durable Object call beyond the memo and no request to the PC.
+  const hit = key ? await cache?.match(key).catch(() => undefined) : undefined;
+  if (hit) return withNosniff(request.method === "HEAD" ? new Response(null, hit) : new Response(hit.body, hit));
   const headers = new Headers();
   const accept = request.headers.get("accept");
   if (accept) headers.set("accept", accept);
   let upstream: Response;
   try {
-    upstream = await fetch(`${origin}${self.pathname}${self.search}`, { method: "GET", headers, redirect: "manual" });
+    upstream = await fetch(`${origin}${self.pathname}${cacheable ? "" : self.search}`, { method: "GET", headers, redirect: "manual" });
   } catch {
     return offlineResponse();
   }
@@ -561,14 +609,17 @@ async function shellFromPc(request: Request, env: Env, origin: string, self: URL
   const location = out.headers.get("location");
   if (location) out.headers.set("location", rewriteLocation(location, origin, self));
   out.headers.delete("set-cookie");
-  if (!fresh && upstream.status === 200 && CACHEABLE_TYPE.test(upstream.headers.get("content-type") ?? "")) {
-    // The phone server says no-store on every file; for these page files (hashed names) the Worker's own header replaces it.
-    out.headers.set("cache-control", "public, max-age=3600, s-maxage=600");
-    if (cache) {
-      try {
-        await cache.put(key, out.clone());
-      } catch {
-        // an uncacheable answer is still an answer
+  if (cacheable) {
+    withNosniff(out);
+    if (upstream.status === 200 && CACHEABLE_TYPE.test(upstream.headers.get("content-type") ?? "")) {
+      // The phone server says no-store on every file; for these page files (hashed names) the Worker's own header replaces it.
+      out.headers.set("cache-control", "public, max-age=3600, s-maxage=600");
+      if (cache && key) {
+        try {
+          await cache.put(key, out.clone());
+        } catch {
+          // an uncacheable answer is still an answer
+        }
       }
     }
   }
@@ -588,9 +639,9 @@ export default {
       // Refuse what is not carried here first (no object, no PC touched), then serve the phone page from the PC.
       const refused = refuseProxyCall(request, url.pathname);
       if (refused) return refused;
-      // Not linked yet: the relay's own front page, as before.
-      const origin = await linkOf(env).origin();
-      if (origin) return shellFromPc(request, env, origin, url);
+      // Not linked yet (`undefined`): the relay's own front page, as before.
+      const shell = await shellFromPc(request, env, url);
+      if (shell) return shell;
     }
     const page = viewerPage(request, url);
     if (page !== undefined) return page;

@@ -51,11 +51,38 @@
 }
 .cockpit .tpg-link {
   display: flex;
-  align-items: center;
-  gap: 6px;
+  align-items: flex-start;
+  gap: 8px;
   margin: 2px 0 0;
   color: var(--label-2);
   font-size: 12px;
+}
+.cockpit .tpg-link-text {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 2px;
+  min-width: 0;
+}
+.cockpit .tpg-link-why {
+  color: var(--label-3);
+  overflow-wrap: anywhere;
+}
+/* While the repair block is showing, it says the reason itself: do not say it twice. */
+.cockpit .tpg-link-text:has(.ss-block) > .tpg-link-why {
+  display: none;
+}
+.cockpit .tpg-link .cx-ico,
+.cockpit .tpg-link .cx-dot {
+  flex: none;
+  margin-top: 0;
+  width: 14px;
+  height: 14px;
+}
+.cockpit .tpg-link .cx-dot {
+  width: 10px;
+  height: 10px;
+  margin: 2px;
 }
 .cockpit .tpg-link-dot {
   width: 7px;
@@ -368,6 +395,10 @@
   gap: 12px;
   align-items: flex-start;
   padding: 24px 0;
+}
+/* The Start and Join forms fill the page width; flex-start would shrink the invite box to its text. */
+.cockpit .tpg-empty-team > .tp-form {
+  align-self: stretch;
 }
 .cockpit .tpg-sr {
   position: absolute;

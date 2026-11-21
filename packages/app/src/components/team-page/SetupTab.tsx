@@ -12,7 +12,7 @@ export function SetupTab({ api, lendApi, displayName }: { api: TeamApi; lendApi?
   return (
     <div className="tpg-setup" data-testid="setup-tab">
       <p className="tpg-sub">{t('teamHub.setup.note')}</p>
-      <TeamSettings api={api} lend={lendApi} displayName={displayName} />
+      <TeamSettings api={api} lend={lendApi} displayName={displayName} hideStatus />
     </div>
   );
 }

@@ -214,6 +214,10 @@ pub fn on_pane_status(pane_id: &str, status: &str) {
 
 /// `turn://summary` (Tauri) and `event: turn-summary` (SSE for the phone).
 fn publish(summary: &TurnSummary) {
+    // A chat on another computer is never summarised for a phone or another PC (it has no summary: the status hook skips it).
+    if crate::acp::chat::is_remote_pane(&summary.pane_id) {
+        return;
+    }
     if let Some(app) = crate::bridge::live_app() {
         let _ = app.emit("turn://summary", summary);
     }

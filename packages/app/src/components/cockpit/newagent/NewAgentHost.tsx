@@ -41,7 +41,7 @@ export function NewAgentHost({
   where,
 }: {
   c: CockpitApi;
-  project?: { path: string; name: string } | null;
+  project?: { path: string; name: string; node?: string } | null;
   onSetUp?: () => void;
   /** Chats from the last run came back: their pane ids, and the split they had (or null). */
   onReopenedRun?: (paneIds: string[], split: SplitMemory | null) => void;
@@ -68,9 +68,9 @@ export function NewAgentHost({
   const openIds = useMemo(() => c.registry.paneList.map((p) => p.info.id), [c.registry.paneList]);
 
   return (
-    <NewAgentWhere where={where ? { ...where, notify: where.notify ?? c.notify } : where} remember={project?.path ?? ''}>
+    <NewAgentWhere where={where ? { ...where, notify: where.notify ?? c.notify } : where} remember={project?.path ?? ''} preselect={project?.node ? { node: project.node, folder: { path: project.path, name: project.name } } : undefined}>
       {(pill, slot, extras) => {
-        // Another PC picked: the same page, fed by that PC's answers. Nothing of this PC (its chats, folder, cards) is passed down.
+        // Another PC picked: the same page, inside that PC's host (its agents, folders, models and pins come through it). Nothing of this PC is passed down.
         const far = slot?.remote ?? null;
         return (
     <NewAgentPage
@@ -80,17 +80,12 @@ export function NewAgentHost({
       startFolder={extras.startFolder}
       place={extras.place ? { name: extras.place.distro, whyNot: extras.place.whyNot } : null}
       remote={far ? { deviceName: far.deviceName, terminals: far.terminals, blocked: slot?.blocked ?? null, onWarm: far.warm, agentsOff: slot?.agentsOff } : null}
-      agents={far ? far.agents : listing.agents}
+      agents={far ? undefined : listing.agents}
       panes={far ? [] : briefs}
       needs={far ? [] : briefs.filter((p) => waiting.has(p.id))}
       selectedCwd={far ? null : selectedCwd}
-      project={far ? null : project}
+      project={far || project?.node ? null : project}
       runningFolders={far ? [] : runningFolders}
-      api={far?.api}
-      addonApi={far?.addonApi}
-      modelApi={far?.modelApi}
-      defaultsApi={far?.defaultsApi}
-      rulesApi={far?.rulesApi}
       onOpenPane={(id) => c.select(id)}
       onSetUp={far ? undefined : onSetUp}
       continueYesterday={

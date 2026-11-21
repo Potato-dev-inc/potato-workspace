@@ -7,7 +7,8 @@ import { useEffect, useMemo, useState, type ReactNode } from 'react';
 import { keepGoingContinue, keepGoingTargetKey, keepGoingTargets } from '../../lib/keep-going';
 import { openSettingsAt, SETUP_CHECK_ROW_ID } from '../../lib/openSettingsAt';
 import { usePaneOutbox } from '../../hooks/usePaneOutbox';
-import { tauriOutboxTransport } from '../../lib/paneOutbox';
+import { paneOutboxTransport } from '../../lib/paneOutbox';
+import { useHost } from '../../lib/host/context';
 import { useComposerDraft } from '../../lib/composerDraft';
 import { pickFiles } from '../../lib/attachFiles';
 import { usePendingBubbles } from '../../hooks/usePendingBubbles';
@@ -119,7 +120,9 @@ export function SessionChatPanel({ paneId, dock, reply, emptyNote, onOpenPane, s
   const menu = slashAgent ? slash.commands : slashCommands;
   // The half-written message follows the person between the phone and this PC (kept by the PC, words only).
   const remoteDraft = useMemo(() => desktopDraft(paneId), [paneId]);
-  const outbox = usePaneOutbox(tauriOutboxTransport, paneId, !!reply);
+  const host = useHost();
+  const transport = useMemo(() => paneOutboxTransport(host), [host]);
+  const outbox = usePaneOutbox(transport, paneId, !!reply);
   const userTexts = useMemo(() => chat.turns.flatMap((turn) => (turn.user ? [turn.user.text] : [])), [chat.turns]);
   const { bubbles, hide } = usePendingBubbles(outbox.messages, userTexts);
   const side = useSideQuestion(paneId, chat.turns);
@@ -130,7 +133,7 @@ export function SessionChatPanel({ paneId, dock, reply, emptyNote, onOpenPane, s
   const [branchFor, setBranchFor] = useState<string | null>(null);
   const hasChat = chat.state !== 'unavailable';
   // A chat with no message box is read-only (the terminal pane's chat): no Branch there.
-  const canBranch = hasChat && !!reply;
+  const canBranch = hasChat && !!reply && host.can?.('branch_lineage') !== false;
   // The Point and Fix draft ('Edit in Chat') for this pane's box: taken only while the box is shown.
   const t = useT();
   // An agent took the standby this chat was: the person's last message goes back in the box, and the box waits for the task.

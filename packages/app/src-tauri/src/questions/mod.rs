@@ -200,6 +200,7 @@ impl QuestionError {
         match self.code {
             "QUESTION_NOT_FOUND" => 404,
             "TOO_MANY_QUESTIONS" => 429,
+            "REMOTE_PANE" => 403,
             _ => 400,
         }
     }
@@ -391,8 +392,16 @@ impl QuestionStore {
         Ok(question)
     }
 
-    /// Pending questions, oldest first, after expiring overdue ones.
+    /// Pending questions, oldest first, after expiring overdue ones. THE SAFE DEFAULT: a card of a chat that runs on another computer
+    /// is left out (a phone, another PC, attention, a channel, a push never list it). The window asks `list_pending_including_remote`.
     pub fn list_pending(&self, now: u64) -> Vec<Question> {
+        let mut list = self.list_pending_including_remote(now);
+        list.retain(|q| !q.pane_id.as_deref().is_some_and(crate::acp::chat::is_remote_pane));
+        list
+    }
+
+    /// `list_pending` with the cards of chats on another computer: the app window only.
+    pub fn list_pending_including_remote(&self, now: u64) -> Vec<Question> {
         let mut inner = self.inner.lock();
         if Self::expire_locked(&mut inner, now) {
             self.bump(&mut inner);
@@ -425,7 +434,23 @@ impl QuestionStore {
 
     /// Answer with a choice id or free text (exactly one). The first answer wins; later ones
     /// get the stored resolution back with `accepted: false`.
-    pub fn answer(
+    ///
+    /// THE SAFE DEFAULT: a card of a chat on another computer is refused here (the bridge, a phone, another PC, attention, a lock screen
+    /// and a channel all come through this). The window's own command uses `answer_including_remote`.
+    pub fn answer(&self, id: &str, choice_id: Option<&str>, text: Option<&str>, answered_by: &str, now: u64) -> Result<Resolution, QuestionError> {
+        if self.is_remote_card(id) {
+            return Err(QuestionError::new("REMOTE_PANE", crate::acp::chat::REMOTE_PANE_REFUSED));
+        }
+        self.answer_including_remote(id, choice_id, text, answered_by, now)
+    }
+
+    /// Whether `id` is a card of a chat that runs on another computer.
+    pub fn is_remote_card(&self, id: &str) -> bool {
+        let pane = self.inner.lock().items.iter().find(|q| q.id == id).and_then(|q| q.pane_id.clone());
+        pane.as_deref().is_some_and(crate::acp::chat::is_remote_pane)
+    }
+
+    pub fn answer_including_remote(
         &self,
         id: &str,
         choice_id: Option<&str>,
@@ -519,6 +544,14 @@ impl QuestionStore {
 
     /// Dismiss (person) or cancel (asking agent). Idempotent like `answer`.
     pub fn dismiss(&self, id: &str, now: u64) -> Result<Resolution, QuestionError> {
+        if self.is_remote_card(id) {
+            return Err(QuestionError::new("REMOTE_PANE", crate::acp::chat::REMOTE_PANE_REFUSED));
+        }
+        self.dismiss_including_remote(id, now)
+    }
+
+    /// `dismiss` for a card of a chat on another computer too: the app window and the chat's own cleanup only.
+    pub fn dismiss_including_remote(&self, id: &str, now: u64) -> Result<Resolution, QuestionError> {
         let resolution = {
             let mut inner = self.inner.lock();
             let expired = Self::expire_locked(&mut inner, now);

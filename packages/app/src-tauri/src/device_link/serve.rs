@@ -8,8 +8,8 @@
 //!
 //! The rights are checked again for every request (`still_allowed`): a switch turned off closes the open link now.
 //!
-//! Besides requests there are three streams: `events` (the bridge's event lines), `screen` (one terminal's screen text,
-//! pushed the moment it changes) and `web` (the web address and a token, only when the person allowed it).
+//! Besides requests there are two streams: `events` (the bridge's event lines; a terminal's output rides them as `app` frames) and
+//! `web` (the web address and a token, only when the person allowed it).
 
 use std::collections::HashMap;
 use std::sync::{Arc, Mutex};
@@ -180,9 +180,6 @@ impl Drop for StreamGuard {
 /// How long a header may take to arrive, and how long one event wait lasts.
 const HEAD_WAIT: Duration = Duration::from_secs(15);
 const EVENT_WAIT: Duration = Duration::from_secs(20);
-/// How often a terminal's screen is looked at, and how often an unchanged one still sends a heartbeat.
-const SCREEN_EVERY: Duration = Duration::from_millis(250);
-const SCREEN_BEAT: Duration = Duration::from_secs(10);
 
 /// What the far side needs for the web route and the log. All of it is read at the moment it is needed.
 #[derive(Clone)]
@@ -285,11 +282,6 @@ impl Stream {
                 let _open = StreamGuard::new(&self.live, self.peer);
                 self.events(stream, head).await
             }
-            "screen" => {
-                self.live.touch_use(self.peer, (self.now)());
-                let _open = StreamGuard::new(&self.live, self.peer);
-                self.screen(stream, head).await
-            }
             "web" => self.web(stream).await,
             _ => {
                 let (rh, body) = reply_json(400, json!({ "error": "unknown operation" }));
@@ -342,51 +334,6 @@ impl Stream {
             if wire::write_frame(&mut stream.send, &rh, data.as_bytes()).await.is_err() {
                 return;
             }
-        }
-        let rh = ReplyHead { status: 410, body_len: 0, cursor: None };
-        let _ = wire::write_frame(&mut stream.send, &rh, &[]).await;
-        let _ = stream.send.shutdown().await;
-    }
-
-    /// One terminal's screen, live: the screen route is read a few times a second on this PC (a local call) and sent
-    /// only when it changed. The bridge answers each read as that device, so its rights decide; a refusal or a pane
-    /// that is gone ends the stream with that status.
-    async fn screen(self, mut stream: BiStream, head: Head) {
-        if !wire::screen_target_ok(&head.target) {
-            let (rh, body) = reply_json(400, json!({ "error": "bad request line", "code": "INVALID_ARGUMENT" }));
-            let _ = wire::write_frame(&mut stream.send, &rh, &body).await;
-            let _ = stream.send.shutdown().await;
-            return;
-        }
-        let mut last: Option<Vec<u8>> = None;
-        let mut quiet = Duration::ZERO;
-        loop {
-            if !(self.still_allowed)(&self.peer) {
-                break;
-            }
-            let (status, bytes) = self.bridge.call(&self.node, "GET", &head.target, Vec::new()).await;
-            if status != 200 {
-                let rh = ReplyHead { status, body_len: bytes.len() as u64, cursor: None };
-                let _ = wire::write_frame(&mut stream.send, &rh, &bytes).await;
-                let _ = stream.send.shutdown().await;
-                return;
-            }
-            if last.as_ref() != Some(&bytes) {
-                let rh = ReplyHead { status: 200, body_len: bytes.len() as u64, cursor: None };
-                if wire::write_frame(&mut stream.send, &rh, &bytes).await.is_err() {
-                    return;
-                }
-                last = Some(bytes);
-                quiet = Duration::ZERO;
-            } else if quiet >= SCREEN_BEAT {
-                let rh = ReplyHead { status: 200, body_len: 0, cursor: None };
-                if wire::write_frame(&mut stream.send, &rh, &[]).await.is_err() {
-                    return;
-                }
-                quiet = Duration::ZERO;
-            }
-            tokio::time::sleep(SCREEN_EVERY).await;
-            quiet += SCREEN_EVERY;
         }
         let rh = ReplyHead { status: 410, body_len: 0, cursor: None };
         let _ = wire::write_frame(&mut stream.send, &rh, &[]).await;

@@ -69,12 +69,19 @@ const rows = () => [...host.querySelectorAll<HTMLElement>('button, [role="option
 const row = (text: string) => [...host.querySelectorAll<HTMLElement>('button, [role="option"]')].find((e) => e.textContent?.includes(text));
 
 describe('the command palette with terminals hidden', () => {
-  it('offers New <agent> only for agents that can chat, and no shell', () => {
+  it('offers New <agent> only for agents that can chat, plus the plain shells', () => {
     forceShowTerminals(false);
     act(() => root.render(<Palette c={cockpit()} onClose={() => {}} />));
     expect(rows().some((r) => r.includes('New Claude'))).toBe(true);
     expect(rows().some((r) => r.includes('New Aider'))).toBe(false);
-    expect(rows().some((r) => r.includes('New PowerShell'))).toBe(false);
+    expect(rows().some((r) => r.includes('New PowerShell'))).toBe(true);
+  });
+
+  it('a shell row starts through the cockpit', () => {
+    forceShowTerminals(false);
+    act(() => root.render(<Palette c={cockpit()} onClose={() => {}} />));
+    act(() => row('New PowerShell')!.click());
+    expect(newAgent).toHaveBeenCalledWith('powershell');
   });
 
   it('a click starts through the cockpit (which starts a chat while terminals are hidden)', () => {

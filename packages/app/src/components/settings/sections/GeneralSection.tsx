@@ -660,6 +660,38 @@ export const generalRows: RowDef[] = [
     ),
   },
   {
+    id: 'ssh-chat-labs',
+    label: 'SSH agent chat',
+    hint: 'Chat with an agent on another computer over SSH. Experimental.',
+    keywords: 'ssh agent chat remote machine server project badge connect labs early experimental',
+    group: 'Labs',
+    labs: { name: 'SSH agent chat', about: 'Experimental: chat with an agent on another computer over SSH.' },
+    render: (env) => (
+      <SettingToggle
+        label={t('settings.row.ssh-chat-labs.label')}
+        description={t('settings.row.ssh-chat-labs.hint')}
+        checked={env.settings.ssh_chat_enabled ?? false}
+        onChange={(value) => void env.patch({ ssh_chat_enabled: value })}
+      />
+    ),
+  },
+  {
+    id: 'pcdoor-labs',
+    label: 'Device door over my web address',
+    hint: 'A paired PC can make read-only calls through your web address. Experimental.',
+    keywords: 'device door pcdoor paired pc web address tunnel signed read only labs early experimental',
+    group: 'Labs',
+    labs: { name: 'Device door over my web address', about: 'Experimental: a paired PC can make read-only calls through your web address.' },
+    render: (env) => (
+      <SettingToggle
+        label={t('settings.row.pcdoor-labs.label')}
+        description={t('settings.row.pcdoor-labs.hint')}
+        checked={env.settings.pcdoor_enabled ?? false}
+        onChange={(value) => void env.patch({ pcdoor_enabled: value })}
+      />
+    ),
+  },
+  {
     id: 'account-labs',
     label: 'Potato account',
     hint: 'Sign in once and your devices find each other. Adds a sign-in to Connect.',

@@ -122,6 +122,15 @@ describe('the settings window reads the switches on, and the saved file keeps th
     expect(h.state.server.missions_enabled).toBe(false);
   });
 
+  it('the window setter sends ssh_chat_enabled and pcdoor_enabled to the app (the window-only path, not the bridge)', async () => {
+    setDevLabsOverrideForTests(false);
+    await patchSettings({ ssh_chat_enabled: true });
+    await patchSettings({ pcdoor_enabled: true });
+    expect(h.state.calls.filter((c) => c === 'settings_patch')).toHaveLength(2);
+    expect(h.state.server.ssh_chat_enabled).toBe(true);
+    expect(h.state.server.pcdoor_enabled).toBe(true);
+  });
+
   it('with the override off, the stored values are what the window reads', async () => {
     setDevLabsOverrideForTests(false);
     const loaded = await loadSettings();

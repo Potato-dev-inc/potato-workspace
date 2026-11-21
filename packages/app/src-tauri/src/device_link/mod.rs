@@ -25,6 +25,7 @@ pub mod client;
 pub mod files;
 pub mod far_http;
 pub mod pclink;
+pub mod pcdoor;
 pub mod files_client;
 pub mod route;
 pub mod serve;
@@ -45,6 +46,8 @@ mod tests_far;
 mod tests_far_cross;
 #[cfg(test)]
 mod tests_p2;
+#[cfg(test)]
+mod pcdoor_tests;
 
 use std::collections::BTreeSet;
 use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
@@ -251,6 +254,9 @@ pub struct DeviceLink {
     last_addrs: Mutex<String>,
     now_secs: Arc<dyn Fn() -> u64 + Send + Sync>,
     pclink_asks: Arc<pclink::Asks>,
+    /// The device door (`pcdoor.rs`): signed read-only calls through this PC's public tunnel address.
+    pcdoor: Arc<pcdoor::PcDoor>,
+    pcdoor_labs: Arc<AtomicBool>,
 }
 
 /// What the two routes that still use the old link door get (`POST /agents/run` and `POST /lend/item`: neither is a phone route,
@@ -326,6 +332,23 @@ impl DeviceLink {
             },
         };
         let pclink_asks = Arc::new(pclink::Asks::new());
+        // The device door: the same `/pclink` door, capped at Watch and with no legacy routes, behind per-request signatures.
+        let pcdoor_labs = Arc::new(AtomicBool::new(false));
+        let web_door: Option<Arc<dyn HostBridge>> = deps
+            .options
+            .pclink
+            .clone()
+            .map(|services| pcdoor::build_door(services, pclink_asks.clone(), trust.clone(), enabled.clone(), pcdoor_labs.clone(), Arc::new(pclink_now_ms)));
+        let pcdoor = Arc::new(pcdoor::PcDoor {
+            trust: trust.clone(),
+            devices_on: enabled.clone(),
+            labs_on: pcdoor_labs.clone(),
+            door: web_door,
+            signer: Arc::new(pcdoor::KeyStoreNode::new(keys.clone())),
+            now_ms: Arc::new(pclink_now_ms),
+            nonces: pcdoor::NonceStore::booted(pclink_now_ms()),
+            throttle: pcdoor::Throttle::default(),
+        });
         // The PC link's own door: `/pclink/...` is served under the PC's own levels, and the phone's routes are not reachable.
         let host_bridge: Arc<dyn HostBridge> = match deps.options.pclink.clone() {
             Some(services) => Arc::new(pclink::Door {
@@ -345,6 +368,10 @@ impl DeviceLink {
                 name_of: {
                     let trust = trust.clone();
                     Arc::new(move |node: &str| node_of(node).ok().and_then(|n| trust.get(&n)).map(|d| d.name).unwrap_or_default())
+                },
+                marked_of: {
+                    let trust = trust.clone();
+                    Arc::new(move |node: &str| node_of(node).is_ok_and(|n| trust.account_marked(&n)))
                 },
                 lend_ok: {
                     let (trust, enabled) = (trust.clone(), enabled.clone());
@@ -429,6 +456,8 @@ impl DeviceLink {
             last_addrs: Mutex::new(String::new()),
             now_secs: deps.now_secs,
             pclink_asks,
+            pcdoor,
+            pcdoor_labs,
         });
         let weak = Arc::downgrade(&me);
         me.mgr.set_notifier(Arc::new({
@@ -461,7 +490,7 @@ impl DeviceLink {
                 if let Some(me) = weak.upgrade() {
                     // Remember which account device this pairing is with: signing that device out takes the pairing with it.
                     me.links.set(&device_id, &node.to_hex());
-                    // Every right stays at the pairing default (off). Nothing on this route turns one on.
+                    // The pairing manager already gave Full + the account marker (plan 2.2); open the live links to match.
                     me.rights_changed();
                 }
             }
@@ -480,11 +509,6 @@ impl DeviceLink {
 
     pub fn set_event_sink(&self, f: Arc<dyn Fn(&str, &str) + Send + Sync>) {
         self.client.set_event_sink(f);
-    }
-
-    /// Where a live terminal's screen text goes: `(node, pane id, text)`.
-    pub fn set_screen_sink(&self, f: client::ScreenSink) {
-        self.client.set_screen_sink(f);
     }
 
     fn changed(&self) {
@@ -512,6 +536,7 @@ impl DeviceLink {
     /// links closed, outbound links and streams dropped, the code withdrawn, the endpoint closed.
     pub fn apply_settings(self: &Arc<Self>, public: &Value) {
         let on = labs_on_for(public, capability::AGENTS_REMOTE);
+        self.pcdoor_labs.store(pcdoor::parse_labs(public), Ordering::SeqCst);
         self.p2p.apply_settings(public);
         // "Let my other PCs open this PC": the door closes the moment the tick goes off, and the listing is withdrawn.
         let tick = on && self.open_pref.load().as_deref() == Some("1");
@@ -703,6 +728,7 @@ impl DeviceLink {
             json!({ "kind": h["kind"], "code": h["code"], "address": h["ticket"], "link": h["link"], "expires_at": h["expires_at"], "worker": h.get("worker").cloned().unwrap_or(Value::Null) })
         });
         let now = (self.now_secs)();
+        let account_nodes: BTreeSet<String> = self.links.all().into_values().collect();
         let devices: Vec<Value> = self
             .trust
             .list()
@@ -710,6 +736,7 @@ impl DeviceLink {
             .map(|d| {
                 let st = self.client.status(&d.node);
                 let level = self.trust.remote_level(&d.node);
+                let marked = d.allowed.contains(capability::AGENTS_REMOTE_ACCOUNT);
                 let name = observe_identity(&d.node.to_hex(), &d.name);
                 let health = self.client.health(&d.node);
                 let (room, room_at) = self.client.room(&d.node);
@@ -735,7 +762,12 @@ impl DeviceLink {
                     "too_old": st.too_old,
                     "lets_run": level.is_some(),
                     "level": match level { Some(RemoteLevel::Full) => "full", Some(RemoteLevel::Answer) => "answer", _ => "watch" },
+                    // Paired through the account (Full was the default); the page says why and whether the person lowered it.
+                    "account_default": marked,
+                    // Paired through the account before the default existed and not answered yet: the one-time Keep / Lower card.
+                    "account_card": !marked && level != Some(RemoteLevel::Full) && account_nodes.contains(&d.node.to_hex()),
                     "lets_web": web::PC_WEB_ROUTE && self.trust.web_allowed(&d.node),
+                    "lets_pcdoor": self.trust.pcdoor_allowed(&d.node),
                     "lets_lend": self.trust.lend_allowed(&d.node),
                     "agents_may_send": self.agents_may_send(&d.node.to_hex()),
                     "web_ready": self.client.web_ready(&d.node),
@@ -762,6 +794,7 @@ impl DeviceLink {
             "locked_until": pair["locked_until"],
             "account_locked_until": pair["account_locked_until"],
             "tampered": pair["tampered"],
+            "key_changed": pair["key_changed"],
             "devices": devices,
             "transfers": self.files.rows_json(),
         })
@@ -898,10 +931,43 @@ impl DeviceLink {
             return;
         }
         let d2 = dir.clone();
-        let _ = tokio::task::spawn_blocking(move || d2.rows(0)).await;
+        if let Ok(Ok(rows)) = tokio::task::spawn_blocking(move || d2.rows(0)).await {
+            self.drop_unlisted(rows.as_deref().unwrap_or(&[]));
+        }
         for id in dir.revoked() {
             self.forget_account_device_as(&id, true).await;
         }
+    }
+
+    /// The account's list no longer has a PC this one paired with through the account (signed out, "Not me", removed, statement no longer
+    /// checks, or this PC signed out): its run rights go now. The pairing stays; a PC never paired through the account is untouched.
+    fn drop_unlisted(&self, rows: &[crate::account::directory::PcRow]) {
+        let mut changed = false;
+        for (device_id, node) in self.links.all() {
+            if rows.iter().any(|r| !r.is_this && r.id == device_id) {
+                continue;
+            }
+            if let Ok(n) = node_of(&node) {
+                changed |= self.trust.drop_account_rights(&n);
+            }
+        }
+        if changed {
+            self.rights_changed();
+        }
+    }
+
+    /// The one-time card on a PC paired through the account before Full became the default (plan D1): Keep gives it the default,
+    /// Lower only records the answer. Either way the card is gone for good (the marker is set). Only an app window may call this.
+    pub fn answer_account_default(&self, node: &str, keep: bool) -> Result<Value, String> {
+        self.require_on()?;
+        let node = node_of(node)?;
+        if !self.trust.is_trusted(&node) || !self.links.all().values().any(|n| *n == node.to_hex()) || self.trust.account_marked(&node) {
+            return Err(NOT_PAIRED.into());
+        }
+        let done = if keep { self.trust.grant_account_default(&node) } else { self.trust.lower_account_default(&node) };
+        done.map_err(|e| e.to_string())?;
+        self.rights_changed();
+        Ok(self.view())
     }
 
     /// My other PCs on the account, for the page: each with what pressing Open would do. Blocking (it may read the account).
@@ -917,8 +983,12 @@ impl DeviceLink {
         };
         match dir.list_rows() {
             Err(sentence) => Ok(head(true, Vec::new(), Some(sentence))),
-            Ok(None) => Ok(head(false, Vec::new(), None)),
+            Ok(None) => {
+                self.drop_unlisted(&[]);
+                Ok(head(false, Vec::new(), None))
+            }
             Ok(Some(rows)) => {
+                self.drop_unlisted(&rows);
                 // Devices signed out of the account elsewhere: this PC's pairing with them goes too.
                 if !self.links.all().is_empty() {
                     let revoked = dir.revoked();
@@ -1228,6 +1298,31 @@ impl DeviceLink {
         Ok(self.view())
     }
 
+    /// The device door for the pwa server's tunnel listener.
+    pub fn pcdoor(&self) -> Arc<pcdoor::PcDoor> {
+        self.pcdoor.clone()
+    }
+
+    /// "Also allow it through my web address" for one device: signed read-only calls through this PC's public tunnel address (`pcdoor.rs`).
+    /// Off by default; only the person, from an app window (`commands::devices`), turns it on; needs the Labs switch and the run switch.
+    /// Turning it off takes effect at the next request (rights are read from the trust list every time; there is no token to revoke).
+    pub fn set_pcdoor(&self, node: &str, on: bool) -> Result<Value, String> {
+        self.require_on()?;
+        let id = node_of(node)?;
+        if !self.trust.is_trusted(&id) {
+            return Err(NOT_PAIRED.into());
+        }
+        if on && !self.pcdoor_labs.load(Ordering::SeqCst) {
+            return Err("The web address door is switched off in Labs.".into());
+        }
+        if on && self.trust.remote_level(&id).is_none() {
+            return Err("Turn on Run agents and terminals here first.".into());
+        }
+        self.mgr.set_permission(&id, capability::AGENTS_REMOTE_PCDOOR, on).map_err(|e| e.to_string())?;
+        self.changed();
+        Ok(self.view())
+    }
+
     // ----- agents sending work to another device (MCP `run_agent`, account `device:<name>`) -----
 
     fn send_work_set(&self) -> BTreeSet<String> {
@@ -1380,26 +1475,6 @@ impl DeviceLink {
     pub fn unsubscribe(&self, node: &str) -> Result<(), String> {
         let id = node_of(node)?;
         self.client.stop_events(&id);
-        Ok(())
-    }
-
-    /// Starts a live view of one terminal on a device (its screen text arrives at the screen sink the moment it changes).
-    pub fn screen_start(self: &Arc<Self>, node: &str, pane: &str) -> Result<(), String> {
-        self.require_on()?;
-        let id = node_of(node)?;
-        if !self.trust.is_trusted(&id) {
-            return Err(NOT_PAIRED.into());
-        }
-        if pane.is_empty() || pane.len() > 128 || pane.chars().any(|c| c.is_control() || c == '/' || c == '?' || c == '#' || c == '\\' || c == ' ') {
-            return Err("That is not a terminal.".into());
-        }
-        self.client.start_screen(id, pane.to_string());
-        Ok(())
-    }
-
-    pub fn screen_stop(&self, node: &str, pane: &str) -> Result<(), String> {
-        let id = node_of(node)?;
-        self.client.stop_screen(&id, pane);
         Ok(())
     }
 

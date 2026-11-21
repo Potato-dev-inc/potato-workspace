@@ -6,6 +6,7 @@ import { AgentLogo } from '../common/AgentLogo';
 import { IconMore, IconPlus } from './Icons';
 import { useT } from '../../i18n';
 import { Menu } from '../common/Floating';
+import { DisabledReason } from '../common/DisabledReason';
 
 export type ProjectSignal = 'needs' | 'error' | 'working' | null;
 
@@ -39,6 +40,12 @@ export interface ProjectHeaderProps {
   added: boolean;
   /** "Other" has no folder: no "+" and no menu. */
   hasFolder: boolean;
+  /** A small neutral chip beside the name: the device's name or `ssh (name)`. Absent for this PC. */
+  badge?: string | null;
+  /** A plain word beside the badge about another PC's state (offline, asleep, needs you). */
+  note?: string;
+  /** The one plain reason the menu's folder actions are off (a project on another PC: "Not on {name} yet"). The buttons stay the same. */
+  unavailable?: string | null;
   onToggle: () => void;
   onNewAgent: () => void;
   onAdd: () => void;
@@ -46,7 +53,7 @@ export interface ProjectHeaderProps {
   onRename: (name: string) => void;
 }
 
-export function ProjectHeader({ name, count, folded, needs, changes, agents = [], signal = null, added, hasFolder, onToggle, onNewAgent, onAdd, onRemove, onRename }: ProjectHeaderProps) {
+export function ProjectHeader({ name, count, folded, needs, changes, agents = [], signal = null, added, hasFolder, badge, note, unavailable = null, onToggle, onNewAgent, onAdd, onRemove, onRename }: ProjectHeaderProps) {
   const t = useT();
   /** Where the menu opened: the right-click point, or the "..." button (`fromMore`). */
   const [menu, setMenu] = useState<{ x: number; y: number; fromMore: boolean } | null>(null);
@@ -86,6 +93,12 @@ export function ProjectHeader({ name, count, folded, needs, changes, agents = []
         <button type="button" className="ck-proj-toggle" aria-expanded={!folded} onClick={onToggle} title={folded ? t('sidebar.showProject', { name }) : t('sidebar.hideProject', { name })}>
           <span className={`ck-proj-caret${folded ? '' : ' is-open'}`} aria-hidden="true" />
           <span className="ck-proj-name">{name}</span>
+          {badge && (
+            <span className="ck-pill-quiet ck-proj-badge" data-testid="proj-badge">
+              {badge}
+            </span>
+          )}
+          {note && <span className="dev-word">{note}</span>}
           {changes && (
             <span className="ck-proj-changes" title={t('sidebar.linesChanged', { added: changes.additions, removed: changes.deletions })}>
               <span className="ck-add">+{changes.additions}</span>
@@ -149,6 +162,7 @@ export function ProjectHeader({ name, count, folded, needs, changes, agents = []
                 type="button"
                 role="menuitem"
                 className="ck-menu-item"
+                disabled={unavailable !== null}
                 onClick={() => {
                   setMenu(null);
                   setDraft(name);
@@ -156,17 +170,20 @@ export function ProjectHeader({ name, count, folded, needs, changes, agents = []
                 }}
               >
                 {t('sidebar.rename')}
+                <DisabledReason as="span" reason={unavailable} />
               </button>
               <button
                 type="button"
                 role="menuitem"
                 className="ck-menu-item"
+                disabled={unavailable !== null}
                 onClick={() => {
                   setMenu(null);
                   onRemove();
                 }}
               >
                 {t('sidebar.removeFromSidebar')}
+                <DisabledReason as="span" reason={unavailable} />
               </button>
             </>
           ) : (

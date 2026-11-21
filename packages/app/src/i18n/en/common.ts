@@ -14,6 +14,9 @@ export const common = {
   'common.err.trustDeclined': 'You chose not to trust this folder, so nothing was sent.',
   'common.err.agentExited': 'The agent closed unexpectedly. Your files are as it left them.',
   'common.err.notInstalled': 'That agent is not installed on this PC yet.',
+  'common.err.secureStoreFull': 'Windows has no room left in its store for saved keys, so nothing was saved. Free some room in Windows Credential Manager, then try again.',
+  'common.err.secureStore': 'Windows would not open its store for saved keys, so nothing was saved. Try again in a moment.',
+  'common.err.relayDown': 'Could not reach the relay at {host}. Check the address and your internet, then try again.',
   'common.err.notReady': 'The agent was not ready, so nothing was typed.',
   'common.err.promptNotSubmitted': 'The task was typed, but the agent did not start on it.',
 } as const;

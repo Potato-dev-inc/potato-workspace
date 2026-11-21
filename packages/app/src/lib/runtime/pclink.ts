@@ -10,6 +10,7 @@ import type { OutboxMessage } from '../paneOutbox';
 import type { AcpChatState } from '../acpChat';
 import type { DevicesApi } from '../devices';
 import type { UsageSnapshot } from '../usage';
+import { pclinkCallPath } from '../host/host';
 
 /** What the far PC lets this PC do. */
 export type PcLevel = 'watch' | 'answer' | 'full';
@@ -32,6 +33,18 @@ export interface PcSession {
   chat: boolean;
   /** The session that started this one (a minion or helper nests under it). */
   parent?: string;
+  /** The same, under the name the row has on its own PC (a newer far PC sends both). */
+  helper_of?: string;
+  /** `minion` | `spin_off`: what the agent that started it made it (a newer far PC). */
+  started_as?: 'minion' | 'spin_off' | string;
+  /** A standby's own chat: its PC's sidebar draws it as the standby's row, never as an agent. */
+  standby?: boolean;
+  /** `acp` for a chat session (a newer far PC; `chat` says the same to an older one). */
+  lane?: string | null;
+  /** The chat works on a separate copy of its project (its `project` and `folder` are the real project's). */
+  copy?: boolean;
+  /** The workflow mark of this chat on the PC that owns it: the front of a workflow, or a box of its crew. */
+  workflow?: { slug: string; role: string; front: boolean; name?: string };
   /** Read-only facts for the chat header and footer. Absent from an older far PC: show nothing then. Names only, never a path. */
   /** The git branch NAME of its folder (null: not a git folder). */
   branch?: string | null;
@@ -119,13 +132,14 @@ export interface PcQuestion {
 /** Everything a PC may ask of another. One method is one route; the far PC enforces the level. */
 export interface PcLinkClient {
   readonly node: string;
+  /** Any allowlisted command of the far PC: `POST /pclink/call/<cmd>`, same args and same JSON as the Tauri command. */
+  call<T>(cmd: string, args?: Record<string, unknown>): Promise<T>;
   // Watch
   me(): Promise<PcMe>;
   sessions(): Promise<PcSession[]>;
   transcript(id: string, since?: number): Promise<PcTranscript>;
   transcriptEarlier(id: string, before: string, limit?: number): Promise<{ items: ChatItem[]; more: boolean }>;
   picture(id: string, path: string): Promise<{ name: string; mime: string; size: number; dataUrl: string }>;
-  screen(id: string): Promise<string>;
   agentOptions(): Promise<PcNewAgentOptions>;
   /** The folders the far PC knows, by opaque id. */
   projects(): Promise<PcProject[]>;
@@ -147,7 +161,6 @@ export interface PcLinkClient {
   /** Makes a browsed folder one of the far PC's projects and says which. */
   openFolder(root: string, sub: string): Promise<PcProject>;
   setConfig(id: string, optionId: string, value: string, hold?: boolean): Promise<AcpChatState>;
-  input(id: string, text: string): Promise<void>;
   close(id: string): Promise<void>;
   moveWork(args: { project: string; branch: string; bundle_b64: string }): Promise<void>;
   /** Asks the person at the far PC to turn "Can work on this PC" on. Nothing is granted by asking. */
@@ -188,15 +201,12 @@ export function makePcLinkClient(node: string, api: Request): PcLinkClient {
   };
   return {
     node,
+    call: (cmd, args) => call('POST', pclinkCallPath(cmd), args ?? {}),
     me: () => call('GET', '/pclink/me'),
     sessions: async () => (await call<{ sessions?: PcSession[] }>('GET', '/pclink/sessions')).sessions ?? [],
     transcript: (id, since) => call('GET', `/pclink/sessions/${seg(id)}/transcript${since === undefined ? '' : `?since=${since}`}`),
     transcriptEarlier: (id, before, limit) => call('GET', `/pclink/sessions/${seg(id)}/transcript/earlier?before=${seg(before)}${limit === undefined ? '' : `&limit=${limit}`}`),
     picture: (id, path) => call('GET', `/pclink/sessions/${seg(id)}/picture?path=${seg(path)}`),
-    screen: async (id) => {
-      const content = (await call<{ content?: unknown }>('GET', `/pclink/sessions/${seg(id)}/screen`)).content;
-      return typeof content === 'string' ? content : '';
-    },
     agentOptions: async () => {
       const [agents, projects] = await Promise.all([call<{ agents?: PcAgent[]; terminals?: boolean; need_terminals?: number }>('GET', '/pclink/agents'), call<{ projects?: PcProject[] }>('GET', '/pclink/projects')]);
       return { agents: agents.agents ?? [], projects: projects.projects ?? [], terminals: agents.terminals, need_terminals: agents.need_terminals };
@@ -223,7 +233,6 @@ export function makePcLinkClient(node: string, api: Request): PcLinkClient {
     },
     warm: async (args) => void (await call('POST', '/pclink/agents/warm', args)),
     setConfig: (id, optionId, value, hold) => call('POST', `/pclink/sessions/${seg(id)}/config`, { option_id: optionId, value, ...(hold ? { hold: true } : {}) }),
-    input: async (id, text) => void (await call('POST', `/pclink/sessions/${seg(id)}/input`, { text })),
     close: async (id) => {
       try {
         await call('DELETE', `/pclink/sessions/${seg(id)}`);
@@ -240,7 +249,7 @@ export function makePcLinkClient(node: string, api: Request): PcLinkClient {
 // ----- live events (`GET`-less: the far PC pushes them over the link's own stream) -----
 
 /** What the far PC's event stream says. These are the PC link's own frames (`pclink/events.rs`), not the phone's. */
-export type PcEvent = { type: 'sessions' } | { type: 'session-status'; id: string; status: PcSession['status'] } | { type: 'outbox'; id: string } | { type: 'questions' };
+export type PcEvent = { type: 'sessions' } | { type: 'session-status'; id: string; status: PcSession['status'] } | { type: 'outbox'; id: string } | { type: 'questions' } | { type: 'app'; event: string; payload: unknown };
 
 /** One frame (`event: x\ndata: {...}\n\n`) to its event; null for a comment, an unknown name or noise. */
 export function parsePcFrame(frame: string): PcEvent | null {
@@ -269,6 +278,8 @@ export function parsePcFrame(frame: string): PcEvent | null {
       return id && typeof parsed.status === 'string' ? { type: 'session-status', id, status: parsed.status } : null;
     case 'outbox':
       return id ? { type: 'outbox', id } : null;
+    case 'app':
+      return typeof parsed.event === 'string' && parsed.event ? { type: 'app', event: parsed.event, payload: parsed.payload } : null;
     default:
       return null;
   }

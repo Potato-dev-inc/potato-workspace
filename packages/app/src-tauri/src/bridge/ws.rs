@@ -122,7 +122,7 @@ pub(super) fn serve(
 
     // The first frames, cut for this viewer like every pushed event (see `sse::first_frames`).
     let settings = settings_store::read_public_settings(app);
-    let snapshot = super::sse::first_frames(&viewer, &registry.lock().list(), &settings);
+    let snapshot = super::sse::first_frames(&viewer, &crate::acp::chat::external_panes(&registry), &settings);
 
     let mut ws = WebSocket::from_raw_socket(stream, Role::Server, None);
     if !snapshot.is_empty() && ws.send(Message::Text(snapshot)).is_err() {
@@ -233,15 +233,20 @@ fn handle_client_text(
     match value.get("type").and_then(Value::as_str)? {
         "watch" => {
             let ids = value.get("pane_ids")?.as_array()?;
+            // A chat on another computer is never watched from here (`acp::chat::is_remote_pane`).
             *watch = Some(
                 ids.iter()
                     .filter_map(|id| id.as_str().map(str::to_string))
+                    .filter(|id| !crate::acp::chat::is_remote_pane(id))
                     .collect(),
             );
             None
         }
         "input" => {
             let pane_id = value.get("pane_id").and_then(Value::as_str)?.to_string();
+            if crate::acp::chat::is_remote_pane(&pane_id) {
+                return Some(json!({"type": "input-error", "pane_id": pane_id, "error": crate::acp::chat::REMOTE_PANE_REFUSED, "code": "REMOTE_PANE"}).to_string());
+            }
             // Same cap as `POST /panes/{id}/input` (device caps: `type`); re-read per frame.
             if !crate::mobile_pairing::caller_may_on(ctx.headers, ctx.peer_loopback, crate::mobile_pairing::Cap::Type, Some(&pane_id)) {
                 super::typing_refusals::note_refused(&pane_id, super::typing_refusals::Channel::Socket, "this device may not type");
@@ -279,6 +284,9 @@ fn write_input(
     append_newline: bool,
     message: &Value,
 ) -> Result<(), Value> {
+    if crate::acp::chat::is_remote_pane(pane_id) {
+        return Err(Value::String(crate::acp::chat::REMOTE_PANE_REFUSED.to_string()));
+    }
     let paired_phone_typing = ctx.session.is_none()
         && crate::mobile_pairing::requires_pairing_token(ctx.headers, ctx.peer_loopback);
     check_socket_input(

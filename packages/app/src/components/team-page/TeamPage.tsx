@@ -1,4 +1,7 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
+import '../../styles/connect-tabs.css';
+import { StatusIcon } from '../connect/ThisPc';
+import { TeamLinkFix } from './TeamLinkFix';
 import { InviteSheet } from './InviteSheet';
 import { useT } from '../../i18n';
 import type { LendApi } from '../../lib/lend';
@@ -16,7 +19,7 @@ import type { FolderPicker } from './pickFolder';
 import { TasksTab } from './TasksTab';
 import { waitingCount } from './tasks-model';
 import { useTeamTasks } from './useTeamTasks';
-import { hereCount, linkWords, shareOf, sortPeople, tabCounts, TABS, type TeamTab } from './team-page-model';
+import { hereCount, linkStatus, shareOf, sortPeople, tabCounts, TABS, type TeamTab } from './team-page-model';
 import { UsageTab } from './UsageTab';
 import { useShelf } from './useShelf';
 
@@ -61,6 +64,19 @@ export function TeamPage({
     setTabState(next);
   };
   const [invite, setInvite] = useState<(InviteView & { joinUrl: string }) | null>(null);
+  // Only a team whose relay is gone needs to know which relay still works (the one Connect > Devices uses).
+  const gone = state.linkDetail?.problem === 'relay_gone';
+  const goneHost = state.linkDetail?.host ?? null;
+  const [working, setWorking] = useState<{ address: string; host: string } | null>(null);
+  useEffect(() => {
+    if (!gone || !config.admin || !api.workingRelay) return;
+    let live = true;
+    void api.workingRelay().then((r) => live && setWorking(r && r.host !== goneHost ? r : null)).catch(() => live && setWorking(null));
+    return () => {
+      live = false;
+    };
+  }, [gone, goneHost, config.admin, api]);
+  const link = linkStatus(state, { admin: config.admin, workingRelay: working });
   const people = sortPeople(config.members, state.presence ?? [], now);
   const tasks = useTeamTasks(tasksApi);
   const [passFor, setPassFor] = useState<string | null | undefined>(undefined);
@@ -74,10 +90,18 @@ export function TeamPage({
       <header className="tpg-head">
         <div className="tpg-head-main">
           <h1 className="tpg-title">{config.teamName || t('teamHub.title.fallback')}</h1>
-          <p className="tpg-link" data-testid="team-link">
-            <span className="tpg-link-dot" data-link={state.link ?? 'none'} aria-hidden="true" />
-            {linkWords(state)}
-          </p>
+          <div className="tpg-link" data-testid="team-link" data-link={state.link ?? 'none'} role="status">
+            <StatusIcon kind={link.icon} testid="team-link-icon" />
+            <div className="tpg-link-text">
+              <span className="tpg-link-title">{link.title}</span>
+              {link.reason && (
+                <span className="tpg-link-why" data-testid="team-link-why">
+                  {link.reason}
+                </span>
+              )}
+              <TeamLinkFix api={api} status={link} admin={config.admin} onRefresh={onRefresh} />
+            </div>
+          </div>
           <p className="tpg-sub">{t('teamHub.head.counts', { count: people.length, here: hereCount(people) })}</p>
           {state.missing > 0 && (
             <p className="tpg-sub" role="status">

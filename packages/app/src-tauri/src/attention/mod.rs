@@ -43,6 +43,21 @@ pub fn counts() -> Counts {
     STORE.lock().counts()
 }
 
+/// The count for the APP WINDOW only (tray, taskbar badge): `counts` plus the permission cards of chats on another computer, which are
+/// left out of everything a phone or another PC can read (`GET /attention`, events, push). The person must still see that a remote
+/// agent is waiting. The window's own question commands list those cards (`questions_list`).
+pub fn counts_including_remote() -> Counts {
+    let mut counts = counts();
+    counts.blocking += remote_card_count();
+    counts
+}
+
+/// Open cards of chats on another computer.
+pub fn remote_card_count() -> u32 {
+    let remote = crate::questions::store().list_pending_including_remote(now_ms()).into_iter().filter(|q| q.pane_id.as_deref().is_some_and(crate::acp::chat::is_remote_pane)).count();
+    u32::try_from(remote).unwrap_or(u32::MAX)
+}
+
 // --- hooks ------------------------------------------------------------------------------------
 
 /// Something changed that attention reads (a question, a loop-guard signal, an Ask-bar notice, a

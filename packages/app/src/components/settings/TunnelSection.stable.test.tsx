@@ -238,6 +238,19 @@ describe('TunnelSection: stable link', () => {
     expect(api.save.mock.calls.length).toBeGreaterThan(calls);
   });
 
+  it('an app too old for the Worker, or too many tries, says so and never offers "Make it anyway"', async () => {
+    for (const [reason, words] of [['update_app', 'newer version'], ['too_many', 'Too many tries']] as const) {
+      const api = mockApi(stable('linked'), { ...stable('linked'), secret_not_reset: reason });
+      await act(async () => root.render(<TunnelSection api={api} />));
+      await flush();
+      await act(async () => button('Make a new secret')!.click());
+      await flush();
+      expect(host.querySelector('[data-testid="strand-warning"]')?.textContent).toContain(words);
+      expect(host.querySelector('[data-testid="strand-go"]')).toBeNull();
+      expect(host.querySelector('[data-testid="strand-keep"]')).not.toBeNull();
+    }
+  });
+
   it('after a paste it keeps polling: a wrong secret brings the recovery card back, a right one ends in linked', async () => {
     vi.useFakeTimers();
     try {

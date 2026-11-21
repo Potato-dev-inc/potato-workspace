@@ -175,7 +175,12 @@ pub fn config_from_input(input: TunnelConfigInput, current: &TunnelConfig) -> Re
         TunnelConfigInput::Stable { worker_url, secret, secret_action, .. } => {
             let worker_url = normalize_custom_url(&worker_url)?;
             let chosen = secret.as_deref().map(str::trim).filter(|s| !s.is_empty());
-            let secret = match (chosen, secret_action, current.stable_secret()) {
+            // The stored secret belongs to ITS Worker: another address never receives it (it would be sent there as a bearer).
+            let stored = match current {
+                TunnelConfig::Stable { worker_url: kept, .. } if *kept == worker_url => current.stable_secret(),
+                _ => None,
+            };
+            let secret = match (chosen, secret_action, stored) {
                 (Some(own), _, _) => check_chosen_secret(own)?,
                 (None, SecretAction::Regenerate, _) | (None, _, None) => generate_secret(),
                 (None, _, Some(stored)) => stored.to_string(),
@@ -274,12 +279,14 @@ pub fn forget_stable(memory: &Path) {
 /// The settings to build the next one from: while the current mode is not stable, a remembered Worker whose address
 /// is the one being saved supplies its secret. Another address never gets the remembered secret.
 pub fn basis_with_memory(input: &TunnelConfigInput, current: &TunnelConfig, memory: &Path) -> TunnelConfig {
-    if matches!(current, TunnelConfig::Stable { .. }) {
+    let TunnelConfigInput::Stable { worker_url, .. } = input else { return current.clone() };
+    let wanted = normalize_custom_url(worker_url);
+    // Already on that very Worker: its own secret. On another Worker (or none): look in the memory below.
+    if matches!((current, &wanted), (TunnelConfig::Stable { worker_url: kept, .. }, Ok(w)) if kept == w) {
         return current.clone();
     }
-    let TunnelConfigInput::Stable { worker_url, .. } = input else { return current.clone() };
     let remembered = load(memory);
-    match (&remembered, normalize_custom_url(worker_url)) {
+    match (&remembered, wanted) {
         (TunnelConfig::Stable { worker_url: kept, .. }, Ok(wanted)) if *kept == wanted => remembered,
         _ => current.clone(),
     }
@@ -533,6 +540,47 @@ mod tests {
         let fresh = config_from_input(stable_input("pm.me.workers.dev", None, SecretAction::Regenerate), &first).unwrap();
         assert_ne!(fresh.stable_secret(), first.stable_secret());
         assert_ne!(generate_secret(), generate_secret());
+    }
+
+    /// A new Worker address never receives the secret of the old one (it would go there as a bearer, unchecked).
+    #[test]
+    fn changing_the_worker_address_makes_a_new_secret_and_the_same_address_keeps_it() {
+        let a = TunnelConfig::Stable { worker_url: "https://a.me.workers.dev".into(), secret: "a-secret-0123456789".into() };
+        let to_b = config_from_input(stable_input("https://b.me.workers.dev", None, SecretAction::Keep), &a).unwrap();
+        assert!(matches!(&to_b, TunnelConfig::Stable { worker_url, .. } if worker_url == "https://b.me.workers.dev"));
+        assert!(to_b.stable_secret().is_some());
+        assert_ne!(to_b.stable_secret(), a.stable_secret(), "the old secret must not follow the address");
+        let show = config_from_input(stable_input("https://b.me.workers.dev", None, SecretAction::Show), &a).unwrap();
+        assert_ne!(show.stable_secret(), a.stable_secret());
+        // A secret the person typed is theirs to send anywhere.
+        let typed = config_from_input(stable_input("https://b.me.workers.dev", Some("typed-secret-0123456789"), SecretAction::Keep), &a).unwrap();
+        assert_eq!(typed.stable_secret(), Some("typed-secret-0123456789"));
+        // The same address (spelled differently) keeps its secret.
+        let same = config_from_input(stable_input("a.me.workers.dev/", None, SecretAction::Keep), &a).unwrap();
+        assert_eq!(same.stable_secret(), a.stable_secret());
+    }
+
+    #[test]
+    fn going_back_to_the_remembered_worker_from_another_stable_one_brings_its_secret_back() {
+        let dir = std::env::temp_dir().join(format!("pm-tc-back-{}", std::process::id()));
+        let _ = fs::remove_dir_all(&dir);
+        fs::create_dir_all(&dir).unwrap();
+        let mem = memory_file(&dir.join(TUNNEL_FILE_NAME));
+        let a = TunnelConfig::Stable { worker_url: "https://a.me.workers.dev".into(), secret: "a-secret-0123456789".into() };
+        let b = TunnelConfig::Stable { worker_url: "https://b.me.workers.dev".into(), secret: "b-secret-0123456789".into() };
+        remember_stable(&mem, &a);
+        // Currently on B, memory still holds A: asking for A gives A's secret; asking for C gives a new one.
+        let to_a = stable_input("https://a.me.workers.dev", None, SecretAction::Keep);
+        let basis = basis_with_memory(&to_a, &b, &mem);
+        assert_eq!(config_from_input(to_a, &basis).unwrap().stable_secret(), a.stable_secret());
+        let to_c = stable_input("https://c.me.workers.dev", None, SecretAction::Keep);
+        let basis = basis_with_memory(&to_c, &b, &mem);
+        let c = config_from_input(to_c, &basis).unwrap();
+        assert!(c.stable_secret() != a.stable_secret() && c.stable_secret() != b.stable_secret());
+        // Already on A: A itself.
+        let again = stable_input("https://a.me.workers.dev", None, SecretAction::Keep);
+        assert_eq!(basis_with_memory(&again, &a, &mem), a);
+        let _ = fs::remove_dir_all(dir);
     }
 
     /// Running the guided setup again saves the same (or a re-printed) Worker address with "keep": the saved secret

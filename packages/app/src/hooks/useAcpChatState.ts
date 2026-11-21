@@ -1,9 +1,13 @@
 // The state of one chat session over ACP (phase, "stopping"): read once when the pane opens and kept fresh by the
 // `acp-chat-state` event the backend sends at every change. `null` while unknown, or for a pane that is not one.
-import { useEffect, useState } from 'react';
-import { tauriAcpChatApi, type AcpChatApi, type AcpChatState } from '../lib/acpChat';
+import { useEffect, useMemo, useState } from 'react';
+import { acpChatApi, type AcpChatApi, type AcpChatState } from '../lib/acpChat';
+import { useHost } from '../lib/host/context';
 
-export function useAcpChatState(paneId: string, enabled: boolean, api: AcpChatApi = tauriAcpChatApi): AcpChatState | null {
+export function useAcpChatState(paneId: string, enabled: boolean, given?: AcpChatApi): AcpChatState | null {
+  const host = useHost();
+  const own = useMemo(() => acpChatApi(host), [host]);
+  const api = given ?? own;
   const [state, setState] = useState<AcpChatState | null>(null);
 
   useEffect(() => {

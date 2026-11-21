@@ -84,7 +84,7 @@ export function AccountPanel({ api = accountApi, now = () => Math.floor(Date.now
 
   if (!view) return null;
   const nowSecs = now();
-  const fresh = newDevices(devices, nowSecs, dismissed);
+  const fresh = newDevices(devices, nowSecs, dismissed, view.device_id);
   const dismiss = (id: string) => {
     const next = new Set(dismissed).add(id);
     setDismissed(next);
@@ -126,6 +126,11 @@ export function AccountPanel({ api = accountApi, now = () => Math.floor(Date.now
             </>
           )}
         </p>
+        {view.key_in_file && (
+          <p className="ac-note" data-testid="account-key-in-file">
+            {t('account.keyInFile')}
+          </p>
+        )}
         {(error ?? view.message) && (
           <p className="ac-error" role="alert" data-testid="account-error">
             {error ?? view.message}
@@ -138,6 +143,11 @@ export function AccountPanel({ api = accountApi, now = () => Math.floor(Date.now
   return (
     <section className="ac-panel" data-testid="account-panel" aria-label={t('account.title')}>
       <h2 className="ac-title">{t('account.title')}</h2>
+      {view.key_in_file && (
+        <p className="ac-note" data-testid="account-key-in-file">
+          {t('account.keyInFile')}
+        </p>
+      )}
       {!view.signed_in ? (
         <>
           <p className="ac-line">{t('account.blurb')}</p>

@@ -47,6 +47,9 @@ import { sendPaneMessage } from '../../lib/paneOutbox';
 import { useChatCopy } from '../../lib/chatCopy';
 import { ReceiptTab } from './ReceiptTab';
 import { TurnFiles } from './turnfiles/TurnFiles';
+import { useRemotePane } from '../../lib/remotePanes';
+import { useHost } from '../../lib/host/context';
+import { RemoteFileView } from './RemoteFileView';
 import { Changes } from './Changes';
 import { usePaneWorktree } from './usePaneWorktree';
 import { SecondOpinion } from './SecondOpinion';
@@ -69,7 +72,7 @@ import { placeLabel, placeTooltip } from '../../lib/wsl-place';
 import { isProseStream, transcriptSpeaker } from '../../lib/transcript-labels';
 import { UntestedChip } from './UntestedChip';
 import { AcpChatDock } from '../chat/AcpChatDock';
-import { acpBadge, ACP_LANE, isTerminalChatLane, quietStrip, runStrip, tauriAcpChatApi, terminalChatCapable, terminalChatBadge, type AcpChatApi } from '../../lib/acpChat';
+import { acpBadge, ACP_LANE, isTerminalChatLane, quietStrip, runStrip, acpChatApi, terminalChatCapable, terminalChatBadge, type AcpChatApi } from '../../lib/acpChat';
 import { useAcpLanes } from '../../hooks/useAcpLanes';
 import { useShowTerminals } from '../../lib/showTerminals';
 import { AcpConfigChips } from '../chat/AcpConfigChips';
@@ -208,7 +211,7 @@ export function PaneView({
   paneId,
   onWhatBroke,
   onSeeDay,
-  acp = tauriAcpChatApi,
+  acp: givenAcp,
   handoff,
   inWindow = false,
 }: {
@@ -226,6 +229,14 @@ export function PaneView({
   handoff?: HandoffControl;
 }) {
   const t = useT();
+  // The chat-session calls go to the PC this screen shows: this one, or another through the PC link (`HostProvider`).
+  const host = useHost();
+  const ownAcp = useMemo(() => acpChatApi(host), [host]);
+  const acp = givenAcp ?? ownAcp;
+  // A control whose command the place cannot answer yet is drawn as it always is, disabled, with the place's one plain reason.
+  const notYet = host.notYet ?? null;
+  const handoffOff = host.can?.('handoff_quick_prepare') === false ? notYet : null;
+  const terminalOff = host.can?.('acp_open_in_terminal') === false ? notYet : null;
   const { view: standbyView } = useStandbyHelpers();
   // The front of a running workflow (Labs "Workflows"): its crew chip also opens the live view of the crew.
   const workflowsOn = useWorkflowsEnabled();
@@ -291,6 +302,8 @@ export function PaneView({
     return () => setActiveArtifactPane(null);
   }, [paneId]);
   const worktree = usePaneWorktree(paneId, pane?.status ?? '');
+  // A chat on another computer (SSH): its folder is not on this PC, so no file, change or branch view is built from it.
+  const remote = useRemotePane(paneId);
   const { signals } = useLoopGuard();
   const rail = useRailLayout();
   usePaneTourActions(paneId, rail);
@@ -610,8 +623,8 @@ export function PaneView({
     moreActions.push({
       id: 'handoff',
       label: handoff.mode === 'file' ? handoffLabel(handoff.mode) : t('pane.handOff'),
-      title: handoff.mode === 'file' ? t('pane.handoffFileTip') : t('pane.handoffAgentTip'),
-      disabled: handoff.busy,
+      title: handoffOff ?? (handoff.mode === 'file' ? t('pane.handoffFileTip') : t('pane.handoffAgentTip')),
+      disabled: handoff.busy || handoffOff !== null,
       onSelect: () => handoff.start(paneId),
     });
   }
@@ -622,7 +635,7 @@ export function PaneView({
     moreActions.push({ id: 'preview', label: t('pane.preview'), onSelect: () => void pointApi.openPreview(paneId, preview.port).catch((e: unknown) => c.notify(typeof e === 'string' ? e : t('pane.previewFailed'))) });
   }
   if (fold >= 2 && canHandOver) {
-    moreActions.push({ id: 'open-in-terminal', label: t('pane.openInTerminal'), title: t('pane.openInTerminalTip'), disabled: handOver.busy, onSelect: () => handOver.start('toTerminal', acpState?.conversation ?? paneId) });
+    moreActions.push({ id: 'open-in-terminal', label: t('pane.openInTerminal'), title: terminalOff ?? t('pane.openInTerminalTip'), disabled: handOver.busy || terminalOff !== null, onSelect: () => handOver.start('toTerminal', acpState?.conversation ?? paneId) });
   }
   if (fold >= 2 && heldConversation) {
     moreActions.push({ id: 'back-to-chat', label: t('pane.backToChat'), title: t('pane.backToChatTip'), disabled: handOver.busy, onSelect: () => handOver.start('toChat', heldConversation.conversation) });
@@ -693,8 +706,8 @@ export function PaneView({
             type="button"
             className="ck-handover-btn"
             data-testid="open-in-terminal"
-            disabled={handOver.busy}
-            title={t('pane.openInTerminalTip')}
+            disabled={handOver.busy || terminalOff !== null}
+            title={terminalOff ?? t('pane.openInTerminalTip')}
             onClick={() => handOver.start('toTerminal', acpState?.conversation ?? paneId)}
           >
             {t('pane.openInTerminal')}
@@ -756,8 +769,8 @@ export function PaneView({
             type="button"
             className="ck-handover-btn"
             data-testid="pane-handoff"
-            disabled={handoff.busy}
-            title={handoff.mode === 'file' ? t('pane.handoffFileTip') : t('pane.handoffAgentTip')}
+            disabled={handoff.busy || handoffOff !== null}
+            title={handoffOff ?? (handoff.mode === 'file' ? t('pane.handoffFileTip') : t('pane.handoffAgentTip'))}
             onClick={() => handoff.start(paneId)}
           >
             {handoff.busy ? t('pane.handingOff') : handoff.mode === 'file' ? handoffLabel(handoff.mode) : t('pane.handOff')}
@@ -851,7 +864,7 @@ export function PaneView({
                 }
                 move={move}
                 reply={{
-                  blockedReason: move.blockedReason ?? (inTerminal ? handedBlock() : composerBlock(pane, !chatAllowed, isAcp)),
+                  blockedReason: move.blockedReason ?? host.denied?.('message') ?? (inTerminal ? handedBlock() : composerBlock(pane, !chatAllowed, isAcp)),
                   // A Chat (terminal) pane: while the agent works, the box shows Stop (the pane menu's Interrupt).
                   // A chat session over ACP: the same Stop the dock's quiet question uses; the words ride in the box footer.
                   running: isAcp ? !!acpState?.turnInFlight : isTerminalChat && pane.status === 'running',
@@ -880,13 +893,21 @@ export function PaneView({
               />
             </div>
           )}
-          {pathOfTab(tab) !== null && openFiles.files.includes(pathOfTab(tab)!) && artifactIdOfPath(pathOfTab(tab)!) === null && !isGuidePath(pathOfTab(tab)!) && (
+          {pathOfTab(tab) !== null && remote && openFiles.files.includes(pathOfTab(tab)!) && (
+            <RemoteFileView key={tab} paneId={paneId} path={pathOfTab(tab)!} name={remote.name} status={pane?.status ?? ''} />
+          )}
+          {pathOfTab(tab) !== null && remote && !openFiles.files.includes(pathOfTab(tab)!) && (
+            <div className="ck-empty" data-testid="remote-no-file">
+              <p className="ck-sub">{t('devices.ssh.remoteNoPanel', { name: remote.name })}</p>
+            </div>
+          )}
+          {pathOfTab(tab) !== null && !remote && openFiles.files.includes(pathOfTab(tab)!) && artifactIdOfPath(pathOfTab(tab)!) === null && !isGuidePath(pathOfTab(tab)!) && (
             <FileTab key={tab} paneId={paneId} path={pathOfTab(tab)!} canTell={chatAllowed} refreshKey={pane?.status ?? ''} goTo={openFiles.lines[pathOfTab(tab)!]} />
           )}
-          {pathOfTab(tab) !== null && openFiles.files.includes(pathOfTab(tab)!) && artifactIdOfPath(pathOfTab(tab)!) !== null && (
+          {pathOfTab(tab) !== null && !remote && openFiles.files.includes(pathOfTab(tab)!) && artifactIdOfPath(pathOfTab(tab)!) !== null && (
             <ArtifactTab key={tab} paneId={paneId} id={artifactIdOfPath(pathOfTab(tab)!)!} />
           )}
-          {pathOfTab(tab) !== null && openFiles.files.includes(pathOfTab(tab)!) && isGuidePath(pathOfTab(tab)!) && (
+          {pathOfTab(tab) !== null && !remote && openFiles.files.includes(pathOfTab(tab)!) && isGuidePath(pathOfTab(tab)!) && (
             <GuideTab key={tab} paneId={paneId} project={projectWithCopy(info.cwd)} agentType={info.agent_type} agentName={name} />
           )}
           {tab === 'transcript' && (
@@ -944,8 +965,8 @@ export function PaneView({
                 copy={copyTotals}
                 agentName={name}
                 // An isolated pane has its own Changes tab, which holds the second opinion.
-                secondOpinion={!worktree ? <SecondOpinion paneId={paneId} status={pane?.status ?? ''} /> : null}
-                review={!worktree ? <TurnFiles paneId={paneId} status={pane?.status ?? ''} /> : null}
+                secondOpinion={!worktree && !remote ? <SecondOpinion paneId={paneId} status={pane?.status ?? ''} /> : null}
+                review={!worktree && !remote ? <TurnFiles paneId={paneId} status={pane?.status ?? ''} /> : null}
               />
             </div>
           )}

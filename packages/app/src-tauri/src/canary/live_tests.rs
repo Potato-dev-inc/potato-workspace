@@ -4,15 +4,15 @@
 //!
 //! `cargo test --lib canary_live -- --ignored --nocapture --test-threads=1`
 //!
-//! `PM_CANARY_SCRATCH` picks the scratch root (default `D:/pm-scratch-canary`). The result is also
-//! written to `PM_CANARY_OUT` (default `D:/pm-night/p0/canary/live`) as JSON.
+//! `PM_CANARY_SCRATCH` picks the scratch root (default `D:/canary-scratch`). The result is also
+//! written to `PM_CANARY_OUT` (default `D:/canary-out/live`) as JSON.
 
 use super::live::{run_live, scratch_dir};
 use super::model::Outcome;
 
 fn live(agent: &str) {
     if std::env::var_os("PM_CANARY_SCRATCH").is_none() {
-        std::env::set_var("PM_CANARY_SCRATCH", "D:/pm-scratch-canary");
+        std::env::set_var("PM_CANARY_SCRATCH", "D:/canary-scratch");
     }
     let source = crate::agent_health::collect_probes()
         .into_iter()
@@ -41,7 +41,7 @@ fn live(agent: &str) {
         println!("--- screen {} ---\n{}\n", shot.label, shot.screen);
     }
     println!("outcome {:?}, dismissed {:?}, keys sent {:?}, prompts sent {}", result.outcome, result.dismissed, result.keys_sent, result.prompts_sent);
-    let out = std::env::var("PM_CANARY_OUT").unwrap_or_else(|_| "D:/pm-night/p0/canary/live".into());
+    let out = std::env::var("PM_CANARY_OUT").unwrap_or_else(|_| "D:/canary-out/live".into());
     let _ = std::fs::create_dir_all(&out);
     let _ = std::fs::write(format!("{out}/{agent}.json"), serde_json::to_vec_pretty(&result).unwrap());
     assert_eq!(result.prompts_sent, 0);

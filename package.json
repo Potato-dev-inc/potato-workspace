@@ -30,6 +30,7 @@
     "test": "npm run test --workspaces --if-present",
     "roam": "node scripts/roam.mjs",
     "check:privacy": "node scripts/check-no-personal-paths.mjs",
+    "check:public-paths": "node scripts/check-public-paths.mjs",
     "check:separation": "node scripts/check-separation.mjs",
     "check": "node scripts/check.mjs",
     "test:changed": "node scripts/test-changed.mjs",

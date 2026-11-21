@@ -418,7 +418,7 @@ fn shown_digits(b: &Pc) -> String {
 }
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 4)]
-async fn open_pairs_when_the_person_types_the_six_digits_the_other_pc_shows_and_grants_nothing() {
+async fn open_pairs_when_the_person_types_the_six_digits_the_other_pc_shows_and_grants_full_with_the_marker() {
     let (net, server) = (MemoryNet::new(), FakeAccount::start());
     let a = pc("Desk PC", A_ID, &net, &server, true, true);
     let b = pc("Laptop", B_ID, &net, &server, false, true);
@@ -446,15 +446,16 @@ async fn open_pairs_when_the_person_types_the_six_digits_the_other_pc_shows_and_
     let done = task.await.unwrap().expect("opened");
     assert_eq!(done["paired"], true);
     assert_eq!(done["node"], a.inst.node());
-    // Both trust each other with every right off: no run-agents right by default.
+    // Both trust each other with Full and the account marker (plan 2.2), and nothing else.
     for (me, other) in [(&a, &b), (&b, &a)] {
         let v = me.inst.link.view();
         assert_eq!(v["devices"].as_array().unwrap().len(), 1);
         assert_eq!(v["devices"][0]["node"], other.inst.node());
-        assert_eq!(v["devices"][0]["lets_run"], false);
+        assert_eq!((v["devices"][0]["lets_run"].clone(), v["devices"][0]["level"].clone(), v["devices"][0]["account_default"].clone()), (json!(true), json!("full"), json!(true)));
+        assert_eq!((v["devices"][0]["lets_web"].clone(), v["devices"][0]["lets_files"].clone(), v["devices"][0]["lets_lend"].clone()), (json!(false), json!(false), json!(false)));
+        assert_eq!(v["devices"][0]["account_card"], false, "no card for a PC paired after the update");
     }
-    assert_eq!(done["state"], "not_allowed", "A has not let B run agents, and B is told so plainly rather than shown as online");
-    assert_eq!(row(&list(&b).await, "Desk PC").unwrap()["status"], "not_allowed");
+    assert_ne!(done["state"], "not_allowed", "A lets B in");
     // The second Open is just a check that it answers: no sheet, no number.
     let again = b.inst.link.open_account_pc(A_ID).await;
     assert!(pending(&a.inst).is_null() && pending(&b.inst).is_null());
@@ -462,7 +463,7 @@ async fn open_pairs_when_the_person_types_the_six_digits_the_other_pc_shows_and_
 }
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 4)]
-async fn the_account_route_never_grants_a_right_and_its_sheet_has_no_way_to_ask_for_one() {
+async fn the_account_sheet_has_no_way_to_ask_for_a_right_and_only_the_pairing_manager_grants_the_default() {
     let (net, server) = (MemoryNet::new(), FakeAccount::start());
     let a = pc("Desk PC", A_ID, &net, &server, true, true);
     let b = pc("Laptop", B_ID, &net, &server, false, true);
@@ -475,12 +476,11 @@ async fn the_account_route_never_grants_a_right_and_its_sheet_has_no_way_to_ask_
     a.inst.link.pair_pick(id_of(&a.inst), &shown_digits(&b)).unwrap();
     b.inst.link.pair_answer(id_of(&b.inst), true).unwrap();
     task.await.unwrap().expect("opened");
-    // Both trust each other with every right off, on both sides, and B is told so plainly.
+    // The sheet has no way to ask for a right; the account pair itself gives Full by default (plan 2.2), nothing else (no web, files, lend).
     let on_a = a.inst.link.view()["devices"][0].clone();
-    assert_eq!((on_a["lets_run"].clone(), on_a["lets_web"].clone(), on_a["lets_files"].clone(), on_a["lets_lend"].clone()), (json!(false), json!(false), json!(false), json!(false)));
-    assert_eq!(b.inst.link.view()["devices"][0]["lets_run"], false);
-    assert_eq!(row(&list(&b).await, "Desk PC").unwrap()["status"], "not_allowed");
-    // The source of the account route never turns a right on: no permission call in the pairing module, and the service hook only syncs.
+    assert_eq!((on_a["lets_web"].clone(), on_a["lets_files"].clone(), on_a["lets_lend"].clone()), (json!(false), json!(false), json!(false)));
+    assert_eq!((on_a["level"].clone(), on_a["account_default"].clone()), (json!("full"), json!(true)));
+    // The source of the account route (this file and the service hook) turns nothing on by itself: the grant is one call in the pairing manager.
     let pairing = include_str!("../p2p/pairing/account.rs");
     assert!(!pairing.contains("set_permission") && !pairing.contains("AGENTS_REMOTE"));
     let service = include_str!("mod.rs");
@@ -1147,4 +1147,129 @@ fn a_recent_row_is_flagged_and_an_old_one_is_not() {
     assert_eq!(super::account_dir::row_json(&r, 1_000_000, None, None)["recent"], true);
     r.created_at = 1_000_000 - 3 * 24 * 3600;
     assert_eq!(super::account_dir::row_json(&r, 1_000_000, None, None)["recent"], false);
+}
+
+fn node_hex_of(p: &Pc) -> crate::p2p::endpoint::NodeId {
+    crate::device_link::node_of(&p.inst.node()).unwrap()
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 4)]
+async fn the_account_dropping_a_pc_takes_its_rights_but_not_the_pairing_and_a_non_account_pc_is_untouched() {
+    let (net, server) = (MemoryNet::new(), FakeAccount::start());
+    let a = pc("Desk PC", A_ID, &net, &server, true, true);
+    let b = pc("Laptop", B_ID, &net, &server, false, true);
+    start(&[&a, &b]).await;
+    pair_through_the_account(&a, &b).await;
+    assert_eq!(a.inst.link.view()["devices"][0]["level"], "full");
+    // The directory no longer lists B (a list with only this PC, or none at all because this PC signed out).
+    a.inst.link.drop_unlisted(&[]);
+    let v = a.inst.link.view();
+    assert_eq!(trusted(&a), 1, "still paired");
+    assert_eq!((v["devices"][0]["lets_run"].clone(), v["devices"][0]["account_default"].clone()), (json!(false), json!(false)));
+    assert_eq!(a.inst.link.trust.remote_level(&node_hex_of(&b)), None);
+    // A PC with no account marker (paired another way) is never touched by the directory, even when the person gave it Full.
+    let (_n2, x, y) = super::tests::memory();
+    super::tests::pair(&x, &y).await;
+    let node_y = crate::device_link::node_of(&y.node()).unwrap();
+    x.link.set_permission(&y.node(), true, Some("full")).unwrap();
+    x.link.links.set("44444444-4444-4444-8444-444444444444", &y.node());
+    x.link.drop_unlisted(&[]);
+    assert_eq!(x.link.trust.remote_level(&node_y), Some(crate::p2p::trust::RemoteLevel::Full));
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 4)]
+async fn a_pc_paired_another_way_gets_nothing_by_default() {
+    let (_net, x, y) = super::tests::memory();
+    super::tests::pair(&x, &y).await;
+    for side in [&x, &y] {
+        let d = side.link.view()["devices"][0].clone();
+        assert_eq!((d["lets_run"].clone(), d["account_default"].clone(), d["account_card"].clone()), (json!(false), json!(false), json!(false)));
+    }
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 4)]
+async fn a_pc_paired_through_the_account_before_the_default_gets_a_card_and_is_not_upgraded_until_keep() {
+    let (net, server) = (MemoryNet::new(), FakeAccount::start());
+    let a = pc("Desk PC", A_ID, &net, &server, true, true);
+    let b = pc("Laptop", B_ID, &net, &server, false, true);
+    start(&[&a, &b]).await;
+    pair_through_the_account(&a, &b).await;
+    // Put A back to how an older version left a pre-existing account pair: linked, no rights, no marker.
+    assert!(a.inst.link.trust.drop_account_rights(&node_hex_of(&b)));
+    let d = a.inst.link.view()["devices"][0].clone();
+    assert_eq!((d["lets_run"].clone(), d["account_card"].clone()), (json!(false), json!(true)), "the card is shown, nothing was upgraded");
+    // Lower: the card is answered, nothing is raised, and it never comes back.
+    a.inst.link.answer_account_default(&b.inst.node(), false).unwrap();
+    let d = a.inst.link.view()["devices"][0].clone();
+    assert_eq!((d["lets_run"].clone(), d["account_card"].clone(), d["account_default"].clone()), (json!(false), json!(false), json!(true)));
+    assert!(a.inst.link.answer_account_default(&b.inst.node(), true).is_err(), "answered once");
+    // Keep on the other side: the default, and the card is gone.
+    assert!(b.inst.link.trust.drop_account_rights(&node_hex_of(&a)));
+    assert_eq!(b.inst.link.view()["devices"][0]["account_card"], true);
+    b.inst.link.answer_account_default(&a.inst.node(), true).unwrap();
+    let d = b.inst.link.view()["devices"][0].clone();
+    assert_eq!((d["level"].clone(), d["account_card"].clone(), d["account_default"].clone()), (json!("full"), json!(false), json!(true)));
+}
+
+#[test]
+fn a_level_the_person_lowered_stays_lowered_across_restarts_and_the_default_never_comes_back() {
+    use crate::p2p::trust::{MemoryTrustStorage, RemoteLevel, TrustList, TrustSigner};
+    struct Key(SigningKey);
+    impl TrustSigner for Key {
+        fn device_pub(&self) -> Result<[u8; 32], String> {
+            Ok(self.0.verifying_key().to_bytes())
+        }
+        fn sign(&self, m: &[u8]) -> Result<[u8; 64], String> {
+            use ed25519_dalek::Signer;
+            Ok(self.0.sign(m).to_bytes())
+        }
+    }
+    let (storage, key) = (MemoryTrustStorage::new(), Arc::new(Key(new_signing_key())));
+    let node = crate::p2p::endpoint::NodeId([9; 32]);
+    let open = || TrustList::open(storage.clone(), key.clone());
+    let t = open();
+    t.add(node, [7; 32], "Laptop", 1).unwrap();
+    t.grant_account_default(&node).unwrap();
+    assert_eq!(t.remote_level(&node), Some(RemoteLevel::Full));
+    // The person lowers it to Watch, then turns it off.
+    t.set_permission(&node, crate::p2p::capability::AGENTS_REMOTE_FULL, false).unwrap();
+    t.set_permission(&node, crate::p2p::capability::AGENTS_REMOTE_ANSWER, false).unwrap();
+    let t = open();
+    assert_eq!(t.remote_level(&node), Some(RemoteLevel::Watch));
+    t.grant_account_default(&node).unwrap();
+    assert_eq!(t.remote_level(&node), Some(RemoteLevel::Watch), "a second grant (a re-pair, a restart) does not raise it");
+    t.set_permission(&node, crate::p2p::capability::AGENTS_REMOTE, false).unwrap();
+    let t = open();
+    t.grant_account_default(&node).unwrap();
+    assert_eq!((t.remote_level(&node), t.account_marked(&node)), (None, true), "off stays off, and the marker still says why");
+    // The marker is never something a route can set.
+    assert!(t.set_permission(&node, crate::p2p::capability::AGENTS_REMOTE_ACCOUNT, true).is_err());
+}
+
+#[test]
+fn a_list_made_with_a_lost_key_says_the_key_changed_and_a_damaged_one_does_not() {
+    use crate::p2p::trust::{MemoryTrustStorage, TrustList, TrustSigner};
+    struct Key(SigningKey);
+    impl TrustSigner for Key {
+        fn device_pub(&self) -> Result<[u8; 32], String> {
+            Ok(self.0.verifying_key().to_bytes())
+        }
+        fn sign(&self, m: &[u8]) -> Result<[u8; 64], String> {
+            use ed25519_dalek::Signer;
+            Ok(self.0.sign(m).to_bytes())
+        }
+    }
+    let storage = MemoryTrustStorage::new();
+    let node = crate::p2p::endpoint::NodeId([9; 32]);
+    TrustList::open(storage.clone(), Arc::new(Key(new_signing_key()))).add(node, [7; 32], "Laptop", 1).unwrap();
+    // The same file read with another key (the key store was reset): dropped, and said so.
+    let t = TrustList::open(storage.clone(), Arc::new(Key(new_signing_key())));
+    assert!((t.tampered(), t.key_changed(), t.list().len()) == (true, true, 0));
+    // The next saved change clears both.
+    t.add(node, [7; 32], "Laptop", 2).unwrap();
+    assert!(!t.tampered() && !t.key_changed());
+    // Cut-short bytes are damage, not a changed key.
+    storage.put(b"{\"devices\":[".to_vec());
+    let t = TrustList::open(storage, Arc::new(Key(new_signing_key())));
+    assert!((t.tampered(), t.key_changed()) == (true, false));
 }

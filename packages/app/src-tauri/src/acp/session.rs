@@ -295,6 +295,10 @@ pub struct AcpSession {
     /// Marks this session's tool server (`acp::leak`); only used by an agent with `shared_server_images`.
     marker: String,
     cwd: PathBuf,
+    /// The chat runs on this SSH machine (`ssh::acp`), in `cwd` on THAT machine. `None`: on this PC.
+    remote: Option<crate::ssh::model::SshHost>,
+    /// The folder ON the SSH machine (`cwd` then holds a marker that is no path on this PC, see `ssh::acp::pane_folder`).
+    remote_folder: String,
     core: Mutex<Core>,
     changed: Condvar,
     outbox: Mutex<Outbox>,
@@ -331,6 +335,35 @@ fn now_ms() -> u64 {
 
 impl AcpSession {
     pub fn new(cfg: Arc<AgentConfig>, host: Arc<dyn HostEnv>, params: SessionParams) -> Arc<AcpSession> {
+        Self::new_on(cfg, host, params, None)
+    }
+
+    /// A session whose adapter runs on an SSH machine. `cfg` must come from `config::for_remote`, and `params.cwd` is a
+    /// folder of that machine (it is never checked, created or read on this PC).
+    pub fn new_remote(cfg: Arc<AgentConfig>, host: Arc<dyn HostEnv>, params: SessionParams, ssh: crate::ssh::model::SshHost, folder: String) -> Arc<AcpSession> {
+        Self::new_on(cfg, host, params, Some((ssh, folder)))
+    }
+
+    /// The plain sentence of the latest failed start or exit, if there is one.
+    pub fn last_exit_reason(&self) -> Option<String> {
+        self.snapshot().exit.and_then(|e| e.reason)
+    }
+
+    /// The SSH machine this chat runs on, if any.
+    pub fn remote_host(&self) -> Option<&crate::ssh::model::SshHost> {
+        self.remote.as_ref()
+    }
+
+    /// The folder ON the SSH machine this chat works in (`None` for a chat on this PC).
+    pub fn remote_folder(&self) -> Option<&str> {
+        self.remote.as_ref().map(|_| self.remote_folder.as_str())
+    }
+
+    fn new_on(cfg: Arc<AgentConfig>, host: Arc<dyn HostEnv>, params: SessionParams, remote: Option<(crate::ssh::model::SshHost, String)>) -> Arc<AcpSession> {
+        let (remote, remote_folder) = match remote {
+            Some((h, f)) => (Some(h), f),
+            None => (None, String::new()),
+        };
         let mut state = SessionState::new();
         state.set_cancel_reports_end_turn(cfg.quirks.cancel_reports_end_turn);
         if let Some(id) = &params.resume_session_id {
@@ -344,6 +377,8 @@ impl AcpSession {
             key: params.key,
             marker: super::leak::new_marker(),
             cwd: params.cwd,
+            remote,
+            remote_folder,
             core: Mutex::new(Core {
                 state,
                 conn: None,
@@ -693,8 +728,13 @@ impl AcpSession {
             }
             // One plain sentence with one thing to do, the same one the first start gives (no raw system text).
             // A program that is gone from disk closes at once when started through a shell: say it is missing, not "closed right away".
-            let gone = matches!(error, AcpError::Closed) && { let p = std::path::Path::new(&self.cfg.command); p.is_absolute() && !p.exists() };
-            let reason = if gone { crate::acp::chat::start_failure_sentence(&self.cfg.label, &AcpError::Spawn("program missing".into())) } else { crate::acp::chat::start_failure_sentence(&self.cfg.label, error) };
+            let gone = self.remote.is_none() && matches!(error, AcpError::Closed) && { let p = std::path::Path::new(&self.cfg.command); p.is_absolute() && !p.exists() };
+            let remote_reason = self.remote.as_ref().and_then(|ssh| match error {
+                // A refusal made on this PC already carries its own plain sentence.
+                AcpError::Spawn(why) => Some(why.clone()),
+                _ => crate::ssh::acp::failure_sentence(&ssh.name, self.cfg.remote_command.first().map(String::as_str).unwrap_or(""), &stderr_tail),
+            });
+            let reason = if let Some(r) = remote_reason { r } else if gone { crate::acp::chat::start_failure_sentence(&self.cfg.label, &AcpError::Spawn("program missing".into())) } else { crate::acp::chat::start_failure_sentence(&self.cfg.label, error) };
             let summary = ExitSummary { kind: ExitKind::StartFailed, code: None, stderr_tail, reason: Some(reason) };
             core.state.on_exit(summary.clone());
             ev.push(SessionEvent::Exited(summary));
@@ -709,7 +749,10 @@ impl AcpSession {
         let cfg = &self.cfg;
         self.stage("starting program");
         let t0 = Instant::now();
-        let spec = config::resolve_spawn(cfg, &*self.host, &self.cwd)?;
+        let spec = match &self.remote {
+            Some(ssh) => config::resolve_remote_spawn(cfg, &*self.host, ssh, &self.remote_folder)?,
+            None => config::resolve_spawn(cfg, &*self.host, &self.cwd)?,
+        };
         let resolve_ms = t0.elapsed().as_millis() as u64;
         let handler = Arc::new(Handler { session: self.me.clone(), epoch });
         let t1 = Instant::now();
@@ -794,7 +837,7 @@ impl AcpSession {
     }
 
     fn open_session(&self, conn: &AcpConnection, caps: &AgentCaps, resume_id: Option<&str>) -> Result<(String, StartKind, SessionInfo), AcpError> {
-        let cwd = self.cwd.to_string_lossy().into_owned();
+        let cwd = if self.remote.is_some() { self.remote_folder.clone() } else { self.cwd.to_string_lossy().into_owned() };
         let replay = self.with_core(|core, _| std::mem::take(&mut core.replay_next));
         let mcp_servers = self.marked_servers();
         let new_params = self.session_params(json!({ "cwd": cwd, "mcpServers": mcp_servers }));

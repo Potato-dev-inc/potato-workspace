@@ -29,3 +29,9 @@ pub fn accounts_remove(id: String, delete_home: Option<bool>) -> Result<bool, St
 pub fn accounts_set_helper_login(agent_id: String, value: String) -> Result<String, String> {
     Store::default_location().set_helper_login(&agent_id, &value).map(|choice| choice.as_value())
 }
+
+/// Sign an account out (removes its sign-in files; the account stays). Returns how many files went.
+#[tauri::command]
+pub fn accounts_sign_out(id: String) -> Result<usize, String> {
+    Store::default_location().sign_out(&id)
+}

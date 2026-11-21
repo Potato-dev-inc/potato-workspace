@@ -6,7 +6,7 @@ use super::AppState;
 use crate::crews::workflow::{self, Plan, ReplyStyle};
 use crate::crews::{agents, live, model::Crew, start, store, validate, CrewError};
 use serde::Serialize;
-use tauri::{AppHandle, State};
+use tauri::{AppHandle, Emitter, State};
 
 fn text(error: CrewError) -> String {
     error.to_string()
@@ -16,15 +16,15 @@ fn internal(error: impl std::fmt::Display) -> String {
     format!("INTERNAL: {error}")
 }
 
-fn setting(app: &AppHandle, key: &str) -> serde_json::Value {
+pub(crate) fn setting(app: &AppHandle, key: &str) -> serde_json::Value {
     crate::settings_store::read_public_settings(app).get(key).cloned().unwrap_or(serde_json::Value::Null)
 }
 
-fn on(app: &AppHandle) -> bool {
+pub(crate) fn on(app: &AppHandle) -> bool {
     setting(app, "workflows_enabled") == serde_json::Value::Bool(true)
 }
 
-fn style(app: &AppHandle) -> ReplyStyle {
+pub(crate) fn style(app: &AppHandle) -> ReplyStyle {
     ReplyStyle::parse(setting(app, "workflow_reply_style").as_str().unwrap_or(""))
 }
 
@@ -50,9 +50,11 @@ pub async fn workflows_hidden_count(app: AppHandle) -> Result<u32, String> {
     if !on(&app) {
         return Ok(0);
     }
-    tauri::async_runtime::spawn_blocking(|| store::list(&store::dir(), &live::agent_state).iter().filter(|s| s.problem.is_some()).count() as u32)
-        .await
-        .map_err(internal)
+    tauri::async_runtime::spawn_blocking(hidden_now).await.map_err(internal)
+}
+
+pub(crate) fn hidden_now() -> u32 {
+    store::list(&store::dir(), &live::agent_state).iter().filter(|s| s.problem.is_some()).count() as u32
 }
 
 /// The first problem that stops a start. A crew saved with a Front is checked with the workflow rules; an older crew
@@ -75,24 +77,21 @@ pub async fn workflows_list(app: AppHandle) -> Result<Option<Vec<WorkflowSummary
         return Ok(None);
     }
     let reply = style(&app);
-    tauri::async_runtime::spawn_blocking(move || {
-        let dir = store::dir();
-        Some(
-            store::list(&dir, &live::agent_state)
-                .into_iter()
-                .filter(|s| s.problem.is_none())
-                .filter_map(|s| {
-                    let crew = load_workflow(&s.slug).ok()?;
-                    let mut plan = workflow::plan(&crew, "{folder}", reply, "")?;
-                    plan.brief.clear();
-                    plan.first_message.clear();
-                    Some(WorkflowSummary { slug: s.slug, plan })
-                })
-                .collect(),
-        )
-    })
-    .await
-    .map_err(internal)
+    tauri::async_runtime::spawn_blocking(move || Some(list_now(reply))).await.map_err(internal)
+}
+
+pub(crate) fn list_now(reply: ReplyStyle) -> Vec<WorkflowSummary> {
+    store::list(&store::dir(), &live::agent_state)
+        .into_iter()
+        .filter(|s| s.problem.is_none())
+        .filter_map(|s| {
+            let crew = load_workflow(&s.slug).ok()?;
+            let mut plan = workflow::plan(&crew, "{folder}", reply, "")?;
+            plan.brief.clear();
+            plan.first_message.clear();
+            Some(WorkflowSummary { slug: s.slug, plan })
+        })
+        .collect()
 }
 
 /// The plan of one workflow in `folder`: who the Front is, its helpers, and the Front's first message (the brief).
@@ -103,16 +102,16 @@ pub async fn workflows_plan(app: AppHandle, slug: String, folder: String, reques
         return Err(text(refused));
     }
     let reply = style(&app);
-    tauri::async_runtime::spawn_blocking(move || {
-        let crew = load_workflow(&slug).map_err(text)?;
-        if let Some(first) = validate_for_start(&slug, &crew) {
-            return Err(text(first));
-        }
-        live::check_folder(&folder).map_err(text)?;
-        workflow::plan(&crew, &folder, reply, &request).ok_or_else(|| text(CrewError::new("WORKFLOW_NOT_FOUND", "There is no such workflow.")))
-    })
-    .await
-    .map_err(internal)?
+    tauri::async_runtime::spawn_blocking(move || plan_now(&slug, &folder, &request, reply)).await.map_err(internal)?
+}
+
+pub(crate) fn plan_now(slug: &str, folder: &str, request: &str, reply: ReplyStyle) -> Result<Plan, String> {
+    let crew = load_workflow(slug).map_err(text)?;
+    if let Some(first) = validate_for_start(slug, &crew) {
+        return Err(text(first));
+    }
+    live::check_folder(folder).map_err(text)?;
+    workflow::plan(&crew, folder, reply, request).ok_or_else(|| text(CrewError::new("WORKFLOW_NOT_FOUND", "There is no such workflow.")))
 }
 
 /// What whole-horde mode did: who started, and the note to give the Front (the pane id of each helper).
@@ -121,6 +120,12 @@ pub struct HordeOutcome {
     #[serde(flatten)]
     pub outcome: start::Outcome,
     pub note: String,
+}
+
+/// The window's workflow marks, mirrored for the PC link's session rows (`pclink::sessions_rows`). Window only: no PC-link call reaches it.
+#[tauri::command]
+pub fn crew_marks_sync(marks: serde_json::Value) {
+    crate::device_link::pclink::sessions_rows::set_marks(&marks);
 }
 
 /// Whole-horde mode: start every helper now, under the Front's pane. Nothing is answered for them. Refused when the
@@ -132,40 +137,64 @@ pub async fn workflows_start_helpers(app: AppHandle, state: State<'_, AppState>,
         return Err(text(refused));
     }
     let registry = state.registry.clone();
-    tauri::async_runtime::spawn_blocking(move || {
-        let _starting = start::StartGuard::claim(&slug).map_err(text)?;
-        let crew = load_workflow(&slug).map_err(text)?;
-        let live_pane = registry.lock().list().iter().any(|info| info.id == front_pane);
-        if let Some(refused) = workflow::refuse_horde_start(&crew, live_pane) {
-            return Err(text(refused));
-        }
-        if let Some(first) = validate_for_start(&slug, &crew) {
-            return Err(text(first));
-        }
-        live::check_folder(&folder).map_err(text)?;
-        let mut starter = live::LiveStarter::new(registry, app);
-        let mut out = start::Outcome { started: Vec::new(), failed: None, not_started: Vec::new() };
-        let helpers = workflow::helpers_of(&crew);
-        for (n, helper) in helpers.iter().enumerate() {
-            let step = start::Step {
-                role: (*helper).clone(),
-                task: workflow::horde_task(&crew, helper, &folder),
-                folder: folder.clone(),
-                parent_pane: Some(front_pane.clone()),
-                workflow: true,
-            };
-            match start::Starter::start(&mut starter, &step) {
-                Ok(pane_id) => out.started.push(start::Started { role: helper.name.clone(), agent_type: helper.agent_type.clone(), pane_id }),
-                Err(f) => {
-                    out.failed = Some(start::Failed { role: helper.name.clone(), code: f.code, message: f.message });
-                    out.not_started = helpers[n + 1..].iter().map(|h| h.name.clone()).collect();
-                    break;
-                }
+    tauri::async_runtime::spawn_blocking(move || start_helpers_now(registry, app, &slug, &folder, &front_pane)).await.map_err(internal)?
+}
+
+pub(crate) fn start_helpers_now(
+    registry: std::sync::Arc<parking_lot::Mutex<crate::pty::PaneRegistry>>,
+    app: AppHandle,
+    slug: &str,
+    folder: &str,
+    front_pane: &str,
+) -> Result<HordeOutcome, String> {
+    let _starting = start::StartGuard::claim(slug).map_err(text)?;
+    let crew = load_workflow(slug).map_err(text)?;
+    let live_pane = registry.lock().list().iter().any(|info| info.id == front_pane);
+    if let Some(refused) = workflow::refuse_horde_start(&crew, live_pane) {
+        return Err(text(refused));
+    }
+    if let Some(first) = validate_for_start(slug, &crew) {
+        return Err(text(first));
+    }
+    live::check_folder(folder).map_err(text)?;
+    let app_for_event = app.clone();
+    let mut starter = live::LiveStarter::new(registry, app);
+    let mut out = start::Outcome { started: Vec::new(), failed: None, not_started: Vec::new() };
+    let helpers = workflow::helpers_of(&crew);
+    for (n, helper) in helpers.iter().enumerate() {
+        let step = start::Step {
+            role: (*helper).clone(),
+            task: workflow::horde_task(&crew, helper, folder),
+            folder: folder.to_string(),
+            parent_pane: Some(front_pane.to_string()),
+            workflow: true,
+        };
+        match start::Starter::start(&mut starter, &step) {
+            Ok(pane_id) => out.started.push(start::Started { role: helper.name.clone(), agent_type: helper.agent_type.clone(), pane_id }),
+            Err(f) => {
+                out.failed = Some(start::Failed { role: helper.name.clone(), code: f.code, message: f.message });
+                out.not_started = helpers[n + 1..].iter().map(|h| h.name.clone()).collect();
+                break;
             }
         }
-        let note = workflow::horde_note(&out.started.iter().map(|s| (s.role.clone(), s.pane_id.clone())).collect::<Vec<_>>());
-        Ok(HordeOutcome { outcome: out, note })
-    })
-    .await
-    .map_err(internal)?
+    }
+    let note = workflow::horde_note(&out.started.iter().map(|s| (s.role.clone(), s.pane_id.clone())).collect::<Vec<_>>());
+    announce(&app_for_event, front_pane, slug, out.started.len());
+    Ok(HordeOutcome { outcome: out, note })
 }
+
+/// The `workflow-state` event: this front's workflow gained helpers, so a screen that shows it reads it again. Ids and a count only.
+/// A paired PC gets it as an `app` frame (`pclink::events`); a chat on another computer is this window's alone.
+pub(crate) fn announce(app: &AppHandle, front_pane: &str, slug: &str, started: usize) {
+    let payload = state_payload(front_pane, slug, started);
+    if !crate::acp::chat::is_remote_pane(front_pane) {
+        crate::bridge::push_sse(crate::device_link::pclink::events::app_frame(WORKFLOW_STATE_EVENT, &payload));
+    }
+    let _ = app.emit(WORKFLOW_STATE_EVENT, payload);
+}
+
+pub(crate) fn state_payload(front_pane: &str, slug: &str, started: usize) -> serde_json::Value {
+    serde_json::json!({ "paneId": front_pane, "slug": slug, "started": started })
+}
+
+pub const WORKFLOW_STATE_EVENT: &str = "workflow-state";

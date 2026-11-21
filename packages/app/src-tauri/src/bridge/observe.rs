@@ -232,7 +232,7 @@ pub(crate) fn checkpoint_pane_facts(pane_id: &str) -> Option<crate::checkpoints:
 pub(crate) fn checkpoint_all_pane_facts() -> Vec<(String, crate::checkpoints::PaneFacts)> {
     let Some(registry) = BRIDGE_REGISTRY.get() else { return Vec::new() };
     let guard = registry.lock();
-    guard.panes.iter().map(|(id, pane)| (id.clone(), pane_facts(pane))).collect()
+    guard.panes.iter().filter(|(id, _)| !crate::acp::chat::is_remote_pane(id)).map(|(id, pane)| (id.clone(), pane_facts(pane))).collect()
 }
 
 /// Folder, agent and LIVE status of a pane. `PaneState::info` is a spawn-time snapshot whose

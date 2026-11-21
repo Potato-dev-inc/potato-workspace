@@ -22,9 +22,9 @@ export function projectLabel(cwd: string | undefined | null): string {
 }
 
 /** `shop` or `separate copy of shop`: the folder the agent works in, or the copy of it. */
-export function projectWithCopy(cwd: string | undefined | null): string {
+export function projectWithCopy(cwd: string | undefined | null, copy = false): string {
   const name = projectLabel(cwd);
-  return isSeparateCopyCwd(cwd) ? t('sidebar.separateCopyOf', { name }) : name;
+  return copy || isSeparateCopyCwd(cwd) ? t('sidebar.separateCopyOf', { name }) : name;
 }
 
 /** The real project folder behind a pane's working directory (a copy maps back), for a hover title. */

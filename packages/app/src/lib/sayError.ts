@@ -73,6 +73,12 @@ export function sayError(e: unknown, where = '', fallback?: string): SaidError {
   const details = [where && `Where: ${where}`, code && `Code: ${code}`, raw.trim() && `Message: ${raw.trim()}`].filter(Boolean).join('\n');
 
   if (code && CODE_KEYS[code]) return { text: t(CODE_KEYS[code]), details };
+  // The operating system's key store failing is not something a person can read: say what it means.
+  if (/secure storage failure.*error code 8(?!\d)/i.test(cleaned)) return { text: t('common.err.secureStoreFull'), details };
+  if (/secure storage failure/i.test(cleaned)) return { text: t('common.err.secureStore'), details };
+  // The relay's raw network error ("Connection Failed ... os error 10061") is for the log; the person gets the address and what to do.
+  const relayDown = /^Can't reach the relay: https?:\/\/([^/\s]+)/i.exec(cleaned);
+  if (relayDown) return { text: t('common.err.relayDown', { host: relayDown[1] }), details };
   if (!cleaned || cleaned.length > MAX_LEN || cleaned.includes('\n') || TECHNICAL.some((re) => re.test(cleaned))) {
     return { text: fallback ?? t('common.err.generic'), details };
   }

@@ -319,32 +319,30 @@
   border-radius: 8px;
 }
 
-/* Sidebar device groups. */
-.dev-group {
-  display: flex;
-  flex-direction: column;
-  margin-top: 6px;
-}
-.dev-group.is-off {
+/* Sidebar: another PC's projects in the Projects list (greyed while that PC is away; the state word sits beside the badge). */
+.ck-proj.is-off {
   opacity: 0.55;
 }
-.dev-group-head {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  width: 100%;
-  padding: 6px 10px;
-  font: inherit;
-  font-size: 11px;
-  letter-spacing: 0.02em;
-  text-align: left;
-  color: var(--label-3);
-  background: transparent;
-  border: 0;
-  cursor: pointer;
+.ck-proj-badge {
+  margin-left: 6px;
+  font-size: 10px;
+  white-space: nowrap;
 }
-.dev-group-head .dev-word {
-  margin-left: auto;
+/* The name comes first: a long PC name gives way (shrinks with an ellipsis) before the project name is cut. */
+.cockpit .ck-proj-head .ck-proj-name:has(+ .ck-proj-badge) {
+  flex-shrink: 0;
+  max-width: 70%;
+}
+.cockpit .ck-proj-head .ck-proj-badge {
+  flex: 0 100 auto;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.ck-proj-head .dev-word {
+  margin-left: 4px;
+  font-size: 11px;
+  color: var(--label-3);
 }
 .dev-group-note {
   padding: 2px 10px 6px 24px;
@@ -473,38 +471,9 @@
   min-height: 0;
   overflow: auto;
 }
-.dev-remote-screen {
-  margin: 0;
-  padding: 12px 14px;
-  white-space: pre-wrap;
-  font-family: var(--font-mono, ui-monospace, monospace);
-  font-size: 12px;
-  color: var(--label);
-}
-.dev-remote-send {
-  display: flex;
-  gap: 8px;
-  padding: 10px 14px;
-  border-top: 1px solid var(--sep, rgba(255, 255, 255, 0.08));
-}
-.dev-remote-send input {
-  flex: 1;
-  min-width: 0;
-  padding: 6px 8px;
-  font: inherit;
-  color: var(--label);
-  background: var(--fill, rgba(255, 255, 255, 0.06));
-  border: 1px solid var(--sep, rgba(255, 255, 255, 0.1));
-  border-radius: 6px;
-}
 .dev-remote-note {
   padding: 16px;
   color: var(--label-3);
-}
-
-.dev-group-head--this {
-  cursor: default;
-  margin-top: 4px;
 }
 
 /* Notices about a device (state, signed out there, needs a person there). */
@@ -1071,4 +1040,30 @@
   overflow: hidden;
   text-overflow: ellipsis;
   max-width: 160px;
+}
+
+/* "Close chat" in the header of a chat on another PC (Full). */
+.dev-remote-close {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  color: var(--label-2);
+  font-size: var(--fs-caption, 12px);
+}
+.dev-remote-close-ask {
+  color: var(--label-2);
+}
+.dev-remote-body:has(> .dev-remote-term) {
+  display: flex;
+  overflow: hidden;
+}
+.dev-remote-term {
+  flex: 1;
+  min-width: 0;
+  min-height: 0;
+  display: flex;
+}
+.dev-remote-term > .pm-terminal-stage {
+  flex: 1;
+  min-width: 0;
 }

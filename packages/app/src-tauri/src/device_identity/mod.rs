@@ -56,10 +56,13 @@ pub fn clean_name(raw: &str) -> String {
     one_line.split_whitespace().collect::<Vec<_>>().join(" ").chars().take(MAX_NAME_CHARS).collect()
 }
 
+/// The name the computer gives itself. Linux: `HOSTNAME` is a shell variable that an app started from the desktop never sees, so the
+/// kernel's hostname is read. (shortcut: macOS has neither and falls back to "This computer"; read scutil when the Mac port lands.)
 pub fn computer_name() -> String {
     std::env::var("COMPUTERNAME")
         .or_else(|_| std::env::var("HOSTNAME"))
         .ok()
+        .or_else(|| std::fs::read_to_string("/proc/sys/kernel/hostname").ok())
         .map(|s| clean_name(&s))
         .filter(|s| !s.is_empty())
         .unwrap_or_else(|| "This computer".into())

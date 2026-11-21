@@ -358,7 +358,7 @@ mod runtime {
 
     /// What the Inbox entry needs.
     fn current_needs(_app: &AppHandle) -> Needs {
-        Needs { need_you: crate::attention::counts().blocking }
+        Needs { need_you: crate::attention::counts_including_remote().blocking }
     }
 
     fn current_model(app: &AppHandle) -> Vec<Item> {
@@ -373,7 +373,7 @@ mod runtime {
             .map(|s| {
                 s.registry
                     .lock()
-                    .list()
+                    .list_including_remote()
                     .into_iter()
                     .map(|p| PaneRow {
                         label: labels.get(&p.agent_type).cloned().unwrap_or_default(),
@@ -466,7 +466,7 @@ mod runtime {
         let summary = current_summary(app);
         let tip = tooltip_for(crate::live_room::service::is_live(), summary);
         let _ = tray.set_tooltip(Some(tip));
-        apply_dot(app, &tray, needs_dot(crate::attention::counts().blocking));
+        apply_dot(app, &tray, needs_dot(crate::attention::counts_including_remote().blocking));
     }
 
     /// Swaps the tray icon to the dot variant only when the state changes, so the icon is not reset on
@@ -497,9 +497,9 @@ mod runtime {
 
     /// The tooltip for the panes and jobs open now. Standby (hidden) panes are not the person's work.
     fn current_summary(app: &AppHandle) -> String {
-        let need_you = crate::attention::counts().blocking;
+        let need_you = crate::attention::counts_including_remote().blocking;
         let Some(state) = app.try_state::<AppState>() else { return summary_line(&[], &[], need_you) };
-        let panes: Vec<_> = state.registry.lock().list().into_iter().filter(|p| !crate::pty::hidden::is_hidden(&p.id)).collect();
+        let panes: Vec<_> = state.registry.lock().list_including_remote().into_iter().filter(|p| !crate::pty::hidden::is_hidden(&p.id)).collect();
         let statuses: Vec<&str> = panes.iter().map(|p| p.status.as_str()).collect();
         let refs: Vec<PaneRef> = panes
             .iter()
@@ -542,7 +542,7 @@ mod runtime {
             let started = std::time::Instant::now();
             loop {
                 let registry = app.state::<AppState>().registry.clone();
-                let alive = registry.lock().list().iter().any(|p| p.id == pane_id);
+                let alive = registry.lock().list_including_remote().iter().any(|p| p.id == pane_id);
                 let has_output = alive
                     && crate::pty::registry_read_snapshot(&registry, &pane_id).map(|t| !t.trim().is_empty()).unwrap_or(false);
                 match ready_decision(alive, has_output, started.elapsed().as_millis() as u64) {
@@ -668,7 +668,7 @@ mod runtime {
         if let Some(claim) = claim {
             let warm_ms = claim.age_ms();
             let pane_id = claim.commit();
-            let info = state.registry.lock().list().into_iter().find(|p| p.id == pane_id);
+            let info = state.registry.lock().list_including_remote().into_iter().find(|p| p.id == pane_id);
             let (cols, rows) = info.map(|p| (p.cols, p.rows)).unwrap_or((120, 30));
             crate::cockpit::present_pane(app, &pane_id, agent, cols, rows, origin);
             let _ = app.emit("pty://panes-changed", ());
@@ -707,7 +707,7 @@ mod runtime {
                 guard_env: None,
             },
         )?;
-        let info = state.registry.lock().list().into_iter().find(|p| p.id == pane_id);
+        let info = state.registry.lock().list_including_remote().into_iter().find(|p| p.id == pane_id);
         let (cols, rows) = info.map(|p| (p.cols, p.rows)).unwrap_or((120, 30));
         crate::cockpit::present_pane(app, &pane_id, agent, cols, rows, origin);
         let _ = app.emit("pty://panes-changed", ());
@@ -749,7 +749,7 @@ mod runtime {
                         .state::<AppState>()
                         .registry
                         .lock()
-                        .list()
+                        .list_including_remote()
                         .into_iter()
                         .find(|p| p.id == pane_id)
                         .map(|p| (p.agent_type, p.cols, p.rows));

@@ -11,6 +11,8 @@ import { realRecents } from '../../../lib/ship-model';
 import { isValidProjectPath } from '../../../lib/project-path';
 import { tauri } from '../../../lib/tauri';
 import { fillDiscordNameOnce } from '../../../lib/discordName';
+import { localHost } from '../../../lib/host/local';
+import type { Host } from '../../../lib/host/host';
 import { cleanName, parseCards, type HomeCard, type LaneView } from './model';
 
 const inTauri = (): boolean => typeof window !== 'undefined' && '__TAURI_INTERNALS__' in window;
@@ -86,30 +88,26 @@ export function laneViewFromWire(wire: LaneWire | null | undefined): LaneView | 
   };
 }
 
+/**
+ * The workflow reads and the two starts, over any host: this PC's commands, or the far call rows of `pclink/calls_workflows.rs`. An answer
+ * that cannot come (no row, an older PC, the Labs switch off) is "no workflows", as on an older build. `send` puts the front's note in its box.
+ */
+export function workflowsOf(host: Host, send: (paneId: string, text: string) => Promise<unknown>, folderOf: (folder: string) => string = (f) => f): Pick<NewAgentApi, 'workflows' | 'workflowsHidden' | 'workflowPlan' | 'workflowHelpers'> {
+  return {
+    workflows: () => host.invoke<WorkflowChoice[] | null>('workflows_list').catch(() => null),
+    workflowsHidden: () => host.invoke<number>('workflows_hidden_count').catch(() => 0),
+    workflowPlan: (slug, folder, request) => host.invoke<WorkflowPlanView>('workflows_plan', { slug, folder: folderOf(folder), request }),
+    workflowHelpers: async (slug, folder, frontPane) => {
+      const out = await host.invoke<{ failed: { role: string; message: string } | null; started: unknown[]; note: string }>('workflows_start_helpers', { slug, folder: folderOf(folder), frontPane });
+      // The front is told which pane is which helper, so it uses them and does not start duplicates.
+      if (out.started.length > 0 && out.note) await send(frontPane, out.note).catch(() => undefined);
+      return out.failed ? `${out.failed.role}: ${out.failed.message}` : null;
+    },
+  };
+}
+
 export const tauriNewAgentApi: NewAgentApi = {
-  workflows: async () => {
-    if (!inTauri()) return null;
-    try {
-      return await invoke<WorkflowChoice[] | null>('workflows_list');
-    } catch {
-      return null; // an older build without the command
-    }
-  },
-  workflowsHidden: async () => {
-    if (!inTauri()) return 0;
-    try {
-      return await invoke<number>('workflows_hidden_count');
-    } catch {
-      return 0;
-    }
-  },
-  workflowPlan: (slug, folder, request) => invoke<WorkflowPlanView>('workflows_plan', { slug, folder, request }),
-  workflowHelpers: async (slug, folder, frontPane) => {
-    const out = await invoke<{ failed: { role: string; message: string } | null; started: unknown[]; note: string }>('workflows_start_helpers', { slug, folder, frontPane });
-    // The front is told which pane is which helper, so it uses them and does not start duplicates.
-    if (out.started.length > 0 && out.note) await sendPaneMessage(frontPane, out.note).catch(() => undefined);
-    return out.failed ? `${out.failed.role}: ${out.failed.message}` : null;
-  },
+  ...workflowsOf(localHost, sendPaneMessage),
   recent: async () => realRecents(await shipApi.recent()),
   pickFolder: () => shipApi.pickFolder(),
   pickPaths: async () => pickFiles(),

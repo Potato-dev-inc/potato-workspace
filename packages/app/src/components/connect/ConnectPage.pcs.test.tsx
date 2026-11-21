@@ -229,3 +229,77 @@ describe("A PC's own sheet: only Can work on this PC", () => {
     });
   });
 });
+
+describe('My PCs: Full by default for PCs on your account', () => {
+  it('shows "On your account: full access" on a PC paired through the account, and says when you lowered it', async () => {
+    const d = new DevicesFake({ enabled: true, name: 'REN-DESK', devices: [{ ...MAC_MINI, lets_run: true, level: 'full', account_default: true }, { ...WORK_LAPTOP, lets_run: true, level: 'watch', account_default: true }] });
+    await h.mount(makeApi({ tunnel: linked(), devices: d }));
+    expect(text(`[data-testid="connect-pc-account-${MAC_MINI.node}"]`)).toContain('On your account: full access');
+    expect(text(`[data-testid="connect-pc-account-${WORK_LAPTOP.node}"]`)).toContain('you lowered it');
+  });
+
+  it('a PC paired before this update gets a one-time card, nothing is raised until Keep, and Lower keeps it as it was', async () => {
+    const d = new DevicesFake({ enabled: true, name: 'REN-DESK', devices: [{ ...MAC_MINI, lets_run: false, level: 'watch', account_card: true }, { ...WORK_LAPTOP, lets_run: false, level: 'watch', account_card: true }] });
+    await h.mount(makeApi({ tunnel: linked(), devices: d }));
+    expect(text(`[data-testid="connect-pc-account-card-${MAC_MINI.node}"]`)).toContain('Mac mini is on your account. Let it work on this PC?');
+    expect(d.view.devices.every((x) => !x.lets_run)).toBe(true);
+    await click(q(`[data-testid="connect-pc-account-keep-${MAC_MINI.node}"]`));
+    await settle();
+    expect(q(`[data-testid="connect-pc-account-card-${MAC_MINI.node}"]`)).toBeNull();
+    expect(d.view.devices.find((x) => x.node === MAC_MINI.node)).toMatchObject({ lets_run: true, level: 'full' });
+    await click(q(`[data-testid="connect-pc-account-lower-${WORK_LAPTOP.node}"]`));
+    await settle();
+    expect(q(`[data-testid="connect-pc-account-card-${WORK_LAPTOP.node}"]`)).toBeNull();
+    expect(d.view.devices.find((x) => x.node === WORK_LAPTOP.node)).toMatchObject({ lets_run: false });
+  });
+});
+
+describe('My PCs: old rows and the key note', () => {
+  const DAY = 86400;
+  const OLD = (over: Partial<AccountPc>) => pc({ id: 'old', name: 'REN', status: 'away', online: false, last_seen_at: NOW - 20 * DAY, node: null, ...over });
+
+  it('PCs not seen for 2 weeks are folded under one line with Show; the 2-day-old one stays', async () => {
+    const account = fakeAccount({ pcs: [pc({ id: 'a' }), OLD({}), OLD({ id: 'old2', name: 'REN-2', last_seen_at: NOW - 15 * DAY }), OLD({ id: 'recent', name: 'REN-3', last_seen_at: NOW - 2 * DAY })] });
+    await h.mount(makeApi({ tunnel: linked(), account }));
+    expect(text('[data-testid="connect-pc-hidden"]')).toContain('Hidden: 2 PCs not seen for 2 weeks.');
+    expect(q('[data-testid="account-pc-a"]')).not.toBeNull();
+    expect(q('[data-testid="account-pc-recent"]')).not.toBeNull();
+    expect(q('[data-testid="account-pc-old"]')).toBeNull();
+    await click(q('[data-testid="connect-pc-hidden-toggle"]'));
+    expect(q('[data-testid="account-pc-old"]')).not.toBeNull();
+    expect(q('[data-testid="account-pc-old2"]')).not.toBeNull();
+    expect(text('[data-testid="connect-pc-hidden-toggle"]')).toBe('Hide');
+  });
+
+  it('nothing is folded when every PC was seen lately', async () => {
+    await h.mount(makeApi({ tunnel: linked(), account: fakeAccount({ pcs: [pc({ id: 'a' }), OLD({ id: 'r', last_seen_at: NOW - 3 * DAY })] }) }));
+    expect(q('[data-testid="connect-pc-hidden"]')).toBeNull();
+  });
+
+  it('Remove on an offline PC asks first, then signs that device out of the account; an online PC has no Remove', async () => {
+    const calls: string[] = [];
+    const base = fakeAccount({ pcs: [pc({ id: 'a' }), OLD({ id: 'r', last_seen_at: NOW - 3 * DAY })] });
+    const account: AccountApi = { ...base, revoke: async (id, action) => (calls.push(`${action}:${id}`), { signed_in: true, devices: [] }) };
+    await h.mount(makeApi({ tunnel: linked(), account }));
+    expect(q('[data-testid="account-pc-remove-a"]')).toBeNull();
+    await click(q('[data-testid="account-pc-remove-r"]'));
+    expect(text('[data-testid="account-pc-line-r"]')).toBe('Sign REN out of your account?');
+    expect(calls).toEqual([]);
+    await click(q('[data-testid="account-pc-remove-yes-r"]'));
+    await settle(6);
+    expect(calls).toEqual(['sign_out:r']);
+  });
+
+  it('a list made with a key this PC no longer has says so; a damaged list keeps the old sentence', async () => {
+    const devices = new DevicesFake({ enabled: true, name: 'REN-DESK' });
+    devices.view = { ...devices.view, tampered: true, key_changed: true };
+    await h.mount(makeApi({ tunnel: linked(), devices }));
+    expect(text('[data-testid="connect-pc-tampered"]')).toContain("This PC's key was reset");
+    await h.unmount();
+    h = harness();
+    const damaged = new DevicesFake({ enabled: true, name: 'REN-DESK' });
+    damaged.view = { ...damaged.view, tampered: true };
+    await h.mount(makeApi({ tunnel: linked(), devices: damaged }));
+    expect(text('[data-testid="connect-pc-tampered"]')).toBe('The list of PCs could not be trusted. Add your PCs again.');
+  });
+});

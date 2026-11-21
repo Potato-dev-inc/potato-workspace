@@ -35,6 +35,8 @@ pub struct AccountView {
     pub message: Option<String>,
     pub account: Option<AccountInfo>,
     pub device_id: Option<String>,
+    /// This computer keeps its key in a private file (Linux without a lasting keyring).
+    pub key_in_file: bool,
 }
 
 #[derive(Serialize, Clone, Debug, PartialEq, Eq)]
@@ -126,6 +128,7 @@ impl AccountService {
             message: self.message.lock().clone(),
             account: session.as_ref().map(|s| AccountInfo { id: s.account_id.clone(), display_name: s.display_name.clone(), provider: s.provider.clone() }),
             device_id: session.map(|s| s.device_id),
+            key_in_file: crate::secrets::keeps_key_in_file(),
         }
     }
 

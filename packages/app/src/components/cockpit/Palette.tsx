@@ -198,8 +198,7 @@ export function Palette({
     const chatIds = !terminals && laneView?.labs_enabled ? chatAgentIds(laneView) : null;
     for (const e of c.launchEntries) {
       if (e.disabled) continue;
-      if (!terminals && e.shell) continue;
-      if (chatIds && !chatIds.has(e.type.toLowerCase())) continue;
+      if (chatIds && !e.shell && !chatIds.has(e.type.toLowerCase())) continue;
       const row: Item = {
         id: `new:${e.type}`,
         group: e.shell ? 'Terminals' : 'New agent',

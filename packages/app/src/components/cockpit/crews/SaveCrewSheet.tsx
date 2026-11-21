@@ -2,8 +2,9 @@
 // the live panes (folder -> {folder}, secrets and personal folder names taken out); the person edits names and tasks here
 // before anything is saved. "Copy to My crews" passes a starter in as `initial` instead: the same editor, nothing saved yet.
 import { t } from '../../../i18n';
-import { useEffect, useRef, useState } from 'react';
-import { crewErrorText, crewsApi, type Crew, type CrewProblem, type CrewsApi } from '../../../lib/crews-api';
+import { useEffect, useMemo, useRef, useState } from 'react';
+import { useHost } from '../../../lib/host/context';
+import { crewErrorText, crewsApiFor, type Crew, type CrewProblem, type CrewsApi } from '../../../lib/crews-api';
 import { Sheet } from '../Sheet';
 import { blockedReason, dropRole, MAX_CREW_NAME, MAX_ROLE_NAME, renameRole, roleLine, setTask } from './model';
 import '../../../styles/cockpit-crews.css';
@@ -11,7 +12,7 @@ import '../../../styles/cockpit-crews.css';
 export function SaveCrewSheet({
   paneId,
   initial,
-  api = crewsApi,
+  api: apiProp,
   agentName,
   onClose,
   onSaved,
@@ -26,6 +27,8 @@ export function SaveCrewSheet({
   onClose: () => void;
   onSaved: (crewName: string) => void;
 }) {
+  const host = useHost();
+  const api = useMemo(() => apiProp ?? crewsApiFor(host), [apiProp, host]);
   const [crew, setCrew] = useState<Crew | null>(null);
   const [omitted, setOmitted] = useState(0);
   const [problems, setProblems] = useState<CrewProblem[]>([]);

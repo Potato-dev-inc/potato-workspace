@@ -59,7 +59,7 @@ pub(super) fn resolve_run_handle(
     if operations::resolve_agent_run(project, id).is_ok() {
         return Ok(id.to_string());
     }
-    let pane_ids: Vec<String> = registry.lock().panes.keys().cloned().collect();
+    let pane_ids: Vec<String> = crate::acp::chat::resolvable_pane_ids(registry.lock().panes.keys().cloned().collect::<Vec<_>>());
     if let Ok(pane_id) = crate::mcp_sessions::resolve_pane_id(id, &pane_ids) {
         let kind = if pane_id == id {
             "a pane id"

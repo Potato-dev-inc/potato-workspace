@@ -64,12 +64,23 @@ export class StableLink extends DurableObject<Env> {
     return { status: 200 };
   }
 
-  /** Clear the link and the stored secret (the next register starts fresh). */
-  async reset(secretHash: string, address: string): Promise<Outcome> {
+  /**
+   * Rotate the secret: the old secret authorises, `newHash` replaces it in the same step and the link is cleared.
+   * There is never a moment with no stored secret, so nobody can claim an empty Worker in between.
+   * With SETUP_SECRET_SHA256 set that secret stays the only way in, so only the link is cleared.
+   */
+  async reset(secretHash: string, newHash: string | null, address: string): Promise<Outcome> {
     if (!(await this.allow(address))) return { status: 429, error: "too_many_attempts" };
     const who = await this.check(secretHash);
     if (who === "wrong") return { status: 403, error: "secret_mismatch" };
-    await this.ctx.storage.delete(["origin", "updated_at", "secret_hash"]);
+    const setup = Boolean((this.env.SETUP_SECRET_SHA256 ?? "").trim());
+    if (!setup && (!newHash || !/^[0-9a-f]{64}$/.test(newHash))) return { status: 400, error: "new_secret_required" };
+    // One transaction: the new hash and the cleared link commit together. In setup mode the stored hash is not used, so a stale one goes.
+    await this.ctx.storage.transaction(async (txn) => {
+      if (setup) await txn.delete("secret_hash");
+      else await txn.put("secret_hash", newHash);
+      await txn.delete(["origin", "updated_at"]);
+    });
     return { status: 200 };
   }
 

@@ -11,6 +11,7 @@ import type { AgentHealth, AgentHealthApi } from '../../lib/agent-health';
 import type { AgentPackApi } from '../../lib/agent-pack';
 import type { AcpAddonApi, AddonStatus } from '../../lib/acpAddon';
 import type { RecentProject } from '../../lib/ship-api';
+import { Sheet } from '../cockpit/Sheet';
 import { FirstRun, type FirstRunDeps } from './FirstRun';
 import { T } from './copy';
 import type { Seed } from './useFirstRun';
@@ -384,6 +385,37 @@ describe('the welcome is a real modal', () => {
     host.querySelector<HTMLElement>('.fr-shell')!.focus();
     await key('Escape');
     expect(onFinish).toHaveBeenCalledTimes(1);
+  });
+
+  it('Esc leaves even when the page has focus and nothing in the welcome does', async () => {
+    const { onFinish } = await mountOnPage(deps());
+    await act(async () => {
+      document.body.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true, cancelable: true }));
+    });
+    expect(onFinish).toHaveBeenCalledTimes(1);
+  });
+
+  it('the first Esc leaves even with a sheet and a window listener behind it', async () => {
+    const onSheetClose = vi.fn();
+    const onWindowKey = vi.fn();
+    window.addEventListener('keydown', onWindowKey);
+    const onFinish = vi.fn();
+    await act(async () =>
+      root.render(
+        <>
+          <Sheet onClose={onSheetClose} labelledBy="x">
+            <h2 id="x">Behind</h2>
+          </Sheet>
+          <FirstRun c={cockpit()} seed={SEED} onFinish={onFinish} deps={deps()} />
+        </>,
+      ),
+    );
+    await flush();
+    await key('Escape');
+    window.removeEventListener('keydown', onWindowKey);
+    expect(onFinish).toHaveBeenCalledTimes(1);
+    expect(onSheetClose).not.toHaveBeenCalled();
+    expect(onWindowKey).not.toHaveBeenCalled();
   });
 
   it('Esc closes an open fold-away first', async () => {

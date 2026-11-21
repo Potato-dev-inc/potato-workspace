@@ -11,7 +11,7 @@ pub(super) fn pane_not_found(pane: &str) -> OperationError {
     )
 }
 
-pub(super) const MIN_PANE_PREFIX_LEN: usize = 4;
+pub(crate) const MIN_PANE_PREFIX_LEN: usize = 4;
 
 /// Error for an agent handle this connection cannot resolve. The message is generic here;
 /// `enrich_handle_error` upgrades it when the id turns out to be a pane id.
@@ -86,6 +86,8 @@ pub fn enrich_handle_error_with(
 
 /// Resolve a caller-supplied pane reference: a full pane id or a unique prefix (min 4 chars).
 pub fn resolve_pane_id(input: &str, pane_ids: &[String]) -> Result<String, OperationError> {
+    // A chat on another computer never resolves (not by full id, not by prefix) and is never named as a candidate.
+    let pane_ids = &crate::acp::chat::resolvable_pane_ids(pane_ids.iter().cloned());
     let input = input.trim();
     if pane_ids.iter().any(|id| id == input) {
         return Ok(input.to_owned());

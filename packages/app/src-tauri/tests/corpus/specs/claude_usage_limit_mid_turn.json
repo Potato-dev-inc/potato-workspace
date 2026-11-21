@@ -8,7 +8,7 @@
   "initial_status": "idle",
   "bug": "Hand-off detect-only: a usage limit mid-turn must be noticed once (after it holds still), must park the run and raise ONE card, must never type into the pane, and must stop counting when Claude continues by itself.",
   "source": [
-   "SYNTHETIC. Built by hand from the 2.1.300 string table texts quoted in D:/pm-night/DESIGN-RELAY.md 1.2 and the layout of the live 2.1.299 captures in tui/claude/fixtures. NOT a live recording. Replace with a flight recording when a real limit is captured (DESIGN-RELAY 7.1 C1)."
+   "SYNTHETIC. Built by hand from the 2.1.300 string table texts quoted in night-shift-folder/DESIGN-RELAY.md 1.2 and the layout of the live 2.1.299 captures in tui/claude/fixtures. NOT a live recording. Replace with a flight recording when a real limit is captured (DESIGN-RELAY 7.1 C1)."
   ]
  },
  "events": [

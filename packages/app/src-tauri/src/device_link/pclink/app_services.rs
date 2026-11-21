@@ -24,18 +24,52 @@ impl AppServices {
     }
 }
 
-type Reply = (u16, Value);
+pub(super) type Reply = (u16, Value);
 
-fn not_ready() -> Reply {
+pub(super) fn not_ready() -> Reply {
     (503, json!({ "error": "The app is not ready yet.", "code": "BRIDGE_NOT_READY" }))
+}
+
+/// A refusal when `session` is a chat that runs on another computer: another PC may not list, read, message, stop or approve it.
+pub(super) fn remote_refusal(session: &str) -> Option<Reply> {
+    crate::acp::chat::is_remote_pane(session).then(crate::acp::chat::remote_refusal)
 }
 
 fn unknown(session: &str) -> Reply {
     (404, json!({ "code": "UNKNOWN_SESSION", "error": crate::pty::registry::unknown_pane_message(session) }))
 }
 
-fn bad(code: &str, message: &str) -> Reply {
+pub(super) fn bad(code: &str, message: &str) -> Reply {
     (400, json!({ "code": code, "error": message }))
+}
+
+pub(super) fn needs_hold_reply() -> Reply {
+    (409, json!({ "code": "NEEDS_HOLD", "error": "This lets the agent act without asking. Only your own PCs may do that from afar; allow it on this PC itself." }))
+}
+
+/// A Tauri command's `"CODE: sentence"` error as the PC link's `{ code, error }` with a status.
+pub(super) fn command_error(text: &str) -> Reply {
+    let (code, message) = match text.split_once(": ") {
+        Some((code, message)) if !code.is_empty() && code.chars().all(|c| c.is_ascii_uppercase() || c == '_') => (code, message),
+        _ => ("COMMAND_FAILED", text),
+    };
+    let status = match code {
+        "PANE_NOT_FOUND" => 404,
+        "BUSY" | "ACP_BUSY" => 409,
+        "ACP_CONFIG_FAILED" => 502,
+        _ => 400,
+    };
+    (status, json!({ "code": code, "error": message }))
+}
+
+/// One Full change from a paired PC, for the audit trail: which setting and which chat, never its value. A held one says so.
+pub(super) fn audit_call(node: &str, pane: &str, what: &str, held: bool) {
+    let (kind, summary) = if held {
+        (crate::audit::Kind::Pairing, format!("A paired PC gave one agent full access ({what}, held to allow)"))
+    } else {
+        (crate::audit::Kind::Setting, format!("A paired PC changed a setting of one agent ({what})"))
+    };
+    crate::audit::record(kind, crate::audit::Who::Device(Some(crate::mobile_pairing::link_device_id(node))), &summary, json!({ "pane_id": pane }));
 }
 
 fn merge(result: Result<Reply, Reply>) -> Reply {
@@ -49,7 +83,7 @@ fn clip(text: &str, max: usize) -> String {
 }
 
 /// The folders this PC knows and that still exist, as `(path, name, state)`.
-fn known_projects(registry: &Arc<parking_lot::Mutex<crate::pty::PaneRegistry>>) -> Vec<(String, String, String)> {
+pub(super) fn known_projects(registry: &Arc<parking_lot::Mutex<crate::pty::PaneRegistry>>) -> Vec<(String, String, String)> {
     let mut others = crate::operations::indexed_project_paths();
     others.push(crate::standby::default_project(registry));
     let store = crate::app_paths::app_data_dir();
@@ -90,7 +124,7 @@ impl Services for AppServices {
 
     fn sessions(&self) -> Reply {
         let Some((_, registry)) = link_app_handles() else { return not_ready() };
-        let panes = registry.lock().list();
+        let panes = crate::acp::chat::external_panes(&registry);
         let mut probes = 0usize;
         let rows: Vec<Value> = panes
             .into_iter()
@@ -118,6 +152,7 @@ impl Services for AppServices {
                 if let Some(parent) = p.parent_pane_id.as_deref().filter(|s| !s.is_empty()) {
                     row["parent"] = json!(clip(parent, 200));
                 }
+                super::sessions_rows::extend(&mut row, &p, project_id, folder_name);
                 row
             })
             .collect();
@@ -125,6 +160,9 @@ impl Services for AppServices {
     }
 
     fn transcript(&self, session: &str, since: Option<u64>) -> Reply {
+        if let Some(refused) = remote_refusal(session) {
+            return refused;
+        }
         let Some((app, registry)) = link_app_handles() else { return not_ready() };
         let Some(agent_type) = registry.lock().get(session).map(|pane| pane.info.agent_type.clone()) else { return unknown(session) };
         let opening = crate::session_chat::Opening::for_pane(session, &agent_type);
@@ -133,6 +171,9 @@ impl Services for AppServices {
     }
 
     fn transcript_earlier(&self, session: &str, before: &str, limit: Option<usize>) -> Reply {
+        if let Some(refused) = remote_refusal(session) {
+            return refused;
+        }
         let Some((_, registry)) = link_app_handles() else { return not_ready() };
         if registry.lock().get(session).is_none() {
             return unknown(session);
@@ -141,20 +182,15 @@ impl Services for AppServices {
     }
 
     fn picture(&self, session: &str, path: &str) -> Reply {
+        if let Some(refused) = remote_refusal(session) {
+            return refused;
+        }
         let Some((_, registry)) = link_app_handles() else { return not_ready() };
         let Some(cwd) = registry.lock().get(session).map(|pane| pane.info.cwd.clone()) else { return unknown(session) };
         use crate::session_chat::picture;
         match picture::read(path, &cwd, &picture::roots_for(&cwd), picture::PHONE_MAX_BYTES) {
             Ok(found) => (200, serde_json::to_value(found).unwrap_or(Value::Null)),
             Err(refused) => (if refused.code == "PICTURE_TOO_BIG" { 413 } else { 404 }, picture::refusal_body(&refused)),
-        }
-    }
-
-    fn screen(&self, session: &str) -> Reply {
-        let Some((_, registry)) = link_app_handles() else { return not_ready() };
-        match crate::pty::registry_read_snapshot(&registry, session) {
-            Ok(content) => (200, json!({ "content": content })),
-            Err(error) => (404, json!({ "code": "UNKNOWN_SESSION", "error": error })),
         }
     }
 
@@ -227,31 +263,17 @@ impl Services for AppServices {
     }
 
     fn outbox(&self, session: &str) -> Reply {
-        let Some((app, registry)) = link_app_handles() else { return not_ready() };
-        let messages: Vec<_> = crate::pane_outbox::global(&registry, &app).list(session).iter().map(crate::pane_outbox::redacted).collect();
-        (200, json!({ "messages": messages }))
+        outbox_list(session)
     }
 
     fn send(&self, node: &str, session: &str, text: &str, full: bool) -> Reply {
-        let Some((app, registry)) = link_app_handles() else { return not_ready() };
-        if !full {
-            if let Some(chat) = crate::acp::chat::get(session) {
-                if message_needs_full(&chat.session().snapshot().config_options, &chat.auto_allowed_kinds()) {
-                    return (403, json!({ "error": "This agent is set to act without asking. Messaging it needs Full on this PC.", "code": "MESSAGE_NEEDS_FULL", "needs": "full" }));
-                }
-            }
-        }
-        let from = crate::mobile_pairing::link_device_id(node);
-        match crate::pane_outbox::global(&registry, &app).send_from(session, text, &[], Some(&from)) {
-            Ok(message) => (200, json!({ "message": crate::pane_outbox::redacted(&message) })),
-            Err(error) => {
-                let code = if error == crate::acp::chat::TOOK_BACK_SENTENCE { crate::acp::chat::drive::TOOK_BACK_CODE } else { "MESSAGE_REFUSED" };
-                (if code == "MESSAGE_REFUSED" { 400 } else { 409 }, json!({ "error": error, "code": code }))
-            }
-        }
+        send_message(node, session, text, full)
     }
 
     fn cancel_message(&self, session: &str, message: &str) -> Reply {
+        if let Some(refused) = remote_refusal(session) {
+            return refused;
+        }
         let Some((app, registry)) = link_app_handles() else { return not_ready() };
         match crate::pane_outbox::global(&registry, &app).cancel(session, message) {
             Ok(message) => (200, json!({ "message": crate::pane_outbox::redacted(&message) })),
@@ -260,6 +282,9 @@ impl Services for AppServices {
     }
 
     fn interrupt(&self, session: &str) -> Reply {
+        if let Some(refused) = remote_refusal(session) {
+            return refused;
+        }
         let Some((app, registry)) = link_app_handles() else { return not_ready() };
         if !registry.lock().panes.contains_key(session) {
             return unknown(session);
@@ -283,6 +308,9 @@ impl Services for AppServices {
             return (403, json!({ "code": "NEEDS_PERSON", "error": "This card is a decision for the person at this PC." }));
         }
         if let Some(pane) = question.pane_id.as_deref() {
+            if let Some(refused) = remote_refusal(pane) {
+                return refused;
+            }
             if !remote_ok(pane) {
                 return (403, json!({ "error": "This agent is switched off for other PCs on its own PC.", "code": "AGENT_LOCKED" }));
             }
@@ -303,42 +331,7 @@ impl Services for AppServices {
     }
 
     fn set_config(&self, node: &str, session: &str, option: &str, value: &str, hold: bool) -> Reply {
-        let Some(chat) = crate::acp::chat::get(session) else {
-            return (404, json!({ "code": "UNKNOWN_SESSION", "error": format!("{session} is not a chat session") }));
-        };
-        let options = chat.session().snapshot().config_options;
-        if needs_hold(&options, option, value) && !hold {
-            return (409, json!({ "code": "NEEDS_HOLD", "error": "This lets the agent act without asking. Press and hold to allow it." }));
-        }
-        if let Err(error) = chat.set_config(option, value) {
-            return match error {
-                crate::acp::error::AcpError::Busy => (409, json!({ "code": "BUSY", "error": "The agent is working. Change this when the turn ends." })),
-                crate::acp::error::AcpError::BadOption(what) => bad("INVALID_ARGUMENT", &format!("the agent does not offer {what}")),
-                other => (502, json!({ "code": "ACP_CONFIG_FAILED", "error": other.to_string() })),
-            };
-        }
-        crate::acp::chat::default_model::remember_pick(&chat, option, value);
-        if hold {
-            crate::audit::record(
-                crate::audit::Kind::Pairing,
-                crate::audit::Who::Device(Some(crate::mobile_pairing::link_device_id(node))),
-                "A paired PC gave one agent full access",
-                json!({ "pane_id": session }),
-            );
-        }
-        (200, chat.state())
-    }
-
-    fn input(&self, node: &str, session: &str, text: &str) -> Reply {
-        let Some((_, registry)) = link_app_handles() else { return not_ready() };
-        if registry.lock().get(session).is_none() {
-            return unknown(session);
-        }
-        if crate::acp::chat::is_chat_pane(&registry, session) {
-            return (409, json!({ "code": "NOT_A_TERMINAL", "error": "This is a chat. Send it a message instead." }));
-        }
-        let body = serde_json::to_vec(&json!({ "text": text, "append_newline": true })).unwrap_or_default();
-        run_after_pclink(node, "POST", &format!("/panes/{session}/input"), &body)
+        self.set_config_as(node, session, option, value, hold, hold)
     }
 
     fn models(&self, agent: &str) -> Reply {
@@ -395,6 +388,65 @@ impl Services for AppServices {
         (200, json!({ "warming": crate::acp::warm::hint(agent, std::path::Path::new(&folder), None) }))
     }
 
+    fn call(&self, node: &str, cmd: &str, args: &Value) -> Reply {
+        use super::calls::text_arg;
+        if let Some(reply) = super::calls_agents::run(cmd, args) {
+            return reply;
+        }
+        if let Some(done) = super::calls_chat::dispatch(node, cmd, args) {
+            return done;
+        }
+        if super::calls_workflows::mine(cmd) {
+            return super::calls_workflows::run(node, cmd, args);
+        }
+        // A person's own PC (`_marked`, set by `pclink::handle`) is not asked to press and hold; any other PC must hold.
+        let held = args.get("hold").and_then(Value::as_bool).unwrap_or(false);
+        let hold = held || args.get("_marked").and_then(Value::as_bool).unwrap_or(false);
+        if super::terminal::handles(cmd) {
+            let Some((app, registry)) = link_app_handles() else { return not_ready() };
+            let folder = |path: &str| {
+                let projects = known_projects(&registry);
+                resolve_project(&projects, path).or_else(|| resolve_project(&projects, &project_id(path)))
+            };
+            return super::terminal::call(&super::terminal::Env { registry: &registry, app: &app, folder: &folder }, node, cmd, args).unwrap_or_else(|| (404, json!({ "error": "not found", "code": "UNKNOWN_ROUTE" })));
+        }
+        if cmd == "agent_model_options" {
+            return match text_arg(args, "agentId") {
+                Some(agent) => self.models(&agent),
+                None => bad("INVALID_ARGUMENT", "agentId is required"),
+            };
+        }
+        if let Some(reply) = super::calls_signin::agent_call(node, cmd, args) {
+            return reply;
+        }
+        let Some(pane) = text_arg(args, "paneId") else { return bad("INVALID_ARGUMENT", "paneId is required") };
+        if let Some(refused) = remote_refusal(&pane) {
+            return refused;
+        }
+        match cmd {
+            "acp_chat_state" => (200, crate::commands::acp_chat::chat_state(&pane)),
+            "acp_chat_set_config" => match (text_arg(args, "optionId"), text_arg(args, "value")) {
+                (Some(option), Some(value)) => self.set_config_as(node, &pane, &option, &value, hold, held),
+                _ => bad("INVALID_ARGUMENT", "optionId and value are required"),
+            },
+            "acp_chat_set_force_yes" => {
+                let Some(on) = super::calls::arg(args, "on").and_then(Value::as_bool) else { return bad("INVALID_ARGUMENT", "on is required") };
+                // Force yes ON lets the agent act without asking: the same press and hold as "Full access".
+                if on && !hold {
+                    return needs_hold_reply();
+                }
+                match crate::commands::acp_chat::chat_set_force_yes(&pane, on) {
+                    Ok(state) => {
+                        audit_call(node, &pane, "Force yes", on && held);
+                        (200, state)
+                    }
+                    Err(text) => command_error(&text),
+                }
+            }
+            _ => super::calls_signin::pane_call(node, cmd, &pane).unwrap_or_else(|| (404, json!({ "error": "not found", "code": "UNKNOWN_ROUTE" }))),
+        }
+    }
+
     fn known_folder(&self, path: &str) -> bool {
         let Some((_, registry)) = link_app_handles() else { return false };
         let id = project_id(path);
@@ -402,6 +454,9 @@ impl Services for AppServices {
     }
 
     fn close(&self, node: &str, session: &str) -> Reply {
+        if let Some(refused) = remote_refusal(session) {
+            return refused;
+        }
         run_after_pclink(node, "DELETE", &format!("/panes/{session}"), &[])
     }
 
@@ -440,10 +495,66 @@ impl Services for AppServices {
     }
 }
 
+impl AppServices {
+    /// `allow`: the asker may do what needs a hold (it held, or it is the person's own PC). `held`: it really held; only that is audited as held.
+    fn set_config_as(&self, node: &str, session: &str, option: &str, value: &str, allow: bool, held: bool) -> Reply {
+        if let Some(refused) = remote_refusal(session) {
+            return refused;
+        }
+        let Some(chat) = crate::acp::chat::get(session) else {
+            return (404, json!({ "code": "UNKNOWN_SESSION", "error": format!("{session} is not a chat session") }));
+        };
+        let options = chat.session().snapshot().config_options;
+        let wants_hold = needs_hold(&options, option, value);
+        if wants_hold && !allow {
+            return needs_hold_reply();
+        }
+        let state = match crate::commands::acp_chat::chat_set_config(session, option, value) {
+            Ok(state) => state,
+            Err(text) => return command_error(&text),
+        };
+        audit_call(node, session, "chat setting", wants_hold && held);
+        (200, state)
+    }
+}
+
+// The two message-box routes' bodies, free of the trait: the far call rows (`calls_chat.rs`) run them without making a `dyn Services`.
+pub(super) fn outbox_list(session: &str) -> Reply {
+    if let Some(refused) = remote_refusal(session) {
+        return refused;
+    }
+    let Some((app, registry)) = link_app_handles() else { return not_ready() };
+    let messages: Vec<_> = crate::pane_outbox::global(&registry, &app).list(session).iter().map(crate::pane_outbox::redacted).collect();
+    (200, json!({ "messages": messages }))
+}
+
+pub(super) fn send_message(node: &str, session: &str, text: &str, full: bool) -> Reply {
+    if let Some(refused) = remote_refusal(session) {
+        return refused;
+    }
+    let Some((app, registry)) = link_app_handles() else { return not_ready() };
+    if !full {
+        if let Some(chat) = crate::acp::chat::get(session) {
+            if message_needs_full(&chat.session().snapshot().config_options, &chat.auto_allowed_kinds()) {
+                return (403, json!({ "error": "This agent is set to act without asking. Messaging it needs Full on this PC.", "code": "MESSAGE_NEEDS_FULL", "needs": "full" }));
+            }
+        }
+    }
+    let from = crate::mobile_pairing::link_device_id(node);
+    match crate::pane_outbox::global(&registry, &app).send_from(session, text, &[], Some(&from)) {
+        Ok(message) => (200, json!({ "message": crate::pane_outbox::redacted(&message) })),
+        Err(error) => {
+            let code = if error == crate::acp::chat::TOOK_BACK_SENTENCE { crate::acp::chat::drive::TOOK_BACK_CODE } else { "MESSAGE_REFUSED" };
+            (if code == "MESSAGE_REFUSED" { 400 } else { 409 }, json!({ "error": error, "code": code }))
+        }
+    }
+}
+
 /// The ONE place that says whether the person has shut an agent for other PCs on this PC (its own "not for remote use" switch).
 /// Sessions, questions and answers all read it here, so they cannot drift. It only shuts; it never caps a level.
-fn remote_ok(pane: &str) -> bool {
-    crate::mobile_pairing::pane_rules::rule(pane).remote
+pub(super) fn remote_ok(pane: &str) -> bool {
+    // A chat on another computer (SSH) is never offered to another PC, whatever the per-agent switch says.
+    !crate::acp::chat::is_remote_pane(pane) && crate::mobile_pairing::pane_rules::rule(pane).remote
 }
 
 /// Whether a message would run with no card at all: a mode that lets the agent act with no questions asked (the same words as the
@@ -486,7 +597,7 @@ fn may_answer(q: &crate::questions::Question) -> bool {
 
 /// A stable opaque id for a folder, so a PC names a project without its path ever leaving this one (FNV-1a over the lowercase,
 /// slash-normalised path). Recomputed from this PC's own list on every call; nothing is stored.
-fn project_id(path: &str) -> String {
+pub(super) fn project_id(path: &str) -> String {
     let normal = path.replace('\\', "/").trim_end_matches('/').to_lowercase();
     project_id_with(&install_key(), &normal)
 }
@@ -570,7 +681,7 @@ pub(crate) fn neutral_sign_ins(rows: &mut [Value]) {
     }
 }
 
-fn resolve_project(projects: &[(String, String, String)], id: &str) -> Option<String> {
+pub(super) fn resolve_project(projects: &[(String, String, String)], id: &str) -> Option<String> {
     projects.iter().find(|(path, _, _)| project_id(path) == id).map(|(path, _, _)| path.clone())
 }
 
@@ -750,5 +861,56 @@ mod tests {
         assert!(ids.contains(&open), "an ordinary agent's question is listed");
         assert!(!ids.contains(&shut), "a locked agent's question is not");
         pane_rules::set("pane-shut-1", PaneRule::default()).unwrap();
+    }
+}
+
+#[cfg(test)]
+mod call_tests {
+    use super::*;
+
+    fn services() -> AppServices {
+        AppServices::new(Arc::new(|| "Desk".into()))
+    }
+
+    #[test]
+    fn force_yes_on_needs_the_press_and_hold_on_the_far_pc_and_turning_it_off_does_not() {
+        let svc = services();
+        let (status, body) = svc.call("aa", "acp_chat_set_force_yes", &json!({ "paneId": "no-such-pane", "on": true }));
+        assert_eq!((status, body["code"].as_str()), (409, Some("NEEDS_HOLD")));
+        // Held (or off): it gets to the chat, which is not there, and says so in the PC link's error shape.
+        // The person's own PC (`_marked`, put there by `handle`) is not asked to hold: it goes through to the chat too.
+        for args in [json!({ "paneId": "no-such-pane", "on": true, "hold": true }), json!({ "paneId": "no-such-pane", "on": true, "_marked": true }), json!({ "paneId": "no-such-pane", "on": false })] {
+            let (status, body) = svc.call("aa", "acp_chat_set_force_yes", &args);
+            assert_eq!((status, body["code"].as_str()), (404, Some("PANE_NOT_FOUND")), "{args}");
+        }
+        assert_eq!(svc.call("aa", "acp_chat_set_force_yes", &json!({ "paneId": "p" })).1["code"], "INVALID_ARGUMENT", "on is required");
+        assert_eq!(svc.call("aa", "acp_chat_state", &json!({ "paneId": "no-such-pane" })), (200, Value::Null));
+        assert_eq!(svc.call("aa", "acp_chat_set_config", &json!({ "paneId": "p", "optionId": "effort" })).1["code"], "INVALID_ARGUMENT");
+        assert_eq!(svc.call("aa", "acp_chat_start", &json!({ "paneId": "p" })).0, 404, "a command that is not a row");
+    }
+
+    #[test]
+    fn the_real_call_path_asks_a_hold_of_an_unmarked_pc_only_for_the_chat_switches() {
+        let svc = services();
+        for (cmd, key) in [("acp_chat_set_auto_allow", "on"), ("acp_chat_set_agent_answering", "allowed")] {
+            let body = |extra: Value| {
+                let mut b = json!({ "paneId": "no-such-pane", "kind": "edit", key: true });
+                b.as_object_mut().unwrap().extend(extra.as_object().unwrap().clone());
+                b
+            };
+            assert_eq!(svc.call("aa", cmd, &body(json!({}))).1["code"], "NEEDS_HOLD", "{cmd}: an unmarked PC that did not hold");
+            // Held, or the person's own PC: past the gate (the rows' implementation is not installed in a unit test, so the table's own 404).
+            for extra in [json!({ "hold": true }), json!({ "_marked": true })] {
+                assert_ne!(svc.call("aa", cmd, &body(extra.clone())).1["code"], "NEEDS_HOLD", "{cmd} {extra}");
+            }
+        }
+    }
+
+    #[test]
+    fn a_command_error_keeps_its_code_and_gets_a_status() {
+        assert_eq!(command_error("BUSY: The agent is working."), (409, json!({ "code": "BUSY", "error": "The agent is working." })));
+        assert_eq!(command_error("INVALID_ARGUMENT: the agent does not offer x").0, 400);
+        assert_eq!(command_error("ACP_CONFIG_FAILED: it broke").0, 502);
+        assert_eq!(command_error("something odd: here"), (400, json!({ "code": "COMMAND_FAILED", "error": "something odd: here" })));
     }
 }

@@ -23,6 +23,8 @@ import { useShowTerminals } from '../../../lib/showTerminals';
 import { NeedTerminalsLine } from '../NeedTerminalsLine';
 import type { ProjectChoice } from '../NewAgentMenu';
 import { gitStateOf, remotePathOf } from '../../../lib/runtime/remoteNewAgent';
+import { useHost } from '../../../lib/host/context';
+import { hostNewAgentSources, useHostAgents } from '../../../lib/host/newAgentSources';
 import { tauriNewAgentApi, type HomeSettings, type NewAgentApi, type WorkflowChoice } from './api';
 import { prettyModel } from '../../crews/modelNames';
 import { openSettingsAt } from '../../../lib/openSettingsAt';
@@ -188,7 +190,8 @@ export interface DevicePicker {
 }
 
 export interface NewAgentPageProps {
-  agents: readonly AgentDescriptor[];
+  /** Absent: the agents of the PC this page is shown on (`useHostAgents`). */
+  agents?: readonly AgentDescriptor[];
   /** Every agent pane, for the Running and Needs you cards. */
   panes: readonly PaneBrief[];
   /** Panes with something waiting on the person. */
@@ -235,8 +238,18 @@ export interface NewAgentPageProps {
 
 type Menu = 'plus' | 'folder' | 'agent' | 'workflow' | null;
 
-export function NewAgentPage({ agents, panes, needs, selectedCwd = null, project = null, runningFolders = [], api = tauriNewAgentApi, addonApi = tauriAcpAddonApi, modelApi = tauriModelOptionsApi, defaultsApi = tauriAgentDefaultsApi, rulesApi = tauriAgentRulesApi, onSignIn, onStart, onOpenPane, onSetUp, continueYesterday, leading = null, remote = null, devices = null, startFolder = null, place = null }: NewAgentPageProps) {
+export function NewAgentPage({ agents: agentsGiven, panes, needs, selectedCwd = null, project = null, runningFolders = [], api: apiGiven, addonApi: addonGiven, modelApi: modelGiven, defaultsApi: defaultsGiven, rulesApi: rulesGiven, onSignIn, onStart, onOpenPane, onSetUp, continueYesterday, leading = null, remote = null, devices = null, startFolder = null, place = null }: NewAgentPageProps) {
   const t = useT();
+  // What this page reads comes from the PC it is shown on (`useHost()`): this PC's own commands, or another PC's far call rows.
+  const host = useHost();
+  const own = useMemo(() => hostNewAgentSources(host), [host]);
+  const hostAgents = useHostAgents(host);
+  const agents = agentsGiven ?? hostAgents;
+  const api = apiGiven ?? own?.api ?? tauriNewAgentApi;
+  const addonApi = addonGiven ?? own?.addonApi ?? tauriAcpAddonApi;
+  const modelApi = modelGiven ?? own?.modelApi ?? tauriModelOptionsApi;
+  const defaultsApi = defaultsGiven ?? own?.defaultsApi ?? tauriAgentDefaultsApi;
+  const rulesApi = rulesGiven ?? own?.rulesApi ?? tauriAgentRulesApi;
   const [prompt, setPrompt] = useState('');
   const [exampleIdx, setExampleIdx] = useState(0);
   const [menu, setMenu] = useState<Menu>(null);
@@ -395,9 +408,9 @@ export function NewAgentPage({ agents, panes, needs, selectedCwd = null, project
   const canChat = chatLane && !lendNoChat && !place;
   // Chat is the default when the agent's chat add-on is in place; otherwise the page starts a terminal.
   const chatAddon = addonFor(addons.byAgent, choice?.agentId);
-  // Chat is the default whenever the agent has one (a missing add-on shows its install card; Terminal stays one click away). With
+  // Another PC's start is always a chat when its agent has one: its terminal is only a plain text screen, so the Chat/Terminal switch is not offered there. With
   // terminals hidden it is the only way.
-  const runAs: RunAs = canChat ? (chatFirst ? 'chat' : (runPick ?? defaultRunAs(lanes, choice?.agentId ?? null))) : 'terminal';
+  const runAs: RunAs = canChat ? (chatFirst || remote ? 'chat' : (runPick ?? defaultRunAs(lanes, choice?.agentId ?? null))) : 'terminal';
   // "Work on a copy": a terminal needs Git; a chat also works on a plain trial copy of a folder without Git.
   const canCopy = runAs === 'chat' ? supportsChatCopy(folder?.state) : copiesOk;
   // Settings > Agents can hide the option (all projects, or one). Hidden means off: a remembered "on" never starts a copy.
@@ -813,7 +826,7 @@ export function NewAgentPage({ agents, panes, needs, selectedCwd = null, project
               </Pop>
               )}
 
-              {chatLane && !chatFirst && (
+              {chatLane && !chatFirst && !remote && (
                 <div className="ck-na-seg" role="radiogroup" aria-label={t('newAgent.runAs')}>
                   {(['terminal', 'chat'] as const).map((mode) => (
                     <button

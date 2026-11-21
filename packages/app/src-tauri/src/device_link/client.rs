@@ -119,8 +119,6 @@ impl Default for Timeouts {
 
 type Changed = Arc<dyn Fn() + Send + Sync>;
 type EventSink = Arc<dyn Fn(&str, &str) + Send + Sync>;
-/// `(node hex, pane id, screen text)`.
-pub type ScreenSink = Arc<dyn Fn(&str, &str, &str) + Send + Sync>;
 
 #[derive(Default)]
 struct Slot {
@@ -144,10 +142,8 @@ pub struct Client {
     p2p: Arc<P2p>,
     slots: Mutex<HashMap<NodeId, Arc<Slot>>>,
     streams: Mutex<HashMap<NodeId, tokio::task::JoinHandle<()>>>,
-    screens: Mutex<HashMap<(NodeId, String), tokio::task::JoinHandle<()>>>,
     changed: Mutex<Option<Changed>>,
     events: Mutex<Option<EventSink>>,
-    screen_sink: Mutex<Option<ScreenSink>>,
     timeouts: Timeouts,
     now: Arc<dyn Fn() -> u64 + Send + Sync>,
     routes: Mutex<Routes>,
@@ -167,10 +163,8 @@ impl Client {
             p2p,
             slots: Mutex::new(HashMap::new()),
             streams: Mutex::new(HashMap::new()),
-            screens: Mutex::new(HashMap::new()),
             changed: Mutex::new(None),
             events: Mutex::new(None),
-            screen_sink: Mutex::new(None),
             timeouts,
             now,
             routes: Mutex::new(Routes::default()),
@@ -186,10 +180,6 @@ impl Client {
 
     pub fn set_event_sink(&self, f: EventSink) {
         *self.events.lock().unwrap_or_else(|p| p.into_inner()) = Some(f);
-    }
-
-    pub fn set_screen_sink(&self, f: ScreenSink) {
-        *self.screen_sink.lock().unwrap_or_else(|p| p.into_inner()) = Some(f);
     }
 
     // ----- the route choice -----
@@ -299,10 +289,6 @@ impl Client {
     /// Forgets a device (removed, or the feature is off): its link is closed and its status is gone.
     pub async fn forget(&self, node: &NodeId) {
         self.stop_events(node);
-        let screens: Vec<(NodeId, String)> = self.screens.lock().unwrap_or_else(|p| p.into_inner()).keys().filter(|(n, _)| n == node).cloned().collect();
-        for (n, pane) in screens {
-            self.stop_screen(&n, &pane);
-        }
         let slot = self.slots.lock().unwrap_or_else(|p| p.into_inner()).remove(node);
         if let Some(slot) = slot {
             if let Some(link) = slot.link.lock().await.take() {
@@ -701,85 +687,6 @@ impl Client {
             }
         }
     }
-
-    // ----- a live terminal -----
-
-    /// Starts a live view of one terminal on the device: the far side pushes its screen text when it changes, and each
-    /// frame goes to the screen sink. A second call for the same pane replaces the first. Ends on its own when the pane
-    /// is gone or this PC may not read it; reconnects with a growing pause while the device is only unreachable.
-    pub fn start_screen(self: &Arc<Self>, node: NodeId, pane: String) {
-        self.stop_screen(&node, &pane);
-        let me = self.clone();
-        let key = (node, pane.clone());
-        let handle = tokio::spawn(async move { me.screen_loop(node, pane).await });
-        self.screens.lock().unwrap_or_else(|p| p.into_inner()).insert(key, handle);
-    }
-
-    pub fn stop_screen(&self, node: &NodeId, pane: &str) {
-        if let Some(h) = self.screens.lock().unwrap_or_else(|p| p.into_inner()).remove(&(*node, pane.to_string())) {
-            h.abort();
-        }
-    }
-
-    async fn screen_loop(self: Arc<Self>, node: NodeId, pane: String) {
-        let mut pause = Duration::from_millis(500);
-        loop {
-            match self.read_screen_once(&node, &pane).await {
-                ScreenEnd::Over => return,
-                ScreenEnd::Delivered => pause = Duration::from_millis(500),
-                ScreenEnd::Lost => pause = (pause * 2).min(Duration::from_secs(15)),
-            }
-            tokio::time::sleep(pause).await;
-        }
-    }
-
-    async fn read_screen_once(self: &Arc<Self>, node: &NodeId, pane: &str) -> ScreenEnd {
-        let Ok(link) = self.link_to(node).await else { return ScreenEnd::Lost };
-        let Ok(mut stream) = link.open_bi().await else { return ScreenEnd::Lost };
-        let target = format!("/pclink/sessions/{pane}/screen");
-        if !wire::screen_target_ok(&target) {
-            return ScreenEnd::Over;
-        }
-        if wire::write_frame(&mut stream.send, &Head::screen(&target), &[]).await.is_err() {
-            return ScreenEnd::Lost;
-        }
-        let mut got = false;
-        loop {
-            let rh: ReplyHead = match wire::read_head(&mut stream.recv).await {
-                Ok(rh) => rh,
-                Err(_) => return if got { ScreenEnd::Delivered } else { ScreenEnd::Lost },
-            };
-            if rh.status == 404 || rh.status == 403 {
-                return ScreenEnd::Over;
-            }
-            if rh.status != 200 {
-                return if got { ScreenEnd::Delivered } else { ScreenEnd::Lost };
-            }
-            let mut buf = vec![0u8; rh.body_len.min(wire::REPLY_MAX as u64) as usize];
-            if stream.recv.read_exact(&mut buf).await.is_err() {
-                return if got { ScreenEnd::Delivered } else { ScreenEnd::Lost };
-            }
-            self.answered(node, &link);
-            if buf.is_empty() {
-                continue; // a heartbeat
-            }
-            let Some(content) = serde_json::from_slice::<Value>(&buf).ok().and_then(|v| v["content"].as_str().map(str::to_string)) else { continue };
-            got = true;
-            let sink = self.screen_sink.lock().unwrap_or_else(|p| p.into_inner()).clone();
-            if let Some(sink) = sink {
-                sink(&node_hex(node), pane, &content);
-            }
-        }
-    }
-}
-
-enum ScreenEnd {
-    /// The pane is gone or not readable: stop.
-    Over,
-    /// It delivered something, then the stream ended: connect again soon.
-    Delivered,
-    /// It never delivered: wait longer before the next try.
-    Lost,
 }
 
 impl From<P2pError> for AskError {

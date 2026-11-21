@@ -25,9 +25,11 @@ export interface EnvironmentProps {
   onOpenCopy?: () => void;
   api?: RemoteApi;
   onPair?: () => void;
+  /** This place cannot answer the Remote control commands yet: the same switch is drawn, off and disabled, with this one reason. */
+  blocked?: string | null;
 }
 
-export function EnvironmentSection({ paneId, cwd, runsOn, branch, copy, onOpenFolder, onOpenCopy, api = tauriRemoteApi, onPair }: EnvironmentProps) {
+export function EnvironmentSection({ paneId, cwd, runsOn, branch, copy, onOpenFolder, onOpenCopy, api = tauriRemoteApi, onPair, blocked = null }: EnvironmentProps) {
   const t = useT();
   const [rule, setRule] = useState<PaneRemote | null>(null);
   const [phones, setPhones] = useState<number | null>(null);
@@ -39,12 +41,17 @@ export function EnvironmentSection({ paneId, cwd, runsOn, branch, copy, onOpenFo
     let live = true;
     setRule(null);
     setPhones(null);
+    if (blocked) {
+      setRule({ remote: false, level: 'full' });
+      setPhones(1);
+      return undefined;
+    }
     void api.get(paneId).then((r) => live && setRule(r)).catch(() => live && setRule({ remote: true, level: 'full' }));
     void api.phones().then((p) => live && setPhones(p.filter((d) => !d.expired).length)).catch(() => live && setPhones(0));
     return () => {
       live = false;
     };
-  }, [api, paneId]);
+  }, [api, paneId, blocked]);
 
   const change = useCallback(
     (next: { remote?: boolean; level?: PaneRemoteLevel }) => {
@@ -114,7 +121,7 @@ export function EnvironmentSection({ paneId, cwd, runsOn, branch, copy, onOpenFo
           <div className="rp-row">
             <span className="rp-k">{t('rail.env.remote')}</span>
             <span className={`rp-v ${remoteOn ? 'is-ok' : 'is-dim'}`}>{remoteOn ? t('rail.env.remoteOn') : t('rail.env.remoteOff')}</span>
-            <button type="button" role="switch" aria-checked={rule.remote} aria-label={t('rail.env.remote')} className="rp-sw" onClick={flip} />
+            <button type="button" role="switch" aria-checked={rule.remote} aria-label={t('rail.env.remote')} className="rp-sw" onClick={flip} disabled={!!blocked} title={blocked ?? undefined} />
           </div>
         )
       )}

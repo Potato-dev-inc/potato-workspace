@@ -37,6 +37,8 @@ export interface SshHost {
   checkedAt: number | null;
   /** The agent CLIs the last check found. */
   agents: { id: string; label: string }[];
+  /** The agents that can CHAT on a machine over SSH (their chat program is started there; this app installs nothing). */
+  chatAgents?: { id: string; label: string }[];
 }
 
 export interface SshParts {
@@ -54,6 +56,8 @@ export interface SshApi {
   remove: (id: string) => Promise<boolean>;
   /** Opens a terminal on a saved machine. `agent` is `shell` or an agent id. Resolves to the pane id. */
   open: (id: string, agent: string, folder?: string) => Promise<string>;
+  /** Starts a CHAT with an agent that runs on a saved machine, in `folder` there. Resolves to the chat's pane id. */
+  chat: (id: string, agent: string, folder: string) => Promise<string>;
 }
 
 const isTauri = (): boolean => typeof window !== 'undefined' && '__TAURI_INTERNALS__' in window;
@@ -78,6 +82,7 @@ export const sshApi: SshApi = {
   checkSaved: (id) => call('ssh_check_saved', { id }),
   remove: (id) => call('ssh_remove', { id }),
   open: (id, agent, folder) => call('ssh_open', { id, agent, folder: folder ?? null }),
+  chat: (id, agent, folder) => call('ssh_chat_start', { id, agent, folder }),
 };
 
 /** Plain words for a failed check. Null when it worked. */

@@ -15,6 +15,7 @@ export const chatMore: Partial<Record<EnglishKey, string>> = {
   'chat.earlier.loading': '正在載入更早的訊息…',
   'chat.earlier.failed': '無法載入更早的訊息。',
   'chat.signin.step1': '你的瀏覽器會打開。',
+  'chat.signin.step1.far': '登入在另一台電腦上進行。請在你的瀏覽器打開下方顯示的連結。',
   'chat.signin.step2': '完成後回到這裡。',
   'chat.signin.start': '登入',
   'chat.signin.starting': '正在啟動…',

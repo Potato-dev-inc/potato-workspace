@@ -28,7 +28,7 @@ use crate::operations::{RunFallback, RunModeNote};
 use serde::{Deserialize, Serialize};
 use serde_json::{json, Value};
 
-pub use agent_model::{agent_default_for, apply_agent_default_model, migrate_legacy_defaults_once, terminal_default_flags};
+pub use agent_model::{agent_default_for, AGENT_DEFAULT_MODELS_KEY, apply_agent_default_model, migrate_legacy_defaults_once, terminal_default_flags};
 pub use helper_model::{apply_helper_model, helper_default_for, HELPER_MODEL_NOTE};
 pub use started_as::{decide as decide_started_as, legacy_kind, parse_asked, StartedAgentKind, StartedAgentTypes, StartedAs, StartedRecord};
 pub use store::{set_started_agent_kind, set_started_agent_types, started_agent_kind, started_agent_types};

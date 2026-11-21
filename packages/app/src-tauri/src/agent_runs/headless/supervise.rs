@@ -203,7 +203,7 @@ impl Supervisor {
             .lock()
             .list()
             .into_iter()
-            .find(|pane| pane.id == pane_id)
+            .find(|pane| pane.id == pane_id && !crate::acp::chat::is_remote_pane(&pane.id))
             .map(|pane| pane.status)
             .unwrap_or_default();
         // The pane shows a usage limit (or is about to be judged to): the limit text is not this

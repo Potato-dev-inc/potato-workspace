@@ -129,6 +129,33 @@
   min-height: 64px;
   padding: 10px 0;
 }
+.cx-row.cx-row-wide {
+  grid-template-columns: minmax(0, 1fr) auto;
+}
+@media (max-width: 720px) {
+  .cx-row.cx-row-wide {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .cx-row.cx-row-wide .cx-act {
+    grid-column: 1;
+    justify-content: flex-start;
+    margin-top: 6px;
+  }
+}
+/* The link-mode row is always one column (text on top, the controls under it): the auto column of the wide row took the full
+   one-line width of the buttons and squeezed the heading to one character per line. */
+.cx-row.cx-row-stack {
+  grid-template-columns: minmax(0, 1fr);
+}
+.cx-row.cx-row-stack .cx-act {
+  grid-column: 1;
+  justify-content: flex-start;
+  margin-top: 6px;
+}
+.cx-route {
+  width: 100%;
+  max-width: 380px;
+}
 .cx-row + .cx-row {
   border-top: 1px solid var(--sep);
 }
@@ -138,7 +165,7 @@
 .cx-name {
   font-weight: 600;
   color: var(--label);
-  overflow-wrap: anywhere;
+  overflow-wrap: break-word;
 }
 .cx-sub {
   color: var(--label-2);
@@ -209,6 +236,26 @@
   border: 2px solid var(--sep);
   border-top-color: var(--label);
   animation: cx-spin 0.8s linear infinite;
+}
+/* Final states: a still icon, never a spinner. */
+.cx-ico {
+  justify-self: center;
+  display: inline-grid;
+  place-items: center;
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  color: #fff;
+}
+.cx-ico.ok {
+  background: #4cc38a;
+}
+.cx-ico.warn {
+  background: #e9b23c;
+  color: #3a2a00;
+}
+.cx-ico.bad {
+  background: #e5484d;
 }
 @keyframes cx-spin {
   to {
@@ -478,4 +525,66 @@
   padding: 8px 0 0;
   max-width: none;
   margin: 0;
+}
+
+.cx-steps,
+.cx-events {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: 4px;
+  font-size: 12px;
+}
+.cx-step {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.cx-events {
+  margin-top: 6px;
+  font-family: ui-monospace, Consolas, monospace;
+  color: var(--text-dim, inherit);
+}
+
+/* Address book setup panel (My domain + Address book) */
+.cx-book {
+  margin: 8px 0 0;
+  padding: 10px 12px;
+  max-width: 520px;
+  background: var(--fill);
+  border-radius: 8px;
+}
+.cx-book-head {
+  font-weight: 600;
+  color: var(--label);
+  overflow-wrap: break-word;
+}
+.cx-book-status {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  margin: 6px 0;
+  color: var(--label);
+  overflow-wrap: anywhere;
+}
+.cx-book-steps {
+  display: grid;
+  gap: 10px;
+  margin: 8px 0;
+  padding: 0;
+  list-style: none;
+}
+.cx-book-step-title {
+  font-weight: 600;
+  color: var(--label);
+}
+.cx-book-hand {
+  margin: 8px 0 2px;
+  font-size: 12.5px;
+  color: var(--label-3);
+}
+.cx-book-actions {
+  justify-content: flex-start;
+  margin-top: 6px;
 }

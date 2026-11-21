@@ -3,8 +3,9 @@
 //   idle = installed or missing but not tested, exited (check) = ready,
 //   waiting_input (plus) = needs you to sign in, error (cross) = problem.
 import { errorSentence } from '../../lib/sayError';
-import { useCallback, useEffect, useRef, useState } from 'react';
-import { agentHealthApi, type AgentHealth, type AgentHealthApi, type HealthState } from '../../lib/agent-health';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useHost } from '../../lib/host/context';
+import { agentHealthApiFor, type AgentHealth, type AgentHealthApi, type HealthState } from '../../lib/agent-health';
 import { agentInstallApi, type AgentInstallApi, type InstallPlan } from '../../lib/agent-install';
 import { CodeText } from '../common/CodeText';
 import { DotSpinner, type DotSpinnerProps } from './DotSpinner';
@@ -145,13 +146,15 @@ export function AgentDoctor({
   onOpenAgent,
   onNotify,
   onClose,
-  api = agentHealthApi,
+  api: givenApi,
   installApi = agentInstallApi,
   onShowPane,
   embedded = false,
   onRows,
   onOpenStore,
 }: AgentDoctorProps) {
+  const host = useHost();
+  const api = useMemo(() => givenApi ?? agentHealthApiFor(host), [givenApi, host]);
   const [rows, setRows] = useState<AgentHealth[] | null>(null);
   const [installs, setInstalls] = useState<Record<string, Install>>(() => keptInstalls);
   const [sheet, setSheet] = useState<{ agentId: string; plan: InstallPlan; busy: boolean; error: string | null } | null>(

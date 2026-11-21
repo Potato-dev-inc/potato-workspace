@@ -57,7 +57,7 @@ const PROVIDER_KEYS: ProviderKeyDef[] = [
     label: 'Anthropic API key',
     name: 'anthropic_api_key',
     placeholder: 'Paste your key',
-    hint: 'Used by agents on Anthropic models.',
+    hint: 'Claude chats use this key instead of your Claude login while it is saved.',
   },
   {
     id: 'key-openai',

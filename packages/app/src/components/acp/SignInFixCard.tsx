@@ -8,6 +8,8 @@
 // moment the sign-in asks a question. The card closes the sign-in when the message goes through, and never sees a credential.
 import { lazy, Suspense, useEffect, useRef, useState, type ReactNode } from 'react';
 import { useT } from '../../i18n';
+import { useHost } from '../../lib/host/context';
+import { onAnotherPc } from '../../lib/host/placeKey';
 import type { ChatSignIn } from '../../lib/chatMore';
 import { errorSentence } from '../../lib/sayError';
 import { requestUsageRefresh } from '../../lib/usage';
@@ -51,12 +53,13 @@ export const SIGNIN_POLL_MS = 6000;
 export const SIGNIN_LOOK_MS = 1500;
 export const SIGNIN_GIVE_UP_MS = 3 * 60_000;
 
-type Step = 'ask' | 'waiting' | 'gaveUp' | 'sent';
+type Step = 'ask' | 'waiting' | 'gaveUp' | 'sent' | 'cannotCheck';
 
 const shorten = (text: string, max = 60): string => (text.length > max ? `${text.slice(0, max - 1).trimEnd()}…` : text);
 
 export function SignInFixCard({ label, hint, kept, other, onOpen, onRetry, onUseOther, signIn, renderTerminal, lookMs = SIGNIN_LOOK_MS, pollMs = SIGNIN_POLL_MS, giveUpMs = SIGNIN_GIVE_UP_MS, plain = false, onSent }: SignInFixCardProps) {
   const t = useT();
+  const host = useHost();
   const [step, setStep] = useState<Step>('ask');
   /** The hidden sign-in pane (without a terminal), its terminal under Details, and what the sign-in is doing. */
   const [hiddenPane, setHiddenPane] = useState<string | null>(null);
@@ -81,6 +84,8 @@ export function SignInFixCard({ label, hint, kept, other, onOpen, onRetry, onUse
     try {
       await retryRef.current();
       sentOnce.current = true;
+      // A "still out" line from an earlier press of Try again is over now.
+      setError(null);
       setStep('sent');
       // The sign-in is back: the Usage bar reads fresh numbers, so its "Sign-in expired" row clears.
       requestUsageRefresh();
@@ -89,7 +94,9 @@ export function SignInFixCard({ label, hint, kept, other, onOpen, onRetry, onUse
       void signInRef.current?.stop().catch(() => undefined);
       setHiddenPane(null);
       return true;
-    } catch {
+    } catch (e) {
+      // This agent shows no sign-in anywhere the app can look: stop promising, say so (the sheet's Close is the way out).
+      if ((e as { name?: string })?.name === 'SignInCannotCheck') setStep('cannotCheck');
       return false;
     } finally {
       trying.current = false;
@@ -165,9 +172,13 @@ export function SignInFixCard({ label, hint, kept, other, onOpen, onRetry, onUse
       setBusy(false);
     }
   };
+  // "Try again" after the waiting ran out: look once more; when the sign-in is still not done, keep waiting for another round
+  // (the hidden sign-in is still open) and say so. It never says "signed in" without a real sign.
   const sendNow = async () => {
     setError(null);
-    if (!(await tryOnce())) setError(t('flow.signin.stillOut', { agent: label }));
+    if (await tryOnce()) return;
+    setError(t('flow.signin.stillOut', { agent: label }));
+    setStep((s) => (s === 'gaveUp' ? 'waiting' : s));
   };
   const useOther = async () => {
     if (!other) return;
@@ -192,7 +203,7 @@ export function SignInFixCard({ label, hint, kept, other, onOpen, onRetry, onUse
         </p>
         {signIn && step === 'ask' && (
           <ol className="ck-acp-card-steps" data-testid="signin-steps">
-            <li>{t('chat.signin.step1')}</li>
+            <li>{t(onAnotherPc(host.place) ? 'chat.signin.step1.far' : 'chat.signin.step1')}</li>
             <li>{t('chat.signin.step2')}</li>
           </ol>
         )}
@@ -211,12 +222,18 @@ export function SignInFixCard({ label, hint, kept, other, onOpen, onRetry, onUse
             className="ck-acp-card-details"
             data-testid="signin-details"
             open={detailsOpen}
-            onToggle={(event) => setDetailsOpen((event.currentTarget as HTMLDetailsElement).open)}
+            onToggle={(event) => {
+              const details = event.currentTarget as HTMLDetailsElement;
+              setDetailsOpen(details.open);
+              // The terminal is taller than the room under the text: bring all of it into view (the sheet scrolls).
+              if (details.open) window.requestAnimationFrame(() => details.scrollIntoView?.({ block: 'nearest' }));
+            }}
           >
             <summary>{t('chat.signin.details')}</summary>
             {detailsOpen && (renderTerminal ? renderTerminal(hiddenPane) : <Suspense fallback={null}><SignInTerminal paneId={hiddenPane} label={t('chat.signin.details')} /></Suspense>)}
           </details>
         )}
+        {step === 'cannotCheck' && <p className="ck-acp-card-line" data-testid="signin-cannot-check">{t('signin.again.cannotCheck', { agent: label })}</p>}
         {step === 'gaveUp' && <p className="ck-acp-card-line">{plain ? t('signin.again.gaveUp') : t('flow.signin.gaveUp')}</p>}
         {error && (
           <p className="ck-acp-card-line is-error" role="alert">
@@ -224,7 +241,7 @@ export function SignInFixCard({ label, hint, kept, other, onOpen, onRetry, onUse
           </p>
         )}
       </div>
-      {step !== 'sent' && (
+      {step !== 'sent' && step !== 'cannotCheck' && (
         <div className="ck-acp-card-actions">
           {step === 'gaveUp' ? (
             <button type="button" className="ck-btn" onClick={() => void sendNow()}>

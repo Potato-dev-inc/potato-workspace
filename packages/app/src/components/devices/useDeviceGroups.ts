@@ -4,6 +4,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { devicesApi, remoteId, type Device, type DevicesApi, type DevicesView } from '../../lib/devices';
 import { makeRemoteClient, subscribeRemote } from '../../lib/runtime/remote';
 import { pollWithBackoff } from '../../lib/runtime/pollWithBackoff';
+import { deviceLocation, type ProjectLocation } from '../../lib/projectLocation';
 import { useDevices } from './useDevices';
 
 /** How often each online device's pane list is read again when no event came. */
@@ -26,10 +27,20 @@ export interface RemoteRow {
   chat: boolean;
   /** The pane that started this one (a minion or a helper sits under it, like on this PC), if the far PC says. */
   parent?: string;
+  /** `minion` | `spin_off`, as this PC's own panes carry it. */
+  startedAs?: 'minion' | 'spin_off';
+  /** A standby's own chat: not an agent row (hidden here as on its own PC). */
+  standby?: boolean;
+  /** It works on a separate copy of its project. */
+  copy?: boolean;
+  /** The workflow mark the far PC gives this chat (its own, not a mark of this PC's browser storage). */
+  workflow?: PcSession['workflow'];
   /** What the far PC says about the chat (a newer far PC only): its git branch name, model name and permission mode. */
   branch?: string;
   model?: string;
   mode?: PcMode;
+  /** Where this row lives: that device. */
+  location: ProjectLocation;
 }
 
 export interface DeviceGroup {
@@ -47,19 +58,28 @@ export interface DeviceGroups {
 
 const clip = (s: unknown, max: number): string => (typeof s === 'string' ? s.slice(0, max) : '');
 
-export function rowOf(node: string, p: PcSession): RemoteRow {
+/** The session that started this one: `helper_of` (a newer far PC), else `parent`. */
+const parentOf = (p: PcSession): string => clip(p.helper_of ?? p.parent, 200);
+
+export function rowOf(node: string, p: PcSession, name = ''): RemoteRow {
   // A device only serves its own local sessions: an id that already names a device is never listed.
   return {
     key: remoteId(node, p.id),
     node,
     paneId: p.id,
-    title: clip(p.title, 80) || clip(p.agent, 40),
+    // No title: the row is called by its agent's name, numbered like the rows of that PC (`paneNames`), never by the raw agent id.
+    title: clip(p.title, 80),
     agent: clip(p.agent, 40),
     status: p.status as PaneInfo['status'],
     cwd: clip(p.folder, 120),
     project: clip(p.project, 40),
-    chat: p.chat === true,
-    ...(typeof p.parent === 'string' && p.parent ? { parent: p.parent.slice(0, 200) } : {}),
+    chat: p.chat === true || p.lane === 'acp',
+    location: deviceLocation(node, name),
+    ...(parentOf(p) ? { parent: parentOf(p) } : {}),
+    ...(p.started_as === 'minion' || p.started_as === 'spin_off' ? { startedAs: p.started_as } : {}),
+    ...(p.standby === true ? { standby: true } : {}),
+    ...(p.copy === true ? { copy: true } : {}),
+    ...(p.workflow && typeof p.workflow.slug === 'string' ? { workflow: { slug: clip(p.workflow.slug, 80), role: clip(p.workflow.role, 80), front: p.workflow.front === true, ...(clip(p.workflow.name, 80) ? { name: clip(p.workflow.name, 80) } : {}) } } : {}),
     ...(pcNameOf(p.branch) ? { branch: pcNameOf(p.branch) } : {}),
     ...(pcNameOf(p.model) ? { model: pcNameOf(p.model) } : {}),
     ...(pcModeOf(p.mode) ? { mode: pcModeOf(p.mode) } : {}),
@@ -118,7 +138,7 @@ export function useDeviceGroups(api: DevicesApi = devicesApi): DeviceGroups {
   const groups = useMemo<DeviceGroup[]>(() => {
     if (!enabled || !view) return [];
     return view.devices
-      .map((device) => ({ device, rows: rows[device.node] ?? [] }))
+      .map((device) => ({ device, rows: (rows[device.node] ?? []).map((r) => ({ ...r, location: deviceLocation(device.node, device.name) })) }))
       .filter((g) => g.rows.length > 0 || g.device.state === 'not_allowed' || g.device.needs_person.length > 0);
   }, [enabled, view, rows]);
 

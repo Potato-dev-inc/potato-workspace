@@ -3,7 +3,7 @@ import { errorSentence } from '../../lib/sayError';
 import { useT } from '../../i18n';
 import { useCallback, useEffect, useState } from 'react';
 import { tauri } from '../../lib/tauri';
-import type { TunnelConfigInput, TunnelConnectionTest, TunnelStatus } from '../../lib/tauri-types';
+import type { DomainBookFiles, TunnelConfigInput, TunnelConnectionTest, TunnelStatus } from '../../lib/tauri-types';
 import { FieldInput, FieldLabel } from './settings-ui';
 import { SecretValue } from './SecretValue';
 import {
@@ -26,6 +26,14 @@ export interface TunnelApi {
   forget?: () => Promise<TunnelStatus>;
   /** "Temporary link" (true) or "Permanent link" (false). */
   setTemporary?: (on: boolean) => Promise<TunnelStatus>;
+  /** Choose the permanent, temporary or own-domain link. A typed domain stays saved whichever is chosen. */
+  setLinkMode?: (mode: 'permanent' | 'temporary' | 'domain', domain?: string | null, route?: 'book' | 'direct' | null) => Promise<TunnelStatus>;
+  /** The port the phone server on this PC asks for first (null = automatic). Takes effect after a restart. */
+  setPhonePort?: (port: number | null) => Promise<TunnelStatus>;
+  /** "Check": does this address really reach this PC? */
+  checkDomain?: (address: string) => Promise<TunnelConnectionTest>;
+  /** "My domain" + Address book: the Worker files to copy onto the person's own Cloudflare. */
+  domainBookFiles?: (domain: string) => Promise<DomainBookFiles>;
 }
 
 const defaultApi: TunnelApi = {
@@ -35,6 +43,10 @@ const defaultApi: TunnelApi = {
   test: () => tauri.testTunnelConnection(),
   forget: () => tauri.forgetOpenTunnelAddress(),
   setTemporary: (on) => tauri.setLinkTemporary(on),
+  setLinkMode: (mode, domain, route) => tauri.setLinkMode(mode, domain, route),
+  setPhonePort: (port) => tauri.setPhonePort(port),
+  checkDomain: (address) => tauri.checkOwnDomain(address),
+  domainBookFiles: (domain) => tauri.domainBookFiles(domain),
 };
 
 const DOT: Record<string, string> = {
@@ -169,7 +181,7 @@ export function TunnelSection({ api = defaultApi, openTunnelOn = false }: { api?
       if (!storedWorker) return;
       const next = await api.save({ mode: 'stable', worker_url: storedWorker, secret_action: kind, ...(confirmStrand ? { confirm_strand: true } : {}) });
       setStatus(next);
-      setStrand(next.secret_not_reset && ['rejected', 'too_old', 'unreachable'].includes(next.secret_not_reset) ? next.secret_not_reset : next.secret_not_reset ? 'unreachable' : null);
+      setStrand(next.secret_not_reset && ['rejected', 'too_old', 'unreachable', 'update_app', 'too_many'].includes(next.secret_not_reset) ? next.secret_not_reset : next.secret_not_reset ? 'unreachable' : null);
       setRevealed(next.secret_once ?? null);
     });
   useEffect(() => {
@@ -396,11 +408,13 @@ export function TunnelSection({ api = defaultApi, openTunnelOn = false }: { api?
               {strand && (
                 <div className="mt-3 rounded-lg border border-pm-border bg-pm-bg p-3" data-testid="strand-warning" role="alert">
                   <p className="text-xs font-semibold">{t('tunnel.strand.title')}</p>
-                  <p className="mt-1 text-xs text-pm-muted">{strand === 'rejected' ? t('tunnel.strand.rejected') : strand === 'too_old' ? t('tunnel.strand.too_old') : t('tunnel.strand.unreachable')}</p>
+                  <p className="mt-1 text-xs text-pm-muted">{strand === 'rejected' ? t('tunnel.strand.rejected') : strand === 'too_old' ? t('tunnel.strand.too_old') : strand === 'update_app' ? t('tunnel.strand.update_app') : strand === 'too_many' ? t('tunnel.strand.too_many') : t('tunnel.strand.unreachable')}</p>
                   <div className="mt-2 flex flex-wrap gap-2">
-                    <button type="button" className={buttonClass} data-testid="strand-go" disabled={busy !== null} onClick={() => secretAction('regenerate', true)}>
-                      {t('tunnel.strand.go')}
-                    </button>
+                    {strand !== 'update_app' && strand !== 'too_many' && (
+                      <button type="button" className={buttonClass} data-testid="strand-go" disabled={busy !== null} onClick={() => secretAction('regenerate', true)}>
+                        {t('tunnel.strand.go')}
+                      </button>
+                    )}
                     <button type="button" className={buttonClass} data-testid="strand-keep" onClick={() => setStrand(null)}>
                       {t('tunnel.strand.keep')}
                     </button>

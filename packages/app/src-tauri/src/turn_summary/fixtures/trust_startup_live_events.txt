@@ -2,7 +2,7 @@
 # one real task (Create a file named note.txt ... then reply done). Times are ms since the pane was created.
 # pane-status = the SSE event; answer = the trust choice POST returned (turn_summary::record_answer runs right after);
 # dispatched = the run typed the task (turn_summary::note_dispatched, just before the pane-status running it causes).
-# Source: D:/pm-night/r12/evidence/cap1-sse.jsonl and the cap3.mjs log. Note: NO pane-status running event for the pane starting.
+# Source: night-shift-folder/r12/evidence/cap1-sse.jsonl and the cap3.mjs log. Note: NO pane-status running event for the pane starting.
 1478 pane-status waiting_input
 210856 answer workspace_trust trust
 210926 pane-status running

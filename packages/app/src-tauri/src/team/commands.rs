@@ -43,6 +43,18 @@ pub async fn team_share_set(level: super::presence::ShareLevel, exclude: Vec<Str
     blocking(move || service::share_set(level, exclude)).await
 }
 
+/// "Try again" on the Team link line: connect again (and, for the owner, set the team up again on a relay that forgot it).
+#[tauri::command]
+pub async fn team_reconnect() -> Result<Value, String> {
+    blocking(service::reconnect).await
+}
+
+/// "Move this team to <relay>" on the Team link line (admin only; the new address is checked first).
+#[tauri::command]
+pub async fn team_move_relay(relay: String) -> Result<Value, String> {
+    blocking(move || service::move_relay(&relay)).await
+}
+
 #[tauri::command]
 pub async fn team_config_get() -> Result<Value, String> {
     blocking(service::config_get).await

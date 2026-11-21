@@ -33,6 +33,10 @@ export interface Device {
   /** What THIS PC lets that device do: the switch and the level. Off after pairing. */
   lets_run: boolean;
   level: DeviceLevel;
+  /** Paired through the account: Full was its default (it may have been lowered since; `level` says what it is now). */
+  account_default?: boolean;
+  /** Paired through the account before that default existed, and the person has not answered "Keep / Lower" yet. */
+  account_card?: boolean;
   /** That device runs an older Potato Workspace: it cannot connect until it is updated. */
   too_old: boolean;
   /** THIS PC lets that device open this PC's shared folders. Off after pairing. */
@@ -135,6 +139,8 @@ export interface DevicesView {
   message: string | null;
   locked_until: number | null;
   tampered: boolean;
+  /** The list was whole but made with another key (this PC's key was reset). */
+  key_changed?: boolean;
   devices: Device[];
   /** Files moving to or from a device, newest first. */
   transfers: Transfer[];
@@ -193,12 +199,6 @@ export interface DeviceEvent {
   frame: string;
 }
 
-export interface ScreenFrame {
-  node: string;
-  pane_id: string;
-  content: string;
-}
-
 /** A card on THIS PC: another PC asks to work on it ("Can work on this PC"). Nothing is granted until the person here says yes. */
 export interface FullAsk {
   id: string;
@@ -235,10 +235,6 @@ export interface DevicesApi {
   setDeviceRoute: (node: string, pref: RoutePref | null) => Promise<DevicesView>;
   /** Turns that device's "run agents here" switch off and closes its link now. */
   disconnect: (node: string) => Promise<DevicesView>;
-  /** The live screen of a far terminal: frames arrive as `onScreen` events, the first one right after start. */
-  screenStart: (node: string, paneId: string) => Promise<void>;
-  screenStop: (node: string, paneId: string) => Promise<void>;
-  onScreen: (cb: (e: ScreenFrame) => void) => Promise<UnlistenFn>;
   /** THIS PC lets that device open its shared folders (or not). */
   setFiles: (node: string, on: boolean) => Promise<DevicesView>;
   /** The folders THIS PC shares with that device. `setFilesFolders` replaces the chosen list. */
@@ -259,6 +255,8 @@ export interface DevicesApi {
   /** The person tapped Allow (turns "Can work on this PC" on for that PC) or Not now (changes nothing). */
   answerFullAsk: (id: string, allow: boolean) => Promise<DevicesView>;
   onFullAsk: (cb: (ask: FullAsk) => void) => Promise<UnlistenFn>;
+  /** The one-time card on a PC already paired through the account: Keep (Full, the default) or Lower (nothing raised). */
+  answerAccountDefault: (node: string, keep: boolean) => Promise<DevicesView>;
   /** Runs one `/pclink/` route on the far device through the PC link. The far device enforces the level it gave this PC. */
   request: (node: string, method: string, path: string, body?: unknown) => Promise<RequestResult>;
   subscribe: (node: string) => Promise<void>;
@@ -294,9 +292,6 @@ export const devicesApi: DevicesApi = {
   setLend: (node, on) => call('devices_set_lend', { node, on }),
   setDeviceRoute: (node, pref) => call('devices_set_device_route', { node, pref }),
   disconnect: (node) => call('devices_disconnect', { node }),
-  screenStart: (node, paneId) => call('devices_screen_start', { node, pane_id: paneId }),
-  screenStop: (node, paneId) => call('devices_screen_stop', { node, pane_id: paneId }),
-  onScreen: (cb) => (isTauri() ? listen<ScreenFrame>('device://screen', (e) => cb(e.payload)) : Promise.resolve(noop)),
   setFiles: (node, on) => call('devices_set_files', { node, on }),
   filesFolders: (node) => call('devices_files_folders', { node }),
   setFilesFolders: (node, folders) => call('devices_files_set_folders', { node, folders }),
@@ -309,6 +304,7 @@ export const devicesApi: DevicesApi = {
   transfersClear: () => call('devices_transfers_clear'),
   fullAsks: () => call('devices_full_asks'),
   answerFullAsk: (id, allow) => call('devices_full_ask_answer', { id, allow }),
+  answerAccountDefault: (node, keep) => call('devices_account_default_answer', { node, keep }),
   onFullAsk: (cb) => (isTauri() ? listen<FullAsk>('devices://full-ask', (e) => cb(e.payload)) : Promise.resolve(noop)),
   request: (node, method, path, body) => call('devices_request', { node, method, path, ...(body === undefined ? {} : { body }) }),
   subscribe: (node) => call('devices_subscribe', { node }),

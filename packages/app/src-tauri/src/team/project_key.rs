@@ -126,14 +126,14 @@ mod tests {
 
     #[test]
     fn local_paths_normalise() {
-        let a = normalize_remote(r"D:\pm-team-demo\origin.git").unwrap();
-        let b = normalize_remote("D:/pm-team-demo/origin.git").unwrap();
+        let a = normalize_remote(r"D:\team-demo\origin.git").unwrap();
+        let b = normalize_remote("D:/team-demo/origin.git").unwrap();
         assert_eq!(a, b);
         assert!(a.starts_with("file:"));
         if cfg!(windows) {
-            assert_eq!(a, "file:d:/pm-team-demo/origin");
-            assert_eq!(normalize_remote("file:///D:/pm-team-demo/origin.git").unwrap(), a);
-            assert_eq!(normalize_remote("/d/pm-team-demo/origin.git").unwrap(), a);
+            assert_eq!(a, "file:d:/team-demo/origin");
+            assert_eq!(normalize_remote("file:///D:/team-demo/origin.git").unwrap(), a);
+            assert_eq!(normalize_remote("/d/team-demo/origin.git").unwrap(), a);
         }
         assert_eq!(display_name(&a), "origin");
         assert_eq!(display_name("github.com/acme/billing-service"), "billing-service");

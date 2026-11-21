@@ -218,7 +218,8 @@ fn assign_pane(
             pane_assignment_guard = PANE_ASSIGNMENT_SERIAL.lock();
         }
     }
-    let existing_panes = registry.lock().list();
+    // A chat on another computer is never picked to adopt for a task.
+    let existing_panes = crate::acp::chat::external_panes(registry);
     // A first-turn run with no explicit pane must not inherit a pane an earlier run
     // used: its terminal still holds that task's conversation. Panes the user opened
     // themselves stay adoptable.

@@ -1,20 +1,18 @@
-// The data sources of the normal New agent page, answered by another PC. `NewAgentPage` takes its data as parameters (`api`,
-// `modelApi`, `defaultsApi`, `rulesApi`, `addonApi`, `agents`, `onStart`); this file builds those from the far PC's own answers
-// (`GET /pclink/agents` and `/pclink/projects`, the model list, `POST /pclink/agents/start`, the chat settings route, the message
-// route) over the PC link client of `lib/runtime/pclink.ts`. So the page is the same page on every PC: only where its answers come from changes.
+// Start and warm-up of the normal New agent page, answered by another PC. What the page READS from that PC (agents, lanes, folders,
+// models, default models, pins) now comes through its host (`lib/host/newAgentSources.ts`, the far call rows of `pclink/calls.rs`). What
+// is left here is what only the far side can do: start an agent (`POST /pclink/agents/start`), warm it up, and say whether the far PC
+// shows terminals.
 //
-// A remote project is an opaque id on the far PC (its path never travels). The page needs a "folder", so the adapter gives each
-// project the pseudo path `remote:<id>` and maps it back to the id when the agent starts.
+// A remote project is an opaque handle on the far PC (its path never travels). The page needs a "folder", so each far project is
+// `remote:<id>` (the far PC's `project_recent` says so) and the handle is mapped back to the id when the agent starts.
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { t } from '../../i18n';
-import type { AgentDescriptor } from '../agentRegistry';
-import type { AcpAddonApi } from '../acpAddon';
-import type { AgentRulesApi, EffectivePins } from '../agentRules';
 import { PcLinkError, type PcLinkClient, type PcNewAgentOptions } from './pclink';
-import { optionsFromWire, type AgentDefaultsApi, type ModelOptionsApi } from '../modelOptions';
-import type { GitState, RecentProject } from '../ship-api';
-import type { NewAgentApi } from '../../components/cockpit/newagent/api';
-import type { LaneView, StartRequest } from '../../components/cockpit/newagent/model';
+import type { GitState } from '../ship-api';
+import type { StartRequest } from '../../components/cockpit/newagent/model';
+
+/** The plain shells ("New terminal"): never an agent, so never a chat or a first message. */
+const SHELLS = ['cmd', 'powershell', 'bash'];
 
 export const REMOTE_PROJECT_PREFIX = 'remote:';
 
@@ -25,48 +23,12 @@ export const remoteProjectId = (path: string | undefined): string | null => (pat
 const GIT_STATES: readonly GitState[] = ['repo', 'no_commits', 'folder', 'missing'];
 export const gitStateOf = (state: string): GitState => (GIT_STATES.includes(state as GitState) ? (state as GitState) : 'folder');
 
-/** The far PC's agents as the registry rows the page draws. Nothing here names an agent. */
-export function remoteAgents(options: PcNewAgentOptions): AgentDescriptor[] {
-  return options.agents.map((a) => ({
-    id: a.id,
-    label: a.label,
-    icon: null,
-    kind: 'agent',
-    source: 'remote',
-    experimental: false,
-    dispatchable: true,
-    not_dispatchable_reason: null,
-    installed: true,
-    install_hint: null,
-    modes: { headless: false, visible: true },
-    features: { read_only_headless: false, read_only_spawned_pane: false, resumable_headless: false },
-    run_options: { trust_workspace: false, allow_shell: false, shell_default_on: false, allowed_commands: false },
-    standby: { visible: false, headless: false, experimental: false },
-    definition: null,
-  }));
-}
-
-/** The far PC's known projects as the page's recent list: first is newest. */
-export function remoteRecents(options: PcNewAgentOptions): RecentProject[] {
-  return options.projects
-    .filter((p) => gitStateOf(p.state) !== 'missing')
-    .map((p, i, all) => ({ path: remotePathOf(p.id), name: p.name, state: gitStateOf(p.state), last_used_ms: all.length - i }));
-}
-
-const NO_PINS: EffectivePins = { model: null, mode: null, force_yes: false, force_yes_source: null, notes: null, fences: [] };
-
 /** What the page reads and writes while another PC is picked. */
 export interface RemoteNewAgent {
   node: string;
   deviceName: string;
   /** The far PC's "Show terminals" setting (an older PC that does not say allows them). */
   terminals: boolean;
-  agents: AgentDescriptor[];
-  api: NewAgentApi;
-  modelApi: ModelOptionsApi;
-  defaultsApi: AgentDefaultsApi;
-  rulesApi: Pick<AgentRulesApi, 'effective'>;
-  addonApi: AcpAddonApi;
   onStart: (request: StartRequest) => Promise<string>;
   /** Warms the far chat program for this agent and folder (the phone does the same once both are picked). */
   warm: (agentId: string, folder: string) => void;
@@ -84,32 +46,9 @@ export interface RemoteDeps {
   notify?: (text: string) => void;
 }
 
-/** The sources for one loaded far PC. Pure: tests build it from a fake client. */
+/** Start, warm-up and the terminals flag for one loaded far PC. Pure: tests build it from a fake client. */
 export function buildRemoteNewAgent(options: PcNewAgentOptions, deps: RemoteDeps): RemoteNewAgent {
   const { client } = deps;
-  const recents = remoteRecents(options);
-  const optionIds = new Map<string, string>();
-  const lanes: LaneView = { labsEnabled: true, agents: options.agents.map((a) => ({ id: a.id, lane: a.chat ? ('acp' as const) : ('terminal' as const), disabled: false })) };
-  const api: NewAgentApi = {
-    recent: async () => recents,
-    pickFolder: async () => null,
-    pickPaths: async () => [],
-    defaultFolder: async () => null,
-    gitState: async (path) => recents.find((p) => p.path === path)?.state ?? 'folder',
-    lanes: async () => lanes,
-    accounts: async () => [],
-    loadHome: async () => ({ name: '', cards: [] }),
-    saveCards: async () => undefined,
-    onHomeChanged: async () => () => undefined,
-  };
-  const modelApi: ModelOptionsApi = {
-    get: async (agentId) => {
-      const wire = await client.modelOptions(agentId);
-      const id = (wire as { live?: { id?: unknown } } | null)?.live?.id;
-      if (typeof id === 'string' && id) optionIds.set(agentId, id);else optionIds.delete(agentId);
-      return optionsFromWire(wire as Parameters<typeof optionsFromWire>[0]);
-    },
-  };
   const name = deps.deviceName;
   // A chat that started but whose first message did not go: pressing Start again sends the message to it, not to a second chat.
   let started: { key: string; paneId: string } | null = null;
@@ -117,6 +56,19 @@ export function buildRemoteNewAgent(options: PcNewAgentOptions, deps: RemoteDeps
     if (!deps.canControl()) throw new Error(t('newAgent.remote.watchOnly', { name }));
     const project = remoteProjectId(req.folder);
     if (!project) throw new Error(t('newAgent.remote.noAnswer', { name }));
+    // A plain shell is "New terminal": the far PC's own login shell, by the terminal call (its cap and audit apply there).
+    if (SHELLS.includes(req.agentId)) {
+      let shell: string;
+      try {
+        shell = await client.call<string>('spawn_pane', { args: { agent_type: 'shell', cwd: project } });
+      } catch (error) {
+        if (error instanceof PcLinkError && error.status === 403) throw new Error(t('newAgent.remote.watchOnly', { name }));
+        const why = error instanceof PcLinkError ? error.said : null;
+        throw new Error(why ? t('newAgent.remote.refused', { name, why }) : t('newAgent.remote.noAnswer', { name }));
+      }
+      deps.onStarted(shell, false);
+      return shell;
+    }
     const key = `${req.agentId}|${project}|${req.runAs}`;
     let paneId: string;
     if (started && started.key === key) paneId = started.paneId;
@@ -130,17 +82,17 @@ export function buildRemoteNewAgent(options: PcNewAgentOptions, deps: RemoteDeps
         throw new Error(why ? t('newAgent.remote.refused', { name, why }) : t('newAgent.remote.noAnswer', { name }));
       }
       started = { key, paneId };
-      // The model goes in before the first message, by the far chat's own setting name (known only when its list loaded).
+      // The model goes in before the first message, by the far chat's own setting name (read from its model list).
       if (req.model && req.runAs === 'chat') {
-        const optionId = optionIds.get(req.agentId);
         let ok = false;
-        if (optionId) {
-          try {
-            await client.setConfig(paneId, optionId, req.model);
+        try {
+          const live = ((await client.modelOptions(req.agentId)) as { live?: { id?: unknown } } | null)?.live?.id;
+          if (typeof live === 'string' && live) {
+            await client.setConfig(paneId, live, req.model);
             ok = true;
-          } catch {
-            /* told below */
           }
+        } catch {
+          /* told below */
         }
         if (!ok) deps.notify?.(t('chatFirst.modelNotSet', { model: req.model }));
       }
@@ -163,21 +115,6 @@ export function buildRemoteNewAgent(options: PcNewAgentOptions, deps: RemoteDeps
     node: deps.node,
     deviceName: deps.deviceName,
     terminals: options.terminals !== false,
-    agents: remoteAgents(options),
-    api,
-    modelApi,
-    defaultsApi: { get: async () => ({}) },
-    rulesApi: { effective: async () => NO_PINS },
-    addonApi: {
-      list: async () => ({ labsEnabled: false, addons: [] }),
-      install: async () => {
-        throw new Error('not here');
-      },
-      remove: async () => {
-        throw new Error('not here');
-      },
-      watch: async () => () => undefined,
-    },
     onStart,
     warm,
   };
@@ -186,8 +123,8 @@ export function buildRemoteNewAgent(options: PcNewAgentOptions, deps: RemoteDeps
 export type RemoteStatus = 'loading' | 'failed' | 'ready';
 
 /**
- * Reads the far PC's agents and projects once (and again on `retry`), and builds the page's sources from them. While it loads, or
- * when it failed, the sources are empty ones (so the page never reaches for this PC's own data), and `status` says which.
+ * Reads the far PC's start-up facts once (and again on `retry`) and builds Start and warm-up from them. While it loads, or when it
+ * failed, Start is the stub's, and `status` says which.
  */
 export function useRemoteNewAgent(deps: RemoteDeps | null): { remote: RemoteNewAgent | null; status: RemoteStatus; retry: () => void } {
   const [state, setState] = useState<{ node: string | null; status: RemoteStatus; remote: RemoteNewAgent | null }>({ node: null, status: 'loading', remote: null });

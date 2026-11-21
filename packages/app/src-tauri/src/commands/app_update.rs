@@ -152,7 +152,7 @@ pub fn working_split<'a>(panes: impl IntoIterator<Item = (&'a str, &'a str, bool
 fn busy_now(app: &AppHandle) -> UpdateBusy {
     match app.try_state::<AppState>() {
         Some(state) => {
-            let panes = state.registry.lock().list();
+            let panes = state.registry.lock().list_including_remote();
             working_split(panes.iter().map(|p| (p.agent_type.as_str(), p.status.as_str(), p.lane.as_deref() == Some("acp"))))
         }
         None => UpdateBusy { agents: Vec::new(), chats: Vec::new(), terminals: Vec::new() },

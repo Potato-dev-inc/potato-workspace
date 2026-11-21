@@ -50,6 +50,8 @@ struct TunnelState {
     mode: &'static str,
     /// `stable` mode only: the Worker and where this computer is registered on it.
     stable: Option<StableInfo>,
+    /// "My domain" + Address book: where this PC stands with the person's own Worker (separate from `stable`, which is the Permanent link).
+    book: Option<BookInfo>,
     phase: Phase,
     last_error: Option<String>,
     /// Bumped on every (re)launch so a dead tunnel's log readers cannot overwrite the new state.
@@ -58,6 +60,160 @@ struct TunnelState {
     problem: Option<&'static str>,
     /// Failed quick-tunnel starts and when cloudflared was last started: no tight restart loops.
     backoff: limits::Backoff,
+    /// What the app is really doing right now, and since when (the screen shows it with a counter).
+    step: Option<StepMark>,
+    /// The last few real things that happened, oldest first (capped; closed codes only, so nothing secret can be in them).
+    events: std::collections::VecDeque<EventView>,
+}
+
+/// How many events the Details list keeps.
+const EVENT_CAP: usize = 8;
+
+/// One thing that really happened. `code` is from a closed list (the screen has the words); `host` is only ever a bare host name
+/// (a trycloudflare or workers.dev name), never a path, a query or a token.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+pub struct EventView {
+    pub at_ms: u64,
+    /// phone_server_up | tunnel_started | tunnel_stopped | tunnel_off | address | relay_linked | relay_failed | outside_ok | outside_failed
+    pub code: &'static str,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub host: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub reason: Option<&'static str>,
+}
+
+/// Only a bare host name survives: scheme, path, query and anything that is not a host character are dropped.
+fn clean_host(raw: &str) -> Option<String> {
+    let rest = raw.split_once("://").map_or(raw, |(_, r)| r);
+    let host: String = rest.split(['/', '?', '#', '@']).next().unwrap_or("").chars().take_while(|c| c.is_ascii_alphanumeric() || *c == '.' || *c == '-' || *c == ':').collect();
+    (host.contains('.') && host.len() <= 100).then_some(host.to_ascii_lowercase())
+}
+
+/// One real step of bringing the phone address up (`TunnelStatus::step` carries it to the screen).
+#[derive(Debug, Clone, Copy)]
+struct StepMark {
+    code: &'static str,
+    since: std::time::Instant,
+}
+
+/// What the screen reads: the step code, how long it has lasted, and (while telling the relay) which try and when the next one is.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+pub struct StepView {
+    /// starting_phone_server | starting_tunnel | waiting_for_address | address_ready | registering | checking_outside | connected | not_reached
+    pub code: &'static str,
+    pub elapsed_secs: u64,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub retry: Option<u32>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub next_in_secs: Option<u64>,
+}
+
+/// Pure so the counter rules are a unit test.
+fn step_view(mark: StepMark, now: std::time::Instant, tries: u32, next_try: Option<std::time::Instant>) -> StepView {
+    let registering = mark.code == "registering";
+    StepView {
+        code: mark.code,
+        elapsed_secs: now.saturating_duration_since(mark.since).as_secs(),
+        retry: (registering && tries > 0).then_some(tries),
+        next_in_secs: next_try.filter(|_| registering).map(|at| at.saturating_duration_since(now).as_secs().max(1)),
+    }
+}
+
+/// The Address book registration: the name, the quick address that was (being) registered, and how it went.
+struct BookInfo {
+    domain: String,
+    quick_url: String,
+    link: LinkState,
+    /// Set to make a Linked loop tell the Worker again now (a Check found it reset or holding an older address).
+    nudge: Arc<std::sync::atomic::AtomicBool>,
+}
+
+/// What `start_book_if_needed` does for the registration that exists now.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum BookKick {
+    /// Already telling the Worker (or it ended for good, and only a new choice or Check restarts it).
+    Nothing,
+    /// Linked for this name and address, but asked to tell the Worker again: wake the loop.
+    Nudge,
+    /// No registration for this name and address: start one.
+    Spawn,
+}
+
+fn book_kick(book: Option<&BookInfo>, domain: &str, quick: &str, force: bool) -> BookKick {
+    match book {
+        Some(b) if b.domain == domain && b.quick_url == quick => {
+            if b.running() {
+                BookKick::Nothing
+            } else if b.link == LinkState::Linked {
+                if force { BookKick::Nudge } else { BookKick::Nothing }
+            } else {
+                BookKick::Spawn
+            }
+        }
+        _ => BookKick::Spawn,
+    }
+}
+
+impl BookInfo {
+    /// Still telling the Worker (or waiting to try again). A final answer (linked, wrong key, not a Worker, gone) ends it.
+    fn running(&self) -> bool {
+        match &self.link {
+            LinkState::Linked => false,
+            LinkState::Failed(why) => !stable_link::reason_of(why).is_some_and(stable_link::reason_is_final),
+            LinkState::Waiting | LinkState::Registering => true,
+        }
+    }
+}
+
+/// "My domain" + Address book as the screen shows it. `reason` is a short code the screen has words for:
+/// secret_mismatch | worker_gone | over_quota | offline | worker_too_old (here: the name is not an Address book Worker).
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+pub struct BookStatus {
+    pub domain: String,
+    /// This PC runs a quick tunnel (Named, Custom and OpenTunnel have no quick address to register).
+    pub supported: bool,
+    /// A quick address exists to register.
+    pub has_address: bool,
+    /// The name has proven it is the Worker, so this PC may tell it where it is. False: nothing is sent to it yet.
+    pub armed: bool,
+    /// waiting | linking | linked | failed
+    pub link: &'static str,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub reason: Option<&'static str>,
+}
+
+fn book_link_view(link: &LinkState) -> (&'static str, Option<&'static str>) {
+    match link {
+        LinkState::Waiting => ("waiting", None),
+        LinkState::Registering => ("linking", None),
+        LinkState::Linked => ("linked", None),
+        // The name did not answer this time and the loop keeps trying: that is still linking, not a failure.
+        LinkState::Failed(why) if stable_link::reason_of(why) == Some("offline") => ("linking", Some("offline")),
+        LinkState::Failed(why) => ("failed", stable_link::reason_of(why)),
+    }
+}
+
+/// The Details event for a change of the Address book link: `book_linked` once it is linked, `book_failed` (with the reason code,
+/// `retry` when there is none) once per change of reason. Offline retries are linking, so they make no event.
+fn book_event(old: &LinkState, new: &LinkState) -> Option<(&'static str, Option<&'static str>)> {
+    match new {
+        LinkState::Linked if !matches!(old, LinkState::Linked) => Some(("book_linked", None)),
+        LinkState::Failed(_) => {
+            let (view, reason) = book_link_view(new);
+            if view != "failed" {
+                return None;
+            }
+            let same = matches!(old, LinkState::Failed(_)) && book_link_view(old) == (view, reason);
+            (!same).then_some(("book_failed", Some(reason.unwrap_or("retry"))))
+        }
+        _ => None,
+    }
+}
+
+/// The relay's own events (`relay_linked`, `relay_failed`) belong to the Permanent link only: with "My domain" or the Temporary
+/// link on, the relay is not what the person is using, so it must not speak in Details.
+fn relay_events_on(choice: crate::worker_origins::LinkChoice) -> bool {
+    choice == crate::worker_origins::LinkChoice::Permanent
 }
 
 struct StableInfo {
@@ -65,6 +221,9 @@ struct StableInfo {
     /// The trycloudflare address cloudflared printed last (never advertised to phones).
     quick_url: Option<String>,
     link: LinkState,
+    /// Failed register tries so far, and when the next one is (for the step line).
+    tries: u32,
+    next_try: Option<std::time::Instant>,
 }
 
 /// `stable` mode as the Settings tab shows it: "Stable link: <worker> -> linked / not linked yet (<error>)".
@@ -77,6 +236,9 @@ pub struct StableStatus {
     pub error: Option<String>,
     /// The Worker answered 403: it keeps another secret than the one saved here (the screen offers the way out).
     pub secret_mismatch: bool,
+    /// Why the link failed, as a short code: secret_mismatch | worker_gone | over_quota | offline | worker_too_old.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub reason: Option<&'static str>,
 }
 
 impl StableInfo {
@@ -88,7 +250,11 @@ impl StableInfo {
             LinkState::Failed(why) => ("failed", Some(why.clone())),
         };
         let secret_mismatch = matches!(&self.link, LinkState::Failed(why) if Some(why) == stable_link::Outcome::SecretMismatch.problem().as_ref());
-        StableStatus { worker_url: self.worker_url.clone(), quick_url: self.quick_url.clone(), link, error, secret_mismatch }
+        let reason = match &self.link {
+            LinkState::Failed(why) => stable_link::reason_of(why),
+            _ => None,
+        };
+        StableStatus { worker_url: self.worker_url.clone(), quick_url: self.quick_url.clone(), link, error, secret_mismatch, reason }
     }
 }
 
@@ -123,16 +289,34 @@ pub struct TunnelStatus {
     /// Why no quick address is coming: `rate_limited` | `slow_start` | `too_soon` (the screen has the words).
     #[serde(skip_serializing_if = "Option::is_none")]
     pub problem: Option<&'static str>,
+    /// What the app is doing right now (a real step with a counter), or none when nothing is in progress.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub step: Option<StepView>,
+    /// The last few real events with their time (the Details list).
+    pub events: Vec<EventView>,
     /// With a `problem`: seconds until cloudflared may be started again (absent when it may start now).
     #[serde(skip_serializing_if = "Option::is_none")]
     pub retry_in_secs: Option<u64>,
     /// The port the phone server really listens on (what an own domain or a named tunnel must point at), or none when it is not running.
     pub local_port: Option<u16>,
+    /// The port the person chose for the phone server (used from the next start), or none for automatic.
+    pub chosen_port: Option<u16>,
     /// `moved` (the usual port was busy, another program has it) | `not_running` (the phone server could not start). Absent when all is well.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub port_problem: Option<&'static str>,
     /// The person chose "Temporary link": phones get the quick address and the Worker is left out (it stays saved and linked).
     pub link_temporary: bool,
+    /// Which of the three links is on: `permanent` | `temporary` | `domain`.
+    pub link_mode: &'static str,
+    /// How the chosen link carries traffic: `book` (the address only says where this PC is) | `direct` (the address carries it).
+    pub link_route: &'static str,
+    /// The person's own address (https origin), kept saved while another link is on.
+    pub own_domain: Option<String>,
+    /// The own address passed a Check made by this app, so phones are given it. False: "Not checked yet".
+    pub own_domain_verified: bool,
+    /// "My domain" + Address book: where this PC stands with the Worker (absent for every other link).
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub book: Option<BookStatus>,
 }
 
 /// Result of "Test connection".
@@ -143,6 +327,9 @@ pub struct ConnectionTest {
     pub http_status: Option<u16>,
     pub latency_ms: u64,
     pub message: String,
+    /// Own address Check only: why it did or did not reach this PC (see `own_domain::domain_reason`).
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub reason: Option<&'static str>,
 }
 
 impl TunnelState {
@@ -156,12 +343,38 @@ impl TunnelState {
             pwa_server: None,
             mode: "quick",
             stable: None,
+            book: None,
             phase: Phase::Stopped,
             last_error: None,
             generation: 0,
             problem: None,
             backoff: limits::Backoff::default(),
+            step: None,
+            events: std::collections::VecDeque::new(),
         }
+    }
+
+    /// Remember one real event for the Details list; the oldest falls off after `EVENT_CAP`.
+    fn push_event(&mut self, code: &'static str, host: Option<&str>, reason: Option<&'static str>) {
+        let at_ms = SystemTime::now().duration_since(UNIX_EPOCH).map(|d| d.as_millis() as u64).unwrap_or(0);
+        if self.events.len() >= EVENT_CAP {
+            self.events.pop_front();
+        }
+        self.events.push_back(EventView { at_ms, code, host: host.and_then(clean_host), reason });
+    }
+
+    /// Mark what is happening now. The same step again keeps its start time, so the counter does not jump back.
+    fn set_step(&mut self, code: &'static str) {
+        if self.step.is_some_and(|s| s.code == code) {
+            return;
+        }
+        self.step = Some(StepMark { code, since: std::time::Instant::now() });
+    }
+
+    fn step_view(&self) -> Option<StepView> {
+        let mark = self.step?;
+        let (tries, next) = self.stable.as_ref().map_or((0, None), |s| (s.tries, s.next_try));
+        Some(step_view(mark, std::time::Instant::now(), tries, next))
     }
 
     /// A quick tunnel did not come up: say why (the screen's words and the CLI's sentence) and count it for the back-off.
@@ -194,9 +407,30 @@ impl TunnelState {
         }
     }
 
+    /// This PC's quick-tunnel address right now, when it runs a quick tunnel at all (the Address book registers it).
+    fn current_quick_url(&self) -> Option<String> {
+        if !matches!(self.mode, "quick" | "stable") {
+            return None;
+        }
+        let url = match &self.stable {
+            Some(info) => info.quick_url.clone(),
+            None => self.tunnel_url.clone(),
+        };
+        url.filter(|u| stable_link::is_quick_origin(u))
+    }
+
+    fn book_view(&self) -> Option<BookStatus> {
+        let domain = crate::worker_origins::book_domain()?;
+        let (link, reason) = self.book.as_ref().filter(|b| b.domain == domain).map_or(("waiting", None), |b| book_link_view(&b.link));
+        Some(BookStatus { supported: matches!(self.mode, "quick" | "stable"), has_address: self.current_quick_url().is_some(), armed: crate::domain_book::is_armed(&domain), domain, link, reason })
+    }
+
     /// The address other parts (the phone page, the CLI's pair link) may hand to a phone. A stable-link Worker is offered only
     /// once this computer is linked to it: before that the Worker has no idea where this computer is and answers "PC offline".
     fn advertised_url(&self) -> Option<String> {
+        if let Some(domain) = crate::worker_origins::own_domain_active() {
+            return Some(domain);
+        }
         if let Some(info) = self.stable.as_ref().filter(|_| crate::worker_origins::link_temporary()) {
             return temporary_url(info.quick_url.as_deref());
         }
@@ -391,13 +625,222 @@ pub fn tunnel_status() -> TunnelStatus {
         secret_once: None,
         secret_not_reset: None,
         problem: guard.problem,
+        step: guard.step_view(),
+        events: guard.events.iter().cloned().collect(),
         retry_in_secs: guard
             .problem
             .and_then(|_| guard.backoff.check(std::time::Instant::now()).err())
             .map(|wait| wait.as_secs().max(1)),
         local_port: pwa_server::bound_pwa_port(),
+        chosen_port: crate::phone_port::saved(),
         port_problem: pwa_server::pwa_port_problem(),
         link_temporary: crate::worker_origins::link_temporary(),
+        link_mode: crate::worker_origins::link_mode().choice.as_str(),
+        link_route: crate::worker_origins::link_mode().route.as_str(),
+        own_domain: crate::worker_origins::link_mode().domain,
+        own_domain_verified: crate::worker_origins::link_mode().proven_domain().is_some(),
+        book: guard.book_view(),
+    }
+}
+
+/// Choose permanent, temporary or the person's own domain (`domain` is typed text, validated here and kept saved). No restart: the
+/// saved Worker and its link stay as they are. Returns the new status.
+pub fn set_link_mode(choice: &str, domain: Option<String>, route: Option<&str>) -> Result<TunnelStatus, String> {
+    let choice = crate::worker_origins::LinkChoice::parse(choice).ok_or_else(|| "Unknown link choice.".to_string())?;
+    let route = crate::worker_origins::parse_route_arg(route)?;
+    crate::worker_origins::set_link_mode(choice, domain, route)?;
+    {
+        // Chosen with a tunnel already up: tell the Worker now (no restart is needed), or stop telling it.
+        let state = tunnel_state();
+        let mut guard = state.lock();
+        start_book_if_needed(&mut guard, &state, false);
+    }
+    Ok(tunnel_status())
+}
+
+/// What the Address book Check needs: this PC's quick address (none yet) and whether it runs a quick tunnel at all.
+pub fn book_facts() -> (Option<String>, bool) {
+    let state = tunnel_state();
+    let guard = state.lock();
+    (guard.current_quick_url(), matches!(guard.mode, "quick" | "stable"))
+}
+
+/// Tell the Worker again now (the Check just proved the name is the Worker, so it is armed): no restart is needed.
+pub fn kick_book() {
+    let state = tunnel_state();
+    let mut guard = state.lock();
+    start_book_if_needed(&mut guard, &state, true);
+}
+
+/// With "My domain" + Address book on, the name proven to be the Worker ("armed") and a quick address known, tell the Worker
+/// (once per name and address; a final failure is tried again only when asked, i.e. when the link is chosen again or a Check
+/// proves the name again). A name that has not proven itself is sent NOTHING, so a typo or a look-alike server never gets a key.
+/// With the link off, forget it: the running loop stops itself.
+fn start_book_if_needed(guard: &mut TunnelState, state: &Arc<Mutex<TunnelState>>, force: bool) {
+    let Some(domain) = crate::worker_origins::book_domain() else {
+        guard.book = None;
+        return;
+    };
+    if !crate::domain_book::is_armed(&domain) {
+        return;
+    }
+    let Some(quick) = guard.current_quick_url() else { return };
+    match book_kick(guard.book.as_ref(), &domain, &quick, force) {
+        BookKick::Nothing => return,
+        BookKick::Nudge => {
+            // Linked, but a Check just heard "not linked" / "stale" from the authentic Worker: tell it again now, not in two minutes.
+            if let Some(b) = guard.book.as_ref() {
+                b.nudge.store(true, std::sync::atomic::Ordering::SeqCst);
+            }
+            return;
+        }
+        BookKick::Spawn => {}
+    }
+    // ONE key for this name only (derived from the PC's master key): it opens no other Worker.
+    let key = match crate::domain_book::key_for(&domain) {
+        Ok(key) => key,
+        Err(err) => {
+            tracing::warn!(%err, "domain book: could not keep the key for the Worker");
+            guard.book = Some(BookInfo { domain, quick_url: quick, link: LinkState::Failed("The key for your Worker could not be kept on this PC.".into()), nudge: Arc::default() });
+            return;
+        }
+    };
+    let nudge = Arc::new(std::sync::atomic::AtomicBool::new(false));
+    guard.book = Some(BookInfo { domain: domain.clone(), quick_url: quick.clone(), link: LinkState::Registering, nudge: nudge.clone() });
+    tracing::info!("cloudflared quick URL ready; registering it with the Address book Worker");
+    spawn_book_registration(state.clone(), guard.generation, domain, key, quick, nudge);
+}
+
+/// One try: the name must make its proof again (it may have moved since the Check), and only then does it get the key.
+fn book_attempt(domain: &str, key: &str, key_hash: &str, quick: &str) -> stable_link::Outcome {
+    use crate::domain_book::Auth;
+    match crate::domain_book::authenticate(domain, key_hash) {
+        Auth::Yes => stable_link::register_once_public(domain, key, quick),
+        Auth::Foreign => {
+            // Not that Worker any more: nothing is sent, the earlier pass is withdrawn and the name must prove itself again.
+            let _ = crate::domain_book::disarm(domain);
+            // Only an Address book pass: a Direct pass for the same name (Use Direct) is not this loop's to withdraw.
+            let _ = crate::worker_origins::unmark_verified_for_route(domain, crate::worker_origins::LinkRoute::Book);
+            foreign_outcome(crate::domain_book::is_direct(domain))
+        }
+        Auth::Down => stable_link::Outcome::Retry(format!("{}: the name did not answer", stable_link::OFFLINE_PREFIX)),
+    }
+}
+
+/// What a name that is not the Worker any more is: this very PC behind a plain proxy (Direct), or just not the Worker.
+fn foreign_outcome(is_direct: bool) -> stable_link::Outcome {
+    if is_direct { stable_link::Outcome::NameIsDirect } else { stable_link::Outcome::WorkerTooOld }
+}
+
+/// How often a registered Worker is looked at again (is it still pointing at this PC?).
+const BOOK_RECHECK: std::time::Duration = std::time::Duration::from_secs(120);
+
+/// Like `spawn_registration`, for the person's own name: public addresses only, it stops when the link is switched off, and once
+/// linked it keeps looking: a Worker that was reset or taken over by another address is noticed, the pass withdrawn, and this PC tells it again.
+fn spawn_book_registration(state: Arc<Mutex<TunnelState>>, generation: u64, domain: String, key: String, quick: String, nudge: Arc<std::sync::atomic::AtomicBool>) {
+    let same = {
+        let (domain, quick) = (domain.clone(), quick.clone());
+        move |guard: &TunnelState| guard.generation == generation && guard.book.as_ref().is_some_and(|b| b.domain == domain && b.quick_url == quick)
+    };
+    let is_current = {
+        let (state, same, domain) = (state.clone(), same.clone(), domain.clone());
+        move || same(&state.lock()) && crate::worker_origins::book_domain().as_deref() == Some(domain.as_str())
+    };
+    let mut report = {
+        let (state, same, domain) = (state.clone(), same, domain.clone());
+        move |link: LinkState| {
+            let mut guard = state.lock();
+            if !same(&guard) {
+                return;
+            }
+            let event = guard.book.as_ref().and_then(|b| book_event(&b.link, &link));
+            if let LinkState::Failed(_) = &link {
+                let reason = book_link_view(&link).1;
+                let changed = guard.book.as_ref().is_some_and(|b| book_link_view(&b.link).1 != reason || !matches!(b.link, LinkState::Failed(_)));
+                if changed {
+                    tracing::warn!(reason = reason.unwrap_or("retrying"), "domain book: not registered yet");
+                }
+            }
+            if let Some(book) = guard.book.as_mut() {
+                book.link = link;
+            }
+            if let Some((code, why)) = event {
+                // The name goes in (clean_host reduces it to a bare host): the Details row says which address this is about.
+                guard.push_event(code, Some(&domain), why);
+            }
+        }
+    };
+    let spawned = thread::Builder::new().name("domain-book-register".into()).spawn(move || {
+        let key_hash = crate::domain_book::sha256_hex(&key);
+        // The Worker was reset or re-pointed and the pass withdrawn: once this PC has told it again, the full Check runs and sets the pass back.
+        // Every later round of this loop follows a ReRegister.
+        let mut first_link = true;
+        loop {
+            let outcome = stable_link::register_until_done(|| book_attempt(&domain, &key, &key_hash, &quick), thread::sleep, &is_current, &mut report);
+            // The last word goes to app.log: no key, no name, no address.
+            match stable_link::final_log_line(&outcome) {
+                Some((true, _)) => tracing::info!("domain book: registered with the Worker"),
+                Some((false, line)) => tracing::warn!("domain book: {}", line.trim_start_matches("stable link: ")),
+                None => {}
+            }
+            if outcome != stable_link::Outcome::Linked {
+                return;
+            }
+            let relinked = !std::mem::replace(&mut first_link, false);
+            if relinked && is_current() {
+                let passed = crate::domain_book::restore_pass(
+                    &|| crate::domain_book::check_armed(&domain, Some(quick.clone()), true, &crate::bridge::identity::own_domain_proof, &|| {}),
+                    &|| crate::worker_origins::mark_verified(&domain, crate::worker_origins::LinkRoute::Book),
+                );
+                tracing::info!(passed, "domain book: checked again after telling the Worker again");
+            }
+            // Linked: keep looking, so a Worker that was reset or pointed elsewhere is not trusted for ever.
+            nudge.store(false, std::sync::atomic::Ordering::SeqCst);
+            'watch: loop {
+                let mut waited = std::time::Duration::ZERO;
+                while waited < BOOK_RECHECK {
+                    if !is_current() {
+                        return;
+                    }
+                    // A Check heard "not linked" / "stale" from the authentic Worker: tell it again at once.
+                    if nudge.swap(false, std::sync::atomic::Ordering::SeqCst) {
+                        tracing::info!("domain book: asked to tell the Worker again now");
+                        break 'watch;
+                    }
+                    thread::sleep(std::time::Duration::from_secs(1));
+                    waited += std::time::Duration::from_secs(1);
+                }
+                if !is_current() {
+                    return;
+                }
+                let (judged, authentic) = crate::domain_book::probe(&domain, &quick, &key_hash);
+                match crate::domain_book::monitor_decision(&judged, authentic) {
+                    crate::domain_book::Monitor::Fine | crate::domain_book::Monitor::Ignore => {}
+                    crate::domain_book::Monitor::ReRegister => {
+                        tracing::warn!("domain book: the Worker no longer points at this PC; telling it again");
+                        // The probe took seconds: only withdraw an Address book pass, and only if this loop is still the current one.
+                        if is_current() {
+                            let _ = crate::worker_origins::unmark_verified_for_route(&domain, crate::worker_origins::LinkRoute::Book);
+                        }
+                        break 'watch;
+                    }
+                    crate::domain_book::Monitor::Foreign => {
+                        tracing::warn!("domain book: the name no longer answers as the Worker; stopped");
+                        if !is_current() {
+                            return;
+                        }
+                        let _ = crate::worker_origins::unmark_verified_for_route(&domain, crate::worker_origins::LinkRoute::Book);
+                        let _ = crate::domain_book::disarm(&domain);
+                        let outcome = foreign_outcome(crate::domain_book::is_direct(&domain));
+                        report(LinkState::Failed(outcome.problem().unwrap_or_default()));
+                        return;
+                    }
+                }
+            }
+        }
+    });
+    if let Err(err) = spawned {
+        tracing::warn!(%err, "could not start the Address book registration thread");
     }
 }
 
@@ -426,19 +869,39 @@ pub fn start_mobile_tunnel(app: &AppHandle, bridge_direct_url: String) -> Result
 
     let dev_info_supplier: Arc<dyn Fn() -> DevInfoPayload + Send + Sync> =
         Arc::new(|| get_mobile_tunnel_info());
-    let pwa_server = pwa_server::start_pwa_server(dist_root, bridge_port_file, dev_info_supplier)?;
+    state.lock().set_step("starting_phone_server");
+    let pwa_server = match pwa_server::start_pwa_server(dist_root, bridge_port_file, dev_info_supplier) {
+        Ok(handle) => handle,
+        Err(err) => {
+            state.lock().step = None;
+            return Err(err);
+        }
+    };
     {
         let mut guard = state.lock();
         guard.pwa_server = Some(pwa_server);
+        guard.step = None;
+        guard.push_event("phone_server_up", None, None);
     }
 
     // A second app on this computer (`POTATO_WORKSPACE_PROFILE`) opens no public address unless asked.
-    if crate::app_paths::profile().is_some() && std::env::var("POTATO_WORKSPACE_TUNNEL").ok().as_deref() != Some("1") {
+    if tunnel_off_for_profile(crate::app_paths::profile().is_some(), std::env::var("POTATO_WORKSPACE_TUNNEL").ok().as_deref()) {
         tracing::info!("profile: public tunnel off (set POTATO_WORKSPACE_TUNNEL=1 to open one)");
+        // The screen says so instead of waiting for a step that never comes.
+        {
+            let mut guard = state.lock();
+            guard.set_step("tunnel_off");
+            guard.push_event("tunnel_off", None, None);
+        }
         return Ok(());
     }
 
     launch_tunnel(app)
+}
+
+/// A second profile opens no public address unless `POTATO_WORKSPACE_TUNNEL=1`.
+fn tunnel_off_for_profile(has_profile: bool, env: Option<&str>) -> bool {
+    has_profile && env != Some("1")
 }
 
 /// Stop the current tunnel process (if any) and start whatever the saved setting asks for.
@@ -532,16 +995,18 @@ fn launch_tunnel(app: &AppHandle) -> Result<(), String> {
         }
         guard.kill_child();
         guard.generation += 1;
+        guard.step = None;
         guard.problem = None;
         guard.mode = plan.mode();
         guard.tunnel_url = plan.known_public_url();
         guard.last_error = None;
         guard.stable = match &plan {
             tunnel_config::TunnelPlan::Stable { worker_url } => {
-                Some(StableInfo { worker_url: worker_url.clone(), quick_url: None, link: LinkState::Waiting })
+                Some(StableInfo { worker_url: worker_url.clone(), quick_url: None, link: LinkState::Waiting, tries: 0, next_try: None })
             }
             _ => None,
         };
+        guard.book = None;
         guard.tunnel_provider = Some(
             match &plan {
                 tunnel_config::TunnelPlan::Quick => "cloudflared",
@@ -554,8 +1019,10 @@ fn launch_tunnel(app: &AppHandle) -> Result<(), String> {
         );
         if plan.runs_cloudflared() || plan.runs_opentunnel() {
             guard.phase = Phase::Starting;
+            guard.set_step("starting_tunnel");
         } else {
             guard.phase = Phase::Running;
+            guard.set_step("connected");
             tracing::info!(
                 mode = plan.mode(),
                 url = %guard.tunnel_url.as_deref().unwrap_or(""),
@@ -645,7 +1112,16 @@ fn launch_tunnel(app: &AppHandle) -> Result<(), String> {
             .map_err(|err| fail(format!("spawn {name} reader: {err}")))?;
     }
 
-    state.lock().cloudflared_child = Some(child);
+    // The tunnel program dies with the app, even when the app crashes or is killed (it used to stay behind).
+    crate::pty::term_job::adopt(child.id());
+    {
+        let mut guard = state.lock();
+        guard.cloudflared_child = Some(child);
+        if guard.generation == generation {
+            guard.set_step("waiting_for_address");
+            guard.push_event("tunnel_started", None, None);
+        }
+    }
     tracing::info!(mode = plan.mode(), target = %local_target, "started cloudflared for the mobile PWA");
     if !named {
         // Never sit on "starting" silently: if no address comes in time, say so (it may still come; then this clears).
@@ -712,14 +1188,24 @@ fn watch_cloudflared_stream(
                     }
                     guard.phase = Phase::Running;
                     guard.start_succeeded();
+                    guard.set_step("address_ready");
+                    guard.push_event("address", Some(&url), None);
                     tracing::info!("cloudflared quick URL ready; registering it with the stable-link Worker");
-                    spawn_registration(state.clone(), generation, ctx.clone(), url);
+                    spawn_registration(state.clone(), generation, ctx.clone(), url.clone());
+                    start_book_if_needed(&mut guard, &state, false);
+                    if crate::worker_origins::link_temporary() {
+                        spawn_outside_check(state.clone(), generation, url);
+                    }
                 }
             } else if guard.tunnel_url.as_deref() != Some(url.as_str()) {
                 guard.tunnel_url = Some(url.clone());
                 guard.phase = Phase::Running;
                 guard.start_succeeded();
+                guard.set_step("address_ready");
+                guard.push_event("address", Some(&url), None);
                 tracing::info!(%url, "cloudflared public URL ready");
+                start_book_if_needed(&mut guard, &state, false);
+                spawn_outside_check(state.clone(), generation, url);
             }
         }
     }
@@ -730,8 +1216,47 @@ fn watch_cloudflared_stream(
             guard.backoff.failed(generation);
         }
         guard.phase = Phase::Error;
+        guard.step = None;
+        guard.push_event("tunnel_stopped", None, None);
         guard.last_error = Some("cloudflared stopped. Press Restart tunnel.".into());
     }
+}
+
+/// Open the new quick address from this computer, like a phone would: "checking it works from outside". The first tries often
+/// fail while the new name is still spreading, so it tries for up to 40 s. It only moves the step line; it never changes the
+/// tunnel's state. Stops when a newer launch replaced this one.
+fn spawn_outside_check(state: Arc<Mutex<TunnelState>>, generation: u64, url: String) {
+    let _ = thread::Builder::new().name("tunnel-outside-check".into()).spawn(move || {
+        let started = std::time::Instant::now();
+        let current = |guard: &TunnelState| guard.generation == generation && guard.phase == Phase::Running;
+        {
+            let mut guard = state.lock();
+            if !current(&guard) {
+                return;
+            }
+            guard.set_step("checking_outside");
+        }
+        loop {
+            let reached = test_origin(&url).map(|r| r.ok).unwrap_or(false);
+            let mut guard = state.lock();
+            if !current(&guard) {
+                return;
+            }
+            if reached {
+                guard.set_step("connected");
+                guard.push_event("outside_ok", None, None);
+                return;
+            }
+            if started.elapsed() > std::time::Duration::from_secs(40) {
+                guard.set_step("not_reached");
+                guard.push_event("outside_failed", None, None);
+                tracing::warn!("the new address was not reachable from this computer within 40 s");
+                return;
+            }
+            drop(guard);
+            thread::sleep(std::time::Duration::from_secs(3));
+        }
+    });
 }
 
 /// Register `quick_url` with the Worker in the background, retrying with a growing wait. Stops when a newer
@@ -752,15 +1277,70 @@ fn spawn_registration(state: Arc<Mutex<TunnelState>>, generation: u64, ctx: Stab
             if guard.generation != generation {
                 return;
             }
+            let choice = crate::worker_origins::link_mode().choice;
+            let temporary = choice == crate::worker_origins::LinkChoice::Temporary;
+            let Some(info) = guard.stable.as_mut().filter(|s| s.quick_url.as_deref() == Some(quick_url.as_str())) else { return };
+            let reason = match &link {
+                LinkState::Failed(why) => stable_link::reason_of(why),
+                _ => None,
+            };
+            let mut event: Option<(&'static str, Option<&'static str>)> = None;
+            if let LinkState::Failed(_) = &link {
+                // One line per change of reason, so app.log names why without a line per retry.
+                let changed = !matches!(&info.link, LinkState::Failed(old) if stable_link::reason_of(old) == reason);
+                if changed {
+                    tracing::warn!(reason = reason.unwrap_or("retrying"), "stable link: not registered yet");
+                    event = Some(("relay_failed", Some(reason.unwrap_or("retry"))));
+                }
+            }
+            let step = match &link {
+                LinkState::Registering => Some("registering"),
+                LinkState::Linked => Some("connected"),
+                LinkState::Failed(_) if reason.is_some_and(stable_link::reason_is_final) => None,
+                LinkState::Failed(_) => Some("registering"),
+                LinkState::Waiting => None,
+            };
+            let linked_now = matches!(link, LinkState::Linked) && !matches!(info.link, LinkState::Linked);
+            if matches!(link, LinkState::Linked) {
+                info.tries = 0;
+                info.next_try = None;
+            }
+            info.link = link;
+            if linked_now {
+                event = Some(("relay_linked", None));
+            }
+            if let Some((code, why)) = event.filter(|_| relay_events_on(choice)) {
+                guard.push_event(code, None, why);
+            }
+            // With the temporary link the relay is only a small note: it never drives the step line.
+            if !temporary {
+                match step {
+                    Some(code) => guard.set_step(code),
+                    None => guard.step = None,
+                }
+            }
+        }
+    };
+    let on_wait = {
+        let (state, quick_url) = (state.clone(), quick_url.clone());
+        move |wait: std::time::Duration| {
+            let mut guard = state.lock();
+            if guard.generation != generation {
+                return;
+            }
             if let Some(info) = guard.stable.as_mut().filter(|s| s.quick_url.as_deref() == Some(quick_url.as_str())) {
-                info.link = link;
+                info.tries = info.tries.saturating_add(1);
+                info.next_try = Some(std::time::Instant::now() + wait);
             }
         }
     };
     let spawned = thread::Builder::new().name("stable-link-register".into()).spawn(move || {
         let outcome = stable_link::register_until_done(
             || stable_link::register_once(&ctx.worker_url, &ctx.secret, &quick_url),
-            thread::sleep,
+            move |wait| {
+                on_wait(wait);
+                thread::sleep(wait);
+            },
             is_current,
             report,
         );
@@ -799,33 +1379,48 @@ fn retire_old_secret(
     input: &TunnelConfigInput,
     before: &tunnel_config::TunnelConfig,
     after: &tunnel_config::TunnelConfig,
-    reset: impl FnOnce(&str, &str) -> stable_link::ResetOutcome,
+    mut reset: impl FnMut(&str, &str, &str) -> stable_link::ResetOutcome,
 ) -> Result<(), &'static str> {
     use stable_link::ResetOutcome;
     let (tunnel_config::TunnelConfig::Stable { worker_url, secret: old }, true) = (before, replaces_secret(before, after)) else {
         return Ok(());
     };
+    let Some(new) = after.stable_secret() else { return Ok(()) };
     if old.is_empty() {
         return Ok(());
     }
     let TunnelConfigInput::Stable { secret, secret_action, confirm_strand, .. } = input else {
-        let _ = reset(worker_url, old);
+        let _ = reset(worker_url, old, new);
         return Ok(());
     };
     let typed = secret.as_deref().is_some_and(|s| !s.trim().is_empty());
-    let guarded = *secret_action == tunnel_config::SecretAction::Regenerate && !typed && !*confirm_strand;
-    match (reset(worker_url, old), guarded) {
-        (ResetOutcome::Done, _) | (_, false) => Ok(()),
-        (ResetOutcome::Rejected, true) => Err("rejected"),
-        (ResetOutcome::TooOld, true) => Err("too_old"),
-        (ResetOutcome::Unreachable, true) => Err("unreachable"),
+    let regenerate = *secret_action == tunnel_config::SecretAction::Regenerate && !typed;
+    let guarded = regenerate && !*confirm_strand;
+    let mut outcome = reset(worker_url, old, new);
+    // The answer may have been lost after the Worker took the new secret: ask once more with the NEW secret.
+    // 200 means the first call had landed (the Worker holds the new secret); 403 means it still has the old one.
+    if matches!(outcome, ResetOutcome::Rejected | ResetOutcome::Unreachable) && reset(worker_url, new, new) == ResetOutcome::Done {
+        outcome = ResetOutcome::Done;
+    }
+    match outcome {
+        ResetOutcome::Done => Ok(()),
+        // The app cannot make this secret at all (too old) or must wait: never offered as "make it anyway".
+        ResetOutcome::UpdateApp if regenerate => Err("update_app"),
+        ResetOutcome::TooManyTries if regenerate => Err("too_many"),
+        ResetOutcome::Rejected if guarded => Err("rejected"),
+        ResetOutcome::TooOld if guarded => Err("too_old"),
+        ResetOutcome::Unreachable if guarded => Err("unreachable"),
+        _ => Ok(()),
     }
 }
 
-/// Whether saving `after` over `before` swaps one stable secret for another.
+/// Whether saving `after` over `before` swaps one stable secret for another on the SAME Worker
+/// (another address is another Worker: the old one is left alone).
 fn replaces_secret(before: &tunnel_config::TunnelConfig, after: &tunnel_config::TunnelConfig) -> bool {
-    match (before.stable_secret(), after.stable_secret()) {
-        (Some(old), Some(new)) => old != new,
+    match (before, after) {
+        (tunnel_config::TunnelConfig::Stable { worker_url: a, secret: old }, tunnel_config::TunnelConfig::Stable { worker_url: b, secret: new }) => {
+            a == b && !old.is_empty() && !new.is_empty() && old != new
+        }
         _ => false,
     }
 }
@@ -871,12 +1466,20 @@ pub fn interpret_health(
         http_status,
         latency_ms,
         message,
+        reason: None,
     }
 }
 
 /// Fetch `<public>/bridge/health` (blocking). `None` tests the tunnel's current public URL.
 pub fn test_connection(public_url: Option<String>) -> Result<ConnectionTest, String> {
     // Stable link: the Worker must answer and say it is linked before the bridge behind it is tried.
+    // Temporary link: phones use the quick address and never the Worker, so the Worker is not what gets tested.
+    if public_url.as_deref().is_none_or(|u| u.trim().is_empty()) && crate::worker_origins::link_temporary() {
+        let quick = tunnel_state().lock().stable.as_ref().and_then(|s| s.quick_url.clone());
+        if let Some(origin) = quick {
+            return test_origin(&origin);
+        }
+    }
     let stable_worker = tunnel_state().lock().stable.as_ref().map(|s| s.worker_url.clone());
     if let Some(worker) = stable_worker.filter(|w| public_url.as_deref().is_none_or(|u| u.trim().is_empty() || u.trim().trim_end_matches('/') == w)) {
         let started = std::time::Instant::now();
@@ -887,6 +1490,7 @@ pub fn test_connection(public_url: Option<String>) -> Result<ConnectionTest, Str
                 http_status: None,
                 latency_ms: started.elapsed().as_millis() as u64,
                 message,
+                reason: None,
             });
         }
         return test_through_worker(&worker, &|w| match stable_link::resolve_tunnel(w, &stable_link::is_quick_origin) {
@@ -921,6 +1525,7 @@ fn test_through_worker(
             http_status: None,
             latency_ms: started.elapsed().as_millis() as u64,
             message: "The Worker is up, but it does not say where this computer is yet. Press Restart tunnel.".into(),
+            reason: None,
         }),
     }
 }
@@ -1152,7 +1757,7 @@ mod tests {
 
     #[test]
     fn stable_status_says_waiting_linking_linked_or_why_not() {
-        let mut info = StableInfo { worker_url: "https://w.dev".into(), quick_url: None, link: LinkState::Waiting };
+        let mut info = StableInfo { worker_url: "https://w.dev".into(), quick_url: None, link: LinkState::Waiting, tries: 0, next_try: None };
         assert_eq!(info.view().link, "waiting");
         info.link = LinkState::Registering;
         assert_eq!(info.view().link, "linking");
@@ -1163,8 +1768,140 @@ mod tests {
         assert_eq!(view.link, "failed");
         assert!(view.secret_mismatch);
         assert!(view.error.unwrap().contains("secret does not match"));
+        assert_eq!(info.view().reason, Some("secret_mismatch"));
         info.link = LinkState::Failed("Could not reach the Worker: dns".into());
         assert!(!info.view().secret_mismatch);
+        assert_eq!(info.view().reason, Some("offline"));
+        info.link = LinkState::Failed(stable_link::Outcome::WorkerGone.problem().unwrap());
+        assert_eq!(info.view().reason, Some("worker_gone"));
+        info.link = LinkState::Failed(stable_link::Outcome::OverQuota.problem().unwrap());
+        assert_eq!(info.view().reason, Some("over_quota"));
+        info.link = LinkState::Linked;
+        assert_eq!(info.view().reason, None);
+    }
+
+    #[test]
+    fn the_step_line_counts_from_when_the_step_began_and_names_the_retry() {
+        use std::time::{Duration, Instant};
+        let t0 = Instant::now();
+        let mark = StepMark { code: "waiting_for_address", since: t0 };
+        let view = step_view(mark, t0 + Duration::from_secs(14), 3, Some(t0 + Duration::from_secs(20)));
+        assert_eq!((view.code, view.elapsed_secs, view.retry, view.next_in_secs), ("waiting_for_address", 14, None, None));
+        let reg = StepMark { code: "registering", since: t0 };
+        let view = step_view(reg, t0 + Duration::from_secs(30), 3, Some(t0 + Duration::from_secs(38)));
+        assert_eq!((view.retry, view.next_in_secs, view.elapsed_secs), (Some(3), Some(8), 30));
+        // no failed try yet: no "retry 0"
+        assert_eq!(step_view(reg, t0, 0, None).retry, None);
+    }
+
+    #[test]
+    fn a_profile_without_the_switch_has_the_tunnel_off_and_says_so_in_the_status() {
+        assert!(tunnel_off_for_profile(true, None) && tunnel_off_for_profile(true, Some("0")));
+        assert!(!tunnel_off_for_profile(true, Some("1")) && !tunnel_off_for_profile(false, None));
+        let mut st = TunnelState::new();
+        st.set_step("tunnel_off");
+        let v = serde_json::to_value(st.step_view().unwrap()).unwrap();
+        assert_eq!(v["code"], "tunnel_off");
+    }
+
+    #[test]
+    fn the_events_list_keeps_the_last_eight_and_only_ever_a_bare_host() {
+        let mut st = TunnelState::new();
+        for i in 0..12 {
+            st.push_event("address", Some(&format!("https://abc-{i}.trycloudflare.com/bridge?token=SECRET-TOKEN-123")), None);
+        }
+        assert_eq!(st.events.len(), EVENT_CAP);
+        assert_eq!(st.events.front().unwrap().host.as_deref(), Some("abc-4.trycloudflare.com"));
+        st.push_event("relay_failed", None, Some("worker_gone"));
+        st.push_event("address", Some("not a host SECRET-TOKEN-123"), None);
+        st.push_event("address", Some("https://user:SECRET-TOKEN-123@evil"), None);
+        let json = serde_json::to_string(&st.events.iter().cloned().collect::<Vec<_>>()).unwrap();
+        assert!(!json.contains("SECRET") && !json.contains("token") && !json.contains("bridge"), "{json}");
+        assert_eq!(st.events.len(), EVENT_CAP);
+        assert_eq!(st.events.back().unwrap().host, None);
+        assert_eq!(clean_host("https://x-1.trycloudflare.com/a?b=c").as_deref(), Some("x-1.trycloudflare.com"));
+        assert_eq!(clean_host("nodots"), None);
+    }
+
+    #[test]
+    fn the_same_step_twice_keeps_its_start_and_a_new_launch_clears_it() {
+        let mut st = TunnelState::new();
+        assert!(st.step_view().is_none());
+        st.set_step("starting_tunnel");
+        let first = st.step.unwrap().since;
+        st.set_step("starting_tunnel");
+        assert_eq!(st.step.unwrap().since, first);
+        st.set_step("waiting_for_address");
+        assert_eq!(st.step_view().unwrap().code, "waiting_for_address");
+    }
+
+    #[test]
+    fn offline_retries_are_linking_and_only_a_real_reason_is_failed() {
+        let offline = LinkState::Failed(format!("{}: dns error", stable_link::OFFLINE_PREFIX));
+        assert_eq!(book_link_view(&offline), ("linking", Some("offline")));
+        assert_eq!(book_link_view(&LinkState::Failed(stable_link::Outcome::SecretMismatch.problem().unwrap())), ("failed", Some("secret_mismatch")));
+        assert_eq!(book_link_view(&LinkState::Failed(stable_link::Outcome::WorkerTooOld.problem().unwrap())), ("failed", Some("worker_too_old")));
+        assert_eq!(book_link_view(&LinkState::Failed("The Worker answered HTTP 500.".into())), ("failed", None));
+        // the status the screen reads says linking while the name is unreachable
+        let info = BookInfo { domain: "https://phone.example.com".into(), quick_url: "https://a-b.trycloudflare.com".into(), link: offline, nudge: Arc::default() };
+        assert!(info.running(), "an offline book keeps trying");
+    }
+
+    #[test]
+    fn the_book_says_linked_once_and_failed_once_per_reason_and_never_for_offline() {
+        let reg = LinkState::Registering;
+        let linked = LinkState::Linked;
+        let offline = LinkState::Failed(format!("{}: x", stable_link::OFFLINE_PREFIX));
+        let gone = LinkState::Failed(stable_link::Outcome::WorkerGone.problem().unwrap());
+        let mismatch = LinkState::Failed(stable_link::Outcome::SecretMismatch.problem().unwrap());
+        let plain = LinkState::Failed("The Worker answered HTTP 500.".into());
+        assert_eq!(book_event(&reg, &linked), Some(("book_linked", None)));
+        assert_eq!(book_event(&offline, &linked), Some(("book_linked", None)));
+        assert_eq!(book_event(&linked, &linked), None, "no event per repeat");
+        assert_eq!(book_event(&reg, &offline), None, "offline is linking, not failed");
+        assert_eq!(book_event(&offline, &offline), None);
+        assert_eq!(book_event(&reg, &gone), Some(("book_failed", Some("worker_gone"))));
+        assert_eq!(book_event(&gone, &gone), None, "one line per change of reason");
+        assert_eq!(book_event(&gone, &mismatch), Some(("book_failed", Some("secret_mismatch"))));
+        assert_eq!(book_event(&offline, &gone), Some(("book_failed", Some("worker_gone"))));
+        assert_eq!(book_event(&reg, &plain), Some(("book_failed", Some("retry"))));
+        assert_eq!(book_event(&linked, &reg), None);
+    }
+
+    #[test]
+    fn book_events_land_in_the_details_list_with_a_bare_reason() {
+        let mut st = TunnelState::new();
+        st.push_event("book_failed", None, Some("worker_gone"));
+        st.push_event("book_linked", None, None);
+        let json = serde_json::to_value(st.events.iter().cloned().collect::<Vec<_>>()).unwrap();
+        assert_eq!(json[0]["code"], "book_failed");
+        assert_eq!(json[0]["reason"], "worker_gone");
+        assert_eq!(json[1]["code"], "book_linked");
+    }
+
+    #[test]
+    fn the_relays_own_events_belong_to_the_permanent_link_only() {
+        use crate::worker_origins::LinkChoice;
+        assert!(relay_events_on(LinkChoice::Permanent));
+        assert!(!relay_events_on(LinkChoice::Domain));
+        assert!(!relay_events_on(LinkChoice::Temporary));
+    }
+
+    #[test]
+    fn a_dead_relay_does_not_touch_the_temporary_address_or_the_phase() {
+        // The row's state in Temporary comes from the quick address and the phase, never from the relay's link.
+        let mut st = TunnelState::new();
+        st.phase = Phase::Running;
+        st.stable = Some(StableInfo {
+            worker_url: "https://w.dev".into(),
+            quick_url: Some("https://a-b.trycloudflare.com".into()),
+            link: LinkState::Failed(stable_link::Outcome::WorkerGone.problem().unwrap()),
+            tries: 0,
+            next_try: None,
+        });
+        assert_eq!(temporary_url(st.stable.as_ref().and_then(|s| s.quick_url.as_deref())), Some("https://a-b.trycloudflare.com".into()));
+        assert_eq!(st.phase, Phase::Running);
+        assert_eq!(st.stable.as_ref().unwrap().view().reason, Some("worker_gone"));
     }
 
     fn regen_input(typed: Option<&str>, action: tunnel_config::SecretAction, confirm: bool) -> TunnelConfigInput {
@@ -1179,13 +1916,19 @@ mod tests {
         let regen = tunnel_config::SecretAction::Regenerate;
         let ask = |input: &TunnelConfigInput, answer| {
             let mut calls = 0;
-            let r = retire_old_secret(input, &old, &new, |_, _| { calls += 1; answer });
+            let r = retire_old_secret(input, &old, &new, |_, _, _| { calls += 1; answer });
             (r, calls)
         };
+        // A refused or lost rotate is asked once more (with the new secret), so two calls.
         // 403: warned in plain words, nothing saved.
         let (r, calls) = ask(&regen_input(None, regen, false), Rejected);
         assert_eq!(r.unwrap_err(), "rejected");
-        assert_eq!(calls, 1);
+        assert_eq!(calls, 2);
+        // The app is too old for the Worker, or it is rate limited: never "make it anyway", even when confirmed.
+        assert_eq!(ask(&regen_input(None, regen, false), UpdateApp).0.unwrap_err(), "update_app");
+        assert_eq!(ask(&regen_input(None, regen, true), UpdateApp).0.unwrap_err(), "update_app");
+        assert_eq!(ask(&regen_input(None, regen, true), TooManyTries).0.unwrap_err(), "too_many");
+        assert!(ask(&regen_input(Some("first-secret-0123456789"), tunnel_config::SecretAction::Keep, false), TooManyTries).0.is_ok());
         // Worker unreachable: warned too.
         assert_eq!(ask(&regen_input(None, regen, false), Unreachable).0.unwrap_err(), "unreachable");
         assert_eq!(ask(&regen_input(None, regen, false), TooOld).0.unwrap_err(), "too_old");
@@ -1197,8 +1940,31 @@ mod tests {
         let paste = regen_input(Some("first-secret-0123456789"), tunnel_config::SecretAction::Keep, false);
         assert!(ask(&paste, Rejected).0.is_ok());
         // The same secret again: nothing to retire.
-        let same = retire_old_secret(&regen_input(None, regen, false), &old, &old, |_, _| panic!("no reset"));
+        let same = retire_old_secret(&regen_input(None, regen, false), &old, &old, |_, _, _| panic!("no reset"));
         assert!(same.is_ok());
+    }
+
+    #[test]
+    fn a_lost_answer_does_not_lock_the_person_out() {
+        use stable_link::ResetOutcome::*;
+        let old = stable_cfg("old-secret-0123456789");
+        let new = stable_cfg("new-secret-0123456789");
+        let input = regen_input(None, tunnel_config::SecretAction::Regenerate, false);
+        // The Worker took the new secret but the answer was lost; the second call (new, new) proves it: save the new secret.
+        let mut seen: Vec<(String, String)> = Vec::new();
+        let r = retire_old_secret(&input, &old, &new, |_, from, to| {
+            seen.push((from.into(), to.into()));
+            if seen.len() == 1 { Unreachable } else { Done }
+        });
+        assert!(r.is_ok());
+        assert_eq!(seen[1], ("new-secret-0123456789".to_string(), "new-secret-0123456789".to_string()));
+        // The Worker still has the old secret (second call 403) and the first was never heard: held back, nothing saved.
+        let mut n = 0;
+        let r = retire_old_secret(&input, &old, &new, |_, _, _| { n += 1; if n == 1 { Unreachable } else { Rejected } });
+        assert_eq!(r.unwrap_err(), "unreachable");
+        // A clean first answer needs no second call.
+        let r = retire_old_secret(&input, &old, &new, |_, _, _| Done);
+        assert!(r.is_ok());
     }
 
     #[test]
@@ -1218,7 +1984,7 @@ mod tests {
         {
             let state = tunnel_state();
             let mut guard = state.lock();
-            guard.stable = Some(StableInfo { worker_url: url.clone(), quick_url: None, link: LinkState::Waiting });
+            guard.stable = Some(StableInfo { worker_url: url.clone(), quick_url: None, link: LinkState::Waiting, tries: 0, next_try: None });
         }
         let result = test_connection(None).unwrap();
         tunnel_state().lock().stable = None;
@@ -1332,7 +2098,7 @@ mod link_choice_tests {
         let probed = std::cell::RefCell::new(Vec::new());
         let probe = |origin: &str| -> Result<ConnectionTest, String> {
             probed.borrow_mut().push(origin.to_string());
-            Ok(ConnectionTest { ok: true, url: format!("{origin}/bridge/health"), http_status: Some(200), latency_ms: 3, message: "ok".into() })
+            Ok(ConnectionTest { ok: true, url: format!("{origin}/bridge/health"), http_status: Some(200), latency_ms: 3, message: "ok".into(), reason: None })
         };
         let out = test_through_worker("https://pm.me.workers.dev", &|_| Some("https://a-1.trycloudflare.com".into()), &probe).unwrap();
         assert!(out.ok && out.url == "https://a-1.trycloudflare.com/bridge/health");
@@ -1344,5 +2110,42 @@ mod link_choice_tests {
         let probe = |_: &str| -> Result<ConnectionTest, String> { panic!("nothing to probe") };
         let out = test_through_worker("https://pm.me.workers.dev", &|_| None, &probe).unwrap();
         assert!(!out.ok && out.url == "https://pm.me.workers.dev/_pm/where" && out.message.contains("does not say where"));
+    }
+
+    #[test]
+    fn a_book_that_became_a_direct_name_says_is_direct_not_worker_too_old() {
+        assert_eq!(foreign_outcome(true), stable_link::Outcome::NameIsDirect);
+        assert_eq!(foreign_outcome(false), stable_link::Outcome::WorkerTooOld);
+        let direct = LinkState::Failed(foreign_outcome(true).problem().unwrap());
+        assert_eq!(book_link_view(&direct), ("failed", Some("is_direct")));
+        assert_eq!(book_event(&LinkState::Registering, &direct), Some(("book_failed", Some("is_direct"))));
+        // final: the loop is not running, so nothing keeps asking the name
+        let info = BookInfo { domain: "https://phone.example.com".into(), quick_url: "https://a-b.trycloudflare.com".into(), link: direct, nudge: Arc::default() };
+        assert!(!info.running());
+    }
+
+    #[test]
+    fn the_book_event_carries_the_bare_host_of_the_name() {
+        let mut st = TunnelState::new();
+        st.push_event("book_failed", Some("https://Phone.Example.com/path?x=SECRET-TOKEN-123"), Some("is_direct"));
+        assert_eq!(st.events[0].host.as_deref(), Some("phone.example.com"));
+        assert_eq!(st.events[0].reason, Some("is_direct"));
+    }
+
+    #[test]
+    fn a_press_on_a_linked_book_wakes_the_loop_instead_of_doing_nothing() {
+        let (d, q) = ("https://phone.example.com", "https://a-b.trycloudflare.com");
+        let mk = |link| BookInfo { domain: d.into(), quick_url: q.into(), link, nudge: Arc::default() };
+        let linked = mk(LinkState::Linked);
+        assert_eq!(book_kick(Some(&linked), d, q, false), BookKick::Nothing, "the tunnel's own calls leave a linked book alone");
+        assert_eq!(book_kick(Some(&linked), d, q, true), BookKick::Nudge, "a Check that heard not_linked or stale must re-register now");
+        // still telling the Worker: nothing to add
+        assert_eq!(book_kick(Some(&mk(LinkState::Registering)), d, q, true), BookKick::Nothing);
+        // another address or name, nothing yet, or a final failure: start again
+        assert_eq!(book_kick(Some(&linked), d, "https://c-d.trycloudflare.com", true), BookKick::Spawn);
+        assert_eq!(book_kick(Some(&linked), "https://other.example.com", q, true), BookKick::Spawn);
+        assert_eq!(book_kick(None, d, q, true), BookKick::Spawn);
+        let failed = mk(LinkState::Failed(stable_link::Outcome::SecretMismatch.problem().unwrap()));
+        assert_eq!(book_kick(Some(&failed), d, q, false), BookKick::Spawn);
     }
 }

@@ -24,6 +24,9 @@ pub const AGENTS_REMOTE_ANSWER: &str = "agents/remote/answer";
 /// Marks the level of `agents/remote` as "Full": the one switch "Can work on this PC (start agents, use the terminal, change
 /// files)". Absent = no such right. Only ever set together with `agents/remote`.
 pub const AGENTS_REMOTE_FULL: &str = "agents/remote/full";
+/// Marker (not a right): this PC was paired through the person's own account, so Full was its default (`TrustList::grant_account_default`).
+/// Kept when the person lowers the level, so Connect can say why. Never in `PERMISSIONABLE`: no route, phone or window sets it directly.
+pub const AGENTS_REMOTE_ACCOUNT: &str = "agents/remote/account";
 /// Pairing is not a permission anyone is given: it is open to strangers only while the person shows a code.
 pub const PAIR: &str = "pair";
 /// Far-away pairing with a pairing link: open to strangers only while a link is shown, and a relay may carry it.
@@ -34,12 +37,16 @@ pub const PAIR_ACCOUNT: &str = "pair/account";
 /// This PC lets that device also reach it through its own web address (stable link / tunnel), with a device token.
 /// Only ever set together with `agents/remote`.
 pub const AGENTS_REMOTE_WEB: &str = "agents/remote/web";
+/// This PC lets that device also call its read-only `/pclink` routes over this PC's own public tunnel address, each request signed with the
+/// device's node key (`device_link::pcdoor`). Not the old web route (`agents/remote/web`, a phone token, off for good). Only ever set
+/// together with `agents/remote`. Only the person, from an app window, turns it on.
+pub const AGENTS_REMOTE_PCDOOR: &str = "agents/remote/pcdoor";
 /// This PC lets that device ask to borrow its agent sign-ins (the lend ask / yes / take-back items travel on the device link).
 /// Independent of `agents/remote`; the device is still let in on the agents link so the items can arrive.
 pub const LEND_CONTROL: &str = "agents/lend/control";
 
 /// What the person may turn on per computer, in the order the page shows them. Everything starts off.
-pub const PERMISSIONABLE: [&str; 8] = [DESK_INPUT, DESK_CLIPBOARD, FILES, AGENTS_REMOTE, AGENTS_REMOTE_ANSWER, AGENTS_REMOTE_FULL, AGENTS_REMOTE_WEB, LEND_CONTROL];
+pub const PERMISSIONABLE: [&str; 9] = [DESK_INPUT, DESK_CLIPBOARD, FILES, AGENTS_REMOTE, AGENTS_REMOTE_ANSWER, AGENTS_REMOTE_FULL, AGENTS_REMOTE_WEB, AGENTS_REMOTE_PCDOOR, LEND_CONTROL];
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum RelayPolicy {

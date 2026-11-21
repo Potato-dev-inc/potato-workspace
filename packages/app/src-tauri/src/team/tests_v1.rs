@@ -1017,6 +1017,7 @@ fn phone_team_routes_follow_device_caps_and_refuse_agents() {
         members: vec!["Maya".into()],
         transport: Some("relay"),
         link: Some("live"),
+        link_detail: None,
         error: None,
         missing: 0,
         drafts: vec![],

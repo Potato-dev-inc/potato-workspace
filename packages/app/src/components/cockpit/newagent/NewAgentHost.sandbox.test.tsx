@@ -94,13 +94,13 @@ describe('New agent page: the sandbox on this PC', () => {
     await click(q('[data-testid="where-pill"]'));
     await settle(4);
     const rows = [...q('.dev-where-menu')!.querySelectorAll('.dev-where-row > span')].map((s) => s.textContent);
-    expect(rows).toEqual(['Desk-PC · This PC', 'Ubuntu', 'Sandbox']);
+    expect(rows).toEqual(['Desk-PC · This PC', 'WSL · Ubuntu', 'WSL · Sandbox']);
     await click(q('[data-testid="where-wsl:pm-sbx-main"]'));
     await settle(6);
 
     // The device name is the one that was picked (not "Ubuntu", not "This PC").
     const pill = q('[data-testid="where-pill"]')!;
-    expect(pill.textContent).toContain('Sandbox');
+    expect(pill.textContent).toContain('WSL · Sandbox');
     expect(pill.textContent).not.toContain('Ubuntu');
     // The normal composer stays (no old form); the project chip is the folder, and Start starts the agent in the sandbox.
     expect(q('[data-testid="wsl-panel"]')).toBeNull();

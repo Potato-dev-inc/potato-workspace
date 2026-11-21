@@ -1,7 +1,7 @@
 //! The chat of an ACP session against the fake agent (`acp/fake_agent.rs`): real processes, real pipes, the real
 //! question store, the real chat watchers and phone answer. No real agent is started.
 
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::Arc;
 use std::time::{Duration, Instant};
@@ -1499,3 +1499,139 @@ fn the_bridge_routes_for_typing_and_taking_over_name_the_device_and_the_app_chan
     assert_eq!(api::claim(&rig.id(), Some("phone-1")).unwrap().0, 200);
     assert_eq!(api::typing(&rig.id(), Some("phone-1")).unwrap().0, 200);
 }
+
+
+/// A host whose `ssh` is this test program playing the fake agent (the agent "runs on the other computer").
+struct RemoteEnv {
+    root: PathBuf,
+}
+
+impl crate::acp::config::HostEnv for RemoteEnv {
+    fn var(&self, _: &str) -> Option<std::ffi::OsString> {
+        None
+    }
+    fn which(&self, _: &str) -> Option<PathBuf> {
+        None
+    }
+    fn adapters_dir(&self) -> PathBuf {
+        self.root.join("adapters")
+    }
+    fn homes_dir(&self) -> PathBuf {
+        self.root.join("homes")
+    }
+    fn ssh_program(&self) -> Option<crate::acp::config::SshProgram> {
+        let mut pre: Vec<std::ffi::OsString> = fake_agent::HARNESS_ARGS.iter().map(std::ffi::OsString::from).collect();
+        pre.push("--".into());
+        let env = vec![
+            (fake_agent::ROLE_ENV.into(), "agent".into()),
+            (fake_agent::OPTS_ENV.into(), "".into()),
+            (fake_agent::STORE_ENV.into(), self.root.join("store").into_os_string()),
+        ];
+        Some(crate::acp::config::SshProgram { exe: std::env::current_exe().expect("test exe"), pre, env })
+    }
+}
+
+/// A chat on another computer, a whole turn: nothing at all is made on THIS PC at the remote path, and the pane's folder on this PC is
+/// a marker no writer (summaries, git exclude, copies, checkpoints) can create anything at.
+#[test]
+fn a_remote_chat_turn_makes_nothing_on_this_pc_at_the_remote_path() {
+    let _gate = crate::test_support::wait::process_permit();
+    let dir = std::env::temp_dir().join(format!("pm-acp-chat-test-{}", uuid::Uuid::new_v4()));
+    std::fs::create_dir_all(&dir).unwrap();
+    let remote_root = format!("/pm-remote-{}", uuid::Uuid::new_v4());
+    let folder = format!("{remote_root}/app");
+    let mut cfg = fake_agent::agent_config("", &dir.join("store"));
+    cfg.remote_command = vec!["fake".into()];
+    let registry = Arc::new(Mutex::new(PaneRegistry::new()));
+    let deps = StartDeps { registry: registry.clone(), host: Arc::new(Recorder::default()), env: Arc::new(RemoteEnv { root: dir.clone() }), conversations: None };
+    let ssh = crate::ssh::model::SshHost::parse("h1", "Build box", "dev@build.local", None, None).unwrap();
+    let chat = start(&deps, cfg, StartRequest { agent_id: "fake".into(), folder: PathBuf::from(&folder), explicit: true, remote: Some(ssh), ..Default::default() }).expect("the remote fake agent starts");
+    chat.send("hello").unwrap();
+    assert!(wait_until(30, || chat.items().iter().any(|i| serde_json::to_value(i).unwrap()["kind"] == "turnEnd")), "the turn did not end");
+    let cwd = registry.lock().get(chat.pane_id()).expect("the pane").info().cwd;
+    assert_eq!(crate::ssh::acp::remote_folder_of(&cwd), Some(("h1", folder.as_str())));
+    let here = Path::new(&cwd);
+    assert!(!here.is_dir() && !here.exists());
+    assert!(std::fs::create_dir_all(here.join(".potato-workspace")).is_err(), "a writer cannot create anything under the pane folder");
+    assert!(matches!(crate::git_exclude::ensure_in(here), crate::git_exclude::Outcome::NotARepo), "no .git/info/exclude is edited for it");
+    assert!(!Path::new(&remote_root).exists() && !Path::new(&folder).exists(), "nothing exists at the remote path on this PC");
+    assert!(crate::acp::chat::is_remote_pane(chat.pane_id()));
+    // The app window sees it; a phone, a paired device or an agent is never shown it.
+    assert!(registry.lock().list_including_remote().iter().any(|p| p.id == chat.pane_id()));
+    assert!(crate::acp::chat::external_panes(&registry).iter().all(|p| p.id != chat.pane_id()));
+    // A permission card of that chat: the bridge (phone, agent) and another PC neither list it nor answer it; the store still has it.
+    let card = crate::questions::store()
+        .create(
+            crate::questions::NewQuestion {
+                pane_id: Some(chat.pane_id().to_string()),
+                question: "Run it?".into(),
+                choices: vec![crate::questions::Choice { id: "allow".into(), label: "Allow".into() }],
+                allow_free_text: Some(false),
+                timeout_s: Some(600),
+                ..Default::default()
+            },
+            crate::questions::now_ms(),
+        )
+        .unwrap()
+        .id;
+    let ids = |list: &Value| list["questions"].as_array().unwrap().iter().map(|q| q["id"].as_str().unwrap().to_string()).collect::<Vec<_>>();
+    let listed = crate::questions::routes::handle("GET", &["questions"], &json!({}), None, true, &|| {}).expect("a questions route").expect("listed");
+    assert!(!ids(&listed.1).contains(&card), "the bridge does not list a remote chat's card");
+    let refused = crate::questions::routes::handle("POST", &["questions", card.as_str(), "answer"], &json!({ "choice_id": "allow" }), None, true, &|| {}).expect("a questions route").expect_err("refused");
+    assert_eq!((refused.0, refused.1["code"].as_str()), (403, Some("REMOTE_PANE")));
+    let dismissed = crate::questions::routes::handle("POST", &["questions", card.as_str(), "dismiss"], &json!({}), None, true, &|| {}).expect("a questions route").expect_err("refused");
+    assert_eq!(dismissed.0, 403);
+    assert!(crate::questions::store().get(&card, crate::questions::now_ms()).is_some(), "the card is still waiting for the app window");
+    use crate::device_link::pclink::services::Services;
+    let pc = crate::device_link::pclink::app_services::AppServices::new(Arc::new(|| "Desk".into())).questions(true);
+    assert!(!ids(&pc.1).contains(&card), "another PC does not list it");
+    // The app window's Inbox list (`questions_list`) has the card, and its own tray count counts it; the attention JSON of
+    // `GET /attention` (the same body the window's `attention_snapshot` returns) stays without it.
+    let window = tauri::async_runtime::block_on(crate::commands::questions_list()).expect("the window's question list");
+    assert!(window.iter().any(|q| q.id == card), "the window's Inbox lists a remote chat's card");
+    assert!(!crate::attention::routes::get(None).to_string().contains(&card), "the attention snapshot is the safe one: no remote card");
+    // The default accessors are safe: the default list and the default store calls leave the card out; only the window's own calls see it.
+    assert!(!crate::questions::store().list_pending(crate::questions::now_ms()).iter().any(|q| q.id == card));
+    assert!(crate::questions::store().list_pending_including_remote(crate::questions::now_ms()).iter().any(|q| q.id == card));
+    let facts = crate::attention::collect_facts(crate::questions::now_ms());
+    assert!(!facts.questions.iter().any(|q| q.id == card), "GET /attention, its events and the Telegram snapshot are built from these facts");
+    assert!(crate::questions::store().answer(&card, Some("allow"), None, "phone", crate::questions::now_ms()).unwrap_err().code == "REMOTE_PANE", "attention, the lock screen and the PC link answer through this");
+    assert!(crate::questions::store().dismiss(&card, crate::questions::now_ms()).is_err());
+    let before = crate::push::NOTIFIED_QUESTIONS.lock().len();
+    crate::push::notify_question(&crate::questions::store().get(&card, crate::questions::now_ms()).unwrap());
+    assert_eq!(crate::push::NOTIFIED_QUESTIONS.lock().len(), before, "no push for a remote card");
+    // The window-only count still counts it; the safe count and the phone's snapshot do not.
+    assert_eq!(crate::attention::remote_card_count(), 1);
+    assert_eq!(crate::attention::counts_including_remote().blocking, crate::attention::counts().blocking + 1);
+    // A prefix of the pane id (4+ characters) is no way in: it never resolves, is never a candidate and is never named in an error.
+    let pane = chat.pane_id().to_string();
+    let prefix = pane[..8].to_string();
+    let ids = crate::acp::chat::resolvable_pane_ids(registry.lock().panes.keys().cloned().collect::<Vec<_>>());
+    assert!(!ids.contains(&pane));
+    for reference in [pane.clone(), prefix.clone(), pane[..4].to_string()] {
+        let err = crate::mcp_sessions::resolve_pane_id(&reference, &ids).unwrap_err();
+        assert_eq!(err.code, "PANE_NOT_FOUND", "{reference}");
+        if reference != pane {
+            // (A full id the caller typed is echoed back as the caller's own text; a prefix must never produce the full id.)
+            assert!(!err.message.contains(&pane) && !err.context.to_string().contains(&pane), "the error names no remote id");
+        }
+    }
+    let raw: Vec<String> = registry.lock().panes.keys().cloned().collect();
+    assert!(raw.contains(&pane), "the raw registry still holds it for the window");
+    assert!(crate::mcp_sessions::resolve_pane_id(&prefix, &raw).is_err(), "even handed the raw list, a remote id never resolves");
+    let enriched = crate::mcp_sessions::enrich_handle_error(crate::mcp_sessions::agent_not_found(&prefix), &raw);
+    assert!(!enriched.message.contains(&pane) && !enriched.context.to_string().contains(&pane));
+    // The ask route will not hand back or cancel an existing remote card.
+    let ask = crate::questions::routes::handle("POST", &["questions", "ask"], &json!({ "question_id": card, "wait_ms": 1 }), None, true, &|| {}).expect("a route").expect_err("refused");
+    assert_eq!(ask.0, 403);
+    // The window answers its own card.
+    assert!(crate::questions::store().answer_including_remote(&card, Some("allow"), None, "desktop", crate::questions::now_ms()).unwrap().accepted);
+    // The status hooks of a remote pane run only the local ones, and a message from another device is refused at the outbox.
+    assert!(crate::acp::chat::is_remote_pane(chat.pane_id()));
+    chat.retire();
+    let _ = std::fs::remove_dir_all(&dir);
+}
+
+#[cfg(test)]
+#[path = "ssh_real_tests.rs"]
+mod ssh_real_tests;

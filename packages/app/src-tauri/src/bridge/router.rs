@@ -64,8 +64,15 @@ fn health_identity() -> (Option<String>, Option<String>, Option<&'static str>) {
 
 /// What `GET /health` says to a caller that is not on this computer: `ok` and the version, nothing about the
 /// profile folder, build, tools or standby pool. `None` for a local caller (the MCP, CLI and watch commands need all of it).
-fn public_health(remote: bool) -> Option<serde_json::Value> {
-    remote.then(|| json!({ "ok": true, "version": crate::app_lifecycle::app_version() }))
+fn public_health(remote: bool, query: &str) -> Option<serde_json::Value> {
+    remote.then(|| {
+        let mut body = json!({ "ok": true, "version": crate::app_lifecycle::app_version() });
+        // "Check" of the person's own address: a fresh nonce in, a proof only this running app can make out.
+        if let Some(nonce) = super::http::query_param(query, "nonce").filter(|n| super::identity::valid_nonce(n)) {
+            body["proof"] = json!(super::identity::own_domain_proof(&nonce));
+        }
+        body
+    })
 }
 
 #[allow(clippy::too_many_arguments)]
@@ -118,7 +125,7 @@ pub(super) fn route_authorized(
 
     if segments == ["health"] && method == "GET" {
         // A caller that is not this computer (a public address, a phone, another PC) learns only that the bridge is up.
-        if let Some(short) = public_health(mobile_pairing::requires_pairing_token(headers, peer_loopback)) {
+        if let Some(short) = public_health(mobile_pairing::requires_pairing_token(headers, peer_loopback), query) {
             return Ok((200, short));
         }
         crate::mcp_sessions::authorize(request_session(headers), method, "/health", &json!({}))
@@ -158,6 +165,10 @@ pub(super) fn route_authorized(
         })?
     };
     let route_path = format!("/{}", segments.join("/"));
+    // A chat that runs on another computer over SSH can only be used from the app window: no MCP tool and no phone drives it.
+    if let Some(refusal) = remote_pane_refusal(&crate::acp::chat::remote_pane_ids(), segments, query, body, &request_body) {
+        return Err(refusal);
+    }
     // A paired phone (it got past the pairing token check above) is the user at another screen:
     // like the desktop pane window, it may type into any pane, including ones an MCP run manages.
     let paired_phone_typing = session.is_none()
@@ -266,6 +277,73 @@ pub(super) fn route_authorized(
 
 /// The routes that start a new agent (a helper): `run_agent`, `quick_ask`, `followup_task`, `delegate_work`, `spawn_agent`; and
 /// `message_parent`, whose caller (a spin-off) is found the same way.
+/// The plain sentence for a refused request that names a chat on another computer (shared: `acp::chat`).
+pub(crate) use crate::acp::chat::REMOTE_PANE_REFUSED;
+
+/// Percent-decoding that never fails (a malformed `%` stays as it is): the text a route would read from a query or a path.
+fn lenient_percent_decode(text: &str) -> String {
+    let bytes = text.as_bytes();
+    let mut out: Vec<u8> = Vec::with_capacity(bytes.len());
+    let mut i = 0;
+    while i < bytes.len() {
+        if bytes[i] == b'%' && i + 2 < bytes.len() && bytes[i + 1].is_ascii_hexdigit() && bytes[i + 2].is_ascii_hexdigit() {
+            out.push(u8::from_str_radix(&text[i + 1..i + 3], 16).unwrap_or(b'%'));
+            i += 3;
+        } else {
+            out.push(bytes[i]);
+            i += 1;
+        }
+    }
+    String::from_utf8_lossy(&out).into_owned()
+}
+
+/// Every string a request can carry a pane id in, AS A ROUTE WILL READ IT: path segments and query percent-decoded, and every
+/// key and string value of the parsed JSON body (so `7` escapes are already plain). The raw texts are included too.
+fn request_strings(segments: &[&str], query: &str, body: &[u8], parsed: &serde_json::Value) -> Vec<String> {
+    fn walk(value: &serde_json::Value, out: &mut Vec<String>) {
+        match value {
+            serde_json::Value::String(s) => out.push(s.clone()),
+            serde_json::Value::Array(items) => items.iter().for_each(|v| walk(v, out)),
+            serde_json::Value::Object(map) => map.iter().for_each(|(k, v)| {
+                out.push(k.clone());
+                walk(v, out);
+            }),
+            _ => {}
+        }
+    }
+    let mut out: Vec<String> = segments.iter().map(|s| s.to_string()).collect();
+    out.extend(segments.iter().map(|s| lenient_percent_decode(s)));
+    out.push(query.to_string());
+    out.push(lenient_percent_decode(query));
+    for pair in query.split('&') {
+        let (key, value) = pair.split_once('=').unwrap_or((pair, ""));
+        out.push(lenient_percent_decode(key));
+        out.push(lenient_percent_decode(&value.replace('+', " ")));
+    }
+    out.push(String::from_utf8_lossy(body).into_owned());
+    walk(parsed, &mut out);
+    out
+}
+
+/// `Some(error)` when a request names one of `remote_ids`, in ANY form a route could decode it from: the raw text, a percent-encoded
+/// path or query value, or a JSON-escaped string (the parsed body is searched, not only its bytes). Pane ids are random uuids, so a
+/// text search cannot hit anything else. Covers sends, follow-ups, adoption, reads and waits by pane id or handle in one place.
+pub(crate) fn remote_pane_refusal(remote_ids: &[String], segments: &[&str], query: &str, body: &[u8], parsed: &serde_json::Value) -> Option<(u16, serde_json::Value)> {
+    if remote_ids.is_empty() {
+        return None;
+    }
+    let strings = request_strings(segments, query, body, parsed);
+    // The whole text names it, OR a whole value is a prefix of it with at least 4 characters (the MCP layer resolves such prefixes).
+    let named = remote_ids.iter().any(|id| {
+        !id.is_empty()
+            && strings.iter().any(|s| {
+                let value = s.trim().to_ascii_lowercase();
+                s.contains(id.as_str()) || (value.len() >= crate::mcp_sessions::MIN_PANE_PREFIX_LEN && id.to_ascii_lowercase().starts_with(value.as_str()))
+            })
+    });
+    named.then(crate::acp::chat::remote_refusal)
+}
+
 fn is_helper_start_route(method: &str, segments: &[&str]) -> bool {
     method == "POST" && matches!(segments, ["agents", "run" | "quick" | "followup" | "message-parent"] | ["operations", "delegate"] | ["panes"] | ["terminals", "start" | "read" | "wait" | "stop"])
 }
@@ -277,7 +355,50 @@ fn is_pane_typing_route(method: &str, segments: &[&str]) -> bool {
 
 #[cfg(test)]
 mod tests {
-    use super::{health_identity, is_helper_start_route, is_pane_typing_route, Health};
+    use super::{health_identity, is_helper_start_route, is_pane_typing_route, remote_pane_refusal, Health, REMOTE_PANE_REFUSED};
+
+    #[test]
+    fn a_request_that_names_a_chat_on_another_computer_is_refused_in_any_form_a_route_can_decode() {
+        let ids = vec!["7d1c0a52-aaaa-4bbb-8ccc-0123456789ab".to_string()];
+        let id = ids[0].clone();
+        // `d` written as a JSON unicode escape, and as a percent escape: the bytes differ, the decoded id is the same.
+        let json_escaped = id.replacen('d', "\\u0064", 1);
+        let percent = id.replacen('d', "%64", 1);
+        let upper_percent = id.replace('-', "%2D");
+        let cases: Vec<(Vec<String>, String, String)> = vec![
+            (vec!["panes".into(), id.clone(), "input".into()], String::new(), "{}".into()),
+            (vec!["panes".into(), percent.clone(), "input".into()], String::new(), "{}".into()),
+            (vec!["agents".into(), "followup".into()], String::new(), format!("{{\"handle\":\"{id}\",\"task\":\"x\"}}")),
+            (vec!["agents".into(), "followup".into()], String::new(), format!("{{\"handle\":\"{json_escaped}\",\"task\":\"x\"}}")),
+            (vec!["agents".into(), "run".into()], String::new(), format!("{{\"nested\":{{\"pane_id\":[\"{json_escaped}\"]}}}}")),
+            (vec!["chat".into(), "messages".into()], format!("pane_id={id}"), "{}".into()),
+            (vec!["chat".into(), "messages".into()], format!("handle={percent}"), "{}".into()),
+            (vec!["chat".into(), "messages".into()], format!("handle={upper_percent}"), "{}".into()),
+        ];
+        for (segments, query, body) in cases {
+            let parsed: serde_json::Value = serde_json::from_str(&body).unwrap();
+            let segs: Vec<&str> = segments.iter().map(String::as_str).collect();
+            let refused = remote_pane_refusal(&ids, &segs, &query, body.as_bytes(), &parsed).unwrap_or_else(|| panic!("not refused: {segs:?} {query} {body}"));
+            assert_eq!(refused.0, 403);
+            assert_eq!(refused.1["error"], REMOTE_PANE_REFUSED);
+            assert_eq!(refused.1["code"], "REMOTE_PANE");
+        }
+        // A prefix of the id (4 or more characters), as the MCP layer accepts it, is refused too; a shorter one or another text is not.
+        for prefix in ["7d1c", "7D1C0A52", "7d1c0a52-aaaa"] {
+            let parsed = serde_json::json!({ "handle": prefix });
+            assert!(remote_pane_refusal(&ids, &["agents", "followup"], "", b"{}", &parsed).is_some(), "{prefix}");
+            assert!(remote_pane_refusal(&ids, &["panes", prefix, "input"], "", b"{}", &serde_json::json!({})).is_some(), "{prefix}");
+            assert!(remote_pane_refusal(&ids, &["chat"], &format!("pane_id={prefix}"), b"{}", &serde_json::json!({})).is_some(), "{prefix}");
+        }
+        assert!(remote_pane_refusal(&ids, &["agents", "followup"], "", b"{}", &serde_json::json!({ "handle": "7d1" })).is_none());
+        assert!(remote_pane_refusal(&ids, &["agents", "followup"], "", b"{}", &serde_json::json!({ "handle": "hello world" })).is_none());
+        // The old raw substring search alone would have let these through.
+        assert!(!format!("{{\"handle\":\"{json_escaped}\"}}").contains(&id));
+        assert!(!format!("handle={percent}").contains(&id));
+        let none = serde_json::json!({});
+        assert!(remote_pane_refusal(&ids, &["panes", "other-pane", "input"], "", b"{}", &none).is_none());
+        assert!(remote_pane_refusal(&[], &["panes", id.as_str(), "input"], "", b"{}", &none).is_none());
+    }
 
     #[test]
     fn the_routes_that_start_a_helper_are_the_ones_that_record_a_caller() {
@@ -336,22 +457,35 @@ mod health_tests {
 
     #[test]
     fn a_public_caller_gets_only_ok_and_the_version() {
-        let body = public_health(true).expect("remote callers get the short answer");
+        let body = public_health(true, "").expect("remote callers get the short answer");
         let keys: Vec<_> = body.as_object().unwrap().keys().cloned().collect();
         assert_eq!(keys, vec!["ok".to_string(), "version".to_string()]);
         assert_eq!(body["ok"], true);
     }
 
     #[test]
+    fn a_check_with_a_nonce_gets_a_proof_and_nothing_else_new() {
+        let nonce = "0123456789abcdef0123456789abcdef";
+        let body = public_health(true, &format!("nonce={nonce}")).unwrap();
+        assert_eq!(body["proof"], crate::bridge::identity::own_domain_proof(nonce));
+        assert!(body.get("nonce").is_none() && body.get("app_instance_id").is_none());
+        // another nonce gives another proof; a junk or short nonce gets none
+        assert_ne!(body["proof"], crate::bridge::identity::own_domain_proof("fedcba9876543210fedcba9876543210"));
+        for bad in ["nonce=abc", "nonce=zzzzzzzzzzzzzzzzzzzzzzzz", "nonce=", "x=1"] {
+            assert!(public_health(true, bad).unwrap().get("proof").is_none(), "{bad}");
+        }
+    }
+
+    #[test]
     fn a_caller_on_this_computer_gets_the_full_answer() {
-        assert!(public_health(false).is_none());
+        assert!(public_health(false, "").is_none());
     }
 
     #[test]
     fn a_forwarded_loopback_request_counts_as_public() {
         let remote = |headers: &str, loopback: bool| crate::mobile_pairing::requires_pairing_token(headers, loopback);
-        assert!(public_health(remote("Cf-Connecting-Ip: 1.2.3.4\r\n", true)).is_some());
-        assert!(public_health(remote("Host: 127.0.0.1:17421\r\n", true)).is_none());
-        assert!(public_health(remote("", false)).is_some());
+        assert!(public_health(remote("Cf-Connecting-Ip: 1.2.3.4\r\n", true), "").is_some());
+        assert!(public_health(remote("Host: 127.0.0.1:17421\r\n", true), "").is_none());
+        assert!(public_health(remote("", false), "").is_some());
     }
 }

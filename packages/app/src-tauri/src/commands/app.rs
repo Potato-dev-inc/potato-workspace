@@ -11,7 +11,7 @@ pub async fn sync_public_settings(
     let parsed: Value = serde_json::from_str(&settings_json)
         .map_err(|err| format!("invalid settings json: {err}"))?;
     let merged =
-        settings_store::merge_public_settings(&settings_store::default_public_settings(), &parsed);
+        settings_store::merge_public_settings_window(&settings_store::default_public_settings(), &parsed);
     *state.public_settings.lock() = merged;
     let _ = app;
     Ok(())

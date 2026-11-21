@@ -7,6 +7,8 @@ export interface Account {
   agent_id: string;
   label: string;
   home: string;
+  /** Read from the folder's file names only: `signed_in`, `signed_out` or `unknown` (the login may be in a keychain). Absent on an old backend. */
+  login_state?: 'signed_in' | 'signed_out' | 'unknown';
   /** A lend sign-in (Lend through my PC): signed in once, used only for lending. Never offered as a login to start with. */
   lend_only?: boolean;
   /** A lend sign-in: the name of the lend profile that uses it ("Work account"). Shown instead of the internal label. */
@@ -54,6 +56,8 @@ export interface AccountsApi {
   add: (agentId: string, label: string) => Promise<Account>;
   rename: (id: string, label: string) => Promise<Account>;
   remove: (id: string, deleteHome?: boolean) => Promise<boolean>;
+  /** Sign the account out: its sign-in files are removed, the account stays. Resolves to how many files went. */
+  signOut: (id: string) => Promise<number>;
   /** Start the agent under the account in a new pane (the one-time login). */
   openLoginPane: (agentId: string, accountId: string) => Promise<string>;
   /** Which login a helper this agent starts uses: `ask`, `main` or an account id. Returns the saved value. */
@@ -72,6 +76,7 @@ export const tauriAccountsApi: AccountsApi = {
   add: (agentId, label) => call<Account>('accounts_add', { agentId, label }),
   rename: (id, label) => call<Account>('accounts_rename', { id, label }),
   remove: (id, deleteHome = false) => call<boolean>('accounts_remove', { id, deleteHome }),
+  signOut: (id) => call<number>('accounts_sign_out', { id }),
   openLoginPane: (agentId, accountId) => call<string>('new_pane', { agentId, accountId }),
   setHelperLogin: (agentId, value) => call<string>('accounts_set_helper_login', { agentId, value }),
 };

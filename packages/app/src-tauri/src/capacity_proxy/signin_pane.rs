@@ -46,6 +46,8 @@ struct Entry {
 pub struct SigninPanes {
     map: Mutex<HashMap<String, Entry>>,
     next: Mutex<u64>,
+    /// When each sign-in was last started (kept after its pane ends): a credential file written after this is a sign-in that happened.
+    started: Mutex<HashMap<String, std::time::SystemTime>>,
 }
 
 fn lock<T>(m: &Mutex<T>) -> std::sync::MutexGuard<'_, T> {
@@ -212,6 +214,8 @@ impl SigninPanes {
         let _ = std::fs::create_dir_all(cwd);
         let pane_id = uuid::Uuid::new_v4().to_string();
         crate::pty::hidden::hide(&pane_id);
+        // Taken before the agent runs, so a credential file it writes can never look older than the start.
+        let started_at = std::time::SystemTime::now();
         let spawned = ports.spawn(args(pane_id.clone()));
         let pane_id = match spawned {
             Ok(id) => id,
@@ -226,6 +230,7 @@ impl SigninPanes {
             *n
         };
         lock(&self.map).insert(key.to_string(), Entry { pane_id: pane_id.clone(), ports, generation });
+        lock(&self.started).insert(key.to_string(), started_at);
         let (me, key) = (Arc::downgrade(self), key.to_string());
         let _ = std::thread::Builder::new().name("lend-signin-timeout".into()).spawn(move || {
             std::thread::sleep(TIMEOUT);
@@ -234,6 +239,11 @@ impl SigninPanes {
             }
         });
         Ok(pane_id)
+    }
+
+    /// When the sign-in under `key` was last started, if it ever was.
+    pub fn started_at(&self, key: &str) -> Option<std::time::SystemTime> {
+        lock(&self.started).get(key).copied()
     }
 
     /// The hidden pane under `key`, when it still runs.

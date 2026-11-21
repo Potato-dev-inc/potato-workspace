@@ -4,7 +4,7 @@ import { lendState, REQUEST_MAYA } from '../../dev/lend-fixtures';
 import { teamConfig, teamState } from '../../dev/team-fixtures';
 import { DEFAULT_SHARE, type PresenceView } from '../../lib/team';
 import { initials, personHue } from './person-color';
-import { busyLine, dayLabel, feedMatches, hereCount, linkWords, presenceKindOf, presenceWords, shareLine, shareOf, sidebarCount, sortPeople, tabCounts, tasksForMe, workingLine } from './team-page-model';
+import { busyLine, dayLabel, feedMatches, hereCount, linkStatus, linkWords, presenceKindOf, presenceWords, shareLine, shareOf, sidebarCount, sortPeople, tabCounts, tasksForMe, workingLine } from './team-page-model';
 
 const NOW = 1_800_000_000_000;
 const MIN = 60_000;
@@ -65,8 +65,77 @@ describe('link words', () => {
     expect(w('connecting')).toBe('Connecting…');
     expect(w(null)).toBe('Connecting…');
     expect(w('offline')).toBe('Not connected. Trying again.');
-    expect(w('denied')).toBe("This team's connection said no. Open Setup.");
+    expect(w('denied')).toBe('The team turned this computer away.');
     expect(linkWords(teamState({ enabled: false }))).toBe('Team is paused on this computer');
+  });
+});
+
+describe('link status', () => {
+  const detail = (o: object) => ({ host: 'relay.example.com', step: 'waiting' as const, attempting: false, problem: null, retryInS: null, ...o });
+  it('spins only while a try is really going on', () => {
+    const first = linkStatus(teamState({ link: 'connecting', linkDetail: detail({ step: 'socket', attempting: true }) }));
+    expect(first.icon).toBe('busy');
+    expect(first.reason).toContain('relay.example.com');
+    expect(linkStatus(teamState({ link: 'connecting', linkDetail: detail({ step: 'idle' }) })).icon).toBe('idle');
+    expect(linkStatus(teamState({ link: 'connecting' })).icon).toBe('idle');
+  });
+  it('says why it is offline, with a still icon, a retry countdown and Setup', () => {
+    const s = linkStatus(teamState({ link: 'offline', linkDetail: detail({ problem: 'refused', retryInS: 2 }) }));
+    expect(s.icon).toBe('warn');
+    expect(s.title).toBe('Not connected to relay.example.com');
+    expect(s.reason).toContain('did not answer');
+    expect(s.reason).toContain('Trying again in 2 seconds.');
+    expect(s.action).toBe('reconnect');
+    expect(s.actionLabel).toBe('Try again');
+    expect(linkStatus(teamState({ link: 'offline', linkDetail: detail({ problem: 'dns', attempting: true }) })).reason).toContain('Trying now.');
+  });
+  it('tells every kind of failure apart, in plain words, with the one button that fixes it', () => {
+    const off = (problem: string, admin?: boolean) => linkStatus(teamState({ link: 'offline', linkDetail: detail({ problem }) }), { admin });
+    expect(off('unknown_team', true).reason).toContain('has forgotten this team');
+    expect(off('unknown_team', true).reason).toContain('Press the button to set the team up there again.');
+    expect(off('unknown_team', true).actionLabel).toBe('Set the team up again');
+    // A member cannot set the team up: the sentence says who can, and the button is only a retry.
+    expect(off('unknown_team', false).reason).toContain('The team owner has to open Team');
+    expect(off('unknown_team', false).actionLabel).toBe('Try again');
+    expect(off('signature').reason).toContain('date or time on this computer');
+    expect(off('busy').reason).toContain('too busy or full');
+    expect(off('down').reason).toContain('having trouble on its side');
+    expect(off('dns').reason).toContain('cannot find relay.example.com');
+    for (const kind of ['unknown_team', 'signature', 'busy', 'down', 'dns', 'refused', 'timeout', 'tls', 'unreadable', 'other']) {
+      expect(off(kind).problem).toBe(kind);
+      expect(off(kind).action).toBe('reconnect');
+      expect(off(kind).reason).not.toMatch(/{|undefined/);
+    }
+  });
+  it('a gone relay is said once: no countdown, no Try again; the owner may move the team to a relay that works', () => {
+    const gone = (admin: boolean, workingRelay: { address: string; host: string } | null, link: 'offline' | 'connecting' = 'offline') =>
+      linkStatus(teamState({ link, linkDetail: detail({ problem: 'relay_gone', retryInS: 3 }) }), { admin, workingRelay });
+    const w = { address: 'https://pm-relay.maya.workers.dev', host: 'pm-relay.maya.workers.dev' };
+    const a = gone(true, w);
+    expect(a.reason).toContain('The relay this team was saved on is gone.');
+    expect(a.reason).not.toContain('Trying again');
+    expect([a.action, a.moveTo, a.actionLabel]).toEqual(['move', w.address, 'Move this team to pm-relay.maya.workers.dev']);
+    expect(gone(true, w, 'connecting').action).toBe('move');
+    expect(gone(true, null).action).toBeNull();
+    expect(gone(true, null).reason).toContain('Connect > Devices');
+    expect(gone(false, w).action).toBeNull();
+    expect(gone(false, w).reason).toContain('team owner');
+  });
+  it('a relay that turned this computer away has no button: only the team owner can add it again', () => {
+    const denied = linkStatus(teamState({ link: 'denied', linkDetail: detail({}) }));
+    expect(denied.action).toBeNull();
+    expect(denied.reason).toContain('does not let this computer in');
+  });
+  it('shows a failed first try as a reason, not a spinner', () => {
+    expect(linkStatus(teamState({ link: 'connecting', linkDetail: detail({ problem: 'timeout', retryInS: 1 }) })).icon).toBe('warn');
+  });
+  it('is honest when nothing is running or the relay says no', () => {
+    const none = linkStatus(teamState({ link: null, transport: null }));
+    expect(none.icon).toBe('warn');
+    expect(none.title).toBe('The team connection is not running');
+    expect(linkStatus(teamState({ link: 'denied' })).icon).toBe('bad');
+    expect(linkStatus(teamState({ link: 'live' })).icon).toBe('ok');
+    expect(linkStatus(teamState({ enabled: false })).icon).toBe('idle');
   });
 });
 

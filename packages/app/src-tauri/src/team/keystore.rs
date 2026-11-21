@@ -13,6 +13,11 @@ use super::crypto::{b64, new_signing_key, unb64_32, KemSecret, SigningKey};
 use crate::secrets::SecretBackend;
 use std::sync::Arc;
 
+/// Room for the invite codes of one team in one entry (Windows keeps 1280 characters at most).
+const INVITES_MAX_CHARS: usize = 1000;
+
+static INVITES_LOCK: parking_lot::Mutex<()> = parking_lot::Mutex::new(());
+
 #[derive(Clone)]
 pub struct KeyStore {
     backend: Arc<dyn SecretBackend>,
@@ -108,20 +113,60 @@ impl KeyStore {
         self.set32(&format!("{team}/epoch/{epoch}"), key)
     }
 
+    // All of a team's invite codes share ONE entry ("id code" lines, newest last). One entry per invite
+    // filled the Windows Credential Manager (its per-user room is small) until even a 32-byte key failed
+    // with error 8. Old single entries are still read, and removed when the invite is forgotten.
+    fn invites_name(&self, team: &str) -> String {
+        self.name(&format!("{team}/invites"))
+    }
+
+    fn read_invites(&self, team: &str) -> Result<Vec<(String, String)>, String> {
+        let text = self.backend.get(&self.invites_name(team))?.unwrap_or_default();
+        Ok(text.lines().filter_map(|l| l.split_once(' ')).map(|(i, c)| (i.to_string(), c.to_string())).collect())
+    }
+
+    fn write_invites(&self, team: &str, list: &[(String, String)]) -> Result<(), String> {
+        if list.is_empty() {
+            return self.backend.delete(&self.invites_name(team));
+        }
+        let text = list.iter().map(|(i, c)| format!("{i} {c}")).collect::<Vec<_>>().join("
+");
+        self.backend.set(&self.invites_name(team), &text)
+    }
+
     pub fn invite_code(&self, team: &str, invite: &str) -> Result<Option<String>, String> {
+        if let Some((_, code)) = self.read_invites(team)?.into_iter().find(|(i, _)| i == invite) {
+            return Ok(Some(code));
+        }
         self.backend.get(&self.name(&format!("{team}/invite/{invite}")))
     }
 
     pub fn set_invite_code(&self, team: &str, invite: &str, code: &str) -> Result<(), String> {
-        self.backend.set(&self.name(&format!("{team}/invite/{invite}")), code)
+        let _guard = INVITES_LOCK.lock(); // read-modify-write of the shared entry
+        let mut list = self.read_invites(team)?;
+        list.retain(|(i, _)| i != invite);
+        list.push((invite.to_string(), code.to_string()));
+        // The store holds at most 1280 characters per entry: keep the newest codes under INVITES_MAX_CHARS.
+        while list.len() > 1 && list.iter().map(|(i, c)| i.len() + c.len() + 2).sum::<usize>() > INVITES_MAX_CHARS {
+            list.remove(0);
+        }
+        self.write_invites(team, &list)
     }
 
     pub fn forget_invite(&self, team: &str, invite: &str) -> Result<(), String> {
+        let _guard = INVITES_LOCK.lock();
+        let mut list = self.read_invites(team)?;
+        let before = list.len();
+        list.retain(|(i, _)| i != invite);
+        if list.len() != before {
+            self.write_invites(team, &list)?;
+        }
         self.backend.delete(&self.name(&format!("{team}/invite/{invite}")))
     }
 
     /// Forget a team's epoch keys up to `last_epoch` (leaving a team).
     pub fn forget_team(&self, team: &str, last_epoch: u64) {
+        let _ = self.backend.delete(&self.invites_name(team));
         for epoch in 1..=last_epoch {
             let _ = self.backend.delete(&self.name(&format!("{team}/epoch/{epoch}")));
         }
@@ -145,6 +190,40 @@ mod tests {
         maya.set_epoch_key("T", 2, &[9; 32]).unwrap();
         assert_eq!(maya.epoch_key("T", 2).unwrap(), Some([9; 32]));
         assert_eq!(leo.epoch_key("T", 2).unwrap(), None);
+    }
+
+    #[test]
+    fn invite_codes_share_one_entry_and_old_entries_still_load() {
+        let backend: Arc<dyn SecretBackend> = Arc::new(MemoryBackend::new());
+        let ks = KeyStore::with_backend(backend.clone(), "maya");
+        // An older version wrote one entry per invite.
+        backend.set("team/maya/T/invite/OLD", "OLDCODE1").unwrap();
+        assert_eq!(ks.invite_code("T", "OLD").unwrap().as_deref(), Some("OLDCODE1"));
+        ks.set_invite_code("T", "A", "AAAA1111").unwrap();
+        ks.set_invite_code("T", "B", "BBBB2222").unwrap();
+        assert_eq!(ks.invite_code("T", "A").unwrap().as_deref(), Some("AAAA1111"));
+        assert!(backend.get("team/maya/T/invite/A").unwrap().is_none(), "new codes use the shared entry");
+        ks.forget_invite("T", "A").unwrap();
+        ks.forget_invite("T", "OLD").unwrap();
+        assert_eq!(ks.invite_code("T", "A").unwrap(), None);
+        assert_eq!(ks.invite_code("T", "OLD").unwrap(), None);
+        assert!(backend.get("team/maya/T/invite/OLD").unwrap().is_none());
+        assert_eq!(ks.invite_code("T", "B").unwrap().as_deref(), Some("BBBB2222"));
+        ks.forget_invite("T", "B").unwrap();
+        assert!(backend.get("team/maya/T/invites").unwrap().is_none(), "an empty list leaves no entry");
+    }
+
+    #[test]
+    fn the_shared_invite_entry_stays_under_the_windows_size_limit() {
+        let backend: Arc<dyn SecretBackend> = Arc::new(MemoryBackend::new());
+        let ks = KeyStore::with_backend(backend.clone(), "maya");
+        let secret = "f".repeat(64);
+        for n in 0..50 {
+            ks.set_invite_code("T", &format!("{n:032x}"), &secret).unwrap();
+        }
+        assert!(backend.get("team/maya/T/invites").unwrap().unwrap().chars().count() <= 1280);
+        assert_eq!(ks.invite_code("T", &format!("{:032x}", 49)).unwrap().as_deref(), Some(secret.as_str()), "newest kept");
+        assert_eq!(ks.invite_code("T", &format!("{:032x}", 0)).unwrap(), None, "oldest dropped");
     }
 
     #[test]

@@ -46,7 +46,7 @@ import { useChatOrder } from '../../lib/sidebarOrder';
 import { requestPotatoCheck } from '../../lib/potatoCheck';
 import { chatSummaryOf, requestPassTask } from '../../lib/team-pass-bridge';
 import { bindingLabel, isMacPlatform } from '../../lib/shortcuts';
-import { groupByProject, useFoldedProjects, useGroupBy, useSidebarProjects } from '../../lib/sidebarProjects';
+import { groupByProject, pathKey, useFoldedProjects, useGroupBy, useSidebarProjects } from '../../lib/sidebarProjects';
 import { formatElapsed, spinnerStatus } from './model';
 import { splitPinned, usePinnedPanes } from '../../lib/pinnedPanes';
 import { useHelpersInSidebar } from '../../lib/helpersInSidebar';
@@ -62,7 +62,8 @@ import { openWorkflowPane } from '../../lib/task-view';
 import { useSidebarTasks } from './useSidebarTasks';
 import type { JobsApi } from '../../lib/pane-jobs';
 import { folderKey } from './history-model';
-import { multiLoginAgents, paneHeading, paneSubline } from './titles';
+import { multiLoginAgents, paneHeading } from './titles';
+import { paneRowFacts } from './rail/rowFacts';
 import { RowDoing } from './RowDoing';
 import { LastTurnContext } from './away-context';
 import { projectWithCopy } from './shell-labels';
@@ -86,12 +87,17 @@ import { TonightHost } from './night/TonightHost';
 import { onOpenTonight } from '../../lib/night-host';
 import { useNightEnabled } from '../../lib/night';
 import { BringChatsLink } from '../history/BringChatsLink';
-import { DeviceGroups } from '../devices/DeviceGroups';
+import { RemoteProjects } from '../devices/RemoteProjects';
+import { useAllProjects } from '../devices/useAllProjects';
 import { NewAgentWhere, type WhereProps } from '../devices/NewAgentWhere';
 import type { DeviceGroup, RemoteRow } from '../devices/useDeviceGroups';
 import { useDismissable } from '../../hooks/useDismissable';
 import { Menu, useLayerHost } from '../common/Floating';
 import { openBrowserWindow } from '../../lib/browser-check';
+import { LOCAL, locationBadge } from '../../lib/projectLocation';
+import { remotePathOf } from '../../lib/runtime/remoteNewAgent';
+
+const NO_GROUPS: DeviceGroup[] = [];
 
 export function Sidebar({
   c,
@@ -167,7 +173,7 @@ export function Sidebar({
   onOpenInbox?: () => void;
   onNewCompanion?: () => void;
   /** The New agent page: the New agent row opens it (with a project preselected from a project's "+"). Absent: the row opens the quick menu. */
-  onOpenNewAgent?: (project?: { path: string; name: string }) => void;
+  onOpenNewAgent?: (project?: { path: string; name: string; node?: string }) => void;
   /** The New agent page is the view on screen: the New agent row is the active one (and the Inbox row is not). */
   newAgentOpen?: boolean;
   /** Settings is the view on screen: its gear (in the footer) is the active one, and the Inbox row is not. */
@@ -251,6 +257,9 @@ export function Sidebar({
   const groups = { needs: unpinned(grouped.needs), working: unpinned(grouped.working), idle: unpinned(grouped.idle) };
   // Projects view: the folders the person added, which groups are folded, and how the list is grouped.
   const { projects, add: addProject, remove: removeProjectNow, rename: renameProject, reorder: reorderProjects, restore: restoreProjects } = useSidebarProjects();
+  // The one Projects list: this PC's added folders (with where each lives) and every other device's projects.
+  const allProjects = useAllProjects(projects, devices?.groups ?? NO_GROUPS);
+  const localLocation = new Map(allProjects.filter((e) => e.path !== null).map((e) => [e.key, e.location] as const));
   // Removing a project only takes it off the sidebar; the undo bar puts the list back exactly as it was.
   const removeProject = (path: string, name: string) => {
     const before = projects;
@@ -524,17 +533,8 @@ export function Sidebar({
     const id = p.info.id;
     const since = c.statusSince.get(id);
     const active = c.selectedId === id && !c.spawn && !openCompanionId && !openTaskId;
-    const heading = paneHeading(p.info, c.names.get(id) ?? p.info.agent_type);
-    const detail =
-      activityText(p.status, c.activities?.[id]) ??
-      (p.status === 'error' ? t('sidebar.errorIn', { where: projectWithCopy(p.info.cwd) }) : projectWithCopy(p.info.cwd));
-    const subline = paneSubline(
-      p.info,
-      c.names.get(id) ?? p.info.agent_type,
-      // Away from its parent (in Needs you) a helper says whose it is.
-      awayFrom ? t('sidebar.helperOf', { name: paneTitle(awayFrom), detail }) : detail,
-      multiLogin,
-    );
+    // The same function draws a chat of another PC (RemoteProjects): its title or agent, and its second line.
+    const { heading, subline } = paneRowFacts(p, { name: c.names.get(id) ?? p.info.agent_type, activity: activityText(p.status, c.activities?.[id]), awayFrom: awayFrom ? paneTitle(awayFrom) : undefined, multiLogin }, t);
     const entry = c.launchEntries.find((e) => e.type === p.info.agent_type);
     const asking = p.status === 'waiting_input' || questionPanes.has(id);
     const broken = p.status === 'error';
@@ -729,11 +729,23 @@ export function Sidebar({
     chatOrder,
   );
   const projectGroups = groupByProject(projectRoots, (n) => n.pane.info.cwd, projects);
+  // Another device's projects: the same list, after this PC's (no folder here, so no drag or "+").
+  const remoteBlock =
+    devices && devices.groups.length > 0 ? (
+      <RemoteProjects groups={devices.groups} entries={allProjects.filter((e) => e.path === null)} selectedKey={devices.selectedKey} onOpen={devices.onOpen} onRetry={devices.onRetry} launchEntries={c.launchEntries} onNewAgent={(e) => e.projectId && e.location.kind === 'device' && onOpenNewAgent?.({ path: remotePathOf(e.projectId), name: e.name, node: e.location.node })} />
+    ) : null;
   // Branch, copy and change counts of each top-level agent: asked again only when its status changes.
   const cards = usePaneCards(groupBy === 'projects' ? projectRoots.map((n) => ({ id: n.pane.info.id, status: n.pane.status })) : []);
   const newAgentIn = (path: string, name: string) => {
     if (onOpenNewAgent) {
       onOpenNewAgent({ path, name });
+      return;
+    }
+    // A project on an SSH machine: its folder is not on this PC, so a local agent is never started in it. The New agent page opens on
+    // that machine (the place is remembered with the project); this small menu has no machine step.
+    const where = localLocation.get(pathKey(path));
+    if (where?.kind === 'ssh') {
+      c.notify(t('devices.ssh.pickWhere', { name: where.name }));
       return;
     }
     setChosen({ path, name });
@@ -814,6 +826,7 @@ export function Sidebar({
               agents={g.items.map((item) => ({ id: item.pane.info.id, agentType: item.pane.info.agent_type, label: c.launchEntries.find((e) => e.type === item.pane.info.agent_type)?.label }))}
               signal={signal}
               added={g.added}
+              badge={locationBadge(localLocation.get(g.key) ?? LOCAL)}
               hasFolder={g.path !== null}
               onToggle={() => toggleProject(g.key)}
               onNewAgent={() => g.path && newAgentIn(g.path, g.name)}
@@ -866,6 +879,7 @@ export function Sidebar({
         );
       })}
       </ReorderList>
+      {remoteBlock}
       <button type="button" data-testid="side-add-project" className="ck-side-new ck-side-add" onClick={() => void addFolder()}>
         <span className="ck-row-glyph ck-row-glyph--icon">
           <IconFolderPlus />
@@ -1088,11 +1102,6 @@ export function Sidebar({
             )}
           </button>
         )}
-        {devices &&devices.groups.length > 0 && (
-          <div className="dev-group-head dev-group-head--this" data-testid="this-pc-head">
-            <span>{t('devices.thisPc')}</span>
-          </div>
-        )}
         <PinnedGroup
           ids={pinnedNodes.map((n) => n.pane.info.id)}
           canPin={(id) => roots.some((n) => n.pane.info.id === id)}
@@ -1110,6 +1119,7 @@ export function Sidebar({
             {section(t('sidebar.working'), groups.working)}
             {section(t('sidebar.idle'), groups.idle)}
             {looseGroup([...placement.loose.values()].flat())}
+            {remoteBlock}
           </>
         )}
         {tasks.ownGroup}
@@ -1134,7 +1144,6 @@ export function Sidebar({
             <span className="ck-side-count">{closedChats.length}</span>
           </button>
         )}
-        {devices && devices.groups.length > 0 && <DeviceGroups groups={devices.groups} selectedKey={devices.selectedKey} onOpen={devices.onOpen} onRetry={devices.onRetry} />}
       </nav>
 
       {hand.status && (

@@ -11,7 +11,7 @@ use serde_json::{json, Value};
 use super::services::EventView;
 use super::*;
 use crate::device_link::serve::HostBridge;
-use crate::device_link::tests::{instance_with, pair, real_now, Instance};
+use crate::device_link::tests::{instance_with, pair, real_now, until, Instance};
 use crate::device_link::Options;
 use crate::p2p::memory::MemoryNet;
 use crate::p2p::pairing::SystemClock;
@@ -25,7 +25,6 @@ fn every_route() -> Vec<(&'static str, &'static str, Value, Level)> {
         ("GET", "/pclink/sessions/p1/transcript?since=3", json!({}), Watch),
         ("GET", "/pclink/sessions/p1/transcript/earlier?before=i9&limit=20", json!({}), Watch),
         ("GET", "/pclink/sessions/p1/picture?path=a.png", json!({}), Watch),
-        ("GET", "/pclink/sessions/p1/screen", json!({}), Watch),
         ("GET", "/pclink/projects", json!({}), Watch),
         ("GET", "/pclink/usage", json!({}), Watch),
         ("GET", "/pclink/browse", json!({}), Full),
@@ -39,21 +38,30 @@ fn every_route() -> Vec<(&'static str, &'static str, Value, Level)> {
         ("POST", "/pclink/sessions/p1/interrupt", json!({}), Answer),
         ("POST", "/pclink/questions/q1/answer", json!({ "choice_id": "yes" }), Answer),
         ("POST", "/pclink/sessions/p1/config", json!({ "option_id": "model", "value": "m" }), Full),
-        ("POST", "/pclink/sessions/p1/input", json!({ "text": "ls" }), Full),
+        ("POST", "/pclink/call/write_pane_input", json!({ "paneId": "p1", "args": { "text": "ls" } }), Full),
         ("GET", "/pclink/agents/claude/models", json!({}), Full),
         ("POST", "/pclink/agents/start", json!({ "agent": "claude", "project": "p1" }), Full),
         ("POST", "/pclink/agents/warm", json!({ "agent": "claude", "project": "p1" }), Full),
         ("DELETE", "/pclink/sessions/p1", json!({}), Full),
         ("POST", "/pclink/move-work", json!({ "project": "p1", "branch": "potato/move-1", "bundle_b64": "AAAA" }), Full),
+        ("POST", "/pclink/call/acp_chat_state", json!({ "paneId": "p1" }), Watch),
+        ("POST", "/pclink/call/agent_model_options", json!({ "agentId": "claude" }), Watch),
+        ("POST", "/pclink/call/acp_chat_set_config", json!({ "paneId": "p1", "optionId": "effort", "value": "high" }), Full),
+        ("POST", "/pclink/call/acp_chat_set_force_yes", json!({ "paneId": "p1", "on": false }), Full),
     ]
 }
 
 #[derive(Default)]
-struct Fake {
+pub(crate) struct Fake {
     calls: Mutex<Vec<String>>,
-    locked: Mutex<Vec<String>>,
+    pub(super) locked: Mutex<Vec<String>>,
     asked: Mutex<Vec<Ask>>,
     count: AtomicUsize,
+    /// The arguments every far call arrived with (a test reads what the far side was told about the asker).
+    pub(crate) call_args: Mutex<Vec<Value>>,
+    /// What the fake chat's effort is, and the event payloads it raised (the far PC's event log).
+    effort: Mutex<String>,
+    log: Mutex<Vec<String>>,
 }
 
 impl Fake {
@@ -62,7 +70,7 @@ impl Fake {
         self.count.fetch_add(1, Ordering::SeqCst);
         (200, json!({ "ok": true, "did": what }))
     }
-    fn calls(&self) -> Vec<String> {
+    pub(crate) fn calls(&self) -> Vec<String> {
         self.calls.lock().unwrap().clone()
     }
 }
@@ -86,9 +94,6 @@ impl Services for Fake {
     }
     fn picture(&self, s: &str, _: &str) -> (u16, Value) {
         self.note(&format!("picture {s}"))
-    }
-    fn screen(&self, s: &str) -> (u16, Value) {
-        self.note(&format!("screen {s}"))
     }
     fn projects(&self) -> (u16, Value) {
         self.note("projects")
@@ -129,9 +134,6 @@ impl Services for Fake {
     fn set_config(&self, _: &str, s: &str, o: &str, v: &str, _: bool) -> (u16, Value) {
         self.note(&format!("config {s} {o} {v}"))
     }
-    fn input(&self, _: &str, s: &str, t: &str) -> (u16, Value) {
-        self.note(&format!("input {s} {t}"))
-    }
     fn models(&self, a: &str) -> (u16, Value) {
         self.note(&format!("models {a}"))
     }
@@ -150,13 +152,43 @@ impl Services for Fake {
     fn notify_full_request(&self, ask: &Ask) {
         self.asked.lock().unwrap().push(ask.clone());
     }
-    fn events(&self, _: Option<u64>, _: Duration, _: &EventView<'_>) -> (u64, String) {
-        (0, String::new())
+    fn call(&self, _: &str, cmd: &str, args: &Value) -> (u16, Value) {
+        let pane = args["paneId"].as_str().unwrap_or("-");
+        self.call_args.lock().unwrap().push(args.clone());
+        // A message sent through the chat rows shows up in the feed, as the window's own event would (P1.7).
+        if cmd == "pane_message_send" {
+            let items = json!([{ "id": "i1", "kind": "message", "text": args["text"] }]);
+            self.log.lock().unwrap().push(events::app_frame("session-chat-items", &json!({ "paneId": pane, "items": items, "reset": false })));
+        }
+        if cmd == "acp_chat_set_config" && args["optionId"] == "effort" {
+            let value = args["value"].as_str().unwrap_or("").to_string();
+            *self.effort.lock().unwrap() = value.clone();
+            self.log.lock().unwrap().push(events::app_frame("acp-chat-state", &json!({ "paneId": pane, "state": { "effort": value } })));
+        }
+        self.note(&format!("call {cmd} {pane}"));
+        (200, json!({ "effort": *self.effort.lock().unwrap() }))
+    }
+    fn events(&self, cursor: Option<u64>, wait: Duration, view: &EventView<'_>) -> (u64, String) {
+        let from = cursor.unwrap_or(0) as usize;
+        let end = std::time::Instant::now() + wait.min(Duration::from_millis(50));
+        loop {
+            let log = self.log.lock().unwrap().clone();
+            if log.len() > from || std::time::Instant::now() >= end {
+                let seen: String = log[from.min(log.len())..].iter().filter_map(|p| view(p)).map(|c| c.into_owned()).collect();
+                return (log.len() as u64, seen);
+            }
+            std::thread::sleep(Duration::from_millis(5));
+        }
     }
 }
 
 fn call(level: Option<Level>, fake: &Fake, asks: &Asks, method: &str, target: &str, body: &Value) -> (u16, Value) {
-    let who = Caller { node: "aa", name: "Laptop", level, now_ms: 1_000 };
+    call_as(level, false, fake, asks, method, target, body)
+}
+
+/// `call` from a PC that does (`marked`) or does not carry the account marker.
+pub(crate) fn call_as(level: Option<Level>, marked: bool, fake: &Fake, asks: &Asks, method: &str, target: &str, body: &Value) -> (u16, Value) {
+    let who = Caller { node: "aa", name: "Laptop", level, marked, now_ms: 1_000 };
     let bytes = if body.as_object().is_some_and(|o| o.is_empty()) { Vec::new() } else { serde_json::to_vec(body).unwrap() };
     handle(&who, fake, asks, method, target, &bytes)
 }
@@ -225,7 +257,7 @@ fn a_watch_pc_cannot_send_stop_start_or_type_and_an_answer_pc_cannot_start_or_us
         ("POST", "/pclink/sessions/p1/messages", json!({ "text": "x" })),
         ("POST", "/pclink/sessions/p1/interrupt", json!({})),
         ("POST", "/pclink/agents/start", json!({ "agent": "a", "project": "p" })),
-        ("POST", "/pclink/sessions/p1/input", json!({ "text": "rm" })),
+        ("POST", "/pclink/call/write_pane_input", json!({ "paneId": "p1", "args": { "text": "rm" } })),
         ("POST", "/pclink/questions/q/answer", json!({ "text": "y" })),
     ] {
         assert_eq!(call(Some(Level::Watch), &fake, &asks, method, target, &body).0, 403, "{target}");
@@ -233,7 +265,7 @@ fn a_watch_pc_cannot_send_stop_start_or_type_and_an_answer_pc_cannot_start_or_us
     for (method, target, body) in [
         ("POST", "/pclink/agents/start", json!({ "agent": "a", "project": "p" })),
         ("POST", "/pclink/agents/warm", json!({ "agent": "a", "project": "p" })),
-        ("POST", "/pclink/sessions/p1/input", json!({ "text": "rm" })),
+        ("POST", "/pclink/call/write_pane_input", json!({ "paneId": "p1", "args": { "text": "rm" } })),
         ("POST", "/pclink/sessions/p1/config", json!({ "option_id": "mode", "value": "bypass" })),
         ("GET", "/pclink/agents/claude/models", json!({})),
     ] {
@@ -350,8 +382,9 @@ data: {}
 
 ", "Watch may read the questions, so its list refreshes");
     let outbox_view = events::view(Level::Answer, outbox).unwrap();
-    assert_eq!(outbox_view, "event: outbox\ndata: {\"id\":\"p1\"}\n\n");
-    assert!(!outbox_view.contains("private"));
+    // Answer reads the queue (as its messages route does): the window's own event, as an `app` frame about that session.
+    assert_eq!(outbox_view, events::app_frame("pane-outbox", &json!({ "paneId": "p1", "messages": [{ "text": "private" }] })));
+    assert_eq!(events::app_pane(&outbox_view).as_deref(), Some("p1"));
     assert!(events::view(Level::Answer, questions).is_some());
     for dropped in [
         "event: terminal\ndata: {\"pane_id\":\"p1\"}\n\n",
@@ -387,6 +420,7 @@ fn make_door(level: Option<Level>) -> (Door, Arc<Fake>, Arc<Legacy>) {
         asks: Arc::new(Asks::new()),
         level_of: Arc::new(move |_| level),
         name_of: Arc::new(|_| "Laptop".into()),
+        marked_of: Arc::new(|_| false),
         lend_ok: Arc::new(|_| true),
         now_ms: Arc::new(|| 1_000),
     };
@@ -499,7 +533,7 @@ async fn the_door_events_follow_the_level_and_end_with_the_switch() {
 
 // ----- two real app instances on the in-memory net -----
 
-fn instance_with_services(name: &str, net: &MemoryNet, fake: Arc<Fake>) -> Instance {
+pub(super) fn instance_with_services(name: &str, net: &MemoryNet, fake: Arc<Fake>) -> Instance {
     let mut options = Options::memory();
     options.pclink = Some(fake);
     instance_with(name, net.factory(), false, Arc::new(SystemClock), Arc::new(real_now), options)
@@ -533,7 +567,7 @@ async fn pairing_grants_nothing_and_each_level_is_enforced_on_the_far_pc() {
         ("POST", "/pclink/sessions/p1/messages", json!({ "text": "x" })),
         ("POST", "/pclink/sessions/p1/interrupt", json!({})),
         ("POST", "/pclink/agents/start", json!({ "agent": "a", "project": "p" })),
-        ("POST", "/pclink/sessions/p1/input", json!({ "text": "x" })),
+        ("POST", "/pclink/call/write_pane_input", json!({ "paneId": "p1", "args": { "text": "x" } })),
     ] {
         assert_eq!(a.link.request(&b_node, method, path, Some(body)).await.unwrap().0, 403, "Watch must not {path}");
     }
@@ -546,7 +580,7 @@ async fn pairing_grants_nothing_and_each_level_is_enforced_on_the_far_pc() {
     assert_eq!(a.link.request(&b_node, "POST", "/pclink/sessions/p1/messages", Some(json!({ "text": "go on" }))).await.unwrap().0, 200);
     assert_eq!(a.link.request(&b_node, "POST", "/pclink/sessions/p1/interrupt", Some(json!({}))).await.unwrap().0, 200);
     assert_eq!(a.link.request(&b_node, "POST", "/pclink/agents/start", Some(json!({ "agent": "a", "project": "p" }))).await.unwrap().0, 403);
-    assert_eq!(a.link.request(&b_node, "POST", "/pclink/sessions/p1/input", Some(json!({ "text": "x" }))).await.unwrap().0, 403);
+    assert_eq!(a.link.request(&b_node, "POST", "/pclink/call/write_pane_input", Some(json!({ "paneId": "p1", "args": { "text": "x" } }))).await.unwrap().0, 403);
 
     // The phone's routes are not served to a PC at any level, Full included.
     b.link.set_permission(&a_node, true, Some("full")).unwrap();
@@ -558,7 +592,7 @@ async fn pairing_grants_nothing_and_each_level_is_enforced_on_the_far_pc() {
     // Full: start and the terminal.
     let (status, body) = a.link.request(&b_node, "POST", "/pclink/agents/start", Some(json!({ "agent": "a", "project": "p" }))).await.unwrap();
     assert_eq!(status, 200, "{body}");
-    assert_eq!(a.link.request(&b_node, "POST", "/pclink/sessions/p1/input", Some(json!({ "text": "ls" }))).await.unwrap().0, 200);
+    assert_eq!(a.link.request(&b_node, "POST", "/pclink/call/write_pane_input", Some(json!({ "paneId": "p1", "args": { "text": "ls" } }))).await.unwrap().0, 200);
     assert!(fake_b.calls().iter().any(|c| c == "start a p chat"));
 
     // Switching it off shuts every route again at once.
@@ -650,4 +684,98 @@ fn usage_is_watch_and_browse_and_open_folder_are_full_and_the_query_reaches_the_
     assert_eq!(call(Some(Level::Full), &fake, &asks, "POST", "/pclink/projects/open", &json!({ "root": "r1", "sub": "code/x" })).0, 200);
     assert_eq!(call(Some(Level::Full), &fake, &asks, "POST", "/pclink/projects/open", &json!({ "sub": "code/x" })).0, 400, "a root is required");
     assert_eq!(fake.calls(), vec!["browse - ", "browse r1 code/billing service", "open_folder r1 code/x"]);
+}
+
+#[test]
+fn a_far_call_needs_its_row_and_its_level_on_every_request() {
+    let asks = Asks::new();
+    // The level matrix, one row at a time: Watch reads, Answer cannot set anything (the permission mode and Full access included), Full can.
+    let rows = [
+        ("acp_chat_state", json!({ "paneId": "p1" }), Level::Watch),
+        ("agent_model_options", json!({ "agentId": "claude" }), Level::Watch),
+        ("acp_chat_set_config", json!({ "paneId": "p1", "optionId": "mode", "value": "bypassPermissions", "hold": true }), Level::Full),
+        ("acp_chat_set_config", json!({ "paneId": "p1", "optionId": "effort", "value": "high" }), Level::Full),
+        ("acp_chat_set_force_yes", json!({ "paneId": "p1", "on": true, "hold": true }), Level::Full),
+    ];
+    assert!(calls::TABLE.len() >= 4, "the chat-settings rows come first; later blocks pin their own rows");
+    for (cmd, body, needs) in rows {
+        let target = format!("/pclink/call/{cmd}");
+        for level in [Level::Watch, Level::Answer, Level::Full] {
+            let fake = Fake::default();
+            let (status, answer) = call(Some(level), &fake, &asks, "POST", &target, &body);
+            if level >= needs {
+                assert_eq!(status, 200, "{level:?} {cmd}: {answer}");
+                assert_eq!(fake.calls().len(), 1);
+            } else {
+                assert_eq!((status, answer["code"].as_str(), answer["needs"].as_str(), answer["have"].as_str()), (403, Some("DEVICE_NOT_ALLOWED"), Some(needs.as_str()), Some(level.as_str())), "{level:?} must not {cmd}");
+                assert!(fake.calls().is_empty(), "{level:?} reached nothing for {cmd}");
+            }
+        }
+        let fake = Fake::default();
+        assert_eq!(call(None, &fake, &asks, "POST", &target, &body).1["code"], "REMOTE_OFF", "{cmd}");
+        assert!(fake.calls().is_empty());
+    }
+    // Not in the table (or refused): 404 at Full, nothing reaches the app. The wrong method is no route either.
+    let fake = Fake::default();
+    for cmd in ["nothing_here", "account_sign_in", "lend_export_pm", "ssh_open", "adapter_key_set", "devices_set_permission", "audit_recent", "secret_get_masked", "acp_chat_start"] {
+        let (status, answer) = call(Some(Level::Full), &fake, &asks, "POST", &format!("/pclink/call/{cmd}"), &json!({ "paneId": "p1" }));
+        assert_eq!((status, answer["code"].as_str()), (404, Some("UNKNOWN_ROUTE")), "{cmd}");
+    }
+    assert_eq!(call(Some(Level::Full), &fake, &asks, "GET", "/pclink/call/acp_chat_state", &json!({})).0, 404);
+    assert!(fake.calls().is_empty());
+    // A row that names a chat needs it, and a chat switched off for other PCs on its own PC refuses even at Full.
+    assert_eq!(call(Some(Level::Full), &fake, &asks, "POST", "/pclink/call/acp_chat_state", &json!({})).1["code"], "INVALID_ARGUMENT");
+    fake.locked.lock().unwrap().push("p1".into());
+    for (cmd, body) in [("acp_chat_state", json!({ "paneId": "p1" })), ("acp_chat_set_force_yes", json!({ "paneId": "p1", "on": false }))] {
+        assert_eq!(call(Some(Level::Full), &fake, &asks, "POST", &format!("/pclink/call/{cmd}"), &body).1["code"], "AGENT_LOCKED", "{cmd}");
+    }
+    assert!(fake.calls().is_empty());
+}
+
+#[test]
+fn an_app_frame_is_only_an_allowlisted_event_about_one_session() {
+    let state = events::app_frame("acp-chat-state", &json!({ "paneId": "p1", "state": { "effort": "high" } }));
+    for level in [Level::Watch, Level::Answer, Level::Full] {
+        assert_eq!(events::view(level, &state).unwrap(), state, "{level:?}");
+    }
+    assert_eq!(events::app_pane(&state).as_deref(), Some("p1"));
+    for dropped in [
+        events::app_frame("settings-changed", &json!({ "paneId": "p1" })),
+        events::app_frame("acp-chat-state", &json!({ "state": {} })),
+        events::app_frame("pty://data", &json!({ "paneId": "p1", "bytes": "x" })),
+        "event: app\ndata: not json\n\n".to_string(),
+    ] {
+        assert!(events::view(Level::Full, &dropped).is_none(), "{dropped}");
+    }
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 4)]
+async fn a_far_call_changes_effort_on_the_far_pc_and_the_new_state_frame_comes_back() {
+    let net = MemoryNet::new();
+    let (fake_a, fake_b) = (Arc::new(Fake::default()), Arc::new(Fake::default()));
+    let a = instance_with_services("alpha", &net, fake_a);
+    let b = instance_with_services("beta", &net, fake_b.clone());
+    pair(&b, &a).await;
+    let (a_node, b_node) = (a.node(), b.node());
+    let got: Arc<Mutex<Vec<String>>> = Arc::default();
+    let sink = got.clone();
+    a.link.set_event_sink(Arc::new(move |_, f| sink.lock().unwrap().push(f.to_string())));
+    let set = json!({ "paneId": "p1", "optionId": "effort", "value": "high" });
+
+    // Watch may read the state but not change anything; the far PC says so, and nothing changed there. Answer is no different.
+    b.link.set_permission(&a_node, true, Some("watch")).unwrap();
+    a.link.subscribe(&b_node).unwrap();
+    assert_eq!(a.link.request(&b_node, "POST", "/pclink/call/acp_chat_state", Some(json!({ "paneId": "p1" }))).await.unwrap().0, 200);
+    assert_eq!(a.link.request(&b_node, "POST", "/pclink/call/acp_chat_set_config", Some(set.clone())).await.unwrap().0, 403);
+    b.link.set_permission(&a_node, true, Some("answer")).unwrap();
+    assert_eq!(a.link.request(&b_node, "POST", "/pclink/call/acp_chat_set_config", Some(set.clone())).await.unwrap().0, 403);
+    assert_eq!(*fake_b.effort.lock().unwrap(), "");
+
+    // Full: the call runs on the far PC and the far PC's new state arrives as an `app` frame.
+    b.link.set_permission(&a_node, true, Some("full")).unwrap();
+    let (status, answer) = a.link.request(&b_node, "POST", "/pclink/call/acp_chat_set_config", Some(set)).await.unwrap();
+    assert_eq!((status, answer["effort"].as_str()), (200, Some("high")), "{answer}");
+    assert_eq!(*fake_b.effort.lock().unwrap(), "high");
+    until("the state frame", || got.lock().unwrap().iter().any(|f| f.starts_with("event: app") && f.contains("acp-chat-state") && f.contains("\"effort\":\"high\""))).await;
+    a.link.unsubscribe(&b_node).unwrap();
 }

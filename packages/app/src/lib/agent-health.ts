@@ -1,6 +1,7 @@
 // Agent doctor client: the `agents_health` / `agents_health_test` Tauri commands (same bodies as
 // `GET /agents/health` and `POST /agents/health/test`).
 import { invoke } from '@tauri-apps/api/core';
+import type { Host } from './host/host';
 
 export type HealthState = 'unchecked' | 'ready' | 'not_installed' | 'needs_login' | 'error';
 
@@ -37,6 +38,15 @@ export interface AgentHealth {
 export interface AgentHealthApi {
   check: () => Promise<AgentHealth[]>;
   test: (agentId: string) => Promise<AgentHealth>;
+}
+
+/** The doctor's two calls at one place (`agents_health` is a Watch row on a far PC; the deep `agents_health_test` is not served there). */
+export function agentHealthApiFor(host: Pick<Host, 'invoke' | 'place'>): AgentHealthApi {
+  if (host.place.kind === 'local') return agentHealthApi;
+  return {
+    check: async () => (await host.invoke<{ agents: AgentHealth[] }>('agents_health')).agents,
+    test: (agentId) => host.invoke<AgentHealth>('agents_health_test', { agentId }),
+  };
 }
 
 export const agentHealthApi: AgentHealthApi = {

@@ -115,6 +115,13 @@ pub async fn devices_set_permission(webview: tauri::Webview, node: String, capab
     dl::app_service()?.set_permission(&node, on, level.as_deref())
 }
 
+/// The one-time card on a PC paired through the account before Full became its default: Keep or Lower. Only this window can answer.
+#[tauri::command(rename_all = "snake_case")]
+pub async fn devices_account_default_answer(webview: tauri::Webview, node: String, keep: bool) -> Result<Value, String> {
+    guard(&webview)?;
+    dl::app_service()?.answer_account_default(&node, keep)
+}
+
 /// The cards "<PC> asks to work on this PC", waiting for this PC's person.
 #[tauri::command(rename_all = "snake_case")]
 pub async fn devices_full_asks(webview: tauri::Webview) -> Result<Value, String> {
@@ -170,6 +177,14 @@ pub async fn devices_set_web(webview: tauri::Webview, node: String, on: bool) ->
     dl::app_service()?.set_web(&node, on)
 }
 
+/// "Also allow it through my web address" (signed read-only calls through this PC's public tunnel address) for one device. Off by default.
+/// An app-window command only: not a bridge route, not an MCP tool, so no phone, agent or paired PC can turn it on.
+#[tauri::command(rename_all = "snake_case")]
+pub async fn devices_set_pcdoor(webview: tauri::Webview, node: String, on: bool) -> Result<Value, String> {
+    guard(&webview)?;
+    dl::app_service()?.set_pcdoor(&node, on)
+}
+
 /// "Agents may send work to this device" for one device (off by default).
 #[tauri::command(rename_all = "snake_case")]
 pub async fn devices_set_agents_send(webview: tauri::Webview, node: String, on: bool) -> Result<Value, String> {
@@ -189,18 +204,6 @@ pub async fn devices_set_device_route(webview: tauri::Webview, node: String, pre
 pub async fn devices_disconnect(webview: tauri::Webview, node: String) -> Result<Value, String> {
     guard(&webview)?;
     dl::app_service()?.disconnect(&node)
-}
-
-#[tauri::command(rename_all = "snake_case")]
-pub async fn devices_screen_start(webview: tauri::Webview, node: String, pane_id: String) -> Result<(), String> {
-    guard(&webview)?;
-    dl::app_service()?.screen_start(&node, &pane_id)
-}
-
-#[tauri::command(rename_all = "snake_case")]
-pub async fn devices_screen_stop(webview: tauri::Webview, node: String, pane_id: String) -> Result<(), String> {
-    guard(&webview)?;
-    dl::app_service()?.screen_stop(&node, &pane_id)
 }
 
 #[tauri::command(rename_all = "snake_case")]

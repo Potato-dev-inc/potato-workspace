@@ -53,6 +53,7 @@ import { hasPrice, turnPrices, type TurnPrice } from '../../lib/turnPrice';
 import { TurnEndingButtons, type EndingActions } from './TurnEndingButtons';
 import { ViewModeToggle } from './ViewModeToggle';
 import { MessageRail } from './MessageRail';
+import { useHost } from '../../lib/host/context';
 import { buildRailEntries } from './messageRailModel';
 
 export { formatDuration };
@@ -95,8 +96,6 @@ export interface SessionChatViewProps {
   headerMenu?: ReactNode;
   /** A place in the pane's own header (PaneView). When given, the view switch, the side question button and the chat menu are drawn there and this chat has no header row of its own. `compact`: the header is tight, so the view switch is one pill. */
   headerSlot?: { el: HTMLElement; compact: boolean };
-  /** No Summary/Normal/Verbose switch: the chat is always drawn in full (a chat on another PC, whose far side keeps no such choice). */
-  hideViewMode?: boolean;
   /** A one-line note above the conversation (the Keep going line); it shows nothing when there is nothing to say. */
   banner?: ReactNode;
   /** Something laid over the chat, inside it (the side question box). */
@@ -274,15 +273,15 @@ function useStable<T>(next: Map<string, T>): Map<string, T> {
   return out;
 }
 
-export function SessionChatView({ state, reason, waitingFor, ready, source, turns, model, cliVersion, dock, pending, composer, paneId, remember, emptyNote, headerExtra, headerMenu, headerSlot, banner, overlay, aside, jump, readOnly, canBranch, onBranch, helpers, onOpenPane, endings, earlier, pictures: farPictures, hideViewMode }: SessionChatViewProps) {
+export function SessionChatView({ state, reason, waitingFor, ready, source, turns, model, cliVersion, dock, pending, composer, paneId, remember, emptyNote, headerExtra, headerMenu, headerSlot, banner, overlay, aside, jump, readOnly, canBranch, onBranch, helpers, onOpenPane, endings, earlier, pictures: farPictures }: SessionChatViewProps) {
   const fromScreen = source === 'screen';
   // "from OPPO Reno13" under a message that another device sent (names come from the PC's one device record).
   const deviceNames = useDeviceNames(loadDesktopDeviceNames);
   const sentFrom = useMemo(() => sentFromLines(turns, deviceNames), [turns, deviceNames]);
   // Markdown only for what the agent itself wrote (its session file or its API); an unknown source keeps the text as it is.
   const markdown = source === 'file' || source === 'api' || source === 'acp';
-  const [chosenMode, setMode] = useChatViewMode(paneId);
-  const mode: ChatViewMode = hideViewMode ? 'normal' : chosenMode;
+  const [mode, setMode] = useChatViewMode(paneId);
+  const host = useHost();
   // Potato ("check on this") reads this chat's turns while it is open, and only reads them.
   const turnsNow = useRef(turns);
   turnsNow.current = turns;
@@ -343,7 +342,7 @@ export function SessionChatView({ state, reason, waitingFor, ready, source, turn
   const sinceLine = useSinceLine({ chatId: paneId, turns, ready: state === 'ready', scrollRef, atBottom });
 
   // Pictures the agent names are asked of the PC for this pane (it only reads files inside the chat's folder).
-  const ownPictures = useMemo(() => (paneId && !readOnly && farPictures === undefined ? desktopPictureSource(paneId) : null), [paneId, readOnly, farPictures]);
+  const ownPictures = useMemo(() => (paneId && !readOnly && farPictures === undefined ? desktopPictureSource(paneId, host) : null), [paneId, readOnly, farPictures, host]);
   const pictures = farPictures !== undefined ? farPictures : ownPictures;
 
   // "Show earlier": older messages go in front, and the reader keeps the same message under the same place.
@@ -426,7 +425,7 @@ export function SessionChatView({ state, reason, waitingFor, ready, source, turn
           <>
             {headerExtra && <span className="flex shrink-0 items-center ck-chat-head-extra">{headerExtra}</span>}
             {/* In the pane header the menu is drawn in the top layer at every width: the header would clip a menu inside it. */}
-            {!hideViewMode && <ViewModeToggle mode={mode} onChange={setMode} compact />}
+            <ViewModeToggle mode={mode} onChange={setMode} compact />
             {headerMenu && <span className="flex shrink-0 items-center ck-chat-head-menu">{headerMenu}</span>}
           </>,
           headerSlot.el,
@@ -437,7 +436,7 @@ export function SessionChatView({ state, reason, waitingFor, ready, source, turn
             {model ?? 'Model not known yet'}
           </span>
           {headerExtra && <span className="ml-auto flex shrink-0 items-center ck-chat-head-extra">{headerExtra}</span>}
-          {!hideViewMode && <ViewModeToggle mode={mode} onChange={setMode} />}
+          <ViewModeToggle mode={mode} onChange={setMode} />
           {headerMenu && <span className="flex shrink-0 items-center ck-chat-head-menu">{headerMenu}</span>}
         </header>
       )}

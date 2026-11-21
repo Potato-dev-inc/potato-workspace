@@ -223,6 +223,8 @@ pub struct TrustList {
     signer: Arc<dyn TrustSigner>,
     entries: Mutex<Vec<TrustedDevice>>,
     tampered: AtomicBool,
+    /// The list is whole and properly signed, but by another key than this PC has now (the key was reset or lost).
+    key_changed: AtomicBool,
     pairing_open: AtomicBool,
     link_open: AtomicBool,
     account_open: AtomicBool,
@@ -233,11 +235,14 @@ impl TrustList {
     /// garbage) is ignored: the list starts empty and `tampered()` is true until the next change is saved.
     pub fn open(storage: Arc<dyn TrustStorage>, signer: Arc<dyn TrustSigner>) -> Arc<Self> {
         let mut entries = Vec::new();
-        let mut tampered = false;
+        let (mut tampered, mut key_changed) = (false, false);
         if let Some(bytes) = storage.load() {
             match Self::verified(&bytes, signer.as_ref()) {
                 Some(list) => entries = list,
-                None => tampered = true,
+                None => {
+                    tampered = true;
+                    key_changed = Self::signed_by_another_key(&bytes, signer.as_ref());
+                }
             }
         }
         Arc::new(Self {
@@ -245,6 +250,7 @@ impl TrustList {
             signer,
             entries: Mutex::new(entries),
             tampered: AtomicBool::new(tampered),
+            key_changed: AtomicBool::new(key_changed),
             pairing_open: AtomicBool::new(false),
             link_open: AtomicBool::new(false),
             account_open: AtomicBool::new(false),
@@ -259,6 +265,18 @@ impl TrustList {
         let vk = VerifyingKey::from_bytes(&owner).ok()?;
         vk.verify(&signed_message(&owner, &entries), &Signature::from_bytes(&sig)).ok()?;
         Some(entries)
+    }
+
+    /// A list that checks out under its own key, which is not this PC's key now: not an edit but a reset key (Linux used to lose its
+    /// key on every restart). It was dropped all the same.
+    fn signed_by_another_key(bytes: &[u8], signer: &dyn TrustSigner) -> bool {
+        let Some((owner, entries, sig)) = decode(bytes) else { return false };
+        let Ok(now) = signer.device_pub() else { return false };
+        owner != now && VerifyingKey::from_bytes(&owner).is_ok_and(|vk| vk.verify(&signed_message(&owner, &entries), &Signature::from_bytes(&sig)).is_ok())
+    }
+
+    pub fn key_changed(&self) -> bool {
+        self.tampered() && self.key_changed.load(Ordering::SeqCst)
     }
 
     pub fn tampered(&self) -> bool {
@@ -344,7 +362,7 @@ impl TrustList {
             let e = entries.iter_mut().find(|e| e.node == *node).ok_or(TrustError::Unknown)?;
             // "Full control" is a level of running agents here: it cannot exist without the switch it belongs to.
             if on
-                && (capability == capability::AGENTS_REMOTE_ANSWER || capability == capability::AGENTS_REMOTE_FULL || capability == capability::AGENTS_REMOTE_WEB)
+                && (capability == capability::AGENTS_REMOTE_ANSWER || capability == capability::AGENTS_REMOTE_FULL || capability == capability::AGENTS_REMOTE_WEB || capability == capability::AGENTS_REMOTE_PCDOOR)
                 && !e.allowed.contains(capability::AGENTS_REMOTE)
             {
                 return Err(TrustError::NotPermissionable);
@@ -357,10 +375,55 @@ impl TrustList {
                     e.allowed.remove(capability::AGENTS_REMOTE_ANSWER);
                     e.allowed.remove(capability::AGENTS_REMOTE_FULL);
                     e.allowed.remove(capability::AGENTS_REMOTE_WEB);
+                    e.allowed.remove(capability::AGENTS_REMOTE_PCDOOR);
                 }
             }
             Ok(())
         })
+    }
+
+    /// A PC of the person's own account gets Full on this one by default, with the account marker so Connect can say why. Once the
+    /// marker is there (granted, kept or lowered by the person) this does nothing: a level the person lowered stays lowered.
+    pub fn grant_account_default(&self, node: &NodeId) -> Result<(), TrustError> {
+        self.change(|entries| {
+            let e = entries.iter_mut().find(|e| e.node == *node).ok_or(TrustError::Unknown)?;
+            if !e.allowed.contains(capability::AGENTS_REMOTE_ACCOUNT) {
+                for c in [capability::AGENTS_REMOTE, capability::AGENTS_REMOTE_ANSWER, capability::AGENTS_REMOTE_FULL, capability::AGENTS_REMOTE_ACCOUNT] {
+                    e.allowed.insert(c.to_string());
+                }
+            }
+            Ok(())
+        })
+    }
+
+    /// "Lower" on the one-time card of a PC paired through the account before the default existed: only the marker is set (the card
+    /// is answered, nothing is raised).
+    pub fn lower_account_default(&self, node: &NodeId) -> Result<(), TrustError> {
+        self.change(|entries| {
+            let e = entries.iter_mut().find(|e| e.node == *node).ok_or(TrustError::Unknown)?;
+            e.allowed.insert(capability::AGENTS_REMOTE_ACCOUNT.to_string());
+            Ok(())
+        })
+    }
+
+    pub fn account_marked(&self, node: &NodeId) -> bool {
+        self.get(node).is_some_and(|e| e.allowed.contains(capability::AGENTS_REMOTE_ACCOUNT))
+    }
+
+    /// The account no longer lists that PC: the run rights and the marker go at once. Only a marked PC is touched (a PC never paired
+    /// through the account keeps what its person set). Returns whether anything changed.
+    pub fn drop_account_rights(&self, node: &NodeId) -> bool {
+        if !self.account_marked(node) {
+            return false;
+        }
+        self.change(|entries| {
+            let e = entries.iter_mut().find(|e| e.node == *node).ok_or(TrustError::Unknown)?;
+            for c in [capability::AGENTS_REMOTE, capability::AGENTS_REMOTE_ANSWER, capability::AGENTS_REMOTE_FULL, capability::AGENTS_REMOTE_WEB, capability::AGENTS_REMOTE_PCDOOR, capability::AGENTS_REMOTE_ACCOUNT] {
+                e.allowed.remove(c);
+            }
+            Ok(())
+        })
+        .is_ok()
     }
 
     /// What this computer lets `node` do when it runs agents here: `None` while the switch is off.
@@ -388,6 +451,12 @@ impl TrustList {
         self.get(node).is_some_and(|e| e.allowed.contains(capability::AGENTS_REMOTE) && e.allowed.contains(capability::AGENTS_REMOTE_WEB))
     }
 
+    /// Whether this computer lets `node` also call its read-only routes through its public tunnel address, signed per request (only with
+    /// the run switch on). Read at every request, so turning it off, lowering the run switch or removing the device ends it at once.
+    pub fn pcdoor_allowed(&self, node: &NodeId) -> bool {
+        self.get(node).is_some_and(|e| e.allowed.contains(capability::AGENTS_REMOTE) && e.allowed.contains(capability::AGENTS_REMOTE_PCDOOR))
+    }
+
     /// Renames a paired computer (the person's own label for it).
     pub fn rename(&self, node: &NodeId, name: &str) -> Result<(), TrustError> {
         self.change(|entries| {
@@ -407,6 +476,7 @@ impl TrustList {
         self.storage.save(&encode(&owner, &next, &sig)).map_err(TrustError::Save)?;
         *guard = next;
         self.tampered.store(false, Ordering::SeqCst);
+        self.key_changed.store(false, Ordering::SeqCst);
         Ok(())
     }
 }

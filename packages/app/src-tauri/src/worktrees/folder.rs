@@ -14,6 +14,7 @@
 use super::git::git_raw;
 use super::proc::tail_lines;
 use super::{err, identity_args};
+use crate::project_location::ProjectLocation;
 use crate::operations::OperationError;
 use serde::{Deserialize, Serialize};
 use std::path::{Path, PathBuf};
@@ -47,12 +48,17 @@ pub struct RecentProject {
     /// `repo`, `no_commits`, `folder` or `missing`.
     pub state: String,
     pub last_used_ms: u64,
+    /// Where the folder lives. Saved data from before this field reads as `Local`.
+    #[serde(default)]
+    pub location: ProjectLocation,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 struct Stored {
     path: String,
     last_used_ms: u64,
+    #[serde(default)]
+    location: ProjectLocation,
 }
 
 fn now_ms() -> u64 {
@@ -99,7 +105,7 @@ pub fn remember(store: &Path, project: &str) {
     }
     let mut items = load(store);
     items.retain(|item| key(&item.path) != key(project));
-    items.insert(0, Stored { path: project.to_string(), last_used_ms: now_ms() });
+    items.insert(0, Stored { path: project.to_string(), last_used_ms: now_ms(), location: ProjectLocation::Local });
     items.truncate(KEEP * 2);
     save(store, &items);
 }
@@ -155,7 +161,7 @@ pub fn recent_light(store: &Path, others: &[String], limit: usize) -> Vec<Recent
 fn recent_with(store: &Path, others: &[String], limit: usize, state_of: impl Fn(&Path) -> &'static str) -> Vec<RecentProject> {
     let mut out: Vec<RecentProject> = Vec::new();
     let wanted = limit.max(1);
-    let mut add = |path: &str, last_used_ms: u64| {
+    let mut add = |path: &str, last_used_ms: u64, location: ProjectLocation| {
         // Enough found: the Git state of the rest is never asked for.
         if out.len() >= wanted {
             return;
@@ -175,13 +181,14 @@ fn recent_with(store: &Path, others: &[String], limit: usize, state_of: impl Fn(
             name: name_of(path),
             state: state_of(Path::new(path)).into(),
             last_used_ms,
+            location,
         });
     };
     for item in load(store) {
-        add(&item.path, item.last_used_ms);
+        add(&item.path, item.last_used_ms, item.location);
     }
     for path in others {
-        add(path, 0);
+        add(path, 0, ProjectLocation::Local);
     }
     out.truncate(limit.max(1));
     out
@@ -319,4 +326,31 @@ pub fn init(path: &Path) -> Result<InitOutcome, OperationError> {
 /// Keep `PathBuf` in the public API of this module for callers that hold one.
 pub fn path_of(text: &str) -> PathBuf {
     crate::project_path::expand_user_path(Path::new(text.trim()))
+}
+
+#[cfg(test)]
+mod location_tests {
+    use super::*;
+
+    #[test]
+    fn old_saved_recents_without_a_location_load_as_local() {
+        let dir = std::env::temp_dir().join(format!("pw-loc-old-{}", std::process::id()));
+        std::fs::create_dir_all(&dir).unwrap();
+        std::fs::write(dir.join(FILE), r#"[{"path":"/work/a","last_used_ms":5}]"#).unwrap();
+        let items = load(&dir);
+        assert_eq!(items.len(), 1);
+        assert_eq!(items[0].location, ProjectLocation::Local);
+        let listed = recent_light(&dir, &[], 8);
+        assert_eq!(listed[0].location, ProjectLocation::Local);
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn location_survives_save_and_load() {
+        let dir = std::env::temp_dir().join(format!("pw-loc-rt-{}", std::process::id()));
+        let items = vec![Stored { path: "/x".into(), last_used_ms: 1, location: ProjectLocation::Ssh { host_id: "h".into(), name: "Box".into() } }];
+        save(&dir, &items);
+        assert_eq!(load(&dir), items);
+        let _ = std::fs::remove_dir_all(&dir);
+    }
 }

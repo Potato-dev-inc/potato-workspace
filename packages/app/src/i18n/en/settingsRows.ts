@@ -50,7 +50,7 @@ export const settingsRows = {
   "settings.row.tunnel.hint": "A fixed address means you pair your phone once.",
   "settings.row.revoke-all-devices.hint": "Every paired phone is signed out and must pair again.",
   "settings.row.phone-devices.hint": "Phone alerts, keyboard, sign out phones, Telegram and the link to this PC.",
-  "settings.row.key-anthropic.hint": "Used by agents on Anthropic models.",
+  "settings.row.key-anthropic.hint": "Claude chats use this key instead of your Claude login while it is saved. Remove it to go back to your login. Commands and tool servers the chat starts can see the key.",
   "settings.row.key-openai.hint": "Used by agents on OpenAI models.",
   "settings.row.key-openrouter.hint": "Used by agents that route through OpenRouter.",
   "settings.row.opencode-keys.hint": "For OpenCode only. Never sent to the phone.",

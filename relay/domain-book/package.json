@@ -1,0 +1,7 @@
+{
+  "name": "pm-address-book-worker",
+  "private": true,
+  "type": "module",
+  "description": "The small Address book Worker for My domain + Address book (the app shows and copies it).",
+  "scripts": { "test": "node --test test/*.test.mjs" }
+}

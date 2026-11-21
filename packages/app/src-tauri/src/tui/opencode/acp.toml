@@ -9,6 +9,9 @@
 # the app's environment are not passed on unless listed in env_allow.
 command = "opencode"
 args = ["acp"]
+
+# On ANOTHER computer over SSH: the far machine's own `opencode acp`.
+remote_command = ["opencode", "acp"]
 env_allow = []
 
 # OpenCode 2.x: the terminal screen starts a background server and takes no typed prompt (the prompt is never

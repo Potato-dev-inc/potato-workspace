@@ -36,7 +36,12 @@ interface PcRow {
   line: string;
   canOpen: boolean;
   recent: boolean;
+  /** An account PC that is offline and was not seen for two weeks: folded away. */
+  stale: boolean;
 }
+
+/** A PC the account has not seen for this long is folded under one line. */
+export const STALE_PC_SECS = 14 * 24 * 3600;
 
 function seen(t: ReturnType<typeof useT>, lastSeen: number, nowSecs: number): string {
   const mins = Math.max(0, Math.floor((nowSecs - lastSeen) / 60));
@@ -79,6 +84,10 @@ export function PcGroup({
   const [adding, setAdding] = useState(false);
   const [sheetNode, setSheetNode] = useState<string | null>(null);
   const [notNow, setNotNow] = useState(false);
+  const [showOld, setShowOld] = useState(false);
+  // The account row asked "Sign it out?" and the one being signed out.
+  const [removing, setRemoving] = useState<string | null>(null);
+  const [removeBusy, setRemoveBusy] = useState(false);
   const alive = useRef(true);
   const account = api.account;
   const off = settings !== null && settings.devices_enabled !== true && !enabled;
@@ -148,6 +157,7 @@ export function PcGroup({
         line,
         canOpen: !waiting && pc.status !== 'allow_there' && pc.status !== 'conflict' && pc.status !== 'lookalike' && (pc.status !== 'new' || pc.online) && (pc.online || pc.status === 'online') && pc.node !== null,
         recent: pc.recent,
+        stale: !pc.online && pc.status !== 'online' && nowSecs - pc.last_seen_at > STALE_PC_SECS,
       });
     }
     for (const d of view?.devices ?? []) {
@@ -162,6 +172,7 @@ export function PcGroup({
         line: waiting ? t('connect.pc.waiting') : on ? (d.too_old ? t('connect.pc.tooOld') : t('connect.pc.online')) : d.last_seen !== null ? seen(t, d.last_seen, nowSecs) : t('connect.pc.offline'),
         canOpen: !waiting && on && !d.too_old,
         recent: false,
+        stale: false,
       });
     }
     return out;
@@ -194,6 +205,21 @@ export function PcGroup({
       return;
     }
     if (row.device && onOpenPc(row.device.node) === false) setSheetNode(row.device.node);
+  };
+  // A PC that is not answering can be signed out of the account from here: the same account action as "Sign out this device".
+  const removePc = (id: string) => {
+    if (!account.revoke) return;
+    setRemoveBusy(true);
+    setError(null);
+    account
+      .revoke(id, 'sign_out')
+      .catch((e: unknown) => alive.current && setError(typeof e === 'string' && e ? e : t('account.failed')))
+      .finally(() => {
+        if (!alive.current) return;
+        setRemoveBusy(false);
+        setRemoving(null);
+        readPcs();
+      });
   };
   const setAllow = (on: boolean) => {
     if (!account.setOpenHere) return;
@@ -247,9 +273,21 @@ export function PcGroup({
           </button>
         </div>
       ))}
+      {/* One-time card for a PC paired through the account before Full became its default. Nothing is raised until the person taps Keep. */}
+      {(view?.devices ?? []).filter((d) => d.account_card).map((d) => (
+        <div key={d.node} className="cx-thin" role="group" aria-label={t('connect.pc.accountCard', { name: deviceLabel(d) })} data-testid={`connect-pc-account-card-${d.node}`}>
+          <span>{t('connect.pc.accountCard', { name: deviceLabel(d) })}</span>
+          <button type="button" className="cx-btn" data-testid={`connect-pc-account-keep-${d.node}`} onClick={() => void api.devices.answerAccountDefault(d.node, true).finally(() => alive.current && refresh())}>
+            {t('connect.pc.accountKeep')}
+          </button>
+          <button type="button" className="cx-link" data-testid={`connect-pc-account-lower-${d.node}`} onClick={() => void api.devices.answerAccountDefault(d.node, false).finally(() => alive.current && refresh())}>
+            {t('connect.pc.accountLower')}
+          </button>
+        </div>
+      ))}
       {view?.tampered && (
-        <p className="cx-error" role="alert">
-          {t('connect.pc.tampered')}
+        <p className="cx-error" role="alert" data-testid="connect-pc-tampered">
+          {view.key_changed ? t('connect.pc.keyChanged') : t('connect.pc.tampered')}
         </p>
       )}
       {rows.length === 0 ? (
@@ -258,7 +296,7 @@ export function PcGroup({
         </p>
       ) : (
         <ul className="cx-list" data-testid="connect-pc-list">
-          {rows.map((r) => (
+          {rows.filter((r) => showOld || !r.stale).map((r) => (
             <li key={r.key} className="cx-row" data-testid={r.account ? `account-pc-${r.account.id}` : `device-${r.device?.node}`} data-status={r.account?.status ?? 'paired'}>
               <span className={`cx-dot${r.online && !waiting ? ' ok' : ''}`} aria-hidden="true" />
               <div className="cx-main">
@@ -270,11 +308,32 @@ export function PcGroup({
                   <div className="cx-name">{r.name}</div>
                 )}
                 <div className="cx-sub" data-testid={r.account ? `account-pc-line-${r.account.id}` : undefined}>
-                  {opening !== null && opening === r.account?.id ? t('connect.pc.opening') : r.line}
+                  {r.account && removing === r.account.id ? t('connect.pc.signOutAsk', { name: r.name }) : opening !== null && opening === r.account?.id ? t('connect.pc.opening') : r.line}
                   {r.recent && <span className="cx-chip"> · {t('connect.pc.recent')}</span>}
+                  {r.device?.account_default && (
+                    <span data-testid={`connect-pc-account-${r.device.node}`}> · {r.device.lets_run && r.device.level === 'full' ? t('connect.pc.accountFull') : t('connect.pc.accountLowered')}</span>
+                  )}
                 </div>
               </div>
               <div className="cx-act">
+                {r.account && !r.online && !r.canOpen && removing === r.account.id ? (
+                  <>
+                    <button type="button" className="cx-btn" data-testid={`account-pc-remove-yes-${r.account.id}`} disabled={removeBusy} onClick={() => removePc(r.account!.id)}>
+                      {t('connect.pc.signOutYes')}
+                    </button>
+                    <button type="button" className="cx-link" disabled={removeBusy} onClick={() => setRemoving(null)}>
+                      {t('connect.pc.signOutNo')}
+                    </button>
+                  </>
+                ) : (
+                  r.account &&
+                  !r.online &&
+                  !r.canOpen && (
+                    <button type="button" className="cx-link" data-testid={`account-pc-remove-${r.account.id}`} onClick={() => setRemoving(r.account!.id)}>
+                      {t('connect.pc.signOut')}
+                    </button>
+                  )
+                )}
                 {r.canOpen && (
                   <button type="button" className="cx-btn" data-testid={r.account ? `account-pc-open-${r.account.id}` : `connect-pc-open-${r.device?.node}`} disabled={opening !== null && opening === r.account?.id} onClick={() => open(r)}>
                     {t('connect.pc.open')}
@@ -284,6 +343,14 @@ export function PcGroup({
             </li>
           ))}
         </ul>
+      )}
+      {rows.some((r) => r.stale) && (
+        <div className="cx-thin" data-testid="connect-pc-hidden">
+          <span>{t('connect.pc.hidden', { count: rows.filter((r) => r.stale).length })}</span>
+          <button type="button" className="cx-link" data-testid="connect-pc-hidden-toggle" onClick={() => setShowOld((v) => !v)}>
+            {showOld ? t('connect.pc.hideHidden') : t('connect.pc.showHidden')}
+          </button>
+        </div>
       )}
       {listed && listed.pcs.length > 0 && !listed.open_here && !notNow && (
         <div className="cx-thin" role="group" data-testid="connect-pc-allow-ask">

@@ -1,6 +1,6 @@
 // "Where" in New agent: a pill (This PC, a Linux distro of this PC, a paired device, or an SSH machine) over the usual New agent
 // body. While a paired device is picked, the body is still the usual New agent page: only its data is the device's own (its
-// installed agents, models and recent projects, from the far PC's `/pclink/agents` and `/pclink/projects`; `lib/runtime/remoteNewAgent.ts`), and
+// installed agents, models and recent projects, read through that PC's host: `lib/host/newAgentSources.ts`), and
 // starting goes through its `/pclink/agents/start` (the far PC's "Can work on this PC" switch decides). The one visible change is a small "on <device>" label. A device that is offline, or does not let this PC
 // in, is listed but cannot be picked. A Linux distro or an SSH machine gets a small body of its own (an agent, a folder, one
 // button) that opens a terminal there; chats are not offered over SSH.
@@ -10,6 +10,10 @@ import { cannotPickWhy, devicesApi, pcStatus, runtimesOf, type Device, type Devi
 import { makeRemoteClient } from '../../lib/runtime/remote';
 import { useFarLevel } from '../../lib/runtime/farLevel';
 import { atLeast, PcLinkError } from '../../lib/runtime/pclink';
+import { farHost } from '../../lib/host/far';
+import { ALL_CAPS, WATCH_CAPS } from '../../lib/host/host';
+import { HostProvider } from '../../lib/host/context';
+import { localHost } from '../../lib/host/local';
 import { sshApi, type SshApi, type SshHost } from '../../lib/ssh';
 import { spawnPaneInLinux, tauriWslApi, wslPlacesGet, type WslApi } from '../../lib/wsl';
 import { suggestion, useRoomPlaces } from '../../lib/room';
@@ -20,6 +24,8 @@ import { useDeviceProjects } from '../../lib/runtime/deviceProjects';
 import { RemoteFolderSheet } from './RemoteFolderSheet';
 import { gitStateOf, remotePathOf, useRemoteNewAgent, type RemoteNewAgent, type RemoteStatus } from '../../lib/runtime/remoteNewAgent';
 import { SshPanel, WslPanel } from './PlacePanels';
+import { isLocalPlace, savedPlace, savePlace } from '../../lib/newAgentPlace';
+import { remoteProjectParts } from '../../lib/projectLocation';
 import '../../styles/devices.css';
 import { Menu } from '../common/Floating';
 
@@ -47,11 +53,9 @@ export interface WhereProps {
   pickKey?: string;
 }
 
-const STORE_KEY = 'pm.newAgent.where';
 /** How long a device that is being checked keeps the state it had. */
 const CHECKING_GRACE_MS = 10_000;
 
-const isLocalPlace = (id: string | null): id is string => !!id && (id.startsWith('wsl:') || id.startsWith('ssh:'));
 /**
  * A paired device is never remembered across launches (the person would silently be on another PC without knowing). Only the quick-start
  * menu hands one over to the full page, once, through this in-memory note.
@@ -61,25 +65,11 @@ let handoff: { key: string; node: string } | null = null;
 /** The place last used for a project ('' = no project): only a Linux distro or SSH machine of this PC, or a device just handed over. */
 function readPlace(key: string): string | null {
   if (handoff && handoff.key === key) return handoff.node;
-  try {
-    const all = JSON.parse(window.localStorage.getItem(STORE_KEY) ?? '{}') as Record<string, unknown>;
-    const v = all[key];
-    return typeof v === 'string' && isLocalPlace(v) ? v : null;
-  } catch {
-    return null;
-  }
+  return savedPlace(key);
 }
 function writePlace(key: string, id: string | null): void {
   if (handoff && handoff.key === key) handoff = null;
-  if (id && !isLocalPlace(id)) return;
-  try {
-    const all = JSON.parse(window.localStorage.getItem(STORE_KEY) ?? '{}') as Record<string, unknown>;
-    if (id) all[key] = id;
-    else delete all[key];
-    window.localStorage.setItem(STORE_KEY, JSON.stringify(all));
-  } catch {
-    /* the place is simply not remembered */
-  }
+  savePlace(key, id);
 }
 
 /** On the full New agent page the Linux / SSH body sits in a column of its own, so the form has a margin and its Start button stays on screen. */
@@ -130,16 +120,16 @@ export interface LinuxPlace {
   start: (agentId: string, folder: string | undefined) => Promise<string>;
 }
 
-export function NewAgentWhere({ where, children, remember }: { where?: WhereProps; children: ReactNode | ((pill: ReactNode, remote: RemoteSlot | null, extras: PickerExtras) => ReactNode); remember?: string }) {
+export function NewAgentWhere({ where, children, remember, preselect }: { where?: WhereProps; children: ReactNode | ((pill: ReactNode, remote: RemoteSlot | null, extras: PickerExtras) => ReactNode); remember?: string; preselect?: { node: string; folder: ProjectChoice } }) {
   const t = useT();
   const api = where?.api ?? devicesApi;
   const sshLayer = where?.ssh ?? sshApi;
   const wslLayer = where?.wsl ?? tauriWslApi;
   /** `null` is This PC; otherwise a device node, `wsl:<distro>` or `ssh:<id>`. */
-  const [pick, setPickRaw] = useState<string | null>(() => (remember === undefined ? null : readPlace(remember)));
+  const [pick, setPickRaw] = useState<string | null>(() => preselect?.node ?? (remember === undefined ? null : readPlace(remember)));
   const isPlace = (id: string | null) => !!id && (id.startsWith('wsl:') || id.startsWith('ssh:'));
   /** The folder a pick in the grouped project picker opens the (re-made) page on. A pick in the Where pill clears it. */
-  const [startFolder, setStartFolder] = useState<ProjectChoice | null>(null);
+  const [startFolder, setStartFolder] = useState<ProjectChoice | null>(preselect?.folder ?? null);
   const [sheetNode, setSheetNode] = useState<string | null>(null);
   const setPick = (id: string | null) => {
     setPickRaw(id);
@@ -150,6 +140,12 @@ export function NewAgentWhere({ where, children, remember }: { where?: WhereProp
   useEffect(() => {
     if (remember !== undefined) setPickRaw(readPlace(remember));
   }, [remember]);
+  // A project of another PC's "+" in the sidebar: that PC and that project, once (never remembered across launches).
+  useEffect(() => {
+    if (!preselect) return;
+    setPickRaw(preselect.node);
+    setStartFolder(preselect.folder);
+  }, [preselect?.node, preselect?.folder.path]); // eslint-disable-line react-hooks/exhaustive-deps
   const [open, setOpen] = useState(false);
   const [, setTick] = useState(0);
   const [distros, setDistros] = useState<string[]>([]);
@@ -272,6 +268,8 @@ export function NewAgentWhere({ where, children, remember }: { where?: WhereProp
           : {}),
       }
     : undefined;
+  // The page of a picked PC reads through that PC's host: its agents, folders, models and pins are its own answers.
+  const pickedHost = useMemo(() => (picked && client ? farHost(client, api, { name: picked.name, caps: full ? ALL_CAPS : WATCH_CAPS }) : null), [client, api, picked?.name, full]); // eslint-disable-line react-hooks/exhaustive-deps
   const inline = typeof children === 'function';
   const slot: RemoteSlot | null = picked && far.remote ? { remote: far.remote, agentsOff, status: far.status, blocked: full ? null : t('newAgent.remote.watchOnly', { name: picked.name }) } : null;
   const groupsOf = useDeviceProjects(where?.view ?? null, api, enabled);
@@ -326,11 +324,10 @@ export function NewAgentWhere({ where, children, remember }: { where?: WhereProp
       </button>
     </p>
   ) : null;
-  const here = pickedDev ? pickedDev.name : pickedWsl ? friendlyPlace(pickedWsl.label, t('devices.sandboxLabel')) : pickedSsh ? pickedSsh.label : t('devices.thisPcNamed', { name: where!.view!.name });
-  // On the full page the project picker alone chooses the PC: this pill is only "Run in" for this PC's Linux places and SSH machines, and is not
-  // drawn at all when there are none, or while another PC's project is picked (that PC's own choices are the page's own).
-  const hasPlaces = runtimes.some((r) => r.kind === 'wsl' || r.kind === 'ssh');
-  const pillShown = !inline || (hasPlaces && !picked);
+  const here = pickedDev ? pickedDev.name : pickedWsl ? t('devices.wslNamed', { name: friendlyPlace(pickedWsl.label, t('devices.sandboxLabel')) }) : pickedSsh ? pickedSsh.label : t('devices.thisPcNamed', { name: where!.view!.name });
+  // On the full page this pill is "Run in". Every online PC of the account is listed by its own name next to this PC's Linux places and SSH machines (a PC that is off is in the project picker, greyed).
+  const hasPlaces = runtimes.some((r) => r.kind === 'wsl' || r.kind === 'ssh' || (r.kind === 'device' && r.pickable));
+  const pillShown = !inline || hasPlaces;
   const pill = !pillShown ? null : (
       <div className={`dev-where${inline ? ' dev-where--row' : ''}`} ref={wrap} data-testid="where">
         {!inline && <span>{t('devices.where')}</span>}
@@ -339,12 +336,12 @@ export function NewAgentWhere({ where, children, remember }: { where?: WhereProp
         </button>
         {open && (
           <Menu anchorRef={pillBtn} align="start" className="dev-where-menu" label={inline ? t('devices.runIn') : t('devices.pickWhere')} onClose={() => setOpen(false)}>
-            {runtimes.filter((r) => !inline || r.kind !== 'device').map((r) => {
+            {runtimes.filter((r) => !inline || r.kind !== 'device' || r.pickable).map((r) => {
               const pickable = r.kind === 'device' ? r.pickable : true;
               const on = r.kind === 'this' ? pick === null : pick === r.id;
               const place = r.kind === 'wsl' || r.kind === 'ssh';
               const status = r.kind === 'device' ? pcStatus(r.device) : null;
-              const label = r.kind === 'this' ? t('devices.thisPcNamed', { name: where!.view!.name }) : r.kind === 'wsl' ? friendlyPlace(r.label, t('devices.sandboxLabel')) : r.label;
+              const label = r.kind === 'this' ? t('devices.thisPcNamed', { name: where!.view!.name }) : r.kind === 'wsl' ? t('devices.wslNamed', { name: friendlyPlace(r.label, t('devices.sandboxLabel')) }) : r.label;
               const sub = place ? t('devices.onThisPc') : status ? t(status === 'online' ? 'devices.pcOnline' : status === 'offline' ? 'devices.pcOffline' : 'devices.pcCantConnect') : null;
               return (
                 <button
@@ -417,6 +414,7 @@ export function NewAgentWhere({ where, children, remember }: { where?: WhereProp
               </button>
             </p>
           )}
+          <HostProvider host={pickedHost ?? localHost}>
           {inline ? (
             body(pill)
           ) : (
@@ -424,20 +422,15 @@ export function NewAgentWhere({ where, children, remember }: { where?: WhereProp
             <div className="dev-menu-page" data-testid="where-body">
               <NewAgentPage
                 key={slot.remote.node}
-                agents={slot.remote.agents}
                 panes={[]}
                 needs={[]}
-                api={slot.remote.api}
-                addonApi={slot.remote.addonApi}
-                modelApi={slot.remote.modelApi}
-                defaultsApi={slot.remote.defaultsApi}
-                rulesApi={slot.remote.rulesApi}
                 onStart={slot.remote.onStart}
                 onOpenPane={() => {}}
                 remote={{ deviceName: slot.remote.deviceName, terminals: slot.remote.terminals, blocked: slot.blocked, onWarm: slot.remote.warm, agentsOff }}
               />
             </div>
           )}
+          </HostProvider>
         </>
       ) : pickedWsl && pickedWsl.kind === 'wsl' && !inline ? (
         <PlacePage inline={inline}>
@@ -445,7 +438,7 @@ export function NewAgentWhere({ where, children, remember }: { where?: WhereProp
         </PlacePage>
       ) : pickedSsh && pickedSsh.kind === 'ssh' ? (
         <PlacePage inline={inline}>
-          <SshPanel key={pickedSsh.id} leading={inline ? pill : null} host={pickedSsh.host} api={sshLayer} onStarted={startedHere} />
+          <SshPanel key={pickedSsh.id} leading={inline ? pill : null} host={pickedSsh.host} api={sshLayer} onStarted={startedHere} initialFolder={remember && savedPlace(remember) === pickedSsh.id ? remoteProjectParts(remember)?.folder : undefined} />
         </PlacePage>
       ) : (
         body(pill)

@@ -52,7 +52,7 @@ export const settingsRows: Partial<Record<EnglishKey, string>> = {
   'settings.row.tunnel.hint': '使用固定網址，手機只需要配對一次。',
   'settings.row.revoke-all-devices.hint': '所有已配對的手機都會登出，必須重新配對。',
   'settings.row.phone-devices.hint': '手機通知、鍵盤、登出手機、Telegram 和連到這台電腦的連結。',
-  'settings.row.key-anthropic.hint': '供使用 Anthropic 模型的 AI 助理使用。',
+  'settings.row.key-anthropic.hint': '存著這把金鑰時，Claude 聊天會用它，不用你的 Claude 登入。移除後會回到原本的登入。聊天所啟動的指令和工具伺服器都看得到這把金鑰。',
   'settings.row.key-openai.hint': '供使用 OpenAI 模型的 AI 助理使用。',
   'settings.row.key-openrouter.hint': '供透過 OpenRouter 連線的 AI 助理使用。',
   'settings.row.opencode-keys.hint': '只供 OpenCode 使用，絕不會傳到手機。',

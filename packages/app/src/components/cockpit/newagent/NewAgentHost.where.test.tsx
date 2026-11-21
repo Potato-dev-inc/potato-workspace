@@ -14,6 +14,7 @@ import type { WslApi } from '../../../lib/wsl';
 import { click, settle, type as typeInto } from '../../settings/test-utils';
 import type { WhereProps } from '../../devices/NewAgentWhere';
 import { NewAgentHost } from './NewAgentHost';
+import { remotePathOf } from '../../../lib/runtime/remoteNewAgent';
 
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 (globalThis as { ResizeObserver?: unknown }).ResizeObserver ??= class {
@@ -88,7 +89,7 @@ async function pickDevice(node = NODE_MAC) {
   await settle(8);
 }
 
-async function open(where: WhereProps | undefined, project: { path: string; name: string } | null = null) {
+async function open(where: WhereProps | undefined, project: { path: string; name: string; node?: string } | null = null) {
   await act(async () => root.render(<NewAgentHost c={fakeApi()} where={where} project={project} />));
   await settle(6);
 }
@@ -132,9 +133,10 @@ describe('New agent page: Where', () => {
     expect(document.querySelectorAll('[data-testid="where-pill"]')).toHaveLength(1);
     await click(pill);
     await settle(4);
-    expect([...q('.dev-where-menu')!.querySelectorAll('.dev-where-row > span:not(.dis-reason)')].map((s) => s.textContent)).toEqual(['Desk-PC · This PC', 'Ubuntu-Test', 'Build box']);
-    // Devices are chosen by project in the picker, never here; no "Add a PC" either.
-    expect(q(`[data-testid="where-${NODE_MAC}"]`)).toBeNull();
+    expect([...q('.dev-where-menu')!.querySelectorAll('.dev-where-row > span:not(.dis-reason)')].map((s) => s.textContent)).toEqual(['Desk-PC · This PC', 'WSL · Ubuntu-Test', 'Mac mini', 'Build box']);
+    // An online PC of the account is listed by its own name; the one that is off is not (it is greyed in the project picker); no "Add a PC" either.
+    expect(q(`[data-testid="where-${NODE_MAC}"]`)).not.toBeNull();
+    expect(q(`[data-testid="where-${WORK_LAPTOP.node}"]`)).toBeNull();
     expect(q('[data-testid="where-add"]')).toBeNull();
   });
 
@@ -154,7 +156,7 @@ describe('New agent page: Where', () => {
     expect(q('[data-testid="place-folder"]')).toBeNull();
     expect(q('[data-testid="place-start"]')).toBeNull();
     expect(shape()).toEqual(local);
-    expect(q('[data-testid="where-pill"]')!.textContent).toContain('Run in: Ubuntu-Test');
+    expect(q('[data-testid="where-pill"]')!.textContent).toContain('Run in: WSL · Ubuntu-Test');
     // An agent that cannot run in this distro is greyed with a short reason, not hidden.
     await click(q('[data-testid="na-agent"]'));
     const items = [...document.querySelectorAll<HTMLButtonElement>('.ck-na-menu [role="menuitemradio"]')];
@@ -181,8 +183,8 @@ describe('New agent page: Where', () => {
     expect(q('[data-testid="na-on-device"]')).toBeNull();
   });
 
-  it('without Linux places or SSH machines there is no Run in pill at all', async () => {
-    const w = { ...whereOf(new DevicesFake({ enabled: true, devices: [MAC_MINI] })), ssh: new SshFake({ hosts: [] }), wsl: { ...fakeWsl(), status: async () => ({ state: 'ready' as const, distros: [] }) } as unknown as WslApi };
+  it('without Linux places, SSH machines or another PC that is online there is no Run in pill at all', async () => {
+    const w = { ...whereOf(new DevicesFake({ enabled: true, devices: [WORK_LAPTOP] })), ssh: new SshFake({ hosts: [] }), wsl: { ...fakeWsl(), status: async () => ({ state: 'ready' as const, distros: [] }) } as unknown as WslApi };
     await open(w);
     expect(q('[data-testid="where-pill"]')).toBeNull();
     expect(q('[data-testid="na-folder"]')).not.toBeNull();
@@ -200,8 +202,8 @@ describe('New agent page: Where', () => {
     expect(q('section.ck-na')).not.toBeNull();
     expect(q('[data-testid="na-on-device"]')!.textContent).toBe('on Mac mini');
     const row = q('.ck-na-row')!;
-    // The Run in pill is for this PC's own Linux places and SSH machines: not drawn on another PC's page.
-    expect(row.querySelector('[data-testid="where-pill"]')).toBeNull();
+    // The Run in pill stays on another PC's page, on that PC, so the person can go back.
+    expect(row.querySelector('[data-testid="where-pill"]')!.textContent).toContain('Run in: Mac mini');
     expect(fake.requests.some((r) => r.node === NODE_MAC && r.path === '/pclink/agents')).toBe(true);
     // The Mac's own project is the folder; the agent chip is the first of the Mac's agents.
     expect(q('[data-testid="na-folder"]')!.textContent).toContain('app');
@@ -220,6 +222,18 @@ describe('New agent page: Where', () => {
     // The agent opens on its PC; the picker is back on This PC.
     expect(q('[data-testid="where-pill"]')!.textContent).toContain('Desk-PC · This PC');
     expect(q('[data-testid="na-on-device"]')).toBeNull();
+  });
+
+  it("a far project's \"+\" in the sidebar opens the page on that PC and that project, and Run in lists the account PC by name next to the WSL places", async () => {
+    const fake = new DevicesFake({ enabled: true, devices: [MAC_MINI] });
+    await open(whereOf(fake), { path: remotePathOf('proj-app'), name: 'app', node: NODE_MAC });
+    await settle(8);
+    expect(q('[data-testid="na-on-device"]')!.textContent).toBe('on Mac mini');
+    expect(q('[data-testid="na-folder"]')!.textContent).toContain('app');
+    await click(q('[data-testid="where-pill"]'));
+    await settle(4);
+    expect([...q('.dev-where-menu')!.querySelectorAll('.dev-where-row > span:not(.dis-reason)')].map((s) => s.textContent)).toEqual(['Desk-PC · This PC', 'WSL · Ubuntu-Test', 'Mac mini', 'Build box']);
+    expect(q(`[data-testid="where-${NODE_MAC}"]`)!.textContent).toContain('Online');
   });
 
   it('draws the same page for the Mac as for This PC: the same sections, composer row chips and Start button, plus only the label', async () => {
@@ -406,8 +420,10 @@ describe('New agent page: Where', () => {
     const fake = new DevicesFake({ enabled: true, devices: [MAC_MINI] });
     const base = fake.request;
     fake.request = async (node: string, method: string, path: string, body?: unknown): Promise<any> => { // eslint-disable-line @typescript-eslint/no-explicit-any
-      if (method === 'GET' ? path.startsWith('/pclink/agents/claude/models') : path.endsWith('/config')) fake.requests.push({ node, method, path, body });
-      if (method === 'GET' && path.startsWith('/pclink/agents/claude/models')) {
+      // The page reads the list through the call row; Start reads the setting name from the same list by the older route.
+      const list = (method === 'GET' && path.startsWith('/pclink/agents/claude/models')) || path === '/pclink/call/agent_model_options';
+      if (list || path.endsWith('/config')) fake.requests.push({ node, method, path, body });
+      if (list) {
         return { status: 200, body: { terminal: false, default_model: 'sonnet', models: ['opus', 'sonnet'], live: { id: 'model_choice', options: [{ value: 'opus', name: 'Opus' }, { value: 'sonnet', name: 'Sonnet' }] } } };
       }
       if (method === 'POST' && /^\/pclink\/sessions\/[^/]+\/config$/.test(path)) return { status: 200, body: { ok: true } };
@@ -416,7 +432,7 @@ describe('New agent page: Where', () => {
     await open(whereOf(fake));
     await pickDevice();
     await settle(10);
-    expect(fake.requests.some((r) => r.path.startsWith('/pclink/agents/claude/models'))).toBe(true);
+    expect(fake.requests.some((r) => r.path === '/pclink/call/agent_model_options')).toBe(true);
     expect(q('[data-testid="na-model"]')).not.toBeNull();
     await click(q('[data-testid="na-model"]'));
     await click([...document.querySelectorAll<HTMLElement>('.mp-menu [role="option"]')].find((o) => o.textContent?.includes('Opus'))!);

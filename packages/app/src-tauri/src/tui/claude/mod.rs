@@ -82,7 +82,13 @@ impl TuiProfile for Claude {
     /// The chat lane (`acp.toml`, read by `crate::acp`).
     fn acp_table(&self) -> Option<crate::acp::config::AgentConfig> {
         static ACP: once_cell::sync::Lazy<Option<crate::acp::config::AgentConfig>> =
-            once_cell::sync::Lazy::new(|| crate::acp::config::from_toml_text("claude", "Claude", include_str!("acp.toml")).ok());
+            once_cell::sync::Lazy::new(|| {
+                let mut cfg = crate::acp::config::from_toml_text("claude", "Claude", include_str!("acp.toml")).ok()?;
+                // An Anthropic API key saved in Settings > Keys goes to the main-login chat as ANTHROPIC_API_KEY (an API
+                // account instead of the subscription). Set here, in code: a definition file can never ask for a secret.
+                cfg.optional_keys = vec![crate::acp::config::OptionalKey { env: "ANTHROPIC_API_KEY".into(), slot: "anthropic_api_key".into() }];
+                Some(cfg)
+            });
         ACP.clone()
     }
 
@@ -144,6 +150,7 @@ impl TuiProfile for Claude {
             login_hint: "Run `claude` and log in, then close it.".into(),
             // Linux and Windows keep the login here; macOS may keep it in the keychain (then the state reads unknown).
             credential_files: vec![".credentials.json".into()],
+            default_home: "~/.claude".into(),
         })
     }
 

@@ -713,7 +713,7 @@ mod no_tap_tests {
 
     #[test]
     fn a_loopback_mcp_run_agent_with_an_unlisted_model_needs_no_tap() {
-        let run = json!({"agent_type": "opencode", "model": "deepseek-v4.1-flash-1017", "project_path": "D:/pm-night", "placement": "grid", "task": "x"});
+        let run = json!({"agent_type": "opencode", "model": "deepseek-v4.1-flash-1017", "project_path": "C:/work/example", "placement": "grid", "task": "x"});
         mcp(&ok_headers(), "POST", &["agents", "run"], run).expect("run_agent goes through with no card");
         for segments in [
             vec!["agents", "run"], vec!["agents", "quick"], vec!["agents", "followup"], vec!["agents", "send"], vec!["agents", "wait"],

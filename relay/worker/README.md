@@ -215,6 +215,27 @@ Worker you do not trust could read an open invite: host your own, as with the re
 Optional settings: `SETUP_SECRET_SHA256` (nobody can claim the phone link first), `RATE_LIMIT_PER_HOUR`,
 `DOWNLOAD_URL` (where the invite page sends someone without the app). See `wrangler.toml`.
 
+## Check your request usage
+
+```sh
+npm run usage                    # last 24 hours, Worker name from wrangler.toml
+npm run usage -- --hours 6       # breakdowns for the last 6 hours
+npm run usage -- --json          # the same numbers as JSON (no token, account id masked)
+```
+
+It reads how many requests the Worker has used from Cloudflare's analytics and prints, in plain English: the
+day's total against the free plan's 100,000 requests per day, the busiest hours, a breakdown by HTTP status and by
+data centre, and a verdict:
+
+- **OK**: nothing unusual.
+- **WATCH**: most of the last hour failed, or the latest 5 minutes ran above 5 requests per second, or the day is at 80% of the free allowance.
+- **STORM**: both of the first two at once. Usually an old phone page or an old app is retrying. Close it, update it, or switch the Worker to the paid plan.
+
+It only reads. It logs in with the token `npx wrangler login` already saved on your computer (or uses
+`CLOUDFLARE_API_TOKEN` and `CLOUDFLARE_ACCOUNT_ID` if they are set). Run `npx wrangler login` again if it says the
+login was rejected. The token is never printed. Exit codes: 0 OK or WATCH, 1 STORM, 2 not logged in or login rejected,
+3 the login cannot read analytics, 4 any other error.
+
 ## Tests
 
 ```sh

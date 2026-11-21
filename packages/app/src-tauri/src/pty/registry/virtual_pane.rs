@@ -157,6 +157,19 @@ mod tests {
     }
 
     #[test]
+    fn a_chat_on_another_computer_is_left_out_of_the_default_list_and_only_the_window_list_has_it() {
+        let registry = Mutex::new(PaneRegistry::new());
+        insert_virtual_pane(&registry, spec("local-1"), Arc::new(|| {}));
+        insert_virtual_pane(&registry, spec("remote-1"), Arc::new(|| {}));
+        crate::acp::chat::mark_remote_for_tests("remote-1");
+        let ids = |list: Vec<crate::pty::PaneInfo>| list.into_iter().map(|p| p.id).collect::<Vec<_>>();
+        assert_eq!(ids(registry.lock().list()), vec!["local-1".to_string()]);
+        let mut all = ids(registry.lock().list_including_remote());
+        all.sort();
+        assert_eq!(all, vec!["local-1".to_string(), "remote-1".to_string()]);
+    }
+
+    #[test]
     fn a_virtual_pane_is_listed_like_any_pane_and_says_it_is_a_chat() {
         let registry = Mutex::new(PaneRegistry::new());
         insert_virtual_pane(&registry, spec("v1"), Arc::new(|| {}));

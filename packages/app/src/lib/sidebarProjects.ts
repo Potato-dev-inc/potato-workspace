@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useState } from 'react';
 import { t } from '../i18n';
 import { projectOfCwd } from './ship-model';
+import { parseLocation, type ProjectLocation } from './projectLocation';
 
 export const LS_SIDEBAR_PROJECTS = 'pm.sidebar.projects';
 export const LS_PROJECTS_FOLDED = 'pm.sidebar.projectsFolded';
@@ -14,6 +15,8 @@ export interface SidebarProject {
   path: string;
   /** A name the person gave it; absent means the folder's own name. */
   name?: string;
+  /** Where it lives; absent means this PC. */
+  location?: ProjectLocation;
 }
 
 export type GroupBy = 'projects' | 'status';
@@ -45,9 +48,10 @@ export function readProjects(): SidebarProject[] {
     const out: SidebarProject[] = [];
     for (const item of parsed) {
       if (!item || typeof item !== 'object') continue;
-      const { path, name } = item as { path?: unknown; name?: unknown };
+      const { path, name, location } = item as { path?: unknown; name?: unknown; location?: unknown };
       if (typeof path !== 'string' || path === '' || out.some((p) => pathKey(p.path) === pathKey(path))) continue;
-      out.push(typeof name === 'string' && name.trim() ? { path, name } : { path });
+      const loc = parseLocation(location);
+      out.push({ path, ...(typeof name === 'string' && name.trim() ? { name } : {}), ...(loc.kind === 'local' ? {} : { location: loc }) });
     }
     return out.slice(0, MAX_PROJECTS);
   } catch {
@@ -67,12 +71,30 @@ export function writeProjects(list: readonly SidebarProject[]): void {
 export const withProject = (list: readonly SidebarProject[], path: string): SidebarProject[] =>
   list.some((p) => pathKey(p.path) === pathKey(path)) ? [...list] : [...list, { path }];
 
+/** `list` with `path` added at `location` (a folder that is there already keeps its place and gets the location). */
+export const withLocatedProject = (list: readonly SidebarProject[], path: string, location: ProjectLocation): SidebarProject[] =>
+  list.some((p) => pathKey(p.path) === pathKey(path))
+    ? list.map((p) => (pathKey(p.path) === pathKey(path) ? { ...p, location } : p))
+    : [...list, { path, location }];
+
+const PROJECTS_CHANGED = 'pm:sidebar-projects-changed';
+
+/** Adds a project that lives somewhere else (an SSH machine) from outside the sidebar; the sidebar's list follows at once. */
+export function addLocatedProject(path: string, location: ProjectLocation): void {
+  writeProjects(withLocatedProject(readProjects(), path, location));
+  try {
+    window.dispatchEvent(new Event(PROJECTS_CHANGED));
+  } catch {
+    /* no window: nothing is listening */
+  }
+}
+
 export const withoutProject = (list: readonly SidebarProject[], path: string): SidebarProject[] =>
   list.filter((p) => pathKey(p.path) !== pathKey(path));
 
 /** A new name; an empty name goes back to the folder's own name. */
 export const renamedProject = (list: readonly SidebarProject[], path: string, name: string): SidebarProject[] =>
-  list.map((p) => (pathKey(p.path) === pathKey(path) ? (name.trim() ? { path: p.path, name: name.trim() } : { path: p.path }) : p));
+  list.map((p) => (pathKey(p.path) === pathKey(path) ? (name.trim() ? { ...p, name: name.trim() } : { path: p.path, ...(p.location ? { location: p.location } : {}) }) : p));
 
 /** The added projects in the order of `paths` (folders not named keep their relative order, after those that are). */
 export function withProjectOrder(list: readonly SidebarProject[], paths: readonly string[]): SidebarProject[] {
@@ -172,8 +194,13 @@ export function useSidebarProjects(): {
   const [projects, setProjects] = useState<SidebarProject[]>(readProjects);
   useEffect(() => {
     const onStorage = (e: StorageEvent) => e.key === LS_SIDEBAR_PROJECTS && setProjects(readProjects());
+    const onChanged = () => setProjects(readProjects());
     window.addEventListener('storage', onStorage);
-    return () => window.removeEventListener('storage', onStorage);
+    window.addEventListener(PROJECTS_CHANGED, onChanged);
+    return () => {
+      window.removeEventListener('storage', onStorage);
+      window.removeEventListener(PROJECTS_CHANGED, onChanged);
+    };
   }, []);
   const change = useCallback((edit: (list: SidebarProject[]) => SidebarProject[]) => {
     const next = edit(readProjects());

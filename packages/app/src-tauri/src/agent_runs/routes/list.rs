@@ -122,9 +122,8 @@ pub(super) fn list_agents(
     } else {
         operations::list_indexed_operations(project)?
     };
-    let live: BTreeMap<String, crate::pty::PaneInfo> = registry
-        .lock()
-        .list()
+    // A chat on another computer is not listed for an agent to drive (`acp::chat::external_panes`).
+    let live: BTreeMap<String, crate::pty::PaneInfo> = crate::acp::chat::external_panes(registry)
         .into_iter()
         .filter(|pane| !pane.id.starts_with("potato-workspace-orchestrator-"))
         .map(|pane| (pane.id.clone(), pane))

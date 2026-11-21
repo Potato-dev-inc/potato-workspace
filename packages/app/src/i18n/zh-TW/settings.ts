@@ -5,6 +5,7 @@ import type { EnglishKey } from '../en';
 export const settings: Partial<Record<EnglishKey, string>> = {
   'settings.region': '設定',
   'settings.back': '返回',
+  'settings.cancel': '取消',
   'settings.close': '關閉設定',
   'settings.search': '搜尋設定',
   'settings.searchPlaceholder': '搜尋',

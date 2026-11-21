@@ -89,6 +89,7 @@ fn account_maps_to_the_profiles_home_env_var() {
         extra_env: vec![("X_FLAG".into(), "1".into())],
         login_hint: String::new(),
         credential_files: Vec::new(),
+        default_home: String::new(),
     };
     assert_eq!(env_for(&scheme, &claude).set, vec![("X_HOME".into(), claude.home.clone()), ("X_FLAG".into(), "1".into())]);
     let _ = std::fs::remove_dir_all(root);
@@ -176,7 +177,7 @@ fn login_state_reads_the_profiles_credential_file() {
     std::fs::write(Path::new(&codex.home).join("auth.json"), "{}").unwrap();
     assert_eq!(state("codex", &codex), "signed_in");
     // A profile that declares no credential file cannot tell.
-    let none = AccountScheme { home_env: "X".into(), extra_env: Vec::new(), login_hint: String::new(), credential_files: Vec::new() };
+    let none = AccountScheme { home_env: "X".into(), extra_env: Vec::new(), login_hint: String::new(), credential_files: Vec::new(), default_home: String::new() };
     assert_eq!(login_state(&none, &codex), "unknown");
     let _ = std::fs::remove_dir_all(root);
 }
@@ -201,4 +202,116 @@ fn an_agent_or_helper_run_may_not_use_a_borrowed_sign_in() {
     assert!(validate_for_agent_run("no_such_agent", "  lend:lg_abc").unwrap_err().contains("borrowed sign-in"));
     // Everything else is judged as before.
     assert!(validate_for_agent_run("claude", "acc_does_not_exist").unwrap_err().contains("unknown account"));
+}
+
+#[test]
+fn sign_out_removes_only_the_credential_files_of_that_account() {
+    let (store, root) = temp_store("signout");
+    let a = store.add("claude", "A", None).unwrap();
+    let b = store.add("claude", "B", None).unwrap();
+    for acc in [&a, &b] {
+        std::fs::write(Path::new(&acc.home).join(".credentials.json"), "fake-token-not-real").unwrap();
+        std::fs::write(Path::new(&acc.home).join("settings.json"), "{}").unwrap();
+    }
+    let scheme = scheme_for("claude").unwrap();
+    assert_eq!(login_state(&scheme, &a), "signed_in");
+    assert_eq!(store.sign_out(&a.id), Ok(1));
+    assert!(!Path::new(&a.home).join(".credentials.json").exists());
+    assert!(Path::new(&a.home).join("settings.json").exists(), "other files stay");
+    assert!(Path::new(&b.home).join(".credentials.json").exists(), "another account is untouched");
+    assert_eq!(store.sign_out(&a.id), Ok(0), "already signed out");
+    assert!(store.get(&a.id).is_some(), "the account stays listed");
+    assert!(store.sign_out("acc_nope").is_err());
+    let overview = overview(&store);
+    let row = overview["accounts"].as_array().unwrap().iter().find(|r| r["id"] == b.id.as_str()).unwrap();
+    assert_eq!(row["login_state"], "signed_in");
+    let _ = std::fs::remove_dir_all(root);
+}
+
+#[test]
+fn sign_out_refuses_links_and_the_agents_own_folder() {
+    let (store, root) = temp_store("signout-safe");
+    // A credential file reached through a directory link is never removed.
+    let acc = store.add("opencode", "L", None).unwrap();
+    let outside = root.join("outside");
+    std::fs::create_dir_all(outside.join("x")).unwrap();
+    std::fs::write(outside.join("x").join("auth.json"), "fake").unwrap();
+    let link = Path::new(&acc.home).join("opencode");
+    #[cfg(windows)]
+    let made = std::os::windows::fs::symlink_dir(outside.join("x"), &link).is_ok();
+    #[cfg(unix)]
+    let made = std::os::unix::fs::symlink(outside.join("x"), &link).is_ok();
+    if made {
+        assert!(store.sign_out(&acc.id).is_err(), "a link on the way stops the sign-out");
+        assert!(outside.join("x").join("auth.json").exists(), "the file behind the link survives");
+    } else {
+        eprintln!("NOTE: this platform would not make a directory symlink here; the link case was skipped");
+    }
+    // The agent's own folder: an account whose folder is or holds it is refused.
+    let own = root.join("own-claude");
+    std::fs::create_dir_all(&own).unwrap();
+    std::fs::write(own.join(".credentials.json"), "fake").unwrap();
+    let scheme = AccountScheme { home_env: "PM_TEST_NO_SUCH_HOME".into(), extra_env: Vec::new(), login_hint: String::new(), credential_files: vec![".credentials.json".into()], default_home: own.to_string_lossy().into_owned() };
+    assert!(overlaps_default_home(&scheme, &own), "the folder itself");
+    assert!(overlaps_default_home(&scheme, &root), "a folder that holds it");
+    assert!(!overlaps_default_home(&scheme, &root.join("accounts").join("a")), "a separate folder");
+    let _ = std::fs::remove_dir_all(root);
+}
+
+/// "Sign in again" says done only on a real sign: this login's credential file written since the sign-in started. A folder the agent has
+/// merely started writing into (`unknown`, the state the sheet used to take for "signed in" ten seconds after Sign in) is not one, and
+/// neither is the OLD credential file of a login that is being renewed.
+#[test]
+fn a_sign_in_is_done_only_when_the_credential_file_was_written_since_it_started() {
+    use std::time::{Duration, SystemTime};
+    let (store, root) = temp_store("proof");
+    let claude = store.add("claude", "Work", None).unwrap();
+    let home = Path::new(&claude.home);
+    let scheme = scheme_for("claude").unwrap();
+    let started = SystemTime::now();
+    let proof = |since| signed_in_since(&scheme, home, since);
+
+    // Fresh folder, then the agent's own first-run files: still not signed in (this is the false "Signed in" of the old check).
+    assert_eq!(proof(Some(started)), Some(false));
+    std::fs::write(home.join(".claude.json"), "{}").unwrap();
+    std::fs::create_dir_all(home.join("sessions")).unwrap();
+    assert_eq!(login_state(&scheme, &claude), "unknown", "the folder status cannot tell, which is the point");
+    assert_eq!(proof(Some(started)), Some(false), "a folder that is not empty is not a sign-in");
+    // The sign-in never started from this app: nothing to prove.
+    assert_eq!(proof(None), Some(false));
+
+    // An old credential file (the login being renewed): written before the sign-in started, so not done yet.
+    let creds = home.join(".credentials.json");
+    std::fs::write(&creds, "{}").unwrap();
+    std::fs::File::options().write(true).open(&creds).unwrap().set_modified(started - Duration::from_secs(3600)).unwrap();
+    assert_eq!(proof(Some(started)), Some(false), "the old sign-in is not the new one");
+    // The person signs in: the file is written again, after the start.
+    std::fs::File::options().write(true).open(&creds).unwrap().set_modified(started + Duration::from_secs(5)).unwrap();
+    assert_eq!(proof(Some(started)), Some(true));
+
+    // An agent that keeps its login in a keychain cannot be seen in a folder: the answer is "cannot tell", never true.
+    let keychain = AccountScheme { home_env: "X".into(), extra_env: Vec::new(), login_hint: String::new(), credential_files: Vec::new(), default_home: String::new() };
+    assert_eq!(signed_in_since(&keychain, home, Some(started)), None);
+    // A credential name that leaves the folder is never looked at (an absolute path to a file that exists, or a parent step).
+    let outside = root.join("outside.json");
+    std::fs::write(&outside, "{}").unwrap();
+    let bad = AccountScheme { home_env: "X".into(), extra_env: Vec::new(), login_hint: String::new(), credential_files: vec![outside.to_string_lossy().into_owned(), "../outside.json".into()], default_home: String::new() };
+    assert_eq!(signed_in_since(&bad, home, Some(started)), Some(false));
+    // By account id: the store resolves the folder; a missing account has no answer.
+    assert_eq!(sign_in_proof(&store, "claude", Some(&claude.id), Some(started)), Some(true));
+    assert_eq!(sign_in_proof(&store, "claude", Some("acc_missing"), Some(started)), None);
+    let _ = std::fs::remove_dir_all(root);
+}
+
+#[test]
+fn own_login_folder_follows_the_agents_env_var_and_falls_back_to_its_default() {
+    let scheme = AccountScheme { home_env: "CODEX_HOME".into(), extra_env: Vec::new(), login_hint: String::new(), credential_files: vec!["auth.json".into()], default_home: "~/.codex".into() };
+    assert_eq!(own_home(&scheme, Some("D:/moved".into())), Some(PathBuf::from("D:/moved")));
+    // An empty or blank variable is "not set".
+    let home_default = own_home(&scheme, None).unwrap();
+    assert!(home_default.ends_with(".codex"));
+    assert_eq!(own_home(&scheme, Some("  ".into())), Some(home_default));
+    // A profile with no default and no variable: no folder to look at.
+    let none = AccountScheme { default_home: String::new(), ..scheme };
+    assert_eq!(own_home(&none, None), None);
 }

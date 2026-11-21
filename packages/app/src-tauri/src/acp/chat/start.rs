@@ -56,6 +56,8 @@ pub struct StartRequest {
     /// What the starting agent made this chat (a spin-off or a minion), known before the adapter starts: the chat carries it from the
     /// first moment, so its tool server (which asks the app what the chat is) lists `message_parent` at once.
     pub early_started: Option<crate::agent_run_mode::StartedRecord>,
+    /// The chat's agent runs on this SSH machine, in `folder` ON THAT MACHINE (`ssh::acp`). `None`: on this PC.
+    pub remote: Option<crate::ssh::model::SshHost>,
 }
 
 /// Why a chat session did not start. `fallback`: the terminal is the way to run this agent instead.
@@ -136,6 +138,9 @@ const WARM_WAIT: std::time::Duration = std::time::Duration::from_secs(30);
 /// Starts a chat session with `cfg` (no gate). The adapter is started and the session opened before the pane exists,
 /// so a failure leaves nothing behind and the caller can run the agent in a terminal instead (`fallback`).
 pub fn start(deps: &StartDeps, cfg: AgentConfig, mut request: StartRequest) -> Result<Arc<AcpChat>, StartError> {
+    if request.remote.is_some() {
+        return start_remote(deps, cfg, request);
+    }
     if !request.separate_copy {
         return start_in(deps, cfg, request);
     }
@@ -161,6 +166,51 @@ pub fn start(deps: &StartDeps, cfg: AgentConfig, mut request: StartRequest) -> R
             Err(error)
         }
     }
+}
+
+/// A chat whose agent runs on an SSH machine. Everything that would read or write the folder on this PC, or hand this PC's
+/// logins and tool servers to the adapter, is left out on purpose: no folder check here, no copy, no account, no warm
+/// session or standby, no saved conversation (a remote chat lives as long as the app), no adapter keys or env, no own
+/// tool server, no picture folder, no model default from this PC's settings, no project rules read from this PC.
+fn start_remote(deps: &StartDeps, cfg: AgentConfig, request: StartRequest) -> Result<Arc<AcpChat>, StartError> {
+    let Some(ssh) = request.remote.clone() else { return Err(StartError::new("INVALID_ARGUMENT", "No computer was named.", false)) };
+    let folder_text = request.folder.to_string_lossy().into_owned();
+    // A full path only: the adapter's `session/new` needs an absolute folder, and `~` would reach it unexpanded.
+    if !ssh.is_valid() || !crate::ssh::model::valid_folder(&folder_text) || !folder_text.starts_with('/') {
+        return Err(StartError::new("INVALID_ARGUMENT", "Type the full folder path on that computer, starting with /.", false));
+    }
+    if request.separate_copy {
+        return Err(StartError::new("INVALID_ARGUMENT", "A separate copy is not available on another computer yet.", false));
+    }
+    if request.account.as_deref().is_some_and(|a| !a.trim().is_empty()) {
+        return Err(StartError::new("INVALID_ARGUMENT", "A chat on another computer uses that computer's own sign-in, not an account of this PC.", false));
+    }
+    let cfg = crate::acp::config::for_remote(&cfg).map_err(|e| match e {
+        crate::acp::error::AcpError::Spawn(why) => StartError::new("ACP_REMOTE_UNSUPPORTED", why, false),
+        other => StartError::new("ACP_REMOTE_UNSUPPORTED", other.to_string(), false),
+    })?;
+    // A remote chat is not saved as a conversation: the one-chat-one-folder machinery of this PC does not apply.
+    let deps = StartDeps { conversations: None, ..deps.clone() };
+    let label = cfg.label.clone();
+    let agent_id = cfg.id.clone();
+    let pane_id = uuid::Uuid::new_v4().to_string();
+    // On this PC the chat's folder is a marker that is no path (`ssh::acp::pane_folder`): nothing can be written at it.
+    let marker = crate::ssh::acp::pane_folder(&ssh.id, &folder_text);
+    let marker_path = PathBuf::from(&marker);
+    let session = AcpSession::new_remote(Arc::new(cfg), deps.env.clone(), SessionParams { key: pane_id.clone(), cwd: PathBuf::from(&marker), resume_session_id: None }, ssh.clone(), folder_text.clone());
+    supervisor::global().insert(session.clone());
+    super::note_remote_started(&pane_id);
+    let chat = build_registered_chat(&deps, &pane_id, &label, &session, &marker_path, None, false);
+    ensure_sweeper();
+    if let Err(error) = session.ensure_running() {
+        let message = session.last_exit_reason().unwrap_or_else(|| start_failure_sentence(&label, &error));
+        chat.retire();
+        return Err(StartError::new("ACP_START_FAILED", message, false));
+    }
+    show_pane(&deps, &chat, &session, agent_id, &marker_path, None);
+    deps.host.panes_changed();
+    deps.host.state_changed(&pane_id, &chat.state());
+    Ok(chat)
 }
 
 /// The model a standby helper is matched on: only one the caller named. A task that names none takes a standby of its agent type
@@ -334,7 +384,10 @@ pub(super) fn ensure_sweeper() {
 /// started ahead of time (a standby or a warm session): the chat has seen what it said while it waited.
 pub(super) fn build_registered_chat(deps: &StartDeps, pane_id: &str, label: &str, session: &Arc<AcpSession>, folder: &Path, project: Option<&Path>, warm_claimed: bool) -> Arc<AcpChat> {
     let chat = AcpChat::build(pane_id, label, session.clone(), deps.host.clone(), deps.conversations.clone());
-    chat.set_image_folder(folder);
+    // A folder of another computer is never a place on this PC's disk: no picture folder is made from it.
+    if session.remote_host().is_none() {
+        chat.set_image_folder(folder);
+    }
     chat.attach();
     chat.set_project_hint(project);
     if warm_claimed {
@@ -342,8 +395,8 @@ pub(super) fn build_registered_chat(deps: &StartDeps, pane_id: &str, label: &str
         // The chat has seen what the session said while it waited (it was kept for this sink); from now on events come live.
         session.stop_buffering();
     }
-    if !cfg!(test) {
-        // Test agents are fakes with no tool server by design.
+    if !cfg!(test) && session.remote_host().is_none() {
+        // Test agents are fakes with no tool server by design. A chat on another computer has none (it is not handed one).
         chat.note_workspace_tools();
     }
     CHATS.lock().insert(pane_id.to_string(), chat.clone());
@@ -512,5 +565,19 @@ mod tests {
             let start: StartError = error.into();
             assert!(start.fallback, "{start}");
         }
+    }
+}
+
+#[cfg(test)]
+mod remote_pane_tests {
+    use crate::acp::chat::{is_remote_pane, NOT_ON_THIS_PC};
+
+    /// A chat on another computer has no folder on this PC: the file commands get a path that cannot name one.
+    #[test]
+    fn the_folder_of_a_remote_pane_cannot_be_read_on_this_pc() {
+        assert!(crate::files::list_dir(NOT_ON_THIS_PC, "", false).is_err());
+        assert!(crate::files::read_file(NOT_ON_THIS_PC, "a.txt").is_err());
+        assert!(NOT_ON_THIS_PC.contains('\0'));
+        assert!(!is_remote_pane("no-such-pane"));
     }
 }

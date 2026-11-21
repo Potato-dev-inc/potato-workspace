@@ -7,7 +7,7 @@ import '../../styles/lend.css';
 /**
  * A modal sheet for Share an agent. It works in the cockpit and in the Settings window (their tokens are the same),
  * so it goes to whichever of the two is around: inside a card it would be cut off by the card's edges.
- * `size="wide"` is the 560 px sheet of the lend profile steps (full width on a phone); `head` sits at the right of the title.
+ * `size="wide"` is the 560 px sheet of the lend profile steps (full width on a phone); `size="term"` is the 720 px sheet of a sign-in with its small terminal; `head` sits at the right of the title.
  */
 export function LendSheet({
   title,
@@ -21,7 +21,7 @@ export function LendSheet({
   labelledBy: string;
   onClose?: () => void;
   children: ReactNode;
-  size?: 'wide';
+  size?: 'wide' | 'term';
   head?: ReactNode;
 }) {
   const ref = useSheetKeys(onClose);

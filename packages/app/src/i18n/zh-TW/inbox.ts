@@ -57,6 +57,8 @@ export const inbox: Partial<Record<EnglishKey, string>> = {
   'inbox.pinnedLabel': '先處理',
   'inbox.showInCrew': '在團隊中顯示',
   'inbox.showInCrewNamed': '在團隊中顯示 {name}',
+  'inbox.onHost': '在 {name} 上',
+  'inbox.onAnotherComputer': '在另一台電腦上',
   'inbox.workingShowFewer': '顯示較少',
   'inbox.doneToday': '今天完成',
   'inbox.doneClear': '清除',

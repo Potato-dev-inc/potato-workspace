@@ -177,6 +177,7 @@ fn run_full(user: &Path, http: &dyn UsageHttp, state: &State, now: SystemTime, f
             extra_env: vec![],
             login_hint: String::new(),
             credential_files: vec![".credentials.json".into()],
+            default_home: String::new(),
         }),
     };
     let env = |_: &str| None;

@@ -141,6 +141,7 @@ impl TuiProfile for OpenCode {
             login_hint: "Run `opencode`, type /connect to log in to a provider, then close it.".into(),
             // Relative to the account home (XDG_DATA_HOME): `<data>/opencode/auth.json`.
             credential_files: vec!["opencode/auth.json".into()],
+            default_home: "~/.local/share".into(),
         })
     }
 

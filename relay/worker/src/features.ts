@@ -4,7 +4,7 @@
  * never sent to an address that does not list the feature it is for.
  */
 export const WORKER_NAME = "potato-worker/1";
-export const FEATURES = ["team", "rooms", "stable-link", "invites"] as const;
+export const FEATURES = ["team", "rooms", "stable-link", "link-rotate", "invites"] as const;
 /** Far-away pairing is listed only when the owner key is set (see `PAIR_OWNER`): without it the routes answer 404. */
 export const PAIR_FEATURE = "pair";
 export type Feature = (typeof FEATURES)[number] | typeof PAIR_FEATURE;

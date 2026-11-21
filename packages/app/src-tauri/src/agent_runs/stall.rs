@@ -328,6 +328,7 @@ fn samples_of(registry: &Arc<Mutex<crate::pty::PaneRegistry>>) -> Vec<PaneSample
         .panes
         .values()
         // Only helpers an agent started: they have a parent pane or an origin.
+        .filter(|pane| !crate::acp::chat::is_remote_pane(&pane.info.id))
         .filter(|pane| (pane.info.parent_pane_id.is_some() || crate::pty::pane_origin::get(&pane.info.id).is_some()) && !crate::pty::hidden::is_hidden(&pane.info.id))
         .map(|pane| {
             // A chat helper has no terminal screen (only a fixed note): its last output is what moves.

@@ -1,5 +1,17 @@
 # Changelog
 
+## 1.2.0
+
+This is alpha 1.
+
+- Another PC works like another folder: same chat, workflows, model, effort and permission, shell, sign-in, agents of its own, and it shows in the Run in picker.
+- PCs on the same account get full rights by default. You can lower this in Connect.
+- My PCs list is tidier and has Remove.
+- The Agents page detects sign-in and shows the sign-in terminal.
+- Team page fixes, and a clear message when its relay is gone.
+- Invites no longer fail when the Windows key store is full.
+- Linux keeps its key in a private file.
+
 ## 1.1.9
 
 This is a beta.

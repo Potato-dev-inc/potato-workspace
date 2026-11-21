@@ -8,7 +8,7 @@ const s: HarnessScenario = {
   window: { width: 1280, height: 900 },
   devices: { devices: [MAC_MINI], panes: { [NODE_MAC]: MAC_PANES }, offlineAfterMs: 1500 },
   after: async (dom) => {
-    await dom.waitFor(`[data-testid="device-group-${NODE_MAC}"][data-state="offline"]`, 8000);
+    await dom.waitFor(`[data-remote-node="${NODE_MAC}"][data-state="offline"]`, 8000);
     await dom.sleep(300);
   },
 };

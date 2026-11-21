@@ -20,6 +20,7 @@ export const account: Partial<Record<EnglishKey, string>> = {
   'account.seenHours_other': '{count} 小時前上線',
   'account.seenDays_one': '{count} 天前上線',
   'account.seenDays_other': '{count} 天前上線',
+  'account.keyInFile': '這台電腦把金鑰存放在一個私人檔案裡。',
   'account.signedOut': '已登出',
   'account.signOutThis': '登出這台裝置',
   'account.signOutOther': '登出',

@@ -41,9 +41,8 @@ pub(super) fn bind_existing_worker(
     let Some(pane_ref) = pane_ref else {
         return Ok(());
     };
-    let live_pane_ids: Vec<String> = registry
-        .lock()
-        .list()
+    // A chat on another computer is never adopted or resolved here (`acp::chat::external_panes`).
+    let live_pane_ids: Vec<String> = crate::acp::chat::external_panes(registry)
         .into_iter()
         .map(|pane| pane.id)
         .collect();
@@ -166,7 +165,7 @@ fn find_live_pane(
     registry: &Arc<Mutex<crate::pty::PaneRegistry>>,
     id: &str,
 ) -> Option<crate::pty::PaneInfo> {
-    let panes = registry.lock().list();
+    let panes = crate::acp::chat::external_panes(registry);
     let ids: Vec<String> = panes.iter().map(|pane| pane.id.clone()).collect();
     let resolved = crate::mcp_sessions::resolve_pane_id(id, &ids).ok()?;
     panes

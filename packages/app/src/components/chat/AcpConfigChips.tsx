@@ -3,6 +3,7 @@
 // four choices or fewer); nothing is drawn when it offers none. Settings change between turns, so the controls are
 // switched off while the agent works (and when the conversation is open in a terminal).
 import { useEffect, useState } from 'react';
+import { useHost } from '../../lib/host/context';
 import { chipsDisabled, configChips, errorSentence, tauriAcpChatApi, type AcpChatApi, type AcpChatState } from '../../lib/acpChat';
 import { ChipMenu, ChipSegmented } from './ChipMenu';
 import { isFullAccessMode, isPermissionChip, permissionFirst } from './permissionChip';
@@ -15,6 +16,8 @@ const SEGMENTED_MAX = 4;
 export function AcpConfigChips({ paneId, state, api = tauriAcpChatApi }: { paneId: string; state: AcpChatState | null; api?: Pick<AcpChatApi, 'setConfig'> }) {
   // A pick shows at once; the backend's state replaces it when it arrives, and a refusal takes it back.
   const t = useT();
+  // A place that does not let this person change settings draws the same chips switched off, with its one reason.
+  const denied = useHost().denied?.('change') ?? null;
   const [picked, setPicked] = useState<Record<string, string>>({});
   const [error, setError] = useState<string | null>(null);
   useEffect(() => {
@@ -24,7 +27,7 @@ export function AcpConfigChips({ paneId, state, api = tauriAcpChatApi }: { paneI
 
   const chips = configChips(state);
   if (chips.length === 0) return null;
-  const off = chipsDisabled(state);
+  const off = chipsDisabled(state) || denied !== null;
   const change = (id: string, value: string) => {
     setError(null);
     setPicked((cur) => ({ ...cur, [id]: value }));
@@ -45,7 +48,7 @@ export function AcpConfigChips({ paneId, state, api = tauriAcpChatApi }: { paneI
           const valueName = choice?.name ?? shown;
           // Say what each chip sets: the kind of setting (by ACP category) and the value, plus what the agent says about the value.
           const kind = chip.category === 'mode' ? t('pane.chipPermissions') : chip.category === 'model' ? t('pane.chipModel') : chip.category === 'thought_level' ? t('pane.chipEffort') : chip.label;
-          const hint = `${kind}: ${valueName}${choice?.description ? ` - ${choice.description}` : ''}`;
+          const hint = `${kind}: ${valueName}${choice?.description ? ` - ${choice.description}` : ''}${denied ? ` - ${denied}` : ''}`;
           const known = chip.category === 'mode' || chip.category === 'model' || chip.category === 'thought_level';
           const props = {
             chipId: chip.id,

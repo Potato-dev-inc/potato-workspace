@@ -156,7 +156,7 @@ export function NewAgentMenu({
   const [addPick, setAddPick] = useState(false);
   // Agents the person hid ("Edit list…"): the menu leaves them out. `allEntries` is the full list for the editor.
   const { hidden } = useHiddenAgents();
-  // Terminals hidden: the menu lists only agents that can chat (and no shell), and every click starts a chat.
+  // Terminals hidden: the menu lists only agents that can chat (plus the plain shells), and every click starts a chat.
   const terminals = useShowTerminals();
   const chatFirst = !terminals;
   const visible = visibleAgentEntries(allEntries, hidden);

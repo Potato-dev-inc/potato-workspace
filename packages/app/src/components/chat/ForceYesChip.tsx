@@ -2,6 +2,7 @@
 // On, it is a visible chip (risk tone) and one click turns it off. A chat keeps the switch in the app; a terminal pane keeps
 // it in the app too (`agent_rules::terminal`). Nothing here answers a question: it only flips the person's own switch.
 import { useEffect, useRef, useState } from 'react';
+import { useHost } from '../../lib/host/context';
 import { useT } from '../../i18n';
 import { ruleError, tauriAgentRulesApi, type AgentRulesApi } from '../../lib/agentRules';
 import { tauriAcpChatApi, type AcpChatApi, type AcpChatState } from '../../lib/acpChat';
@@ -21,6 +22,8 @@ interface Props {
 
 export function ForceYesChip({ paneId, isAcp, state, agent, cwd, chatApi = tauriAcpChatApi, rulesApi = tauriAgentRulesApi }: Props) {
   const t = useT();
+  // A place that does not let this person change this draws the same chip switched off, with its one reason.
+  const denied = useHost().denied?.('change') ?? null;
   const [open, setOpen] = useState(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -95,8 +98,8 @@ export function ForceYesChip({ paneId, isAcp, state, agent, cwd, chatApi = tauri
         aria-pressed={on}
         aria-haspopup={on ? undefined : 'dialog'}
         aria-expanded={on ? undefined : open}
-        title={on ? t('forceYes.chipOnTip') : t('forceYes.chipOffTip')}
-        disabled={busy}
+        title={denied ?? (on ? t('forceYes.chipOnTip') : t('forceYes.chipOffTip'))}
+        disabled={busy || denied !== null}
         onClick={click}
       >
         {on ? t('forceYes.chipOn') : t('forceYes.chip')}

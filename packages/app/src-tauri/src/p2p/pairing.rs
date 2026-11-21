@@ -767,6 +767,7 @@ impl PairManager {
             "locked_until": lock,
             "account_locked_until": self.account_locked_until(),
             "tampered": self.trust.tampered(),
+            "key_changed": self.trust.key_changed(),
             "devices": self.devices_view(),
         })
     }
@@ -1305,9 +1306,10 @@ impl PairManager {
         if let Some(meta) = &account {
             self.account_success(&meta.device_id);
         }
-        // A PC of the person's own account was paired. Every right stays at the pairing default (off): this route never offers a way to
-        // ask for one, and this file hands out none. The owner turns one on later, on the paired PC's own page.
+        // A PC of the person's own account was paired: Full by default, with the account marker (plan 2.2). Only this route does it; the
+        // person can lower it any time in Connect, and a level they lowered stays lowered (the marker is already there).
         if let Some(meta) = &account {
+            let _ = self.trust.grant_account_default(&other.binding.node_id);
             let hook = self.on_account_paired.lock().unwrap_or_else(|p| p.into_inner()).clone();
             if let Some(hook) = hook {
                 hook(other.binding.node_id, meta.device_id.clone());

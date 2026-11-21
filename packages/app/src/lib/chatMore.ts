@@ -3,6 +3,8 @@
 // The desktop reaches them through Tauri commands, the phone through the bridge (same checks on the PC). Pure helpers
 // (no Tauri import beyond `invoke`) so both sides and the tests share them.
 import { invoke } from '@tauri-apps/api/core';
+import { localHost } from './host/local';
+import type { Host } from './host/host';
 import type { ChatItem } from './sessionChatModel';
 import { mergeItems } from './sessionChatModel';
 
@@ -39,8 +41,8 @@ export function prependItems(held: readonly ChatItem[], earlier: readonly ChatIt
   return mergeItems(earlier, held, false);
 }
 
-export function chatEarlier(paneId: string, before: string, limit: number): Promise<EarlierPage> {
-  return call<EarlierPage>('chat_earlier', { paneId, before, limit });
+export function chatEarlier(paneId: string, before: string, limit: number, host: Host = localHost): Promise<EarlierPage> {
+  return host.invoke<EarlierPage>('chat_earlier', { paneId, before, limit });
 }
 
 // ---------------------------------------------------------------------------------------------- Pictures
@@ -60,8 +62,8 @@ export interface PictureSource {
   load(path: string): Promise<LoadedPicture>;
 }
 
-export function desktopPictureSource(paneId: string): PictureSource {
-  return { key: `desk:${paneId}`, load: (path) => call<LoadedPicture>('chat_picture', { paneId, path }) };
+export function desktopPictureSource(paneId: string, host: Host = localHost): PictureSource {
+  return { key: `desk:${paneId}`, load: (path) => host.invoke<LoadedPicture>('chat_picture', { paneId, path }) };
 }
 
 // ---------------------------------------------------------------------------------------------- Draft
@@ -95,10 +97,11 @@ export interface ChatSignIn {
   stop(): Promise<void>;
 }
 
-export function desktopSignIn(chatPaneId: string): ChatSignIn {
+export function desktopSignIn(chatPaneId: string, host?: Pick<Host, 'invoke'>): ChatSignIn {
+  const run = <T,>(command: string, args: Record<string, unknown>): Promise<T> => (host ? host.invoke<T>(command, args) : call<T>(command, args));
   return {
-    start: async () => (await call<{ pane_id: string }>('chat_signin_start', { pane_id: chatPaneId })).pane_id,
-    status: () => call<SignInStatus>('chat_signin_status', { pane_id: chatPaneId }),
-    stop: () => call<void>('chat_signin_stop', { pane_id: chatPaneId }),
+    start: async () => (await run<{ pane_id: string }>('chat_signin_start', { pane_id: chatPaneId })).pane_id,
+    status: () => run<SignInStatus>('chat_signin_status', { pane_id: chatPaneId }),
+    stop: () => run<void>('chat_signin_stop', { pane_id: chatPaneId }),
   };
 }

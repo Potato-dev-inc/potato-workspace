@@ -25,6 +25,9 @@ pub(crate) fn branch_of(dir: &Path) -> Option<String> {
 /// The git branch of the folder this pane works in, or null for a folder that is not a git work tree.
 #[tauri::command]
 pub async fn pane_git_branch(state: State<'_, AppState>, pane_id: String) -> Result<Option<String>, String> {
+    if crate::acp::chat::is_remote_pane(&pane_id) {
+        return Ok(None);
+    }
     let Some(cwd) = state.registry.lock().list().into_iter().find(|p| p.id == pane_id).map(|p| p.cwd) else {
         return Ok(None);
     };

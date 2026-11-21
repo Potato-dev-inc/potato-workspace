@@ -6,10 +6,11 @@ use crate::agent_store::detect::{self, FoundAgent};
 /// only. `project_dir` leaves out any folder inside the open project (a program the project ships is not "installed").
 #[tauri::command]
 pub async fn agents_detect_installed(project_dir: Option<String>) -> Result<Vec<FoundAgent>, String> {
-    tauri::async_runtime::spawn_blocking(move || {
-        let dir = project_dir.as_deref().map(str::trim).filter(|d| !d.is_empty()).map(std::path::PathBuf::from);
-        detect::detect_on_this_pc(dir.as_deref())
-    })
-    .await
-    .map_err(|e| e.to_string())
+    tauri::async_runtime::spawn_blocking(move || found_here(project_dir.as_deref())).await.map_err(|e| e.to_string())
+}
+
+/// The body of `agents_detect_installed` (blocking); a paired PC's call runs the same one.
+pub(crate) fn found_here(project_dir: Option<&str>) -> Vec<FoundAgent> {
+    let dir = project_dir.map(str::trim).filter(|d| !d.is_empty()).map(std::path::PathBuf::from);
+    detect::detect_on_this_pc(dir.as_deref())
 }

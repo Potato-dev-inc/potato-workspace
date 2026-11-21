@@ -47,11 +47,51 @@ pub enum Outcome {
     AddressRefused,
     /// 404: this address is not a Worker with the stable link (an older team relay, or something else). Trying again cannot help.
     WorkerTooOld,
+    /// Address book only: the name is not the Worker any more but answers as THIS app (it became a Direct proxy). Nothing is sent to it.
+    NameIsDirect,
+    /// 404 with Cloudflare's "error code: 1042": the Worker no longer exists on Cloudflare. Trying again cannot help.
+    WorkerGone,
+    /// 429 with Cloudflare's "error code: 1027": the free daily limit of the Worker is used up. It resets at 00:00 UTC, so trying later helps.
+    OverQuota,
     /// Anything else (no network, Worker down, 429, 5xx): try again later.
     Retry(String),
 }
 
+/// A transport failure text starts with this; `reason_of` relies on it (no network or DNS).
+pub const OFFLINE_PREFIX: &str = "Could not reach the Worker";
+pub const WORKER_GONE_SENTENCE: &str = "Your relay was removed from Cloudflare, so it cannot be reached any more. Set it up again.";
+pub const OVER_QUOTA_SENTENCE: &str = "Cloudflare's free daily limit for your relay is used up. It resets at 00:00 UTC.";
+
+/// The short machine code for a problem sentence (the screen turns it into its own words), or `None` for a plain retry.
+pub fn reason_of(problem: &str) -> Option<&'static str> {
+    if Some(problem) == Outcome::SecretMismatch.problem().as_deref() {
+        Some("secret_mismatch")
+    } else if problem == WORKER_GONE_SENTENCE {
+        Some("worker_gone")
+    } else if problem == OVER_QUOTA_SENTENCE {
+        Some("over_quota")
+    } else if Some(problem) == Outcome::WorkerTooOld.problem().as_deref() {
+        Some("worker_too_old")
+    } else if Some(problem) == Outcome::NameIsDirect.problem().as_deref() {
+        Some("is_direct")
+    } else if problem.starts_with(OFFLINE_PREFIX) {
+        Some("offline")
+    } else {
+        None
+    }
+}
+
+/// Whether trying again cannot help for this reason code.
+pub fn reason_is_final(reason: &str) -> bool {
+    matches!(reason, "secret_mismatch" | "worker_gone" | "worker_too_old" | "is_direct")
+}
+
 impl Outcome {
+    /// The machine code for the failure (see `reason_of`), or `None` when linked or a plain retry.
+    pub fn reason(&self) -> Option<&'static str> {
+        self.problem().and_then(|p| reason_of(&p))
+    }
+
     /// The sentence for the status line; `None` once linked.
     pub fn problem(&self) -> Option<String> {
         match self {
@@ -59,20 +99,35 @@ impl Outcome {
             Self::SecretMismatch => Some("The secret does not match the one the Worker has. Another copy of Potato Workspace may have set it up first: paste that first secret under Secret, or use a new Worker.".into()),
             Self::AddressRefused => Some("The Worker refused this tunnel address. Is it a stable-link Worker?".into()),
             Self::WorkerTooOld => Some("Update your Worker: this address does not have the stable link yet. Open Settings > Connect and press Update Worker.".into()),
+            Self::NameIsDirect => Some("That name already goes straight to this PC (Direct). It is not your Address book any more.".into()),
+            Self::WorkerGone => Some(WORKER_GONE_SENTENCE.into()),
+            Self::OverQuota => Some(OVER_QUOTA_SENTENCE.into()),
             Self::Retry(why) => Some(why.clone()),
         }
     }
 
     /// Whether another try can still help.
     pub fn is_final(&self) -> bool {
-        matches!(self, Self::Linked | Self::SecretMismatch | Self::AddressRefused | Self::WorkerTooOld)
+        matches!(self, Self::Linked | Self::SecretMismatch | Self::AddressRefused | Self::WorkerTooOld | Self::NameIsDirect | Self::WorkerGone)
     }
 }
 
 /// Read the Worker's answer. Pure, so every case is a unit test.
 pub fn interpret_register(http_status: Option<u16>, transport_error: Option<&str>) -> Outcome {
+    interpret_register_body(http_status, "", transport_error)
+}
+
+/// Cloudflare's own refusals are plain text in the body: "error code: 1042" (no such Worker) and "error code: 1027" (daily limit).
+fn cloudflare_code(body: &str, code: &str) -> bool {
+    body.contains(&format!("error code: {code}")) || body.contains(&format!("error code {code}"))
+}
+
+/// Like `interpret_register`, with the response body so Cloudflare's 1042 and 1027 are told apart from a plain 404 / 429.
+pub fn interpret_register_body(http_status: Option<u16>, body: &str, transport_error: Option<&str>) -> Outcome {
     match (http_status, transport_error) {
-        (_, Some(err)) => Outcome::Retry(format!("Could not reach the Worker: {err}")),
+        (_, Some(err)) => Outcome::Retry(format!("{OFFLINE_PREFIX}: {err}")),
+        (Some(404), None) if cloudflare_code(body, "1042") => Outcome::WorkerGone,
+        (Some(429 | 503), None) if cloudflare_code(body, "1027") => Outcome::OverQuota,
         (Some(200), None) => Outcome::Linked,
         (Some(401 | 403), None) => Outcome::SecretMismatch,
         (Some(400), None) => Outcome::AddressRefused,
@@ -95,7 +150,57 @@ fn agent() -> ureq::Agent {
 
 /// One register call. The error text never contains the secret (ureq's transport errors name only the URL).
 pub fn register_once(worker_url: &str, secret: &str, origin: &str) -> Outcome {
-    let result = agent()
+    register_with(&agent(), worker_url, secret, origin)
+}
+
+pub fn pm_health_url(worker_url: &str) -> String {
+    format!("{}/_pm/health", worker_url.trim_end_matches('/'))
+}
+
+/// What a Worker's `/_pm/health` means before a secret may be sent to it: `None` = it lists the stable link, go ahead.
+/// A name that is not such a Worker never receives the secret.
+pub fn interpret_features(http_status: Option<u16>, body: &str, transport_error: Option<&str>) -> Option<Outcome> {
+    match (http_status, transport_error) {
+        (_, Some(err)) => Some(Outcome::Retry(format!("{OFFLINE_PREFIX}: {err}"))),
+        (Some(404), None) if cloudflare_code(body, "1042") => Some(Outcome::WorkerGone),
+        (Some(429 | 503), None) if cloudflare_code(body, "1027") => Some(Outcome::OverQuota),
+        (Some(200), None) => {
+            let listed = serde_json::from_str::<serde_json::Value>(body)
+                .ok()
+                .and_then(|v| v.get("features")?.as_array().map(|a| a.iter().any(|f| f.as_str() == Some("stable-link"))))
+                .unwrap_or(false);
+            if listed {
+                None
+            } else {
+                Some(Outcome::WorkerTooOld)
+            }
+        }
+        (Some(429 | 500..=599), None) => Some(Outcome::Retry("The Worker is busy. Waiting a little.".into())),
+        (Some(_), None) => Some(Outcome::WorkerTooOld),
+        (None, None) => Some(Outcome::Retry("The Worker did not answer.".into())),
+    }
+}
+
+/// Like `register_once`, for a name the person TYPED (My domain + Address book): only public addresses are connected to, and
+/// the secret is sent only after the name has said it is a Worker with the stable link.
+pub fn register_once_public(worker_url: &str, secret: &str, origin: &str) -> Outcome {
+    let agent = ureq::AgentBuilder::new().timeout(TIMEOUT).redirects(0).resolver(crate::own_domain::PublicOnly).build();
+    let checked = match agent.get(&pm_health_url(worker_url)).set("Accept-Encoding", "identity").call() {
+        Ok(resp) => {
+            let status = resp.status();
+            interpret_features(Some(status), &resp.into_string().unwrap_or_default(), None)
+        }
+        Err(ureq::Error::Status(code, resp)) => interpret_features(Some(code), &resp.into_string().unwrap_or_default(), None),
+        Err(err) => interpret_features(None, "", Some(&err.kind().to_string())),
+    };
+    if let Some(outcome) = checked {
+        return outcome;
+    }
+    register_with(&agent, worker_url, secret, origin)
+}
+
+fn register_with(agent: &ureq::Agent, worker_url: &str, secret: &str, origin: &str) -> Outcome {
+    let result = agent
         .post(&register_url(worker_url))
         .set("Authorization", &format!("Bearer {secret}"))
         .set("Accept-Encoding", "identity")
@@ -103,7 +208,7 @@ pub fn register_once(worker_url: &str, secret: &str, origin: &str) -> Outcome {
         .send_string(&serde_json::json!({ "origin": origin }).to_string());
     match result {
         Ok(resp) => interpret_register(Some(resp.status()), None),
-        Err(ureq::Error::Status(code, _)) => interpret_register(Some(code), None),
+        Err(ureq::Error::Status(code, resp)) => interpret_register_body(Some(code), &resp.into_string().unwrap_or_default(), None),
         Err(err) => interpret_register(None, Some(&err.kind().to_string())),
     }
 }
@@ -119,6 +224,10 @@ pub enum ResetOutcome {
     TooOld,
     /// No answer, or any other answer (Worker down, no network).
     Unreachable,
+    /// 400: the Worker wants a new secret in the request. This app is too old for that Worker. Trying again cannot help.
+    UpdateApp,
+    /// 429: too many tries from this network. Wait and try again.
+    TooManyTries,
 }
 
 /// Read the Worker's answer to a reset call. Pure, so every case is a unit test.
@@ -127,18 +236,50 @@ pub fn interpret_reset(http_status: Option<u16>) -> ResetOutcome {
         Some(200..=299) => ResetOutcome::Done,
         Some(401 | 403) => ResetOutcome::Rejected,
         Some(404) => ResetOutcome::TooOld,
+        Some(400) => ResetOutcome::UpdateApp,
+        Some(429) => ResetOutcome::TooManyTries,
         _ => ResetOutcome::Unreachable,
     }
 }
 
-/// Ask the Worker to forget its link and secret (used before a new secret replaces the old one).
-/// The secret only goes in the `Authorization` header; the outcome carries no text from the request.
-pub fn reset(worker_url: &str, secret: &str) -> ResetOutcome {
+/// Whether a Worker's `/_pm/health` lists `link-rotate`: `None` = yes, go ahead. An older Worker ignores the new secret and
+/// would reopen the first-come window, so it is never asked to rotate.
+pub fn interpret_rotate_feature(http_status: Option<u16>, body: &str) -> Option<ResetOutcome> {
+    match http_status {
+        Some(200) => {
+            let listed = serde_json::from_str::<serde_json::Value>(body)
+                .ok()
+                .and_then(|v| v.get("features")?.as_array().map(|a| a.iter().any(|f| f.as_str() == Some("link-rotate"))))
+                .unwrap_or(false);
+            (!listed).then_some(ResetOutcome::TooOld)
+        }
+        Some(404) => Some(ResetOutcome::TooOld),
+        Some(429) => Some(ResetOutcome::TooManyTries),
+        _ => Some(ResetOutcome::Unreachable),
+    }
+}
+
+/// Rotate the secret on the Worker: the old secret authorises, the new one replaces it in the same call and the link is
+/// cleared (the Worker is never without a secret, so nobody can claim it in between). Both secrets only travel inside
+/// the request (old in `Authorization`, new in the body); the outcome carries no text from it.
+pub fn reset(worker_url: &str, old_secret: &str, new_secret: &str) -> ResetOutcome {
+    let checked = match agent().get(&pm_health_url(worker_url)).set("Accept-Encoding", "identity").call() {
+        Ok(resp) => {
+            let status = resp.status();
+            interpret_rotate_feature(Some(status), &resp.into_string().unwrap_or_default())
+        }
+        Err(ureq::Error::Status(code, resp)) => interpret_rotate_feature(Some(code), &resp.into_string().unwrap_or_default()),
+        Err(_) => interpret_rotate_feature(None, ""),
+    };
+    if let Some(outcome) = checked {
+        return outcome;
+    }
     let result = agent()
         .post(&reset_url(worker_url))
-        .set("Authorization", &format!("Bearer {secret}"))
+        .set("Authorization", &format!("Bearer {old_secret}"))
         .set("Accept-Encoding", "identity")
-        .call();
+        .set("Content-Type", "application/json")
+        .send_string(&serde_json::json!({ "new_secret": new_secret }).to_string());
     match result {
         Ok(resp) => interpret_reset(Some(resp.status())),
         Err(ureq::Error::Status(code, _)) => interpret_reset(Some(code)),
@@ -147,8 +288,8 @@ pub fn reset(worker_url: &str, secret: &str) -> ResetOutcome {
 }
 
 /// Best effort: forget the old secret on the Worker, ignoring why it could not.
-pub fn reset_once(worker_url: &str, secret: &str) -> bool {
-    reset(worker_url, secret) == ResetOutcome::Done
+pub fn reset_once(worker_url: &str, old_secret: &str, new_secret: &str) -> bool {
+    reset(worker_url, old_secret, new_secret) == ResetOutcome::Done
 }
 
 /// The line the app log gets when a registration ends for good. Never has the secret or an address in it.
@@ -159,6 +300,9 @@ pub fn final_log_line(outcome: &Outcome) -> Option<(bool, String)> {
         Outcome::SecretMismatch => Some((false, "stable link: the Worker refused the secret (403); it holds another secret, so phones cannot reach this computer".into())),
         Outcome::AddressRefused => Some((false, "stable link: the Worker refused the tunnel address (400)".into())),
         Outcome::WorkerTooOld => Some((false, "stable link: the address is not a stable-link Worker (404)".into())),
+        Outcome::NameIsDirect => Some((false, "stable link: the name answers as a Direct link to this PC, not as the Address book Worker".into())),
+        Outcome::WorkerGone => Some((false, "stable link: reason=worker_gone, the relay was removed from Cloudflare (404, error 1042)".into())),
+        Outcome::OverQuota => None,
         Outcome::Retry(_) => None,
     }
 }
@@ -197,7 +341,9 @@ pub fn register_until_done(
 /// What "Test connection" learns from `<worker>/_pm/link/health`: `Ok` only when linked.
 pub fn interpret_worker_health(http_status: Option<u16>, body: &str, transport_error: Option<&str>) -> Result<(), String> {
     match (http_status, transport_error) {
-        (_, Some(err)) => Err(format!("Could not reach the Worker: {err}")),
+        (_, Some(err)) => Err(format!("{OFFLINE_PREFIX}: {err}")),
+        (Some(404), None) if cloudflare_code(body, "1042") => Err(WORKER_GONE_SENTENCE.into()),
+        (Some(429 | 503), None) if cloudflare_code(body, "1027") => Err(OVER_QUOTA_SENTENCE.into()),
         (Some(200), None) => match serde_json::from_str::<serde_json::Value>(body).ok().and_then(|v| v.get("linked")?.as_bool()) {
             Some(true) => Ok(()),
             Some(false) => Err("The Worker is up, but this computer is not linked to it yet. Press Restart tunnel.".into()),
@@ -344,6 +490,33 @@ mod tests {
     }
 
     #[test]
+    fn cloudflares_own_refusals_are_told_apart_from_a_plain_404_and_429() {
+        assert_eq!(interpret_register_body(Some(404), "error code: 1042", None), Outcome::WorkerGone);
+        assert_eq!(interpret_register_body(Some(404), "{}", None), Outcome::WorkerTooOld);
+        assert_eq!(interpret_register_body(Some(429), "error code: 1027", None), Outcome::OverQuota);
+        assert!(matches!(interpret_register_body(Some(429), "slow down", None), Outcome::Retry(_)));
+        assert!(Outcome::WorkerGone.is_final() && !Outcome::OverQuota.is_final());
+        assert_eq!(Outcome::WorkerGone.reason(), Some("worker_gone"));
+        assert_eq!(Outcome::OverQuota.reason(), Some("over_quota"));
+        assert_eq!(Outcome::SecretMismatch.reason(), Some("secret_mismatch"));
+        assert_eq!(Outcome::WorkerTooOld.reason(), Some("worker_too_old"));
+        assert_eq!(interpret_register(None, Some("dns")).reason(), Some("offline"));
+        assert_eq!(Outcome::Retry("The Worker answered HTTP 500.".into()).reason(), None);
+        assert!(reason_is_final("worker_gone") && !reason_is_final("over_quota") && !reason_is_final("offline"));
+        let line = final_log_line(&Outcome::WorkerGone).unwrap().1;
+        assert!(line.contains("worker_gone") && !line.contains("http"), "{line}");
+    }
+
+    #[test]
+    fn a_fake_worker_that_cloudflare_removed_is_read_as_gone_over_http() {
+        let (url, _seen, server) = fake_worker(vec![(404, "error code: 1042"), (404, "error code: 1042")]);
+        assert_eq!(register_once(&url, "secret-secret-secret-1", "https://a.trycloudflare.com"), Outcome::WorkerGone);
+        assert_eq!(check_worker(&url).unwrap_err(), WORKER_GONE_SENTENCE);
+        server.join().unwrap();
+        assert_eq!(interpret_worker_health(Some(429), "error code: 1027", None).unwrap_err(), OVER_QUOTA_SENTENCE);
+    }
+
+    #[test]
     fn backoff_grows_from_two_to_sixty_seconds() {
         let secs: Vec<u64> = (0..9).map(|n| backoff(n).as_secs()).collect();
         assert_eq!(secs, [2, 4, 8, 16, 32, 60, 60, 60, 60]);
@@ -469,14 +642,19 @@ mod tests {
 
     #[test]
     fn check_worker_and_reset_work_against_a_fake_worker() {
-        let (url, seen, server) = fake_worker(vec![(200, r#"{"linked":true,"updated_at":1}"#), (200, r#"{"ok":true}"#)]);
+        let rotating = r#"{"ok":true,"features":["stable-link","link-rotate"]}"#;
+        let (url, seen, server) = fake_worker(vec![(200, r#"{"linked":true,"updated_at":1}"#), (200, rotating), (200, r#"{"ok":true}"#)]);
         assert!(check_worker(&url).is_ok());
-        assert!(reset_once(&url, "old-secret-0123456789"));
+        assert!(reset_once(&url, "old-secret-0123456789", "new-secret-0123456789"));
         server.join().unwrap();
         let requests = seen.lock().unwrap();
         assert!(requests[0].starts_with("GET /_pm/link/health "));
-        assert!(requests[1].starts_with("POST /_pm/link/reset "));
-        assert!(requests[1].contains("Bearer old-secret-0123456789"));
+        assert!(requests[1].starts_with("GET /_pm/health "), "the features are read first");
+        assert!(!requests[1].contains("secret"), "no secret goes with the feature check");
+        assert!(requests[2].starts_with("POST /_pm/link/reset "));
+        assert!(requests[2].contains("Bearer old-secret-0123456789"));
+        assert!(requests[2].contains(r#"{"new_secret":"new-secret-0123456789"}"#), "{}", requests[2]);
+        assert!(!requests[2].contains("Bearer new-secret"), "the new secret goes in the body only");
     }
 
     #[test]
@@ -485,16 +663,35 @@ mod tests {
         assert_eq!(interpret_reset(Some(403)), ResetOutcome::Rejected);
         assert_eq!(interpret_reset(Some(401)), ResetOutcome::Rejected);
         assert_eq!(interpret_reset(Some(404)), ResetOutcome::TooOld);
+        assert_eq!(interpret_reset(Some(400)), ResetOutcome::UpdateApp);
+        assert_eq!(interpret_reset(Some(429)), ResetOutcome::TooManyTries);
         assert_eq!(interpret_reset(Some(500)), ResetOutcome::Unreachable);
         assert_eq!(interpret_reset(None), ResetOutcome::Unreachable);
     }
 
     #[test]
-    fn a_fake_worker_that_refuses_the_old_secret_gives_rejected() {
-        let (url, _seen, server) = fake_worker(vec![(403, r#"{"error":"secret_mismatch"}"#)]);
-        assert_eq!(reset(&url, "old-secret-0123456789"), ResetOutcome::Rejected);
+    fn a_worker_without_link_rotate_is_never_asked_to_rotate() {
+        assert_eq!(interpret_rotate_feature(Some(200), r#"{"features":["team","stable-link"]}"#), Some(ResetOutcome::TooOld));
+        assert_eq!(interpret_rotate_feature(Some(200), "<html>"), Some(ResetOutcome::TooOld));
+        assert_eq!(interpret_rotate_feature(Some(200), r#"{"features":["stable-link","link-rotate"]}"#), None);
+        assert_eq!(interpret_rotate_feature(Some(404), ""), Some(ResetOutcome::TooOld));
+        assert_eq!(interpret_rotate_feature(None, ""), Some(ResetOutcome::Unreachable));
+        // Over HTTP: only the feature check is sent, no reset (and so no secret) reaches the old Worker.
+        let (url, seen, server) = fake_worker(vec![(200, r#"{"ok":true,"features":["team","stable-link"]}"#)]);
+        assert_eq!(reset(&url, "old-secret-0123456789", "new-secret-0123456789"), ResetOutcome::TooOld);
         server.join().unwrap();
-        assert_eq!(reset("http://127.0.0.1:1", "old-secret-0123456789"), ResetOutcome::Unreachable);
+        let requests = seen.lock().unwrap();
+        assert_eq!(requests.len(), 1);
+        assert!(!requests[0].contains("secret"));
+    }
+
+    #[test]
+    fn a_fake_worker_that_refuses_the_old_secret_gives_rejected() {
+        let rotating = r#"{"ok":true,"features":["stable-link","link-rotate"]}"#;
+        let (url, _seen, server) = fake_worker(vec![(200, rotating), (403, r#"{"error":"secret_mismatch"}"#)]);
+        assert_eq!(reset(&url, "old-secret-0123456789", "new-secret-0123456789"), ResetOutcome::Rejected);
+        server.join().unwrap();
+        assert_eq!(reset("http://127.0.0.1:1", "old-secret-0123456789", "new-secret-0123456789"), ResetOutcome::Unreachable);
     }
 
     #[test]
@@ -550,5 +747,42 @@ mod tests {
         let (url, _s, h2) = fake_worker(vec![(200, r#"{"ok":true,"url":"http://127.0.0.1:9"}"#)]);
         assert_eq!(resolve_tunnel(&url, &|u| is_quick_origin(u)), Where::Failed);
         h2.join().unwrap();
+    }
+
+    #[test]
+    fn a_typed_name_gets_the_secret_only_after_it_lists_the_stable_link() {
+        // a Worker that lists it: go ahead
+        assert_eq!(interpret_features(Some(200), r#"{"ok":true,"features":["team","stable-link"]}"#, None), None);
+        // an older Worker, a web page, a site with no such route, junk: never sent the secret
+        assert_eq!(interpret_features(Some(200), r#"{"ok":true,"features":["team"]}"#, None), Some(Outcome::WorkerTooOld));
+        assert_eq!(interpret_features(Some(200), "<html>my blog</html>", None), Some(Outcome::WorkerTooOld));
+        assert_eq!(interpret_features(Some(200), r#"{"ok":true}"#, None), Some(Outcome::WorkerTooOld));
+        assert_eq!(interpret_features(Some(404), "not found", None), Some(Outcome::WorkerTooOld));
+        assert_eq!(interpret_features(Some(404), "error code: 1042", None), Some(Outcome::WorkerGone));
+        assert_eq!(interpret_features(Some(429), "error code: 1027", None), Some(Outcome::OverQuota));
+        // down or slow: try again later
+        assert!(matches!(interpret_features(Some(502), "", None), Some(Outcome::Retry(_))));
+        assert!(matches!(interpret_features(None, "", Some("dns")), Some(Outcome::Retry(_))));
+        assert!(matches!(interpret_features(None, "", None), Some(Outcome::Retry(_))));
+        assert_eq!(pm_health_url("https://phone.example.com/"), "https://phone.example.com/_pm/health");
+    }
+
+    #[test]
+    fn the_public_register_never_connects_to_a_private_address() {
+        // a loopback name is refused by the resolver before anything is sent: the answer is a plain retry, never a link
+        let (url, seen, h) = fake_worker(vec![]);
+        let outcome = register_once_public(&url, "a-secret-that-must-not-leave", "https://x-1.trycloudflare.com");
+        assert!(matches!(outcome, Outcome::Retry(_)), "{outcome:?}");
+        assert!(seen.lock().unwrap().is_empty(), "nothing reached the loopback server");
+        drop(h);
+    }
+
+    #[test]
+    fn a_name_that_became_direct_has_its_own_final_reason() {
+        assert_eq!(Outcome::NameIsDirect.reason(), Some("is_direct"));
+        assert_ne!(Outcome::NameIsDirect.reason(), Outcome::WorkerTooOld.reason());
+        assert!(Outcome::NameIsDirect.is_final() && reason_is_final("is_direct"));
+        let line = final_log_line(&Outcome::NameIsDirect).unwrap();
+        assert!(!line.0 && !line.1.contains("http"));
     }
 }

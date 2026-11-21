@@ -480,7 +480,9 @@ export function useCockpit(): CockpitApi {
   const newAgent = useCallback(
     async (agentId: string, accountId?: string, isolated = false, projectPath?: string, model?: string, how?: 'terminal') => {
       // Terminals hidden: start a chat. An agent that has none (or a sign-in terminal) falls through to the terminal below.
-      if (how !== 'terminal' && !showTerminalsRef.current) {
+      // A plain shell is always a terminal, whatever "Show terminals" says.
+      const isShell = launchEntries.some((e) => e.type === agentId && e.shell);
+      if (how !== 'terminal' && !isShell && !showTerminalsRef.current) {
         const startId = chatStarts.begin(agentId, projectPath ?? '');
         const result = await startChatFirst({ agentId, accountId, folder: projectPath, model }, realChatFirstDeps());
         chatStarts.end(startId);
@@ -508,7 +510,7 @@ export function useCockpit(): CockpitApi {
       }
     },
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [notify, chatStarts.begin, chatStarts.end],
+    [notify, chatStarts.begin, chatStarts.end, launchEntries],
   );
 
   // One answer per card: further clicks on the same prompt while the first is on its way (or just

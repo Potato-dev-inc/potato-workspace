@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 // Build the app (debug) and the fake agent once, into a cargo target folder of their own.
-//   npm run e2e:build            E2E_CARGO_TARGET=D:/pm-cargo-e2e npm run e2e:build
+//   npm run e2e:build            E2E_CARGO_TARGET=D:/cargo-e2e npm run e2e:build
 //   flags: --skip-ui (do not rebuild the web UI), --skip-rust
 // Never touches the running app; never builds in a checkout other than the one this file is in.
 import { spawnSync } from 'node:child_process';

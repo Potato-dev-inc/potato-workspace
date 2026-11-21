@@ -48,6 +48,8 @@ import { CompanionStoppedCard } from './companion/StoppedCard';
 import { CrewCanvas } from '../crews/CrewCanvas';
 import { crewOf } from '../../lib/crew-members';
 import { groupInbox, readInboxView, rootOf, saveInboxView, type InboxView } from '../../lib/inbox-view';
+import { remoteProjectParts } from '../../lib/projectLocation';
+import { sshApi, type SshHost } from '../../lib/ssh';
 
 /** One card in the Inbox's single list: where it sorts, and how to draw it. */
 interface Entry extends InboxEntry {
@@ -114,6 +116,26 @@ export function Inbox({
   const stuckIds = itemsOfKind(blocking, 'stuck').flatMap((i) => (i.paneId ? [i.paneId] : []));
 
   // The sign-ins, for a usage-limit card's "Use another sign-in". No store (browser, old backend): the button stays away.
+  // The SSH machines' names, for the "On <host>" line of a card whose chat runs on another computer. A failed read leaves the plain line.
+  const [sshHosts, setSshHosts] = useState<SshHost[]>([]);
+  useEffect(() => {
+    let alive = true;
+    sshApi
+      .hosts()
+      .then((list) => alive && setSshHosts(list))
+      .catch(() => undefined);
+    return () => {
+      alive = false;
+    };
+  }, []);
+  // Where a card's chat runs: a chat on another computer has its SSH folder as its pane folder (`remoteProjectParts`).
+  const whereLabel = (paneId?: string): string | null => {
+    const cwd = paneId && !isCompanionPaneId(paneId) ? c.registry.panes.get(paneId)?.info.cwd : undefined;
+    const parts = cwd ? remoteProjectParts(cwd) : null;
+    if (!parts) return null;
+    const name = sshHosts.find((h) => h.id === parts.hostId)?.name;
+    return name ? t('inbox.onHost', { name }) : t('inbox.onAnotherComputer');
+  };
   const [accounts, setAccounts] = useState<Account[]>([]);
   useEffect(() => {
     let alive = true;
@@ -333,8 +355,14 @@ export function Inbox({
   const firstKey = grouped ? [...grouped.pinned, ...grouped.groups.flatMap((g) => g.entries)][0]?.key : entries[0]?.key;
   const renderItem = (e: Entry) => {
     const show = showInCrew(e.paneId);
+    const where = whereLabel(e.paneId);
     return (
       <li key={e.key} data-ib-key={e.key} {...rowOpenProps(e.paneId && c.registry.panes.has(e.paneId) ? () => c.select(e.paneId!) : undefined)}>
+        {where && (
+          <p className="ib-where" data-testid="inbox-where">
+            {where}
+          </p>
+        )}
         {e.render(e.key === firstKey)}
         {show && (
           <button type="button" className="ck-btn ck-btn--plain ck-btn--sm ib-crew-btn" aria-label={t('inbox.showInCrewNamed', { name: nameOfKey(e.key) ?? '' })} onClick={show}>

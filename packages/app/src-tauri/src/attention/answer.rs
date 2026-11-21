@@ -265,6 +265,11 @@ pub fn answer(env: &dyn Env, caller: &Caller, item_id: &str, request: &Request) 
 
     let snapshot = env.snapshot();
     let Some(item) = snapshot.items.iter().find(|i| i.id == item_id) else { return gone("unknown") };
+    // A chat on another computer is the window's alone: its card can never be answered from a phone, a lock screen or a channel.
+    if item.pane.as_ref().is_some_and(|p| crate::acp::chat::is_remote_pane(&p.id)) || item.key.split_once(':').is_some_and(|(_, qid)| crate::questions::store().is_remote_card(qid)) {
+        let (status, body) = crate::acp::chat::remote_refusal();
+        return (status, body);
+    }
     // A phone may not answer for an agent whose Remote control is off (or capped below "answer").
     if matches!(caller.via, Via::Card | Via::LockScreen) {
         if let Some(pane) = &item.pane {

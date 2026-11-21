@@ -25,13 +25,30 @@ use serde_json::{json, Value};
 pub mod app_services;
 pub mod asks;
 pub mod browse;
+pub mod calls;
+pub mod calls_agents;
+#[cfg(test)]
+mod calls_agents_tests;
+pub mod calls_chat;
+pub mod calls_workflows;
+pub mod calls_signin;
 pub mod door;
 pub mod events;
 pub mod meta;
 pub mod services;
+pub mod sessions_rows;
+pub mod terminal;
 
 #[cfg(test)]
-mod tests;
+pub(crate) mod tests;
+#[cfg(test)]
+mod calls_chat_tests;
+#[cfg(test)]
+mod calls_terminal_tests;
+#[cfg(test)]
+mod calls_workflows_tests;
+#[cfg(test)]
+mod sessions_rows_tests;
 
 pub use asks::{Ask, Asks, Refusal};
 pub use door::Door;
@@ -74,7 +91,6 @@ pub fn need(method: &str, segs: &[&str]) -> Option<Level> {
         ("GET", ["sessions", _, "transcript"]) => Watch,
         ("GET", ["sessions", _, "transcript", "earlier"]) => Watch,
         ("GET", ["sessions", _, "picture"]) => Watch,
-        ("GET", ["sessions", _, "screen"]) => Watch,
         ("GET", ["projects"]) => Watch,
         ("GET", ["usage"]) => Watch,
         ("GET", ["agents"]) => Watch,
@@ -87,7 +103,6 @@ pub fn need(method: &str, segs: &[&str]) -> Option<Level> {
         ("POST", ["sessions", _, "interrupt"]) => Answer,
         ("POST", ["questions", _, "answer"]) => Answer,
         ("POST", ["sessions", _, "config"]) => Full,
-        ("POST", ["sessions", _, "input"]) => Full,
         ("GET", ["agents", _, "models"]) => Full,
         ("GET", ["browse"]) => Full,
         ("POST", ["projects", "open"]) => Full,
@@ -95,6 +110,8 @@ pub fn need(method: &str, segs: &[&str]) -> Option<Level> {
         ("POST", ["agents", "warm"]) => Full,
         ("DELETE", ["sessions", _]) => Full,
         ("POST", ["move-work"]) => Full,
+        // The far call table (`calls.rs`): its own allowlist, one row per command.
+        ("POST", ["call", cmd]) => return calls::need(cmd),
         _ => return None,
     })
 }
@@ -107,6 +124,9 @@ pub struct Caller<'a> {
     pub name: &'a str,
     /// What this PC lets it do now. `None`: nothing (the switch is off).
     pub level: Option<Level>,
+    /// The person's own PC: it carries the account marker (`AGENTS_REMOTE_ACCOUNT`). The person there is the person here, so the press
+    /// and hold that guards "let the agent act without asking" is not asked of it. Read from the trust list at every request.
+    pub marked: bool,
     pub now_ms: u64,
 }
 
@@ -196,10 +216,28 @@ pub fn handle(who: &Caller<'_>, svc: &dyn Services, asks: &Asks, method: &str, t
             Some(_) => {}
         }
     }
-    let json_body: Value = if body.is_empty() { json!({}) } else { match serde_json::from_slice(body) {
+    let mut json_body: Value = if body.is_empty() { json!({}) } else { match serde_json::from_slice(body) {
         Ok(v) => v,
         Err(_) => return bad("INVALID_ARGUMENT", "the body is not JSON"),
     } };
+    // What this side knows about the asker travels to a call row in two keys of its own, always overwritten (the asker cannot send them).
+    if let (["call", _], Some(args)) = (segs, json_body.as_object_mut()) {
+        args.insert("_marked".into(), json!(who.marked));
+        args.insert("_full".into(), json!(level >= Level::Full));
+    }
+    // A call that names a chat pane meets that pane's own rule on this PC, like the `sessions/<id>` routes.
+    if let ["call", cmd] = segs {
+        if calls::names_pane(cmd) {
+            match calls::text_arg(&json_body, "paneId") {
+                None => return bad("INVALID_ARGUMENT", "paneId is required"),
+                Some(id) => match svc.ceiling(&id) {
+                    None => return reply(403, json!({ "error": "This agent is switched off for other PCs on its own PC.", "code": "AGENT_LOCKED" })),
+                    Some(cap) if level.min(cap) < needs => return refusal(Some(level.min(cap)), needs),
+                    Some(_) => {}
+                },
+            }
+        }
+    }
     match (method, segs) {
         ("GET", ["me"]) => reply(200, json!({ "level": level.as_str(), "name": svc.name(), "asked": asks.pending_for(who.node, who.now_ms) })),
         ("GET", ["sessions"]) => svc.sessions(),
@@ -212,7 +250,6 @@ pub fn handle(who: &Caller<'_>, svc: &dyn Services, asks: &Asks, method: &str, t
             Some(path) => svc.picture(id, &path),
             None => bad("INVALID_ARGUMENT", "path is required"),
         },
-        ("GET", ["sessions", id, "screen"]) => svc.screen(id),
         ("GET", ["projects"]) => svc.projects(),
         ("GET", ["usage"]) => svc.usage(),
         ("GET", ["browse"]) => svc.browse(query_param(query, "root").filter(|v| !v.is_empty()).as_deref(), &query_param(query, "sub").unwrap_or_default()),
@@ -231,12 +268,8 @@ pub fn handle(who: &Caller<'_>, svc: &dyn Services, asks: &Asks, method: &str, t
         ("POST", ["sessions", id, "interrupt"]) => svc.interrupt(id),
         ("POST", ["questions", id, "answer"]) => svc.answer_question(id, &json_body, level >= Level::Full),
         ("POST", ["sessions", id, "config"]) => match (text(&json_body, "option_id"), text(&json_body, "value")) {
-            (Some(option), Some(value)) => svc.set_config(who.node, id, &option, &value, json_body.get("hold").and_then(Value::as_bool).unwrap_or(false)),
+            (Some(option), Some(value)) => svc.set_config(who.node, id, &option, &value, who.marked || json_body.get("hold").and_then(Value::as_bool).unwrap_or(false)),
             _ => bad("INVALID_ARGUMENT", "option_id and value are required"),
-        },
-        ("POST", ["sessions", id, "input"]) => match json_body.get("text").and_then(Value::as_str) {
-            Some(typed) => svc.input(who.node, id, typed),
-            None => bad("INVALID_ARGUMENT", "text is required"),
         },
         ("GET", ["agents", agent, "models"]) => svc.models(agent),
         ("POST", ["agents", "start"]) => match (text(&json_body, "agent"), text(&json_body, "project")) {
@@ -252,6 +285,7 @@ pub fn handle(who: &Caller<'_>, svc: &dyn Services, asks: &Asks, method: &str, t
             (Some(project), Some(branch), Some(bundle)) => svc.move_work(&project, &branch, &bundle),
             _ => bad("INVALID_ARGUMENT", "project, branch and bundle_b64 are required"),
         },
+        ("POST", ["call", cmd]) => svc.call(who.node, cmd, &json_body),
         ("POST", ["full-request"]) => full_request(who, svc, asks, level),
         _ => reply(404, json!({ "error": "not found", "code": "UNKNOWN_ROUTE" })),
     }

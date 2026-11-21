@@ -151,7 +151,22 @@ impl Outbox {
     }
 
     /// `send_with` for a message that came from another device (`from`: its identity id; `None`: this PC).
+    ///
+    /// THE SAFE DEFAULT: a message for a chat on another computer is refused for every caller here (a channel, a companion, a PC link, a
+    /// second opinion, a phone). The app window's own command uses `send_including_remote`.
     pub fn send_from(&self, pane_id: &str, text: &str, attachments: &[ChatAttachment], from: Option<&str>) -> Result<OutboxMessage, String> {
+        if crate::acp::chat::is_remote_pane(pane_id) {
+            return Err(crate::acp::chat::REMOTE_PANE_REFUSED.to_string());
+        }
+        self.send_from_unchecked(pane_id, text, attachments, from)
+    }
+
+    /// `send_with` for a chat on another computer too: ONLY the app window's own send command.
+    pub fn send_including_remote(&self, pane_id: &str, text: &str, attachments: &[ChatAttachment]) -> Result<OutboxMessage, String> {
+        self.send_from_unchecked(pane_id, text, attachments, None)
+    }
+
+    fn send_from_unchecked(&self, pane_id: &str, text: &str, attachments: &[ChatAttachment], from: Option<&str>) -> Result<OutboxMessage, String> {
         let text = text.trim();
         if let Some(sentence) = crate::chat_move::book().send_refusal(pane_id) {
             return Err(sentence);

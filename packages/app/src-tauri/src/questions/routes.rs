@@ -27,6 +27,17 @@ fn string_field(body: &Value, key: &str) -> Option<String> {
     body.get(key).and_then(Value::as_str).map(str::to_string)
 }
 
+/// The card belongs to a chat that runs on another computer (`acp::chat::is_remote_pane`).
+fn is_remote_question(q: &crate::questions::Question) -> bool {
+    q.pane_id.as_deref().is_some_and(crate::acp::chat::is_remote_pane)
+}
+
+/// `Some(403)` when `id` is a card of a remote chat: the bridge (a phone, an agent) may not answer or dismiss it. The app window answers
+/// through its own commands, which do not come here.
+fn remote_question_refusal(id: &str) -> Option<(u16, Value)> {
+    store().get(id, now_ms()).filter(is_remote_question).map(|_| crate::acp::chat::remote_refusal())
+}
+
 /// Handles a questions route; `None` when the request is not one. `via_phone` marks a request
 /// that came through the paired-device gate (recorded as `answered_by: "phone"`).
 pub fn handle(
@@ -39,13 +50,14 @@ pub fn handle(
 ) -> Option<RouteReply> {
     let before = store().revision();
     let reply = match (method, segments) {
+        // A permission card of a chat on another computer is the app window's alone: it is not listed here.
         ("GET", ["questions"]) => Some(Ok((
             200,
-            json!({ "questions": store().list_pending(now_ms()), "revision": store().revision() }),
+            json!({ "questions": store().list_pending(now_ms()).into_iter().filter(|q| !is_remote_question(q)).collect::<Vec<_>>(), "revision": store().revision() }),
         ))),
         ("POST", ["questions", "ask"]) => Some(ask(body, session)),
-        ("POST", ["questions", id, "answer"]) => Some(answer(id, body, via_phone)),
-        ("POST", ["questions", id, "dismiss"]) => Some(dismiss(id, via_phone)),
+        ("POST", ["questions", id, "answer"]) => Some(remote_question_refusal(id).map_or_else(|| answer(id, body, via_phone), Err)),
+        ("POST", ["questions", id, "dismiss"]) => Some(remote_question_refusal(id).map_or_else(|| dismiss(id, via_phone), Err)),
         _ => None,
     };
     if reply.is_some() && store().revision() != before {
@@ -196,6 +208,10 @@ fn ask(body: &Value, session: Option<&str>) -> RouteReply {
         body.get("wait_ms").and_then(Value::as_u64).unwrap_or(MAX_ASK_WAIT_MS).min(MAX_ASK_WAIT_MS),
     );
     let id = if let Some(existing) = string_field(body, "question_id") {
+        // An existing card of a chat on another computer is the window's alone (not read, waited on or cancelled from here).
+        if store().is_remote_card(&existing) {
+            return Err(crate::acp::chat::remote_refusal());
+        }
         if body.get("cancel").and_then(Value::as_bool) == Some(true) {
             let resolution = store().dismiss(&existing, now_ms()).map_err(error)?;
             return Ok((200, super::tool_result(&resolution.question)));

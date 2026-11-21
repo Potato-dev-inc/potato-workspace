@@ -14,6 +14,9 @@ export const defaultTunnelApi: TunnelApi = {
   restart: () => tauri.restartTunnel(),
   test: () => tauri.testTunnelConnection(),
   setTemporary: (on) => tauri.setLinkTemporary(on),
+  setLinkMode: (mode, domain, route) => tauri.setLinkMode(mode, domain, route),
+  setPhonePort: (port) => tauri.setPhonePort(port),
+  checkDomain: (address) => tauri.checkOwnDomain(address),
 };
 
 const hostOf = (url: string | null | undefined): string => {

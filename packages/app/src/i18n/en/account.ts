@@ -18,6 +18,7 @@ export const account = {
   "account.seenHours_other": "Seen {count} hours ago",
   "account.seenDays_one": "Seen {count} day ago",
   "account.seenDays_other": "Seen {count} days ago",
+  "account.keyInFile": "This computer keeps its key in a private file.",
   "account.signedOut": "Signed out",
   "account.signOutThis": "Sign out this device",
   "account.signOutOther": "Sign out",

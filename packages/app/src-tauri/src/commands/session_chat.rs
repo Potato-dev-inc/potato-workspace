@@ -102,17 +102,30 @@ struct StatusEvent<'a> {
 
 struct EventSink(AppHandle);
 
+impl EventSink {
+    /// The window's event, and the same payload as an `app` frame for a paired PC (`pclink::events`; redacted on its way out and
+    /// dropped for a session its own PC switched off). A chat on another computer is this window's alone.
+    fn emit<P: Serialize + Clone>(&self, event: &str, pane_id: &str, payload: P) {
+        if !crate::acp::chat::is_remote_pane(pane_id) && crate::device_link::pclink::calls_chat::watching(pane_id) {
+            if let Ok(value) = serde_json::to_value(&payload) {
+                crate::bridge::push_sse(crate::device_link::pclink::events::app_frame(event, &value));
+            }
+        }
+        let _ = self.0.emit(event, payload);
+    }
+}
+
 impl Sink for EventSink {
     fn send(&self, pane_id: &str, items: Vec<ChatItem>, reset: bool) {
-        let _ = self.0.emit("session-chat-items", ItemsEvent { pane_id, items, reset });
+        self.emit("session-chat-items", pane_id, ItemsEvent { pane_id, items, reset });
     }
 
     fn waiting(&self, pane_id: &str, waiting_for: Option<&str>) {
-        let _ = self.0.emit("session-chat-status", StatusEvent { pane_id, waiting_for });
+        self.emit("session-chat-status", pane_id, StatusEvent { pane_id, waiting_for });
     }
 
     fn source(&self, pane_id: &str, source: &str) {
-        let _ = self.0.emit("session-chat-source", SourceEvent { pane_id, source });
+        self.emit("session-chat-source", pane_id, SourceEvent { pane_id, source });
     }
 }
 
@@ -231,26 +244,22 @@ pub async fn session_chat_open(
     pane_id: String,
     surface: Option<String>,
 ) -> Result<SessionChatOpened, String> {
-    let agent_type = state
-        .registry
-        .lock()
-        .get(&pane_id)
-        .map(|pane| pane.info.agent_type.clone())
-        .ok_or_else(|| format!("unknown pane: {pane_id}"))?;
-    // An agent with no session file Potato Workspace can read is read off its screen, unless it is a plain shell.
-    let Some(opening) = Opening::for_pane(&pane_id, &agent_type) else {
-        return Ok(SessionChatOpened { available: false, reason: Some(NO_SOURCE.into()), items: Vec::new(), waiting_for: None, source: None });
-    };
     let watchers = chat.watchers(&app, &state.registry);
     let holder = holder_id(window.label(), surface.as_deref());
-    // The first read of a long session file happens in this call.
-    let (items, waiting_for, source) = tauri::async_runtime::spawn_blocking(move || {
-        let items = opening.open(&watchers, &pane_id, holder.as_str().into());
-        (items, watchers.waiting_for(&pane_id), opening.source_now(&watchers, &pane_id))
-    })
-    .await
-    .map_err(|e| format!("INTERNAL: {e}"))?;
-    Ok(SessionChatOpened { available: true, reason: None, items, waiting_for, source: Some(source) })
+    let registry = state.registry.clone();
+    tauri::async_runtime::spawn_blocking(move || open_chat_feed(&watchers, &registry, &pane_id, &holder)).await.map_err(|e| format!("INTERNAL: {e}"))?
+}
+
+/// The body of `session_chat_open` (blocking: the first read of a long session file), also run for a paired PC
+/// (`pclink::calls_chat`, with a holder of its own).
+pub(crate) fn open_chat_feed(watchers: &Arc<Watchers>, registry: &Arc<Mutex<PaneRegistry>>, pane_id: &str, holder: &str) -> Result<SessionChatOpened, String> {
+    let agent_type = registry.lock().get(pane_id).map(|pane| pane.info.agent_type.clone()).ok_or_else(|| format!("unknown pane: {pane_id}"))?;
+    // An agent with no session file Potato Workspace can read is read off its screen, unless it is a plain shell.
+    let Some(opening) = Opening::for_pane(pane_id, &agent_type) else {
+        return Ok(SessionChatOpened { available: false, reason: Some(NO_SOURCE.into()), items: Vec::new(), waiting_for: None, source: None });
+    };
+    let items = opening.open(watchers, pane_id, holder.into());
+    Ok(SessionChatOpened { available: true, reason: None, items, waiting_for: watchers.waiting_for(pane_id), source: Some(opening.source_now(watchers, pane_id)) })
 }
 
 /// One holder per chat surface: two views of one pane in a window (the cockpit and a pane view) each hold the
@@ -268,10 +277,15 @@ pub async fn session_chat_close(
     pane_id: String,
     surface: Option<String>,
 ) -> Result<(), String> {
-    if let Some(watchers) = chat.watchers.get() {
-        watchers.close(&pane_id, &holder_id(window.label(), surface.as_deref()));
-    }
+    close_chat_feed(&chat, &pane_id, &holder_id(window.label(), surface.as_deref()));
     Ok(())
+}
+
+/// The body of `session_chat_close`, also run for a paired PC (`pclink::calls_chat`).
+pub(crate) fn close_chat_feed(chat: &SessionChatState, pane_id: &str, holder: &str) {
+    if let Some(watchers) = chat.watchers.get() {
+        watchers.close(pane_id, holder);
+    }
 }
 
 #[cfg(test)]

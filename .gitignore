@@ -84,3 +84,4 @@ packages/app/src-tauri/resources/legal/LICENSES/
 relay/*.sqlite
 relay/*.sqlite-shm
 relay/*.sqlite-wal
+.testkeys/

@@ -548,10 +548,14 @@
   align-items: center;
   gap: 8px;
 }
+/* The small sign-in terminal. The agent draws its own sign-in screens for whatever grid this box gives it (the PTY is sized to the
+   box), and those screens are about 24 rows tall, so the box is as tall as the window allows (never a fixed few lines) and as wide
+   as its column (no minimum that pokes out of it). A smaller window makes the sheet scroll; the terminal always fits its box. */
 .lend-term {
   box-sizing: border-box;
   width: 100%;
-  height: 264px;
+  min-width: 0;
+  height: clamp(280px, calc(56vh / var(--ui-scale, 1)), 480px);
   padding: 6px;
   overflow: hidden;
   border-radius: 8px;
@@ -600,12 +604,22 @@
   }
 }
 
-/* The four-step profile sheet: 560 px wide (the whole width on a phone), step dots, summary card. */
+/* The four-step profile sheet: 560 px wide (the whole width on a phone), step dots, summary card. The sign-in sheet that shows a
+   terminal is 720 px wide: about 80 columns, which is what the agents' sign-in screens are made for. */
 .lend-sheet[data-size='wide'] {
   width: 560px;
 }
+.lend-sheet[data-size='term'] {
+  width: 720px;
+}
+@media (max-width: 760px) {
+  .lend-sheet[data-size='term'] {
+    width: 100%;
+  }
+}
 @media (max-width: 600px) {
-  .lend-sheet[data-size='wide'] {
+  .lend-sheet[data-size='wide'],
+  .lend-sheet[data-size='term'] {
     width: 100%;
     max-height: 100%;
     border-radius: 10px;

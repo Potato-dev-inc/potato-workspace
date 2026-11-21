@@ -193,6 +193,8 @@ export interface HarnessScenario {
   lend?: import('./lend-fixtures').LendScenario;
   /** Project guide (Labs `project_guide_enabled`): a finished guide, and what the video tour card shows. */
   guide?: import('./guide-fixtures').GuideScenario;
+  /** A chat of THIS PC over ACP (same transcript and settings as a far chat), selected with `select`: the local side of the far-chat comparison. */
+  localAcpChat?: import('./local-acp-chat-mock').LocalAcpChatScenario;
   /** Devices (Labs `devices_enabled`): the state the mocked `devices_*` commands start from. Absent = the switch is off and nothing shows. */
   devices?: import('./devices-fixtures').DevicesScenario;
   /** Connect > My phone: `none` = no phone is added yet (the giant code shows); `basic` = one phone that can watch, answer and send messages. Absent: one phone with full control. */

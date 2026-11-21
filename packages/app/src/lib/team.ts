@@ -7,6 +7,8 @@ import { invoke } from '@tauri-apps/api/core';
 import { listen, type UnlistenFn } from '@tauri-apps/api/event';
 import type { WorktreeDiff } from './cockpit-api';
 import { t } from '../i18n';
+import { oneRelay } from './relay';
+import { tauri } from './tauri';
 
 export type TeamEventKind =
   | 'pushed'
@@ -165,6 +167,20 @@ export interface PresenceReport {
   waiting: number;
 }
 
+/** What the relay link is doing right now. Absent from an older backend and for a shared folder. Words only: no raw error text. */
+export interface TeamLinkDetail {
+  /** The relay's host name. */
+  host: string | null;
+  /** `socket` (opening the live connection), `poll` (asking for news), `waiting` (before the next try), `idle`. */
+  step: 'socket' | 'poll' | 'waiting' | 'idle';
+  /** A try is going on right now: the only time the page may spin. */
+  attempting: boolean;
+  /** Why the last try failed; null when it did not. */
+  problem: 'dns' | 'refused' | 'timeout' | 'tls' | 'refused_by_relay' | 'unknown_team' | 'signature' | 'busy' | 'down' | 'unreadable' | 'relay_gone' | 'other' | null;
+  /** Seconds until the next try, while waiting. */
+  retryInS: number | null;
+}
+
 export interface TeamState {
   enabled: boolean;
   active: boolean;
@@ -173,6 +189,8 @@ export interface TeamState {
   members: string[];
   transport: TeamTransport | null;
   link: TeamLink | null;
+  /** Absent from an older backend. */
+  linkDetail?: TeamLinkDetail | null;
   error: string | null;
   /** How many teammate updates are known to be missing. */
   missing: number;
@@ -351,6 +369,12 @@ export interface TeamApi {
   /** Admin: the member's claimed GitHub login is theirs (GitHub facts about it then show as theirs). */
   confirmGithub: (memberId: string) => Promise<TeamConfigView>;
   clearGaps: () => Promise<void>;
+  /** "Try again" on the link line: start the relay link again and, for the team's owner, set the team up again on a relay that forgot it. Absent from an older backend. */
+  reconnect?: () => Promise<TeamState>;
+  /** The team's owner moves the team to another relay (its health is checked first). */
+  moveRelay?: (relay: string) => Promise<TeamState>;
+  /** The relay this person already uses on Connect > Devices, if one is set up. */
+  workingRelay?: () => Promise<{ address: string; host: string } | null>;
   /** Tells the backend what I am doing (every 30 s and when it changes). Absent from an older backend. */
   presenceReport?: (report: PresenceReport) => Promise<void>;
   /** "Share what I am doing": the level and the projects that share nothing but "here". Absent from an older backend. */
@@ -403,6 +427,12 @@ export const teamApi: TeamApi = {
   removeMember: (memberId) => call('team_member_remove', { memberId }),
   confirmGithub: (memberId) => call('team_member_confirm_github', { memberId }),
   clearGaps: () => call('team_gaps_clear'),
+  reconnect: () => call('team_reconnect'),
+  moveRelay: (relay) => call('team_move_relay', { relay }),
+  workingRelay: async () => {
+    const r = oneRelay(await tauri.getTunnelStatus());
+    return r ? { address: r.address, host: r.host } : null;
+  },
   presenceReport: (report) => call('team_presence_report', { report }),
   shareSet: (level, exclude) => call('team_share_set', { level, exclude }),
   ping: () => call('team_ping'),

@@ -19,6 +19,7 @@ pub const DEV_LABS_KEYS: &[&str] = &[
     "lend_enabled",
     "devices_enabled",
     "far_pcs_enabled",
+    "pcdoor_enabled",
     "account_enabled",
     "desktop_pet_enabled",
     "agent_browser_enabled",
@@ -32,6 +33,9 @@ pub const DEV_LABS_KEYS: &[&str] = &[
     "crews_enabled",
     "workflows_enabled",
     "opentunnel_stable_link",
+    // Chat with an agent that runs on an SSH machine. A Labs switch that is NOT in `PATCHABLE_KEYS` on purpose: a phone or an agent over
+    // the bridge can never turn it on; it reads as on in a development build and is off in a release build until a person-only path exists.
+    "ssh_chat_enabled",
 ];
 
 /// Tests turn the override on through this; it is off in every test unless a test sets it.
@@ -72,6 +76,10 @@ pub fn with_dev_labs(stored: &Value, active: bool) -> Value {
     }
     out
 }
+
+/// Labs switches only the app window may turn on or off (Settings > Labs, through the `settings_patch` command). They are
+/// deliberately NOT in `PATCHABLE_KEYS`: a phone, an agent or the CLI goes through the bridge, which ignores them.
+pub const WINDOW_ONLY_KEYS: &[&str] = &["ssh_chat_enabled", "pcdoor_enabled"];
 
 const PATCHABLE_KEYS: &[&str] = &[
     "opencode_model_provider",
@@ -214,15 +222,30 @@ pub fn default_public_settings() -> Value {
         "workflow_reply_style": "translator",
         // Fixed phone address (Labs): an address from the third-party OpenTunnel relay. Off until chosen. Rust: mobile_tunnel/opentunnel.
         "opentunnel_stable_link": false,
+        // Chat on an SSH machine (Labs, development builds only; not patchable over the bridge). Off by default. Rust: commands/ssh, ssh/acp.
+        "ssh_chat_enabled": false,
         // PCs meet through your own relay (Connect > My PCs). On by default since Connect v2 (WP5); it only acts when the person has a
         // relay and PC pairing (devices_enabled) is on. A profile that saved an explicit off keeps it. Rust: p2p.
         "far_pcs_enabled": true,
+        // The device door (Labs): an already-paired PC may also make signed read-only calls through this PC's public tunnel address, only for
+        // devices the person switched it on for. Off until chosen. NOT patchable over the bridge. Rust: device_link::pcdoor.
+        "pcdoor_enabled": false,
         // The version whose small update failed; it takes the full package from then on. Written by the app, empty when none.
         "app_only_failed_for": "",
     })
 }
 
+/// Merge a patch that came over the bridge (phone, agent, CLI): only `PATCHABLE_KEYS` are written.
 pub fn merge_public_settings(base: &Value, patch: &Value) -> Value {
+    merge_public_settings_for(base, patch, false)
+}
+
+/// Merge a patch that came from the app window (or from the saved file the window wrote): `PATCHABLE_KEYS` plus `WINDOW_ONLY_KEYS`.
+pub fn merge_public_settings_window(base: &Value, patch: &Value) -> Value {
+    merge_public_settings_for(base, patch, true)
+}
+
+fn merge_public_settings_for(base: &Value, patch: &Value, from_window: bool) -> Value {
     let mut merged = default_public_settings();
     if let Some(obj) = base.as_object() {
         if let Some(target) = merged.as_object_mut() {
@@ -233,7 +256,8 @@ pub fn merge_public_settings(base: &Value, patch: &Value) -> Value {
     }
     if let Some(obj) = patch.as_object() {
         if let Some(target) = merged.as_object_mut() {
-            for key in PATCHABLE_KEYS {
+            let window_keys: &[&str] = if from_window { WINDOW_ONLY_KEYS } else { &[] };
+            for key in PATCHABLE_KEYS.iter().chain(window_keys.iter()) {
                 if let Some(value) = obj.get(*key) {
                     if value.is_null() {
                         // Merge-patch rule: null removes the key, so the mirror falls back to its default.
@@ -327,15 +351,20 @@ fn apply_public_settings(effective: &Value) {
 /// Merge `patch` into the public mirror (bridge state + mobile SSE) without any window event.
 /// `settings_patch` uses this and emits its own `settings://changed`. Returns the effective settings.
 pub fn mirror_public_patch(app: &AppHandle, patch: &Value) -> Value {
+    mirror_patch(app, patch, true)
+}
+
+fn mirror_patch(app: &AppHandle, patch: &Value, from_window: bool) -> Value {
+    let merge = if from_window { merge_public_settings_window } else { merge_public_settings };
     // Read, merge and store under one lock so two patches cannot lose each other's keys.
     let merged = match app.try_state::<AppState>() {
         Some(state) => {
             let mut guard = state.public_settings.lock();
-            let merged = merge_public_settings(&guard, patch);
+            let merged = merge(&guard, patch);
             *guard = merged.clone();
             merged
         }
-        None => merge_public_settings(&default_public_settings(), patch),
+        None => merge(&default_public_settings(), patch),
     };
     let effective = with_dev_labs(&merged, dev_labs_override_active());
     apply_public_settings(&effective);
@@ -344,7 +373,8 @@ pub fn mirror_public_patch(app: &AppHandle, patch: &Value) -> Value {
 }
 
 pub fn patch_public_settings(app: &AppHandle, patch: Value) -> Value {
-    let merged = mirror_public_patch(app, &patch);
+    // The bridge path: window-only keys in `patch` are ignored.
+    let merged = mirror_patch(app, &patch, false);
     let _ = app.emit("settings://apply", patch);
     let _ = app.emit("settings://changed", merged.clone());
     merged
@@ -358,7 +388,8 @@ pub fn public_settings_from_store_file(file: &Value) -> Value {
         .as_object()
         .map(|o| o.iter().filter(|(_, v)| !v.is_null()).map(|(k, v)| (k.clone(), v.clone())).collect())
         .unwrap_or_default();
-    merge_public_settings(&default_public_settings(), &Value::Object(cleaned))
+    // The file is only written by the app window and the app itself, never straight from the bridge.
+    merge_public_settings_window(&default_public_settings(), &Value::Object(cleaned))
 }
 
 /// Load the saved public settings into `AppState` (no-op when the file is missing or unreadable).
@@ -494,6 +525,39 @@ mod tests {
         assert_eq!(lend["labs"], true);
         assert_eq!(lend["type"], "boolean");
         assert!(catalog["refused"].as_array().unwrap().iter().any(|k| k == "ui_mode"));
+    }
+
+    #[test]
+    fn the_ssh_chat_switch_is_a_dev_labs_key_that_a_bridge_patch_cannot_set() {
+        assert_eq!(DEV_LABS_KEYS.iter().filter(|k| **k == "ssh_chat_enabled").count(), 1);
+        assert!(!PATCHABLE_KEYS.contains(&"ssh_chat_enabled"), "a phone or an agent must not be able to turn it on");
+        assert_eq!(default_public_settings()["ssh_chat_enabled"], serde_json::json!(false));
+        let merged = merge_public_settings(&default_public_settings(), &serde_json::json!({ "ssh_chat_enabled": true }));
+        assert_eq!(merged["ssh_chat_enabled"], serde_json::json!(false), "the patch is ignored");
+        assert_eq!(with_dev_labs(&default_public_settings(), true)["ssh_chat_enabled"], serde_json::json!(true));
+    }
+
+    #[test]
+    fn the_window_can_set_the_ssh_and_door_switches_but_the_bridge_cannot() {
+        for key in WINDOW_ONLY_KEYS {
+            assert!(DEV_LABS_KEYS.contains(key), "{key} is a Labs switch");
+            assert!(!PATCHABLE_KEYS.contains(key), "{key} must not be patchable over the bridge");
+            let base = default_public_settings();
+            let on = serde_json::json!({ *key: true });
+            // The bridge route (phone, agent, CLI) ignores it, whatever else is in the patch.
+            let bridge = merge_public_settings(&base, &serde_json::json!({ *key: true, "theme": "light" }));
+            assert_eq!(bridge[*key], serde_json::json!(false), "{key}: bridge patch refused");
+            // The window path writes it, and a later bridge patch cannot switch it off or on again.
+            let window = merge_public_settings_window(&base, &on);
+            assert_eq!(window[*key], serde_json::json!(true), "{key}: window setter writes it");
+            let after_bridge = merge_public_settings(&window, &serde_json::json!({ *key: false }));
+            assert_eq!(after_bridge[*key], serde_json::json!(true), "{key}: bridge cannot change a window-set value");
+            // Loading the saved file (written by the window) keeps it.
+            assert_eq!(public_settings_from_store_file(&serde_json::json!({ "settings": { *key: true } }))[*key], serde_json::json!(true));
+            // Null in a window patch puts the default back.
+            assert_eq!(merge_public_settings_window(&window, &serde_json::json!({ *key: null }))[*key], serde_json::json!(false));
+        }
+        assert_eq!(WINDOW_ONLY_KEYS, &["ssh_chat_enabled", "pcdoor_enabled"]);
     }
 
     #[test]

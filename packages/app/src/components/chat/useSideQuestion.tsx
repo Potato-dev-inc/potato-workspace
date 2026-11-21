@@ -2,6 +2,7 @@
 // Ctrl+; opens the box (Esc closes it). The shortcut is ignored while this chat is not on screen, so a hidden chat
 // never answers it.
 import { useCallback, useEffect, useRef, useState, type ReactNode } from 'react';
+import { useHost } from '../../lib/host/context';
 import type { ChatTurn } from '../../lib/sessionChatModel';
 import { tauriSideQuestionApi, type SideQuestionApi } from '../../lib/sideQuestion';
 import { bindingHint, matchesAction } from '../../lib/shortcuts';
@@ -50,6 +51,9 @@ function isShown(el: Element | null): boolean {
 
 export function useSideQuestion(paneId: string, turns: readonly ChatTurn[], api: SideQuestionApi = tauriSideQuestionApi): { button: ReactNode; box: ReactNode } {
   const t = useT();
+  // A place that cannot run a side question yet draws the same button, off, with its one reason.
+  const host = useHost();
+  const off = host.can?.('side_question_ask') === false ? (host.notYet ?? null) : null;
   const [open, setOpen] = useState(false);
   // Bumped when an answer is kept, so the box re-reads the pane's list.
   const [, setVersion] = useState(0);
@@ -69,20 +73,21 @@ export function useSideQuestion(paneId: string, turns: readonly ChatTurn[], api:
 
   useEffect(() => {
     const onKey = (event: KeyboardEvent) => {
-      if (!isSideShortcut(event) || !isShown(anchor.current)) return;
+      if (off || !isSideShortcut(event) || !isShown(anchor.current)) return;
       event.preventDefault();
       setOpen(true);
     };
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
-  }, []);
+  }, [off]);
 
   const button = (
     <button
       ref={anchor}
       type="button"
       aria-expanded={open}
-      title={`${t('pane.askAsideTip')}${bindingHint('ask-aside')}`}
+      title={off ?? `${t('pane.askAsideTip')}${bindingHint('ask-aside')}`}
+      disabled={off !== null}
       onClick={() => (open ? close() : setOpen(true))}
       className="rounded px-1.5 py-0.5 text-[11px] text-pm-muted ck-chat-aside"
     >

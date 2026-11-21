@@ -19,7 +19,7 @@ packages/e2e/
 npm run e2e:build
 ```
 
-Builds the web UI, the app (debug, with the dev-only `dev-fake-tui` feature) and `tools/pm-fake-tui` (the fake agent). Output goes to `packages/e2e/.build/cargo` (ignored). Put it somewhere else with `E2E_CARGO_TARGET=D:/pm-cargo-e2e npm run e2e:build` (set the same variable when you run). First build is about 3 minutes, a rebuild after a Rust change about 2 minutes (`--skip-ui` skips the web UI, `--skip-rust` skips cargo). Rebuild after changing the app; the tests themselves need no build.
+Builds the web UI, the app (debug, with the dev-only `dev-fake-tui` feature) and `tools/pm-fake-tui` (the fake agent). Output goes to `packages/e2e/.build/cargo` (ignored). Put it somewhere else with `E2E_CARGO_TARGET=D:/cargo-e2e npm run e2e:build` (set the same variable when you run). First build is about 3 minutes, a rebuild after a Rust change about 2 minutes (`--skip-ui` skips the web UI, `--skip-rust` skips cargo). Rebuild after changing the app; the tests themselves need no build.
 
 ## Run
 

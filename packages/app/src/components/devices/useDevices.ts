@@ -51,6 +51,7 @@ function sane(value: unknown): DevicesView | null {
     message: v.message ?? null,
     locked_until: v.locked_until ?? null,
     tampered: v.tampered === true,
+    key_changed: v.key_changed === true,
     devices: withShortIds(v.devices.map(saneDevice), v.name ?? ''),
     transfers: Array.isArray(v.transfers) ? v.transfers.filter((x) => x && typeof x.id === 'number') : [],
   };

@@ -7,6 +7,7 @@
 //
 // All of them flush a pending edit when they unmount, so leaving a section or closing the window with
 // text still in a field does not lose it.
+import { useT } from '../../i18n';
 import { useCallback, useEffect, useRef, useState, type InputHTMLAttributes, type ReactNode, type SelectHTMLAttributes, type TextareaHTMLAttributes } from 'react';
 
 export const DEBOUNCE_MS = 600;
@@ -310,6 +311,7 @@ export function ConfirmSheet({
   onConfirm: () => void;
   onCancel: () => void;
 }) {
+  const t = useT();
   const cancelRef = useRef<HTMLButtonElement>(null);
   useEffect(() => {
     cancelRef.current?.focus();
@@ -329,7 +331,7 @@ export function ConfirmSheet({
         <p>{body}</p>
         <div className="st-sheet-actions">
           <button ref={cancelRef} type="button" className="st-btn" onClick={onCancel}>
-            Cancel
+            {t('settings.cancel')}
           </button>
           <button type="button" className="st-btn is-primary" onClick={onConfirm}>
             {confirmLabel}

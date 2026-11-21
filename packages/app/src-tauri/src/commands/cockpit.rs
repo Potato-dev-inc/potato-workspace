@@ -64,7 +64,7 @@ pub async fn mode_switch_preview(app: AppHandle, style: String) -> Result<(), St
 /// The mini bar: bring a pane's pop-out forward and focus it.
 #[tauri::command]
 pub async fn mini_bar_focus_pane(app: AppHandle, state: State<'_, AppState>, pane_id: String) -> Result<(), String> {
-    let found = state.registry.lock().list().into_iter().find(|p| p.id == pane_id);
+    let found = state.registry.lock().list_including_remote().into_iter().find(|p| p.id == pane_id);
     match found {
         Some(p) => {
             crate::app_windows::open_pane_window(&app, &p.id, &p.agent_type, p.cols, p.rows, true);

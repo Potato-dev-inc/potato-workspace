@@ -1,9 +1,8 @@
 // @vitest-environment jsdom
-// Devices > Files, through the real parents: Settings > Devices > a device > Files tab; a remote chat > Open folder; a
-// remote chat with a `potato-result:` line > Get it. Only the devices command layer is the fake (`DevicesFake`) and the
+// Devices > Files, through the real parents: Settings > Devices > a device > Files tab; a remote terminal > Open folder. Only the devices command layer is the fake (`DevicesFake`) and the
 // folder dialog is mocked. Proves: browse, breadcrumb, select, Copy -> a transfer goes running -> done; the "already there"
 // question (Replace is never sent without a click); a far error shows as plain text; text and picture previews; the
-// switch and folder list on the device page; Open folder starts at the chat's folder; Get it.
+// switch and folder list on the device page; Open folder starts at the chat's folder.
 import { open } from '@tauri-apps/plugin-dialog';
 import { act } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
@@ -11,7 +10,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { DevicesFake, MAC_FILES, MAC_MINI, MAC_PANES, NODE_MAC, type DevicesScenario } from '../../dev/devices-fixtures';
 import { click, settle } from '../settings/test-utils';
 import { DevicesPage } from './DevicesPage';
-import { RemotePaneView } from './RemotePaneView';
+import { RemoteTerminal } from './RemoteTerminal';
 
 vi.mock('@tauri-apps/plugin-dialog', () => ({ open: vi.fn() }));
 vi.mock('../../lib/tauri', async (importOriginal) => {
@@ -222,10 +221,10 @@ describe('the device page', () => {
   });
 });
 
-describe('from a remote chat', () => {
-  const chatRow = { paneId: 'p1', chat: true, title: 'Build the .dmg', agent: 'claude', cwd: '/Users/me/app' };
+describe('from a remote terminal', () => {
+  const chatRow = { paneId: 'p1', chat: false, title: 'Build the .dmg', agent: 'claude', cwd: '/Users/me/app' };
   const mountRemote = async (fake: DevicesFake) => {
-    await act(async () => root.render(<RemotePaneView device={fake.view.devices[0]!} row={chatRow} api={fake} />));
+    await act(async () => root.render(<RemoteTerminal device={fake.view.devices[0]!} row={chatRow} api={fake} />));
     await settle(8);
   };
 
@@ -243,39 +242,5 @@ describe('from a remote chat', () => {
     await settle(4);
     expect(q('[data-testid="files-view"]')).toBeNull();
     expect(q('[data-testid="open-remote-folder"]')).not.toBeNull();
-  });
-
-  const result = (line: string) => [{ kind: 'assistant', id: 'a1', at: 1, text: `The build is done.\n${line}`, model: null, finalAnswer: true }];
-
-  it('offers Get it when the last reply names a result file, copies it, and says where it was saved', async () => {
-    const fake = new DevicesFake(scenario({ chats: { p1: result('potato-result: build/app.dmg') } }));
-    await mountRemote(fake);
-    expect(text('[data-testid="get-it-card"]')).toContain('Mac mini has a file for you: app.dmg');
-    await click(q('[data-testid="get-it"]'));
-    await settle(6);
-    const call = fake.fileCalls.find((c) => c.cmd === 'filesCopy')!;
-    expect(call.args).toMatchObject({ node: NODE_MAC, root: 'app', paths: ['build/app.dmg'], on_exists: 'ask' });
-    expect(q('[data-testid="get-it-card"] [data-testid="transfer-1"]')!.getAttribute('data-state')).toBe('running');
-    await act(async () => fake.progress(1, { bytes: 48_000_000, state: 'done' }));
-    await settle(2);
-    expect(text('[data-testid="get-it-card"]')).toContain('Saved to Downloads as app.dmg');
-  });
-
-  it('Get it uses the same question when the name is taken', async () => {
-    const fake = new DevicesFake(scenario({ chats: { p1: result('potato-result: build/app.dmg') }, files: { ...MAC_FILES, existing: ['app.dmg'] } }));
-    await mountRemote(fake);
-    await click(q('[data-testid="get-it"]'));
-    await settle(6);
-    expect(text('[data-testid="get-it-card"]')).toContain('A file named app.dmg is already there.');
-    await click(q('[data-testid="exists-both"]'));
-    await settle(6);
-    expect(fake.fileCalls.filter((c) => c.cmd === 'filesCopy').map((c) => c.args.on_exists)).toEqual(['ask', 'both']);
-    expect(q('[data-testid="get-it-card"] [data-testid="transfer-1"]')).not.toBeNull();
-  });
-
-  it('shows no card for an unsafe result path', async () => {
-    const fake = new DevicesFake(scenario({ chats: { p1: result('potato-result: ../secrets.txt') } }));
-    await mountRemote(fake);
-    expect(q('[data-testid="get-it-card"]')).toBeNull();
   });
 });

@@ -24,14 +24,15 @@ const ALLOWED_PHONE_CALLS: Record<string, string[]> = {};
 /** Everything that talks to, or draws, another PC. */
 const REMOTE_FILES = [
   'lib/runtime/remote.ts',
-  'lib/runtime/remoteChat.ts',
+  'lib/host/far.ts',
+  'lib/host/farCockpit.ts',
+  'lib/host/useFarPane.ts',
   'lib/runtime/remoteNewAgent.ts',
   'lib/runtime/pclink.ts',
-  'lib/runtime/pclinkOutbox.ts',
   'lib/runtime/farLevel.ts',
   'lib/moveChat.ts',
-  'components/devices/RemoteChat.tsx',
-  'components/devices/RemotePaneView.tsx',
+  'components/devices/FarPane.tsx',
+  'components/devices/RemoteTerminal.tsx',
   'components/devices/NewAgentWhere.tsx',
   'components/devices/useDeviceGroups.ts',
   'components/devices/FullAskNotice.tsx',
@@ -84,14 +85,17 @@ describe('PC to PC is separate from the phone', () => {
   });
 
   it('a screen of another PC decides nothing from this PC\'s own grant: the far level comes from the far PC (`/pclink/me`)', () => {
-    for (const rel of ['components/devices/RemotePaneView.tsx', 'components/devices/NewAgentWhere.tsx', 'components/chat/MoveSheet.tsx']) {
+    for (const rel of ['components/devices/RemoteTerminal.tsx', 'components/devices/NewAgentWhere.tsx', 'components/chat/MoveSheet.tsx']) {
       const src = stripComments(read(rel));
       expect(src, rel).not.toMatch(/\bpicked\.level\b|\bdevice\.level\b/);
       expect(src, rel).toContain('useFarLevel');
     }
   });
 
-  it('the remote chat screen and the remote pane call no phone bridge method at all', () => {
-    for (const rel of ['components/devices/RemoteChat.tsx', 'components/devices/RemotePaneView.tsx']) expect(stripComments(read(rel)), rel).not.toMatch(/\.phone[A-Z]/);
+  it('the far host reaches the far PC only through the PC link: it names no bridge, no loopback address and no port (S1)', () => {
+    for (const rel of ['lib/host/far.ts', 'lib/host/farCockpit.ts', 'lib/host/useFarPane.ts']) {
+      const src = stripComments(read(rel));
+      expect(src, rel).not.toMatch(/bridge-url|bridge-sse|127.0.0.1|localhost|.phone[A-Z]/);
+    }
   });
 });

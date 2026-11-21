@@ -158,3 +158,14 @@ pub fn started_agents_set(types: Option<String>, kind: Option<String>) -> Result
     }
     Ok(started_agents_get())
 }
+
+/// The Default model saved per agent (Settings > Agents) in the public `settings`: `{ agent id: model id }`. Plain data in and out, so the
+/// New agent page of this PC and of a PC that looks at this one (`pclink::calls_agents`) read the same answer.
+pub fn agent_default_models_of(settings: &Value) -> Value {
+    settings.get(agent_run_mode::AGENT_DEFAULT_MODELS_KEY).filter(|v| v.is_object()).cloned().unwrap_or_else(|| serde_json::json!({}))
+}
+
+#[tauri::command]
+pub fn agent_default_models(app: tauri::AppHandle) -> Value {
+    agent_default_models_of(&crate::settings_store::read_public_settings(&app))
+}

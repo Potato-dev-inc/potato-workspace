@@ -3,8 +3,9 @@
 // screens show. A device here is another PC that runs Potato Workspace; its panes are what its `GET /pclink/sessions` answers.
 import { emit, type UnlistenFn } from '@tauri-apps/api/event';
 import type { PcLevel } from '../lib/runtime/pclink';
+import { StubShell } from './far-shell-stub';
 import type { UsageSnapshot } from '../lib/usage';
-import type { ActivityEntry, CopyResult, Device, DeviceEvent, DeviceLevel, DevicesApi, DevicesView, FarError, FileEntry, FullAsk, FileList, FilePreview, FilesFolders, HostingView, OnExists, PendingPair, RoutePref, ScreenFrame, Transfer } from '../lib/devices';
+import type { ActivityEntry, CopyResult, Device, DeviceEvent, DeviceLevel, DevicesApi, DevicesView, FarError, FileEntry, FullAsk, FileList, FilePreview, FilesFolders, HostingView, OnExists, PendingPair, RoutePref, Transfer } from '../lib/devices';
 
 type Handler = { handled: true; value: unknown } | { handled: false };
 
@@ -50,7 +51,84 @@ export interface RemotePane {
   title: string;
   lane?: 'acp';
   parent_pane_id?: string;
+  /** The rest of the row a far PC's own registry gives (`sessions_rows.rs`). */
+  started_as?: 'minion' | 'spin_off';
+  standby_seat?: string;
+  copy?: boolean;
+  workflow?: { slug: string; role: string; front: boolean; name?: string };
+  /** What the far PC says about the chat (its session list's read-only facts). */
+  model?: string;
+  mode?: 'asks' | 'acts_without_asking';
+  branch?: string;
 }
+
+
+/** One session row as a newer far PC lists it (`GET /pclink/sessions`, `sessions_rows.rs`): the same JSON for every fixture pane. */
+export const sessionRowOf = (p: RemotePane) => ({
+  id: p.id,
+  agent: p.agent_type,
+  title: p.title,
+  status: p.status,
+  project: `p-${p.cwd}`,
+  folder: p.cwd.split('/').filter(Boolean).pop() ?? '',
+  chat: p.lane === 'acp',
+  ...(p.lane ? { lane: p.lane } : {}),
+  ...(p.model ? { model: p.model } : {}),
+  ...(p.mode ? { mode: p.mode } : {}),
+  ...(p.branch ? { branch: p.branch } : {}),
+  ...(p.parent_pane_id ? { parent: p.parent_pane_id, helper_of: p.parent_pane_id } : {}),
+  ...(p.started_as ? { started_as: p.started_as } : {}),
+  ...(p.standby_seat ? { standby: true } : {}),
+  ...(p.copy ? { copy: true } : {}),
+  ...(p.workflow ? { workflow: p.workflow } : {}),
+});
+
+/** A far PC's registry for the P2.4 shots and the sameness test: a workflow front with a spin-off and a minion, a standby's own chat, a chat on a copy, untitled agents. A copy's folder there is its REAL project (the row says `copy`). */
+export const PM_NIGHT_PANES: RemotePane[] = [
+  { id: 'front', agent_type: 'opencode', cwd: '/w/pm-night', status: 'idle', title: '', lane: 'acp', workflow: { slug: 'wf', role: 'Front', front: true, name: 'Research + Write' } },
+  { id: 'h1', agent_type: 'claude', cwd: '/w/pm-night', status: 'running', title: 'Research', lane: 'acp', parent_pane_id: 'front', started_as: 'spin_off' },
+  { id: 'h2', agent_type: 'claude', cwd: '/w/pm-night', status: 'running', title: 'Scratch', lane: 'acp', parent_pane_id: 'front', started_as: 'minion' },
+  { id: 'seat', agent_type: 'claude', cwd: '/w/pm-night', status: 'idle', title: 'Standby', lane: 'acp', standby_seat: 'seat1' },
+  { id: 'copy', agent_type: 'claude', cwd: '/w/pm-night', status: 'idle', title: 'Fix on a copy', lane: 'acp', copy: true },
+  { id: 'plain', agent_type: 'opencode', cwd: '/w/pm-night', status: 'error', title: '', lane: 'acp' },
+];
+
+/** The chat settings a far PC offers (what its `acp_chat_state` answers): permission, model and effort, like the local chat's. */
+const opt = (id: string, name: string, category: string, current: string, values: [string, string][]) => ({ id, name, category, type: 'select', currentValue: current, options: values.map(([value, label]) => ({ value, name: label })) });
+export const farChatState = (paneId: string, over: Record<string, unknown> = {}): Record<string, unknown> => ({
+  lane: 'acp',
+  agent: 'claude',
+  label: 'Claude',
+  phase: 'idle',
+  status: 'idle',
+  turnInFlight: false,
+  stopping: false,
+  quietSecs: 0,
+  canSteer: false,
+  turn: 1,
+  epoch: 1,
+  revision: 1,
+  title: null,
+  usage: { used: 1200, size: 20000 },
+  commands: [],
+  configOptions: [
+    opt('mode', 'Permissions', 'mode', 'default', [['default', 'Ask first'], ['plan', 'Plan'], ['bypassPermissions', 'Full access']]),
+    opt('model', 'Model', 'model', 'sonnet', [['sonnet', 'Sonnet 5.5'], ['opus', 'Opus 5'], ['haiku', 'Haiku 5']]),
+    opt('effort', 'Effort', 'thought_level', 'medium', [['low', 'Low'], ['medium', 'Medium'], ['high', 'High']]),
+  ],
+  modes: null,
+  historyLost: null,
+  permissions: [],
+  exit: null,
+  closed: false,
+  conversation: paneId,
+  inTerminal: null,
+  agentAnswering: false,
+  forceYes: false,
+  interruptedTurn: false,
+  signIn: { needed: false, hint: '' },
+  ...over,
+});
 
 export const MAC_PANES: RemotePane[] = [
   { id: 'p1', agent_type: 'claude', cwd: '/Users/me/app', status: 'running', title: 'Build the .dmg', lane: 'acp' },
@@ -122,10 +200,10 @@ export interface DevicesScenario {
   offlineAfterMs?: number;
   /** Later changes of a device (asleep, closed, needs a person…), this many ms after the page opens. */
   changeAfter?: { ms: number; node: string; patch: Partial<Device> }[];
-  /** What a live terminal shows once it starts. */
-  screen?: string;
   /** Per device: the folders its `GET /pclink/projects` lists. */
   projectsOf?: Record<string, { id: string; name: string; state: string }[]>;
+  /** Per device: the agents its registry lists (`agents_list`); default Claude and Codex, both installed. */
+  agentsOf?: Record<string, FarAgent[]>;
   /** Per device: what its `GET /pclink/usage` answers. */
   usageOf?: Record<string, UsageSnapshot>;
   /** Per device: the places it offers to browse, and the folders in each (`<root id>|<sub>` to names). */
@@ -149,25 +227,53 @@ function baseView(s: DevicesScenario): DevicesView {
   };
 }
 
+/** One agent of a far PC's registry (`agents_list`): installed or not. */
+export interface FarAgent {
+  id: string;
+  label: string;
+  installed?: boolean;
+}
+const DEFAULT_FAR_AGENTS: FarAgent[] = [
+  { id: 'claude', label: 'Claude' },
+  { id: 'codex', label: 'Codex' },
+];
+/** The registry row the app's `agents_list` gives for an agent (`AgentDescriptor`). */
+const descriptorOf = (a: FarAgent) => ({
+  id: a.id,
+  label: a.label,
+  icon: null,
+  kind: 'cli',
+  source: 'code',
+  experimental: false,
+  dispatchable: true,
+  not_dispatchable_reason: null,
+  installed: a.installed !== false,
+  install_hint: null,
+  modes: { headless: false, visible: true },
+  features: { read_only_headless: false, read_only_spawned_pane: false, resumable_headless: false },
+  run_options: { trust_workspace: false, allow_shell: false, shell_default_on: false, allowed_commands: false },
+  standby: { visible: false, headless: false, experimental: false },
+  definition: null,
+});
+
 export class DevicesFake implements DevicesApi {
   view: DevicesView;
   panes: Record<string, RemotePane[]>;
   requests: { node: string; method: string; path: string; body?: unknown }[] = [];
+  /** Per far chat: the settings state its `acp_chat_state` answers (default: `farChatState`); `set_config` and `set_force_yes` change it. */
+  chatStates: Record<string, Record<string, unknown>> = {};
+  /** The far calls that were answered (`POST /pclink/call/<cmd>`), in order. */
+  farCalls: { cmd: string; args: Record<string, unknown> }[] = [];
   private changed = new Set<(v: DevicesView) => void>();
   private events = new Set<(e: DeviceEvent) => void>();
   private waiting: ((allow: boolean) => void) | null = null;
   subscribed = new Set<string>();
   activityLog: ActivityEntry[];
-  screens = new Set<(f: ScreenFrame) => void>();
-  screenStarts: string[] = [];
-  screenStops: string[] = [];
   files: FakeFiles;
   chats: Record<string, unknown[]>;
   /** Every files call, in order. */
   fileCalls: { cmd: string; args: Record<string, unknown> }[] = [];
   private nextTransfer = 1;
-  /** Make `screenStart` fail (the far side cannot stream): the view falls back to one snapshot. */
-  screenFails = false;
 
   constructor(s: DevicesScenario = {}) {
     this.view = baseView(s);
@@ -178,6 +284,7 @@ export class DevicesFake implements DevicesApi {
     this.activityLog = (s.activity ?? []).map((e) => ({ ...e }));
     this.panes = Object.fromEntries(Object.entries(s.panes ?? {}).map(([k, v]) => [k, v.map((p) => ({ ...p }))]));
     this.projectsOf = { ...(s.projectsOf ?? {}) };
+    this.agentsOf = { ...(s.agentsOf ?? {}) };
     this.usageOf = { ...(s.usageOf ?? {}) };
     this.browseTree = { ...(s.browseTree ?? {}) };
   }
@@ -215,6 +322,57 @@ export class DevicesFake implements DevicesApi {
 
   emitEvent(e: DeviceEvent): void {
     for (const cb of this.events) cb(e);
+    this.alsoEmit?.(e);
+  }
+  /** The harness page also gets the event as the Tauri event `device://event`. */
+  alsoEmit?: (e: DeviceEvent) => void;
+
+  // ----- P2.3: a stub far shell behind `POST /pclink/call/<cmd>` (a script, not a pty; see far-shell-stub.ts) -----
+  /** What this PC typed into the far terminal and the grids it asked for. */
+  farInput: string[] = [];
+  farResizes: Array<[number, number]> = [];
+  private farBytes = 0;
+  private farShells = new Map<string, StubShell>();
+  private farShell(node: string): StubShell {
+    let shell = this.farShells.get(node);
+    if (!shell) {
+      shell = new StubShell((data) => {
+        const bytes = new TextEncoder().encode(data);
+        const payload = { pane_id: 'p2', b64: btoa(String.fromCharCode(...bytes)), offset: this.farBytes };
+        this.farBytes += bytes.length;
+        this.emitEvent({ node, frame: `event: app
+data: ${JSON.stringify({ event: 'terminal-data', payload })}
+
+` });
+      });
+      this.farBytes = new TextEncoder().encode(shell.screen).length;
+      this.farShells.set(node, shell);
+    }
+    return shell;
+  }
+  private farCall(node: string, cmd: string, body: Record<string, unknown>, need: (needs: PcLevel) => { status: number; body: unknown } | null): { status: number; body: unknown } {
+    const shell = this.farShell(node);
+    const full = need('full');
+    switch (cmd) {
+      case 'list_panes':
+        return full ?? { status: 200, body: [] };
+      case 'read_pane_screen_replay':
+        if (full) return full;
+        return { status: 200, body: { data: [...new TextEncoder().encode(shell.screen)], cols: 100, rows: 28, offset: this.farBytes } };
+      case 'write_pane_input': {
+        if (full) return full;
+        const text = String(((body.args ?? body) as { text?: unknown }).text ?? '');
+        this.farInput.push(text);
+        shell.type(text);
+        return { status: 200, body: null };
+      }
+      case 'resize_pane':
+        if (full) return full;
+        this.farResizes.push([Number(body.cols), Number(body.rows)]);
+        return { status: 200, body: null };
+      default:
+        return { status: 404, body: { error: 'not found', code: 'UNKNOWN_ROUTE' } };
+    }
   }
 
   private folders: FilesFolders;
@@ -341,18 +499,6 @@ export class DevicesFake implements DevicesApi {
     this.setDevice(node, { connected: false, lets_run: false });
     return this.view;
   };
-  screenStart = async (node: string, paneId: string) => {
-    if (this.screenFails) throw new Error('No live screen.');
-    this.screenStarts.push(`${node}:${paneId}`);
-  };
-  screenStop = async (node: string, paneId: string) => void this.screenStops.push(`${node}:${paneId}`);
-  onScreen = async (cb: (f: ScreenFrame) => void): Promise<UnlistenFn> => {
-    this.screens.add(cb);
-    return () => this.screens.delete(cb);
-  };
-  emitScreen(f: ScreenFrame): void {
-    for (const cb of this.screens) cb(f);
-  }
   private pairAsJoiner = async (code: string) => {
     this.view = { ...this.view, joining: 'Looking for the other computer…', pending: { id: 8, role: 'joiner', name: 'Studio PC', code, expires_at: Date.now() + 120_000 } };
     this.emit();
@@ -453,20 +599,62 @@ export class DevicesFake implements DevicesApi {
     const rank = { watch: 0, answer: 1, full: 2 } as const;
     const need = (needs: PcLevel) => (rank[level] >= rank[needs] ? null : denied(needs));
     const id = decodeURIComponent(segs[2] ?? '');
+    // P2.3: the terminal rows are served by the stub far shell (far-shell-stub.ts).
+    if (method === 'POST' && segs[1] === 'call' && ['list_panes', 'spawn_pane', 'read_pane_screen_replay', 'read_pane_raw_buffer', 'write_pane_input', 'resize_pane', 'kill_pane_cmd'].includes(segs[2] ?? '')) return this.farCall(node, segs[2] ?? '', (body ?? {}) as Record<string, unknown>, need);
+    // The far call table (`pclink/calls.rs`): the chat-settings family and the chat feed rows, at the levels its rows say. Any other command is not a row (404).
+    if (method === 'POST' && segs[1] === 'call') {
+      const cmd = segs[2] ?? '';
+      const a = (body ?? {}) as Record<string, unknown>;
+      const levelOf: Record<string, PcLevel> = {
+        acp_chat_state: 'watch',
+        agent_model_options: 'watch',
+        acp_chat_set_config: 'full',
+        acp_chat_set_force_yes: 'full',
+        session_chat_open: 'watch',
+        session_chat_close: 'watch',
+        chat_earlier: 'watch',
+        chat_picture: 'watch',
+        acp_chat_cancel: 'answer',
+        pane_message_send: 'answer',
+        pane_message_cancel: 'answer',
+        pane_message_hold: 'answer',
+        pane_message_edit: 'answer',
+        pane_messages_list: 'answer',
+        acp_chat_keep_waiting: 'answer',
+        acp_chat_take_back: 'full',
+        acp_chat_set_auto_allow: 'full',
+        acp_chat_set_agent_answering: 'full',
+        acp_chat_warm: 'answer',
+      };
+      const agents = cmd === 'agent_model_options' ? null : this.agentsCall(node, cmd);
+      if (agents) return agents;
+      if (!levelOf[cmd]) return { status: 404, body: { error: 'That PC does not do this yet.', code: 'UNKNOWN_ROUTE' } };
+      const denial = need(levelOf[cmd]!);
+      if (denial) return denial;
+      this.farCalls.push({ cmd, args: a });
+      const pane = String(a.paneId ?? a.pane_id ?? '');
+      const state = (this.chatStates[pane] ??= farChatState(pane));
+      const feed = this.feedCall(node, cmd, pane, a);
+      if (feed) return feed;
+      if (cmd === 'agent_model_options') return { status: 200, body: { models: [], live: { id: 'model', options: [{ value: 'sonnet', name: 'Sonnet 5.5', description: null }, { value: 'opus', name: 'Opus 5', description: null }, { value: 'haiku', name: 'Haiku 5', description: null }] } } };
+      if (cmd === 'acp_chat_set_config') {
+        state.configOptions = (state.configOptions as { id: string }[]).map((o) => (o.id === a.optionId ? { ...o, currentValue: a.value } : o));
+      }
+      if (cmd === 'acp_chat_set_force_yes') state.forceYes = a.on === true;
+      return { status: 200, body: state };
+    }
     if (method === 'GET' && segs[1] === 'me') return { status: 200, body: { level, name: d.name, asked: this.asksAt.has(node) } };
     if (method === 'GET' && segs[1] === 'sessions' && segs.length === 2) {
-      return { status: 200, body: { sessions: list.map((p) => ({ id: p.id, agent: p.agent_type, title: p.title, status: p.status, project: `p-${p.cwd}`, folder: p.cwd.split('/').filter(Boolean).pop() ?? '', chat: p.lane === 'acp', ...(p.parent_pane_id ? { parent: p.parent_pane_id } : {}) })) } };
+      return { status: 200, body: { sessions: list.map(sessionRowOf) } };
     }
     if (method === 'GET' && segs[1] === 'sessions' && segs[3] === 'transcript') {
       return { status: 200, body: { available: true, reason: null, source: 'file', waitingFor: null, rev: 1, reset: false, items: this.chats[id] ?? [], revision: 1 } };
     }
-    if (method === 'GET' && segs[1] === 'sessions' && segs[3] === 'screen') return { status: 200, body: { content: '$ make dmg\nBuilding...' } };
     if (method === 'GET' && segs[1] === 'sessions' && segs[3] === 'messages') return need('answer') ?? { status: 200, body: { messages: [] } };
     if (method === 'POST' && segs[1] === 'sessions' && segs[3] === 'messages') {
       return need('answer') ?? { status: 200, body: { message: { id: 'm1', text: (body as { text?: string })?.text ?? '', state: 'sent', createdAt: 1, waitingFor: null, error: null } } };
     }
     if (method === 'POST' && segs[1] === 'sessions' && segs[3] === 'interrupt') return need('answer') ?? { status: 200, body: { id, stopped: true } };
-    if (method === 'POST' && segs[1] === 'sessions' && segs[3] === 'input') return need('full') ?? { status: 200, body: { ok: true } };
     if (method === 'POST' && segs[1] === 'sessions' && segs[3] === 'config') return need('full') ?? { status: 200, body: {} };
     if (method === 'DELETE' && segs[1] === 'sessions' && segs.length === 3) {
       const denial = need('full');
@@ -515,7 +703,7 @@ export class DevicesFake implements DevicesApi {
       (this.opened[node] ??= []).push(project);
       return { status: 200, body: { project } };
     }
-    if (method === 'GET' && segs[1] === 'agents' && segs[3] === 'models') return need('full') ?? { status: 200, body: { models: [] } };
+    if (method === 'GET' && segs[1] === 'agents' && segs[3] === 'models') return need('full') ?? { status: 200, body: { models: [], live: { id: 'model', options: [{ value: 'sonnet', name: 'Sonnet 5.5', description: null }, { value: 'opus', name: 'Opus 5', description: null }, { value: 'haiku', name: 'Haiku 5', description: null }] } } };
     if (method === 'POST' && segs[1] === 'agents' && segs[2] === 'warm') return need('full') ?? { status: 200, body: { warming: true } };
     if (method === 'POST' && segs[1] === 'agents' && segs[2] === 'start') {
       const denial = need('full');
@@ -539,6 +727,80 @@ export class DevicesFake implements DevicesApi {
     if (method === 'GET' && segs[1] === 'questions') return { status: 200, body: { questions: [] } };
     return { status: 404, body: { error: 'not found' } };
   };
+  /** Per device: the agents its registry lists (default: Claude and Codex, both installed). */
+  agentsOf: Record<string, FarAgent[]> = {};
+  /** Per far chat: its message box queue (`pane_messages_list`). */
+  outboxes: Record<string, Record<string, unknown>[]> = {};
+  private nextMessage = 1;
+  /** One `app` frame of the far PC's event stream, as the window's own event would arrive. */
+  private appFrame(node: string, event: string, payload: unknown): void {
+    this.emitEvent({ node, frame: 'event: app\ndata: ' + JSON.stringify({ event, payload }) + '\n\n' });
+  }
+  /** The far call rows the New agent page reads (`pclink/calls.rs`, `// ---- P2.1 agents/projects ----`): Watch level, the same JSON as the app's own commands. `null`: not one of them. */
+  private agentsCall(node: string, cmd: string): { status: number; body: unknown } | null {
+    const rows = this.agentsOf[node] ?? DEFAULT_FAR_AGENTS;
+    if (cmd === 'agents_list') return { status: 200, body: { agents: rows.map(descriptorOf), dispatchable_ids: rows.map((r) => r.id) } };
+    if (cmd === 'agent_lane_get') return { status: 200, body: { labs_enabled: true, agents: rows.map((r) => ({ id: r.id, lane: 'acp', disabled: false })) } };
+    if (cmd === 'agent_default_models') return { status: 200, body: {} };
+    if (cmd === 'agent_rules_effective') return { status: 200, body: { model: null, mode: null, force_yes: false, force_yes_source: null, notes: null, fences: [] } };
+    if (cmd === 'project_recent') {
+      const all = [...(this.projectsOf[node] ?? [{ id: 'proj-app', name: 'app', state: 'ready' }]), ...(this.opened[node] ?? [])];
+      return { status: 200, body: all.filter((p) => p.state !== 'missing').map((p, i) => ({ path: `remote:${p.id}`, name: p.name, state: p.state, last_used_ms: all.length - i })) };
+    }
+    if (cmd === 'agent_model_options') return { status: 200, body: { terminal: false, default_model: null, models: [], live: { id: 'model', options: [{ value: 'sonnet', name: 'Sonnet 5.5', description: null }, { value: 'opus', name: 'Opus 5', description: null }, { value: 'haiku', name: 'Haiku 5', description: null }] } } };
+    return null;
+  }
+  /** The chat feed rows (P1.7): the feed, Stop, the message box and the chat's switches. `null`: not one of them. */
+  private feedCall(node: string, cmd: string, pane: string, a: Record<string, unknown>): { status: number; body: unknown } | null {
+    const ok = (body: unknown) => ({ status: 200, body });
+    const state = (this.chatStates[pane] ??= farChatState(pane));
+    switch (cmd) {
+      case 'session_chat_open':
+        return ok({ available: true, reason: null, source: 'file', items: this.chats[pane] ?? [], waitingFor: null });
+      case 'session_chat_close':
+      case 'acp_chat_warm':
+      case 'acp_chat_take_back':
+        return ok(null);
+      case 'chat_earlier':
+        return ok({ items: [], more: false });
+      case 'chat_picture':
+        return { status: 404, body: { error: 'That picture is not there.', code: 'PICTURE_NOT_FOUND' } };
+      case 'acp_chat_cancel':
+      case 'acp_chat_keep_waiting':
+        return ok(true);
+      case 'acp_chat_set_auto_allow':
+      case 'acp_chat_set_agent_answering':
+        return ok(state);
+      case 'pane_messages_list':
+        return ok(this.outboxes[pane] ?? []);
+      case 'pane_message_send': {
+        const n = this.nextMessage++;
+        const text = String(a.text ?? '');
+        const message = { id: 'm' + n, text, createdAt: Date.now(), state: 'sent', waitingFor: null, error: null };
+        const queue = (this.outboxes[pane] ??= []);
+        queue.push(message);
+        // The far PC's reply path: the message shows in the feed and in the box's queue, as frames.
+        const item = { kind: 'user', id: 'u-sent-' + n, at: new Date().toISOString(), text };
+        (this.chats[pane] ??= []).push(item);
+        queueMicrotask(() => {
+          this.appFrame(node, 'session-chat-items', { paneId: pane, items: [item], reset: false });
+          this.appFrame(node, 'pane-outbox', { paneId: pane, messages: queue });
+        });
+        return ok(message);
+      }
+      case 'pane_message_cancel':
+      case 'pane_message_hold':
+      case 'pane_message_edit': {
+        const message = (this.outboxes[pane] ?? []).find((m) => m.id === a.messageId);
+        if (!message) return { status: 409, body: { error: 'That message is not waiting any more.', code: 'MESSAGE_NOT_CANCELLABLE' } };
+        if (cmd === 'pane_message_cancel') message.state = 'cancelled';
+        if (cmd === 'pane_message_edit') message.text = String(a.text ?? '');
+        return ok(message);
+      }
+      default:
+        return null;
+    }
+  }
   /** Per device: the folders its `GET /pclink/projects` lists (default: one called "app"). */
   projectsOf: Record<string, { id: string; name: string; state: string }[]> = {};
   /** Folders opened on a device through "Browse folders" (they join its project list). */
@@ -573,6 +835,10 @@ export class DevicesFake implements DevicesApi {
     return this.emit();
   };
   answeredAsks: { id: string; allow: boolean }[] = [];
+  answerAccountDefault = async (node: string, keep: boolean) => {
+    this.view = { ...this.view, devices: this.view.devices.map((x) => (x.node === node ? { ...x, account_card: false, account_default: true, ...(keep ? { lets_run: true, level: 'full' as const } : {}) } : x)) };
+    return this.emit();
+  };
   onFullAsk = async (cb: (a: FullAsk) => void): Promise<UnlistenFn> => {
     this.askListeners.add(cb);
     return () => this.askListeners.delete(cb);
@@ -597,6 +863,7 @@ export class DevicesFake implements DevicesApi {
 /** One mock per harness page: answers the `devices_*` commands from the scenario. `handled: false` leaves a command alone. */
 export function createDevicesMock(s: DevicesScenario | undefined): (cmd: string, args: Record<string, unknown>) => Handler {
   const fake = new DevicesFake(s ?? { enabled: false });
+  fake.alsoEmit = (e) => void emit('device://event', e);
   if (s?.offlineAfterMs !== undefined) {
     setTimeout(() => {
       fake.setDevice(NODE_MAC, { state: 'offline', path: null, last_seen: Math.floor(Date.now() / 1000) - 60 });
@@ -637,6 +904,8 @@ export function createDevicesMock(s: DevicesScenario | undefined): (cmd: string,
         return v(fake.fullAsks());
       case 'devices_full_ask_answer':
         return v(fake.answerFullAsk(String(a.id), a.allow === true));
+      case 'devices_account_default_answer':
+        return v(fake.answerAccountDefault(String(a.node), a.keep === true));
       case 'devices_request':
         return v(fake.request(String(a.node), String(a.method), String(a.path), a.body));
       case 'devices_make_link':
@@ -655,11 +924,6 @@ export function createDevicesMock(s: DevicesScenario | undefined): (cmd: string,
         return v(fake.setDeviceRoute(String(a.node), (a.pref ?? null) as RoutePref | null));
       case 'devices_disconnect':
         return v(fake.disconnect(String(a.node)));
-      case 'devices_screen_start':
-        setTimeout(() => void emit('device://screen', { node: String(a.node), pane_id: String(a.pane_id), content: s?.screen ?? '$ make dmg\nBuilding...' }), 50);
-        return v(fake.screenStart(String(a.node), String(a.pane_id)));
-      case 'devices_screen_stop':
-        return v(fake.screenStop(String(a.node), String(a.pane_id)));
       case 'devices_set_files':
         return v(fake.setFiles(String(a.node), a.on === true));
       case 'devices_files_folders':

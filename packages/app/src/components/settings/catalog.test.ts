@@ -11,7 +11,7 @@ const allRows = SECTIONS.flatMap((s) => s.rows.map((r) => ({ section: s.id, row:
 const PINNED_IDS = [
   'account-labs', 'accounts', 'phone-devices', 'agent-browser-labs', 'companion-vault-labs', 'discord-bot-labs', 'agent-rules', 'less-motion', 'speak-results', 'strong-contrast', 'text-size', 'add-agent', 'agent-default-models', 'agent-lane', 'agent-list', 'agent-pack', 'ask-bar', 'assign-issue', 'away-minutes',
   'bridge-endpoint', 'bring-old-chats', 'budget-turns', 'project-budget', 'right-size', 'chat-addons', 'chat-search-index',
-  'checkpoints', 'close-helpers-with-agent', 'close-to-tray', 'collision', 'confirm-close', 'copy-offer', 'crews-labs', 'crews-page', 'definitions', 'desktop-potato-labs', 'devices-labs', 'far-pcs-labs', 'diagnostic-file', 'dock-browser-labs',
+  'checkpoints', 'close-helpers-with-agent', 'close-to-tray', 'collision', 'confirm-close', 'copy-offer', 'crews-labs', 'crews-page', 'definitions', 'desktop-potato-labs', 'devices-labs', 'far-pcs-labs', 'pcdoor-labs', 'ssh-chat-labs', 'diagnostic-file', 'dock-browser-labs',
   'discord-alerts', 'early-versions', 'handoff-mode', 'started-agents', 'helper-agents', 'helper-answers', 'helper-default-models', 'helper-tools', 'helpers-in-sidebar',
   'individual-window-layout', 'keep-awake', 'language', 'keep-going', 'keep-helpers-open', 'key-anthropic', 'key-openai', 'key-openrouter',
   'lend-labs', 'librarian-indexer', 'linux', 'live-updates', 'loop-guard', 'markup-bar-labs', 'mcp-install', 'mcp-status',

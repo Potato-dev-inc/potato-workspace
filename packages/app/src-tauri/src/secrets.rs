@@ -146,10 +146,23 @@ impl SecretBackend for MemoryBackend {
 }
 
 /// The process-wide store. Unit tests never touch the user's real credential store.
-#[cfg(not(test))]
+#[cfg(all(not(test), not(target_os = "linux")))]
 pub fn backend() -> &'static dyn SecretBackend {
     static B: KeyringBackend = KeyringBackend;
     &B
+}
+
+/// Linux: the kernel keyring is wiped on restart, so the private file (`secrets_file.rs`) is the store.
+#[cfg(all(not(test), target_os = "linux"))]
+pub fn backend() -> &'static dyn SecretBackend {
+    static B: once_cell::sync::Lazy<crate::secrets_file::FallbackBackend<KeyringBackend>> =
+        once_cell::sync::Lazy::new(|| crate::secrets_file::FallbackBackend { primary: KeyringBackend, file: crate::secrets_file::FileBackend::at(crate::secrets_file::FileBackend::default_dir()) });
+    &*B
+}
+
+/// True when this computer keeps its keys in the private file (Linux); Connect says so in one line.
+pub fn keeps_key_in_file() -> bool {
+    cfg!(target_os = "linux") && backend().available()
 }
 
 #[cfg(test)]

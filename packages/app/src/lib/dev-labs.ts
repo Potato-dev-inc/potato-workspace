@@ -14,6 +14,7 @@ export const DEV_LABS_KEYS = [
   'lend_enabled',
   'devices_enabled',
   'far_pcs_enabled',
+  'pcdoor_enabled',
   'account_enabled',
   'desktop_pet_enabled',
   'agent_browser_enabled',
@@ -27,6 +28,7 @@ export const DEV_LABS_KEYS = [
   'markup_bar_enabled',
   'dock_browser_enabled',
   'opentunnel_stable_link',
+  'ssh_chat_enabled',
 ] as const;
 
 /** The one line the Labs page shows while the override is on. */

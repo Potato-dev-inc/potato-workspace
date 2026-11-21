@@ -16,7 +16,7 @@ const s: HarnessScenario = {
   after: async (dom) => {
     await dom.waitFor(`[data-pane-row="dev:${NODE_MAC}:p1"]`);
     await dom.click(`[data-pane-row="dev:${NODE_MAC}:p1"]`);
-    await dom.waitFor('[data-testid="phone-result-card"]');
+    await dom.waitFor('[data-testid="session-chat"]');
     await dom.sleep(500);
   },
 };

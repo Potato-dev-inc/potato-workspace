@@ -27,6 +27,8 @@ export function AccountsGroup({ api = tauriAccountsApi, only }: { api?: Accounts
   const [note, setNote] = useState<string | null>(null);
   const [drafts, setDrafts] = useState<Record<string, string>>({});
   const [busy, setBusy] = useState(false);
+  /** The account whose "Sign out" is waiting for a yes. */
+  const [confirming, setConfirming] = useState<string | null>(null);
   const registry = useAgentRegistry();
   const loaded = useRef(false);
 
@@ -46,13 +48,13 @@ export function AccountsGroup({ api = tauriAccountsApi, only }: { api?: Accounts
   }, [refresh]);
 
   /** Runs one change. Resolves true when it worked, false when it failed (the error is shown). */
-  const run = async (work: () => Promise<unknown>, done?: string): Promise<boolean> => {
+  const run = async (work: () => Promise<unknown>, done?: string | ((result: unknown) => string)): Promise<boolean> => {
     setBusy(true);
     setError(null);
     setNote(null);
     try {
-      await work();
-      if (done) setNote(done);
+      const result = await work();
+      if (done) setNote(typeof done === 'function' ? done(result) : done);
       await refresh();
       return true;
     } catch (err) {
@@ -137,6 +139,45 @@ export function AccountsGroup({ api = tauriAccountsApi, only }: { api?: Accounts
                     >
                       {t('accounts.again')}
                     </button>
+                    {a.login_state && a.login_state !== 'unknown' && (
+                      <span className="text-xs text-pm-muted" data-testid={`state-${a.id}`}>
+                        {a.login_state === 'signed_in' ? t('accounts.stateIn') : t('accounts.stateOut')}
+                      </span>
+                    )}
+                    {confirming === a.id ? (
+                      <span className="flex items-center gap-1" role="group" aria-label={t('accounts.signOutAsk', { label: a.label })}>
+                        <span className="text-xs text-pm-muted">{t('accounts.signOutAsk', { label: a.label })}</span>
+                        <button
+                          type="button"
+                          className={BTN}
+                          disabled={busy}
+                          data-testid={`signout-yes-${a.id}`}
+                          onClick={() => {
+                            setConfirming(null);
+                            void run(
+                              () => api.signOut(a.id),
+                              (removed) => (removed === 0 ? t('accounts.signOutNothing', { label: a.label }) : t('accounts.signedOut', { label: a.label })),
+                            );
+                          }}
+                        >
+                          {t('accounts.signOutYes')}
+                        </button>
+                        <button type="button" className={BTN} onClick={() => setConfirming(null)}>
+                          {t('accounts.signOutNo')}
+                        </button>
+                      </span>
+                    ) : (
+                      <button
+                        type="button"
+                        className={BTN}
+                        disabled={busy || a.login_state === 'signed_out' || a.login_state === 'unknown'}
+                        title={t('accounts.signOutTip')}
+                        data-testid={`signout-${a.id}`}
+                        onClick={() => setConfirming(a.id)}
+                      >
+                        {t('accounts.signOut')}
+                      </button>
+                    )}
                     <button
                       type="button"
                       className={BTN}

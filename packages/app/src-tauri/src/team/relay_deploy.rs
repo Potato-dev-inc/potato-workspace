@@ -521,7 +521,7 @@ mod tests {
         }
         let bundle = load_bundle(&dir).unwrap();
         assert_eq!(bundle.manifest.name, "pm-relay");
-        assert_eq!(bundle.manifest.migrations.last().unwrap().tag, "v3");
+        assert_eq!(bundle.manifest.migrations.last().unwrap().tag, "v4");
         assert!(bundle.modules.iter().any(|(n, t, b)| n == "pm_relay_wasm_bg.wasm" && t == "application/wasm" && b.starts_with(b"\0asm")));
         assert!(load_bundle(&dir.join("nope")).is_err());
     }

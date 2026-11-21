@@ -39,7 +39,7 @@ afterEach(async () => {
 });
 
 /** Words that stay English here on purpose: product, tool and file names a person types or reads as code. */
-const ALLOW = ['Claude', 'Codex', 'Cursor', 'OpenCode', 'OpenRouter', 'Cloudflare', 'Zero', 'Trust', 'Docker', 'Dropbox', 'WSL', 'Node', 'npx', 'QR', 'Telegram', 'BotFather', 'Live', 'Room', 'Esc', 'Ctrl', 'Alt', 'Shift', 'Win', 'Enter', 'Space', 'Tab', 'Desktop', 'Git', 'Zip', 'webhook', 'Webhooks', 'Webhook', 'pull', 'request', 'issue', 'CI', 'Potato', 'MCP', 'HANDOFF', 'gh', 'auth', 'login', 'Spaces', 'Kimi', 'Agent', 'IDE', 'English', 'Left', 'Right', 'Up', 'Down', 'Home', 'End', 'mcp', 'json', 'codex', 'config', 'toml', 'opencode', 'pm', 'toolbelt', 'bak', 'Beta', 'token', 'Command', 'Prompt', 'PowerShell', 'Shell'];
+const ALLOW = ['Claude', 'Codex', 'Cursor', 'OpenCode', 'OpenRouter', 'Cloudflare', 'Zero', 'Trust', 'Docker', 'Dropbox', 'WSL', 'SSH', 'Node', 'npx', 'QR', 'Telegram', 'BotFather', 'Live', 'Room', 'Esc', 'Ctrl', 'Alt', 'Shift', 'Win', 'Enter', 'Space', 'Tab', 'Desktop', 'Git', 'Zip', 'webhook', 'Webhooks', 'Webhook', 'pull', 'request', 'issue', 'CI', 'Potato', 'MCP', 'HANDOFF', 'gh', 'auth', 'login', 'Spaces', 'Kimi', 'Agent', 'IDE', 'English', 'Left', 'Right', 'Up', 'Down', 'Home', 'End', 'mcp', 'json', 'codex', 'config', 'toml', 'opencode', 'pm', 'toolbelt', 'bak', 'Beta', 'token', 'Command', 'Prompt', 'PowerShell', 'Shell'];
 
 async function page(id: string, extra: Partial<Settings> = {}): Promise<Element> {
   await act(async () => {

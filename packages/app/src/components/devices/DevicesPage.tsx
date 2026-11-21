@@ -108,7 +108,7 @@ export function DevicesPage({ api = devicesApi, ssh, onSaved, onOpenPhone, varia
           {!inConnect && <p className="dev-note">{t('devices.blurb')}</p>}
           {view.tampered && (
             <p className="dev-error" role="alert">
-              {t('devices.tampered')}
+              {view.key_changed ? t('connect.pc.keyChanged') : t('devices.tampered')}
             </p>
           )}
           {justPairedDevice ? (

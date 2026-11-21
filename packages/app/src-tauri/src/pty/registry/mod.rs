@@ -195,16 +195,25 @@ impl PaneRegistry {
         }
     }
 
-    /// The panes any pane list shows: hidden standby workers (`pty::hidden`) are left out.
+    /// The panes any pane list shows: hidden standby workers (`pty::hidden`) and chats that run on another computer over SSH are left
+    /// out. THE SAFE DEFAULT: a phone, another PC, an agent, a channel, a push or any new consumer that calls this never sees a remote
+    /// chat. Only the app window's own code (`list_including_remote`) does.
     pub fn list(&self) -> Vec<PaneInfo> {
         self.panes
             .values()
-            .filter(|pane| !super::hidden::is_hidden(&pane.info.id))
+            .filter(|pane| !super::hidden::is_hidden(&pane.info.id) && !crate::acp::chat::is_remote_pane(&pane.info.id))
             .map(|p| p.info())
             .collect()
     }
 
-    /// Every pane including hidden ones; only the standby pool needs this.
+    /// `list` with the chats that run on another computer. ONLY for the app window and its own lifecycle (the pane list command, the
+    /// tray, the badge, update/panic checks); never for a route a phone, an agent or another PC can reach.
+    pub fn list_including_remote(&self) -> Vec<PaneInfo> {
+        self.panes.values().filter(|pane| !super::hidden::is_hidden(&pane.info.id)).map(|p| p.info()).collect()
+    }
+
+    /// Every pane including hidden ones and remote chats; only the app's own lifecycle code (the standby pool, keep-awake, pane
+    /// windows, sign-in panes) uses it, never a route.
     pub fn list_all(&self) -> Vec<PaneInfo> {
         self.panes.values().map(|p| p.info()).collect()
     }

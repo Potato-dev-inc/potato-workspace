@@ -1,12 +1,13 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { PaneStreamManager } from '../terminal/pane-stream';
 import { createOwnerReplayReader } from '../terminal/pane-replay';
-import type { PaneDataSubscriber } from '../terminal/types';
+import type { PaneDataListener, PaneDataSubscriber, PaneResizeListener } from '../terminal/types';
+import type { Host } from '../lib/host/host';
+import { farPaneIo, type PaneBytes, type PaneIo } from '../lib/host/farPanes';
 import {
   tauri,
   type PaneInfo,
   type PaneStatusEvent,
-  type TerminalDataEvent,
   type TerminalSnapshotEvent,
 } from '../lib/tauri';
 
@@ -30,12 +31,10 @@ export interface PaneRegistryApi {
   subscribePaneData: PaneDataSubscriber;
 }
 
-/** Mount replay for this window: the screen at the PTY's current size, not size-mixed raw history. */
-const readOwnerReplay = createOwnerReplayReader({
-  readScreen: tauri.readScreenReplay,
-  readRaw: tauri.readRawBuffer,
-  pendingResize: tauri.pendingResize,
-});
+/** A far terminal that lost output (the link was slow) is cleared and drawn again from the far screen: a full reset. */
+const RESET = new Uint8Array([0x1b, 0x63]);
+/** After a "lost output" note the far screen is read once more, a little later (the burst has mostly passed). */
+const LAG_REDRAW_MS = 600;
 
 const EMPTY: Map<string, PaneData> = new Map();
 
@@ -90,13 +89,25 @@ export function withNewerStatuses(list: PaneInfo[], events: Map<string, StatusEv
   });
 }
 
-export function usePaneRegistry(): PaneRegistryApi {
+/**
+ * The pane registry of one place. With no `host` it is this PC's (the Tauri commands and events); with a far host it is that PC's
+ * terminals, over the PC link (`farPaneIo`), and `TerminalViewport` draws them the same way.
+ */
+export function usePaneRegistry(host?: Host): PaneRegistryApi {
+  const io: PaneIo = useMemo(() => (host ? farPaneIo(host) : tauri), [host]);
+  // Mount replay for this window: the screen at the PTY's current size, not size-mixed raw history.
+  const readOwnerReplay = useMemo(() => createOwnerReplayReader({ readScreen: io.readScreenReplay, readRaw: io.readRawBuffer, pendingResize: io.pendingResize }), [io]);
+  // What each open terminal listens with, so a far one can be redrawn from the screen.
+  const subs = useRef(new Map<string, { cb: PaneDataListener; onResize?: PaneResizeListener; off: () => void }>());
+  const resyncRef = useRef((paneId: string) => void paneId);
+
   const [panes, setPanes] = useState<Map<string, PaneData>>(EMPTY);
   const [initialReady, setInitialReady] = useState(false);
   const panesRef = useRef(panes);
   panesRef.current = panes;
 
-  const streamsRef = useRef(new PaneStreamManager());
+  const streamsRef = useRef<PaneStreamManager>(null as unknown as PaneStreamManager);
+  streamsRef.current ??= new PaneStreamManager({ onGap: (paneId) => resyncRef.current(paneId) });
   const replacingRef = useRef<Set<string>>(new Set());
   const exitRefreshTimers = useRef<Map<string, ReturnType<typeof setTimeout>>>(new Map());
   // Refreshes overlap (a pane event fires one while another is in flight). Only the newest one may
@@ -111,7 +122,7 @@ export function usePaneRegistry(): PaneRegistryApi {
     const seq = ++refreshSeq.current;
     const askedAt = eventClock.current;
     try {
-      const list = await tauri.listPanes();
+      const list = await io.listPanes();
       if (seq !== refreshSeq.current) return;
       const events = statusEvents.current;
       const current = withNewerStatuses(list, events, askedAt);
@@ -123,7 +134,7 @@ export function usePaneRegistry(): PaneRegistryApi {
     } finally {
       if (seq === refreshSeq.current) setInitialReady(true);
     }
-  }, []);
+  }, [io]);
 
   useEffect(() => {
     refresh();
@@ -137,57 +148,70 @@ export function usePaneRegistry(): PaneRegistryApi {
     let unsubExit: (() => void) | undefined;
     let unsubPanesChanged: (() => void) | undefined;
     let unsubResized: (() => void) | undefined;
+    let unsubLag: (() => void) | undefined;
+    let lagTimer: ReturnType<typeof setTimeout> | undefined;
 
     (async () => {
-      unsubPanesChanged = await tauri.onPanesChanged(() => {
+      unsubPanesChanged = await io.onPanesChanged(() => {
         void refresh();
       });
-      const ingestData = (e: TerminalDataEvent) => {
+      const ingestData = (e: PaneBytes) => {
         streamsRef.current.ingest(e.pane_id, e.data, e.offset);
       };
-      unsubData = await tauri.onTerminalData(ingestData);
-      unsubResized = await tauri.onPtyResized((e) => {
+      unsubData = await io.onTerminalData(ingestData);
+      unsubResized = await io.onPtyResized((e) => {
         streamsRef.current.ingestResize(e.pane_id, e.cols, e.rows, e.offset);
       });
-      unsubSnapshot = await tauri.onTerminalSnapshot((e: TerminalSnapshotEvent) => {
-        // Snapshot events are retained for MCP/debug consumers; xterm rendering
-        // consumes raw terminal-data events instead.
-        void e;
+      unsubLag = await io.onTerminalLag?.((paneId) => {
+        // One redraw per burst: the far PC says so again while output keeps being dropped.
+        lagTimer ??= setTimeout(() => {
+          lagTimer = undefined;
+          resyncRef.current(paneId);
+        }, LAG_REDRAW_MS);
       });
-      unsubStatus = await tauri.onPtyStatus((e: PaneStatusEvent) => {
-        statusEvents.current.set(e.pane_id, { status: e.status as PaneInfo['status'], at: ++eventClock.current });
-        setPanes((prev) => {
-          const existing = prev.get(e.pane_id);
-          if (!existing || existing.status === e.status) return prev;
-          const next = new Map(prev);
-          next.set(e.pane_id, { ...existing, status: e.status });
-          return next;
+      // A far PC's pane status and exit arrive with its pane list (polled), not as events.
+      if (!host) {
+        unsubSnapshot = await tauri.onTerminalSnapshot((e: TerminalSnapshotEvent) => {
+          // Snapshot events are retained for MCP/debug consumers; xterm rendering
+          // consumes raw terminal-data events instead.
+          void e;
         });
-      });
-      unsubExit = await tauri.onPtyExit((e) => {
-        if (replacingRef.current.has(e.pane_id)) {
-          return;
-        }
-        setPanes((prev) => {
-          const next = new Map(prev);
-          const existing = next.get(e.pane_id);
-          if (existing) {
-            next.set(e.pane_id, { ...existing, status: 'error' });
-          }
-          return next;
+        unsubStatus = await tauri.onPtyStatus((e: PaneStatusEvent) => {
+          statusEvents.current.set(e.pane_id, { status: e.status as PaneInfo['status'], at: ++eventClock.current });
+          setPanes((prev) => {
+            const existing = prev.get(e.pane_id);
+            if (!existing || existing.status === e.status) return prev;
+            const next = new Map(prev);
+            next.set(e.pane_id, { ...existing, status: e.status });
+            return next;
+          });
         });
-        const pending = exitRefreshTimers.current.get(e.pane_id);
-        if (pending) clearTimeout(pending);
-        const timer = setTimeout(() => {
-          exitRefreshTimers.current.delete(e.pane_id);
-          if (!replacingRef.current.has(e.pane_id)) {
-            void refresh();
+        unsubExit = await tauri.onPtyExit((e) => {
+          if (replacingRef.current.has(e.pane_id)) {
+            return;
           }
-        }, 200);
-        exitRefreshTimers.current.set(e.pane_id, timer);
-      });
+          setPanes((prev) => {
+            const next = new Map(prev);
+            const existing = next.get(e.pane_id);
+            if (existing) {
+              next.set(e.pane_id, { ...existing, status: 'error' });
+            }
+            return next;
+          });
+          const pending = exitRefreshTimers.current.get(e.pane_id);
+          if (pending) clearTimeout(pending);
+          const timer = setTimeout(() => {
+            exitRefreshTimers.current.delete(e.pane_id);
+            if (!replacingRef.current.has(e.pane_id)) {
+              void refresh();
+            }
+          }, 200);
+          exitRefreshTimers.current.set(e.pane_id, timer);
+        });
+      }
 
       if (disposed) {
+        unsubLag?.();
         unsubData?.();
         unsubResized?.();
         unsubSnapshot?.();
@@ -199,6 +223,8 @@ export function usePaneRegistry(): PaneRegistryApi {
 
     return () => {
       disposed = true;
+      clearTimeout(lagTimer);
+      unsubLag?.();
       unsubData?.();
       unsubResized?.();
       unsubSnapshot?.();
@@ -206,19 +232,19 @@ export function usePaneRegistry(): PaneRegistryApi {
       unsubExit?.();
       unsubPanesChanged?.();
     };
-  }, [refresh]);
+  }, [refresh, io, host]);
 
   const spawnPane = useCallback(async (args: Parameters<typeof tauri.spawnPane>[0]) => {
-    const id = await tauri.spawnPane(args);
+    const id = await io.spawnPane(args);
     await refresh();
     return id;
-  }, [refresh]);
+  }, [refresh, io]);
 
   const killPane = useCallback(async (paneId: string) => {
-    await tauri.killPane(paneId);
+    await io.killPane(paneId);
     streamsRef.current.delete(paneId);
     await refresh();
-  }, [refresh]);
+  }, [refresh, io]);
 
   const replacePaneAgent = useCallback(
     async (paneId: string, agentType: string, cwd?: string) => {
@@ -239,8 +265,8 @@ export function usePaneRegistry(): PaneRegistryApi {
 
       replacingRef.current.add(paneId);
       try {
-        await tauri.killPane(paneId);
-        const id = await tauri.spawnPane({
+        await io.killPane(paneId);
+        const id = await io.spawnPane({
           agent_type: agentType,
           pane_id: paneId,
           cols,
@@ -258,25 +284,37 @@ export function usePaneRegistry(): PaneRegistryApi {
         }, 800);
       }
     },
-    [refresh],
+    [refresh, io],
   );
 
   const killAll = useCallback(async () => {
-    await tauri.killAllPanes();
+    await io.killAllPanes();
     await refresh();
-  }, [refresh]);
+  }, [refresh, io]);
 
   const writeInput = useCallback(async (paneId: string, text: string, appendNewline = true) => {
-    await tauri.writeInput(paneId, text, appendNewline);
-  }, []);
+    await io.writeInput(paneId, text, appendNewline);
+  }, [io]);
 
   const resize = useCallback(async (paneId: string, cols: number, rows: number) => {
-    await tauri.resize(paneId, cols, rows);
-  }, []);
+    await io.resize(paneId, cols, rows);
+  }, [io]);
 
   const subscribePaneData = useCallback<PaneDataSubscriber>((paneId, cb, onResize) => {
-    return streamsRef.current.subscribe(paneId, cb, readOwnerReplay, onResize);
-  }, []);
+    const entry = { cb, onResize, off: streamsRef.current.subscribe(paneId, cb, readOwnerReplay, onResize) };
+    subs.current.set(paneId, entry);
+    return () => {
+      entry.off();
+      if (subs.current.get(paneId) === entry) subs.current.delete(paneId);
+    };
+  }, [readOwnerReplay]);
+  resyncRef.current = (paneId) => {
+    const entry = subs.current.get(paneId);
+    if (!entry) return;
+    entry.off();
+    entry.cb(RESET);
+    entry.off = streamsRef.current.subscribe(paneId, entry.cb, readOwnerReplay, entry.onResize);
+  };
 
 
   const paneList = useMemo(

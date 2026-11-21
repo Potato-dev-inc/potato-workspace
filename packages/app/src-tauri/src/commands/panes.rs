@@ -4,7 +4,7 @@ use super::*;
 
 #[tauri::command]
 pub async fn list_panes(state: State<'_, AppState>) -> Result<Vec<PaneInfo>, String> {
-    Ok(state.registry.lock().list())
+    Ok(state.registry.lock().list_including_remote())
 }
 
 #[tauri::command]
@@ -141,14 +141,19 @@ pub async fn resize_pane(
         tracing::debug!(pane = %pane_id, caller = %window.label(), mode = mode.as_str(), "resize ignored: caller does not own this pane");
         return Ok(());
     }
+    resize_applied(&state.registry, &pane_id, cols, rows)
+}
+
+/// The resize itself, after the caller's right to make it was checked (a window that owns the pane, or a paired PC at Full).
+pub(crate) fn resize_applied(registry: &Mutex<crate::pty::PaneRegistry>, pane_id: &str, cols: u16, rows: u16) -> Result<(), String> {
     // A phone viewing this pane holds its size; the desktop size is applied when it lets go.
-    if crate::pty::viewer_size::desktop_resize(&pane_id, cols, rows) {
+    if crate::pty::viewer_size::desktop_resize(pane_id, cols, rows) {
         return Ok(());
     }
-    let changed = registry_resize(&state.registry, &pane_id, cols, rows)?;
+    let changed = registry_resize(registry, pane_id, cols, rows)?;
     if changed {
         // Phone viewers (SSE / long-poll) and desktop windows (re-read pane info) see the size.
-        crate::bridge::notify_pane_resized(&pane_id, cols, rows);
+        crate::bridge::notify_pane_resized(pane_id, cols, rows);
     }
     Ok(())
 }

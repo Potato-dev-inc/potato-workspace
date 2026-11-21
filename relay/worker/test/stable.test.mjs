@@ -28,12 +28,24 @@ const register = (base, origin, token = secret) =>
     headers: { authorization: `Bearer ${token}`, "content-type": "application/json" },
     body: JSON.stringify({ origin }),
   });
-const reset = (base, token = secret) => call(base, "/_pm/link/reset", { method: "POST", headers: { authorization: `Bearer ${token}` } });
+// A reset is a rotate: it must carry the new secret (the same one is fine when only the link is to be cleared).
+const reset = (base, token = secret, next = token) =>
+  call(base, "/_pm/link/reset", {
+    method: "POST",
+    headers: { authorization: `Bearer ${token}`, "content-type": "application/json" },
+    body: JSON.stringify(next === null ? {} : { new_secret: next }),
+  });
 test("before anything is registered: health says unlinked and nothing is forwarded (the relay answers)", async () => {
   const health = await (await call(MAIN, "/_pm/link/health")).json();
   assert.deepEqual(health, { linked: false, updated_at: null });
   assert.equal((await call(MAIN, "/hello")).status, 404);
   assert.equal((await call(MAIN, "/")).status, 200, "the relay front page");
+});
+
+test("reset on an unclaimed Worker claims it with the new secret (the same claim register would make), and nobody else can after that", async () => {
+  assert.equal((await reset(MAIN, secret, secret)).status, 200);
+  assert.equal((await register(MAIN, "https://evil.example.com", randomBytes(32).toString("base64url"))).status, 403, "a stranger is late");
+  assert.deepEqual(await (await call(MAIN, "/_pm/link/health")).json(), { linked: false, updated_at: null });
 });
 
 test("the offline page needs no external asset and retries by itself", async () => {
@@ -144,19 +156,106 @@ test("shell caching: hashed asset files get the Worker's own cache header; index
   assert.equal(pc.seen.length - before, 2, "index.html is asked of the PC every time");
 });
 
+test("shell cache hit: a cached page file needs neither the address lookup nor the PC, and the query string is not part of the key", async () => {
+  const path = "/assets/app-abc123.js";
+  const first = await call(MAIN, path);
+  assert.equal(first.status, 200);
+  await first.text();
+  const before = pc.seen.length;
+  // same file, other query strings: all answered from the edge cache, the PC is not asked
+  for (const q of ["", "?a=1", "?a=2&b=3"]) {
+    const res = await call(MAIN, path + q);
+    assert.equal(res.status, 200, q);
+    assert.equal(res.headers.get("cache-control"), "public, max-age=3600, s-maxage=600", q);
+    await res.text();
+  }
+  assert.equal(pc.seen.length, before, "no request reached the PC for cached page files");
+});
+
+test("unlinked: nothing is served from the edge cache, even a page file cached while linked", async () => {
+  const path = "/assets/app-abc123.js";
+  assert.equal((await call(MAIN, path)).status, 200, "cached while linked");
+  assert.equal((await reset(MAIN)).status, 200);
+  try {
+    const before = pc.seen.length;
+    assert.equal((await call(MAIN, path)).status, 404, "unlinked: a cached page file is not served; the relay's own 404");
+    assert.equal((await call(MAIN, path + "?v=2")).status, 404, "unlinked: no query variant either");
+    assert.equal((await call(MAIN, "/assets/never-cached-1.js")).status, 404, "unlinked: an uncached file falls to the relay's own 404");
+    assert.equal((await call(MAIN, "/sw.js")).status, 404, "sw.js is never served from the cache");
+    assert.equal((await call(MAIN, "/index.html")).status, 404, "index.html is never served from the cache");
+    assert.equal(pc.seen.length, before, "unlinked: the PC is not asked either");
+  } finally {
+    assert.equal((await register(MAIN, pc.origin)).status, 200);
+  }
+  // linked again: the page and sw.js come from the PC every time
+  const mark = pc.seen.length;
+  assert.equal((await call(MAIN, "/sw.js")).status, 200);
+  assert.equal((await call(MAIN, "/sw.js")).status, 200);
+  assert.equal(pc.seen.length - mark, 2);
+});
+
+test("tunnel change: a page file cached under tunnel A is never served once tunnel B is registered", async () => {
+  const path = "/assets/tunnel-swap-1.js";
+  const b = await startFakeOrigin("B");
+  try {
+    assert.equal((await register(MAIN, pc.origin)).status, 200);
+    for (let i = 0; i < 2; i += 1) {
+      const res = await call(MAIN, path);
+      assert.equal(res.status, 200);
+      assert.equal(await res.text(), 'console.log("A")');
+    }
+    assert.equal(pc.seen.filter((r) => r.path === path).length, 1, "A is asked once; the second load is a cache hit");
+    // the registered tunnel changes: the same path must go to B (a miss) and never answer with A's cached file
+    assert.equal((await register(MAIN, b.origin)).status, 200);
+    const res = await call(MAIN, path);
+    assert.equal(res.status, 200);
+    assert.equal(await res.text(), 'console.log("B")', "B's own file, not A's cached one");
+    assert.equal(b.seen.filter((r) => r.path === path).length, 1, "B was asked: a cache miss");
+    assert.equal(pc.seen.filter((r) => r.path === path).length, 1, "A was not asked again");
+    // and B's answer is cached under B only: a second load is a hit on B, still without asking anyone
+    assert.equal(await (await call(MAIN, path)).text(), 'console.log("B")');
+    assert.equal(b.seen.filter((r) => r.path === path).length, 1);
+  } finally {
+    assert.equal((await register(MAIN, pc.origin)).status, 200);
+    await b.close();
+  }
+});
+
+test("page files: the query string never reaches the PC and never splits the cache; nosniff on misses and hits", async () => {
+  const path = "/assets/query-collapse-1.js";
+  const miss = await call(MAIN, path + "?v=1&x=abc");
+  assert.equal(miss.status, 200);
+  assert.equal(miss.headers.get("x-content-type-options"), "nosniff", "miss: nosniff");
+  assert.equal(await miss.text(), 'console.log("A")');
+  const asked = pc.seen.filter((r) => r.path.startsWith(path));
+  assert.equal(asked.length, 1);
+  assert.equal(asked[0].path, path, "the PC was asked for the bare path, not the query");
+  const hit = await call(MAIN, path + "?v=2");
+  assert.equal(hit.status, 200);
+  assert.equal(hit.headers.get("x-content-type-options"), "nosniff", "hit: nosniff");
+  assert.equal(hit.headers.get("cache-control"), "public, max-age=3600, s-maxage=600");
+  await hit.text();
+  assert.equal(pc.seen.filter((r) => r.path.startsWith(path)).length, 1, "query variants are hits: the PC is asked once");
+  // a path that is not a page file keeps its query string on the PC fetch (the /hello test above relies on it)
+  const plain = await call(MAIN, "/hello?keep=1");
+  assert.equal(await plain.text(), "hello ?keep=1");
+});
+
 test("the Worker is not a proxy any more: the phone API, bodies, event streams and sockets are refused and never reach the PC", async () => {
   const before = pc.seen.length;
-  // an older phone page reads a 502 BRIDGE_UNREACHABLE and shows its message: the person is told what to do
+  // an older phone page reads a 410 BRIDGE_UNREACHABLE and shows its message: the person is told what to do
   for (const path of ["/bridge/health", "/bridge/panes", "/bridge"]) {
     const old = await call(MAIN, path);
-    assert.equal(old.status, 502, path);
+    assert.equal(old.status, 410, path);
+    assert.match(old.headers.get("clear-site-data") ?? "", /storage/);
+    assert.equal(old.headers.get("retry-after"), "3600");
     const body = await old.json();
     assert.equal(body.code, "BRIDGE_UNREACHABLE");
     assert.match(body.message, /Update Potato Workspace on your PC/);
   }
   assert.equal((await call(MAIN, "/echo", { method: "POST", body: "x" })).status, 405);
   assert.equal((await call(MAIN, "/echo", { method: "PUT", body: "x" })).status, 405);
-  assert.equal((await call(MAIN, "/__puppet_master_dev__.json")).status, 502);
+  assert.equal((await call(MAIN, "/__puppet_master_dev__.json")).status, 410);
   const failed = await new Promise((resolve) => {
     const ws = new WebSocket(MAIN.replace("http://", "ws://") + "/socket?x=1");
     const timer = setTimeout(() => resolve(false), 5000);
@@ -198,17 +297,34 @@ test("the control routes are not forwarded and unknown /_pm paths are 404", asyn
   assert.equal(pc.seen.length, before);
 });
 
-test("reset: needs the secret, then the link and the secret are cleared", async () => {
+test("reset: needs the secret, then the link is cleared and the secret is rotated in the same step", async () => {
   assert.equal((await reset(MAIN, "not-the-secret")).status, 403);
   assert.equal((await call(MAIN, "/hello")).status, 200, "a wrong reset changes nothing");
-  assert.equal((await reset(MAIN)).status, 200);
+  const other = randomBytes(32).toString("base64url");
+  assert.equal((await reset(MAIN, secret, other)).status, 200);
   assert.deepEqual(await (await call(MAIN, "/_pm/link/health")).json(), { linked: false, updated_at: null });
   assert.equal((await call(MAIN, "/hello")).status, 404);
-  // a new secret may claim it again
-  const other = randomBytes(32).toString("base64url");
+  // the old secret is refused at once, and a stranger cannot claim the Worker in the unlinked moment
+  assert.equal((await register(MAIN, pc.origin, secret)).status, 403, "old secret refused after rotate");
+  assert.equal((await reset(MAIN, secret, secret)).status, 403, "old secret cannot rotate again");
+  const stranger = randomBytes(32).toString("base64url");
+  assert.equal((await register(MAIN, pc.origin, stranger)).status, 403, "a stranger cannot register after rotate");
+  assert.equal((await reset(MAIN, stranger, stranger)).status, 403);
+  assert.deepEqual(await (await call(MAIN, "/_pm/link/health")).json(), { linked: false, updated_at: null });
+  // only the new secret registers
   assert.equal((await register(MAIN, pc.origin, other)).status, 200);
-  assert.equal((await register(MAIN, pc.origin, secret)).status, 403);
-  assert.equal((await reset(MAIN, other)).status, 200);
+  assert.equal((await call(MAIN, "/hello")).status, 200);
+  assert.equal((await reset(MAIN, other, secret)).status, 200, "rotate back so later tests keep their secret");
+  assert.equal((await register(MAIN, pc.origin, secret)).status, 200);
+});
+
+test("reset without a usable new secret is refused (a plain reset would reopen first-come-first-served) and changes nothing", async () => {
+  for (const next of [null, "", "short", "has space in it 0123456789", 12]) {
+    assert.equal((await reset(MAIN, secret, next)).status, 400, String(next));
+  }
+  assert.equal((await call(MAIN, "/hello")).status, 200, "still linked");
+  assert.equal((await register(MAIN, pc.origin, randomBytes(32).toString("base64url"))).status, 403, "still owned");
+  assert.equal((await register(MAIN, pc.origin)).status, 200);
 });
 
 test("SETUP_SECRET_SHA256: only that secret can register, nobody can claim first", async () => {
@@ -234,5 +350,6 @@ test("rate limit: more than 30 register/reset tries an hour from one address get
   assert.equal(statuses.indexOf(429) > 0, true);
   // while limited even the right secret is refused, and the link keeps working for the phone
   assert.equal((await register(STRICT, pc.origin, SETUP)).status, 429);
+  assert.equal((await reset(STRICT, SETUP, SETUP)).status, 429, "reset is limited too");
   assert.equal((await call(STRICT, "/hello")).status, 200);
 });

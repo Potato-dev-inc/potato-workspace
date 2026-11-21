@@ -1,4 +1,5 @@
 #![recursion_limit = "512"]
+mod test_manifest;
 
 mod account;
 mod accounts;
@@ -52,6 +53,9 @@ mod mobile_pairing;
 mod mobile_tunnel;
 pub mod night_shift;
 mod tunnel_config;
+mod domain_book;
+mod own_domain;
+mod phone_port;
 mod worker_origins;
 mod tools_home;
 mod uninstall;
@@ -117,6 +121,7 @@ pub mod proc_job;
 pub mod proc_util;
 mod path_limit;
 mod project_path;
+mod project_location;
 mod project_budget;
 mod projections;
 mod pty;
@@ -137,6 +142,8 @@ mod import_orca;
 mod session_chat;
 mod scores;
 mod secrets;
+#[cfg(target_os = "linux")]
+mod secrets_file;
 mod settings_store;
 mod show_terminals;
 mod settings_patch;
@@ -311,6 +318,7 @@ pub fn run() {
             commands::chat_signin_stop,
             commands::agent_signin_start,
             commands::agent_signin_status,
+            commands::agent_login_states,
             commands::agent_signin_stop,
             commands::chat_earlier,
             commands::chat_picture,
@@ -384,6 +392,7 @@ pub fn run() {
             commands::devices_open_account_pc,
             commands::devices_rename,
             commands::devices_set_permission,
+            commands::devices_account_default_answer,
             commands::devices_remove,
             commands::devices_full_asks,
             commands::devices_full_ask_answer,
@@ -392,12 +401,11 @@ pub fn run() {
             commands::devices_join_link,
             commands::devices_activity,
             commands::devices_set_web,
+            commands::devices_set_pcdoor,
             commands::devices_set_agents_send,
             commands::devices_set_lend,
             commands::devices_set_device_route,
             commands::devices_disconnect,
-            commands::devices_screen_start,
-            commands::devices_screen_stop,
             commands::devices_request,
             commands::devices_subscribe,
             commands::devices_unsubscribe,
@@ -489,6 +497,8 @@ pub fn run() {
             team::shelf::commands::shelf_dismiss,
             team::commands::team_default_name,
             team::commands::team_config_set,
+            team::commands::team_reconnect,
+            team::commands::team_move_relay,
             team::commands::team_send,
             team::commands::team_draft_dismiss,
             team::commands::team_card_dismiss,
@@ -540,6 +550,11 @@ pub fn run() {
             commands::ssh_check_saved,
             commands::ssh_remove,
             commands::ssh_open,
+            commands::ssh_chat_start,
+            commands::ssh_remote_panes,
+            commands::ssh_fs_list,
+            commands::ssh_fs_read,
+            commands::ssh_git_status,
             commands::kill_pane_cmd,
             commands::kill_all_panes,
             uninstall::commands::uninstall_allowed,
@@ -696,6 +711,10 @@ pub fn run() {
             commands::profile_bridge_url,
             commands::get_tunnel_status,
             commands::set_link_temporary,
+            commands::set_link_mode,
+            commands::check_own_domain,
+            commands::domain_book_files,
+            commands::set_phone_port,
             commands::set_tunnel_config,
             commands::restart_tunnel,
             commands::test_tunnel_connection,
@@ -739,6 +758,7 @@ pub fn run() {
             commands::accounts_add,
             commands::accounts_rename,
             commands::accounts_remove,
+            commands::accounts_sign_out,
             commands::accounts_set_helper_login,
             commands::standby_get_status,
             commands::standby_set_config,
@@ -924,6 +944,7 @@ pub fn run() {
             commands::workflows_hidden_count,
             commands::workflows_plan,
             commands::workflows_start_helpers,
+            commands::crew_marks_sync,
             commands::first_run_state,
             commands::first_run_start_task,
             commands::first_run_task_status,
@@ -1016,6 +1037,7 @@ pub fn run() {
             commands::acp_back_to_chat,
             commands::acp_conversation_notices_seen,
             commands::agent_run_mode_get,
+            commands::agent_default_models,
             commands::agent_run_mode_set,
             commands::helper_visibility_get,
             commands::helper_visibility_set,
@@ -1427,6 +1449,8 @@ pub fn run() {
                     room.stop_all(live_room::publisher::StopReason::AppQuit);
                 }
                 device_link::app::shutdown();
+                // The tunnel program (cloudflared) is this app's own child: stop it so none is left behind.
+                mobile_tunnel::stop_for_uninstall();
                 standby::shutdown();
                 // A lend sign-in's hidden pane (the sign-in step of a lend profile) ends with the app.
                 capacity_proxy::signin_pane::app_panes().stop_all();

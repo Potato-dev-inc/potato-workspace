@@ -286,6 +286,63 @@ pub fn get(pane_id: &str) -> Option<Arc<AcpChat>> {
     CHATS.lock().get(pane_id).cloned()
 }
 
+/// A path no folder can have (it holds a NUL). Commands that read a pane's folder on THIS PC get it for a chat that runs on another
+/// computer, so they fail instead of reading a same-named local folder.
+pub const NOT_ON_THIS_PC: &str = "\0not-on-this-pc";
+
+/// Every chat that runs on an SSH machine: `(pane id, saved host id, the name shown for it)`.
+pub fn remote_panes() -> Vec<(String, String, String)> {
+    CHATS.lock().iter().filter_map(|(id, chat)| chat.remote_host().map(|h| (id.clone(), h.id.clone(), h.name.clone()))).collect()
+}
+
+/// The panes a phone, a paired device or an agent (MCP) may be SHOWN: every pane except a chat that runs on another computer, which is
+/// the app window's alone. The remote ids are read before the registry is locked (no lock is held while the other is taken).
+pub fn external_panes(registry: &std::sync::Arc<parking_lot::Mutex<crate::pty::PaneRegistry>>) -> Vec<crate::pty::PaneInfo> {
+    // `PaneRegistry::list` leaves remote chats out by default; this name stays for the callers that say so on purpose.
+    registry.lock().list()
+}
+
+/// Set at the first chat on another computer; until then `is_remote_pane` is a single atomic read (it is asked on hot paths).
+static REMOTE_IDS: Lazy<parking_lot::RwLock<BTreeSet<String>>> = Lazy::new(|| parking_lot::RwLock::new(BTreeSet::new()));
+
+/// Noted BEFORE the pane is registered, and never forgotten (pane ids are random uuids): a closed remote chat's cards and messages stay
+/// the window's alone. A lock-free-ish read set (no chat or registry lock is taken), so it is safe to ask from inside any lock.
+pub(super) fn note_remote_started(pane_id: &str) {
+    REMOTE_IDS.write().insert(pane_id.to_string());
+}
+
+/// Marks `pane_id` as a chat on another computer (tests of the consumers that must leave such a pane out).
+#[cfg(test)]
+pub fn mark_remote_for_tests(pane_id: &str) {
+    note_remote_started(pane_id);
+}
+
+/// Every id of a chat on another computer, from the ONE set `is_remote_pane` reads (the router's prefix check uses it).
+pub fn remote_pane_ids() -> Vec<String> {
+    REMOTE_IDS.read().iter().cloned().collect()
+}
+
+/// The pane ids a caller may resolve a reference (full id or prefix) against: the remote ones never, so a remote id cannot match, be a
+/// candidate in an ambiguity list or be named in an error.
+pub fn resolvable_pane_ids(ids: impl IntoIterator<Item = String>) -> Vec<String> {
+    ids.into_iter().filter(|id| !is_remote_pane(id)).collect()
+}
+
+/// The plain sentence every refusal of a chat on another computer uses (bridge, phone, PC link, questions, MCP).
+pub const REMOTE_PANE_REFUSED: &str = "This agent runs on another computer and can only be used from the app window.";
+
+/// THE shared check (the DEFAULT of `PaneRegistry::list`, `questions::Store::list_pending`/`answer`/`dismiss` and the outbox is built on it). A chat that runs on another computer over SSH is the app window's alone: every route, stream, event hook and list
+/// that a phone, another PC or an agent can reach asks this (or `external_panes`) before it shows or touches a pane. The app window's
+/// own Tauri commands do not ask it. `ssh::guard_tests` lists the files that must.
+pub fn is_remote_pane(pane_id: &str) -> bool {
+    REMOTE_IDS.read().contains(pane_id)
+}
+
+/// `(403, { code: "REMOTE_PANE", error })`, the same answer everywhere.
+pub fn remote_refusal() -> (u16, Value) {
+    (403, json!({ "code": "REMOTE_PANE", "error": REMOTE_PANE_REFUSED }))
+}
+
 /// Whether `handle` names a chat session (its handle is the pane's id).
 pub fn is_chat_handle(handle: &str) -> bool {
     CHATS.lock().contains_key(handle.trim())
@@ -649,6 +706,20 @@ impl AcpChat {
     /// agent cannot honour is an error; nothing is quietly run on a different model.
     pub fn apply_choices(&self, model: Option<&str>, reasoning: Option<&str>) -> Result<Applied, ChoiceError> {
         choice::apply(self, model, reasoning)
+    }
+
+    /// This chat's agent runs on another computer over SSH.
+    pub fn is_remote(&self) -> bool {
+        self.session.remote_host().is_some()
+    }
+
+    pub fn remote_host(&self) -> Option<&crate::ssh::model::SshHost> {
+        self.session.remote_host()
+    }
+
+    /// `(machine, folder on it)` of a chat that runs on an SSH machine; the screen never picks either.
+    pub fn remote_place(&self) -> Option<(crate::ssh::model::SshHost, String)> {
+        Some((self.session.remote_host()?.clone(), self.session.remote_folder()?.to_string()))
     }
 
     pub fn session(&self) -> &Arc<AcpSession> {
@@ -1188,7 +1259,7 @@ impl AcpChat {
                     // The agent is gone (crash, hang, closed): nobody is waiting for this answer any more.
                     questions::store().expire(&card.question_id, questions::now_ms());
                 } else {
-                    let _ = questions::store().dismiss(&card.question_id, questions::now_ms());
+                    let _ = questions::store().dismiss_including_remote(&card.question_id, questions::now_ms());
                 }
             }
             self.host.questions_changed(None);

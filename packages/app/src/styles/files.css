@@ -863,3 +863,56 @@
   background: var(--fill-active);
   box-shadow: inset 2px 0 0 var(--accent);
 }
+
+/* A file of a project on another computer, read only. */
+.cockpit .ck-rfile {
+  padding: 12px 16px;
+}
+.cockpit .ck-rfile-head {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
+}
+.cockpit .ck-rfile-path {
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font: 600 12px var(--font-mono);
+  color: var(--label);
+}
+.cockpit .ck-rfile-size {
+  flex: none;
+  font-size: 11px;
+  color: var(--label-3);
+}
+.cockpit .ck-rfile-btn {
+  flex: none;
+  min-height: 24px;
+  padding: 0 8px;
+  border-radius: 5px;
+  font-size: 12px;
+  color: var(--label-2);
+}
+.cockpit .ck-rfile-btn:hover {
+  background: var(--fill-hover);
+  color: var(--label);
+}
+.cockpit .ck-rfile-btn:focus-visible {
+  outline: none;
+  box-shadow: var(--focus);
+}
+.cockpit .ck-rfile-text {
+  margin: 8px 0 0;
+  padding: 10px 12px;
+  border-radius: 6px;
+  background: var(--fill-hover);
+  font: 12px/1.5 var(--font-mono);
+  color: var(--label);
+  white-space: pre;
+  overflow: auto;
+  max-height: calc(100vh - 220px);
+  tab-size: 4;
+}

@@ -10,7 +10,33 @@ import type { ActivityEntry } from '../../lib/devices';
 import { click, pickOption, settle, type as typeInto } from '../settings/test-utils';
 import { ConnectedBanner } from './ConnectedBanner';
 import { DevicesPage } from './DevicesPage';
-import { RemotePaneView } from './RemotePaneView';
+import { RemoteTerminal } from './RemoteTerminal';
+
+vi.mock('../../terminal', () => ({
+  // A far terminal is the real viewport; xterm itself needs a browser, so these screens draw it with a stub session.
+  TerminalSession: class {
+    mount() {}
+    dispose() {}
+    nudgeReflow() {
+      return true;
+    }
+    setReprintsOnResize() {}
+    followHeldPty() {}
+    afterReclaim() {}
+    setKnownPtyGrid() {}
+    isScrolledUp() {
+      return false;
+    }
+    getSelection() {
+      return '';
+    }
+    setPtyDimensions() {}
+    refreshFromSource() {}
+    measureFitGrid() {
+      return null;
+    }
+  },
+}));
 
 vi.mock('../../lib/tauri', async (importOriginal) => {
   const orig = await importOriginal<typeof import('../../lib/tauri')>();
@@ -50,7 +76,7 @@ const at = (h: number, m: number) => Math.floor(new Date(2026, 10, 15, h, m).get
 describe('the remote view: states and notices', () => {
   const mountRemote = async (fake: DevicesFake, row: { agent?: string; chat?: boolean } = {}) => {
     const device = fake.view.devices[0]!;
-    await act(async () => root.render(<RemotePaneView device={device} row={{ paneId: 'p2', chat: row.chat ?? false, title: 'Terminal', agent: row.agent }} api={fake} onRetry={() => void fake.state()} />));
+    await act(async () => root.render(<RemoteTerminal device={device} row={{ paneId: 'p2', chat: row.chat ?? false, title: 'Terminal', agent: row.agent }} api={fake} onRetry={() => void fake.state()} />));
     await settle(6);
   };
 
@@ -88,41 +114,20 @@ describe('the remote view: states and notices', () => {
 
 describe('the live terminal', () => {
   const live = async (fake: DevicesFake) => {
-    await act(async () => root.render(<RemotePaneView device={fake.view.devices[0]!} row={{ paneId: 'p2', chat: false, title: 'Terminal' }} api={fake} />));
+    await act(async () => root.render(<RemoteTerminal device={fake.view.devices[0]!} row={{ paneId: 'p2', chat: false, title: 'Terminal' }} api={fake} />));
     await settle(6);
   };
 
-  it('starts on mount, draws what the far side pushes, ignores other panes and devices, and stops on unmount', async () => {
+  it('is the normal terminal on the far PC event stream, and uses no plain-text route', async () => {
     const fake = new DevicesFake({ enabled: true, devices: [MAC_MINI], panes: { [NODE_MAC]: MAC_PANES } });
     await live(fake);
-    expect(fake.screenStarts).toEqual([`${NODE_MAC}:p2`]);
-    await act(async () => fake.emitScreen({ node: NODE_MAC, pane_id: 'p2', content: '$ make dmg' }));
-    expect(q('[data-testid="remote-screen"]')!.textContent).toBe('$ make dmg');
-    await act(async () => fake.emitScreen({ node: NODE_MAC, pane_id: 'p9', content: 'other pane' }));
-    await act(async () => fake.emitScreen({ node: 'b2'.repeat(32), pane_id: 'p2', content: 'other device' }));
-    expect(q('[data-testid="remote-screen"]')!.textContent).toBe('$ make dmg');
-    await act(async () => fake.emitScreen({ node: NODE_MAC, pane_id: 'p2', content: '$ make dmg\nDone.' }));
-    expect(q('[data-testid="remote-screen"]')!.textContent).toContain('Done.');
-    expect(fake.requests.some((r) => r.path.endsWith('/screen'))).toBe(false);
-    expect(fake.screenStops).toEqual([]);
+    expect(q('[data-testid="remote-terminal"]')).not.toBeNull();
+    expect(q('.pm-terminal-host')).not.toBeNull();
+    expect(fake.subscribed.has(NODE_MAC)).toBe(true);
+    expect(fake.requests.some((r) => r.path.endsWith('/screen') || r.path.endsWith('/input'))).toBe(false);
     await act(async () => root.unmount());
     root = createRoot(host);
-    expect(fake.screenStops).toEqual([`${NODE_MAC}:p2`]);
-    expect(fake.screens.size).toBe(0);
-  });
-
-  it('reads one snapshot when the far side cannot stream', async () => {
-    const fake = new DevicesFake({ enabled: true, devices: [MAC_MINI], panes: { [NODE_MAC]: MAC_PANES } });
-    fake.screenFails = true;
-    await live(fake);
-    expect(q('[data-testid="remote-screen"]')!.textContent).toContain('make dmg');
-    expect(fake.requests.filter((r) => r.path.endsWith('/screen'))).toHaveLength(1);
-  });
-
-  it('does not start while the device is offline', async () => {
-    const fake = new DevicesFake({ enabled: true, devices: [{ ...MAC_MINI, state: 'offline', path: null }] });
-    await live(fake);
-    expect(fake.screenStarts).toEqual([]);
+    expect(fake.subscribed.has(NODE_MAC)).toBe(false);
   });
 });
 

@@ -81,6 +81,9 @@ pub(crate) fn terminal_payload(pane_id: &str, data: &[u8], offset: Option<u64>) 
 /// Forward live PTY bytes to mobile xterm.js clients. `offset`: where the chunk starts in the
 /// pane's byte stream (`terminal-data`'s `offset`).
 pub fn push_terminal_sse(pane_id: &str, data: &[u8], offset: Option<u64>) {
+    if crate::acp::chat::is_remote_pane(pane_id) {
+        return;
+    }
     crate::pane_activity::note_output(pane_id);
     if let Some(payload) = terminal_payload(pane_id, data, offset) {
         push_sse(payload);
@@ -331,6 +334,11 @@ fn run_in_order(order: &[StatusHook], mut run: impl FnMut(StatusHook)) {
 }
 
 fn run_status_hook(hook: StatusHook, pane_id: &str, status: &str) {
+    // A chat on another computer feeds no phone notification, summary, attention card, checkpoint, operation or hook (`acp::chat::is_remote_pane`);
+    // only the local, app-window-only hooks run for it.
+    if crate::acp::chat::is_remote_pane(pane_id) && !matches!(hook, StatusHook::PaneActivity | StatusHook::Ambient) {
+        return;
+    }
     match hook {
         StatusHook::PaneActivity => crate::pane_activity::note_output(pane_id),
         StatusHook::Ambient => crate::ambient::notify_changed(),
@@ -346,6 +354,9 @@ fn run_status_hook(hook: StatusHook, pane_id: &str, status: &str) {
 /// Forward pane status changes to mobile clients.
 pub fn push_pane_status_sse(pane_id: &str, status: &str) {
     run_in_order(&STATUS_HOOK_ORDER, |hook| run_status_hook(hook, pane_id, status));
+    if crate::acp::chat::is_remote_pane(pane_id) {
+        return;
+    }
     let payload = json!({ "pane_id": pane_id, "status": status });
     if let Ok(json) = serde_json::to_string(&payload) {
         push_sse(format!("event: pane-status\ndata: {json}\n\n"));
@@ -355,6 +366,9 @@ pub fn push_pane_status_sse(pane_id: &str, status: &str) {
 
 /// Forward a pane's plain-language activity phrase (`pane_activity`) to mobile clients.
 pub fn push_pane_activity_sse(pane_id: &str, activity: &crate::tui::Activity) {
+    if crate::acp::chat::is_remote_pane(pane_id) {
+        return;
+    }
     let payload = json!({ "pane_id": pane_id, "activity": activity });
     if let Ok(json) = serde_json::to_string(&payload) {
         push_sse(format!("event: pane-activity
@@ -366,6 +380,9 @@ data: {json}
 
 /// Forward a pane's dev-server URLs (`pane_preview`) to mobile clients; an empty list clears them.
 pub fn push_pane_preview_sse(pane_id: &str, urls: &[crate::pane_preview::PreviewUrl]) {
+    if crate::acp::chat::is_remote_pane(pane_id) {
+        return;
+    }
     let payload = json!({ "pane_id": pane_id, "urls": urls });
     if let Ok(json) = serde_json::to_string(&payload) {
         push_sse(format!("event: pane-preview
@@ -377,6 +394,9 @@ data: {json}
 
 /// Tell mobile clients a pane looks stuck (`Some`) or that the warning cleared (`None`).
 pub fn push_loop_signal_sse(signal: Option<&crate::loop_guard::LoopSignal>, pane_id: &str) {
+    if crate::acp::chat::is_remote_pane(pane_id) {
+        return;
+    }
     let payload = json!({ "pane_id": pane_id, "signal": signal });
     if let Ok(json) = serde_json::to_string(&payload) {
         push_sse(format!("event: loop-signal
@@ -390,6 +410,9 @@ data: {json}
 /// the stream position the resize falls after (`pty::stream_pos::emitted`), so a viewer applies it
 /// in order with the `terminal` chunks and knows whether a screen snapshot already shows it.
 pub fn push_pane_resize_sse(pane_id: &str, cols: u16, rows: u16, offset: Option<u64>) {
+    if crate::acp::chat::is_remote_pane(pane_id) {
+        return;
+    }
     if let Some(payload) = pane_resize_payload(pane_id, cols, rows, offset) {
         push_sse(payload);
     }
@@ -459,7 +482,7 @@ pub(super) fn handle_sse(
     // The pane list and the public settings snapshot, so the mobile PWA is in sync from the moment it
     // connects (and does not have to race GET /settings). Cut for this viewer (see `first_frames`).
     let settings = settings_store::read_public_settings(app);
-    let snapshot = first_frames(&viewer, &registry.lock().list(), &settings);
+    let snapshot = first_frames(&viewer, &crate::acp::chat::external_panes(&registry), &settings);
     if stream.write_all(snapshot.as_bytes()).is_err() {
         return;
     }
@@ -492,7 +515,7 @@ pub fn push_settings_sse(settings: &serde_json::Value) {
 }
 
 pub fn push_panes_sse(registry: &Arc<Mutex<PaneRegistry>>) {
-    let panes = registry.lock().list();
+    let panes = crate::acp::chat::external_panes(registry);
     if let Ok(json) = serde_json::to_string(&panes) {
         push_sse(format!("event: panes\ndata: {json}\n\n"));
     }

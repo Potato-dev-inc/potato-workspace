@@ -27,12 +27,14 @@ export interface PlacePanelProps {
   /** Starts it; resolves to the pane id. A rejection is shown as one plain sentence. */
   onStart: (agent: string, folder: string | undefined) => Promise<string>;
   onStarted: (paneId: string) => void;
+  /** Put in the folder box at first (the project this panel was opened for). */
+  initialFolder?: string;
 }
 
 export function PlacePanel(p: PlacePanelProps) {
   const t = useT();
   const [picked, setPicked] = useState<string | null>(null);
-  const [folder, setFolder] = useState('');
+  const [folder, setFolder] = useState(p.initialFolder ?? '');
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const agent = p.agents.find((a) => a.id === picked)?.id ?? p.agents[0]?.id ?? null;

@@ -7,6 +7,10 @@ use tauri::State;
 
 /// The project folder of a pane; without a pane (an older window) the default project folder.
 pub(crate) fn pane_root(state: &AppState, pane_id: &str) -> String {
+    // A chat on another computer has no folder here: the NUL makes every file command fail instead of reading a local folder.
+    if crate::acp::chat::is_remote_pane(pane_id) {
+        return crate::acp::chat::NOT_ON_THIS_PC.to_string();
+    }
     let registry = state.registry.lock();
     registry.get(pane_id).map(|pane| pane.info.cwd.clone()).unwrap_or_else(|| registry.project_path.clone())
 }

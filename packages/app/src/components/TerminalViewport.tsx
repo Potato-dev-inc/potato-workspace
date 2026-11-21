@@ -1,6 +1,6 @@
 // One terminal pane as used by the standalone / detached pane window: xterm host, optional title bar,
 // and floating controls (move back to app, API key tray, reflow nudge).
-import { useCallback, useEffect, useRef, useState, type MutableRefObject } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState, type MutableRefObject } from 'react';
 import { useTerminalSession } from '../hooks/useTerminalSession';
 import { agentLabel, useAgentRegistry } from '../lib/agentRegistry';
 import { tauri } from '../lib/tauri';
@@ -78,6 +78,10 @@ export function TerminalViewport({
   // at the PTY's size, live). Bumping the epoch re-runs the session effect; nothing else differs.
   const [epoch, setEpoch] = useState(0);
   const mountedAtRef = useRef(Date.now());
+  // Keys and resizes go where the pane lives: this PC, or (a far registry) the PC that runs it.
+  const { writeInput, resize } = registry as Partial<PaneRegistryApi>; // (a test registry may carry only the stream)
+  const paneKey = pane.info.id;
+  const transport = useMemo(() => (writeInput && resize ? { resize: (cols: number, rows: number) => resize(paneKey, cols, rows), writeInput: (text: string, appendNewline?: boolean) => writeInput(paneKey, text, appendNewline) } : undefined), [writeInput, resize, paneKey]);
   const { containerRef, afterReclaim, isScrolledUp, getSelection } = useTerminalSession({
     remountEpoch: epoch,
     assumePtyGrid: { cols: pane.info.cols, rows: pane.info.rows },
@@ -85,6 +89,7 @@ export function TerminalViewport({
     paneId: pane.info.id,
     sessionKey: pane.info.created_at,
     subscribePaneData: registry.subscribePaneData,
+    transport,
     syncPTYResize: true,
     disableMobileInput,
     reflowKey,

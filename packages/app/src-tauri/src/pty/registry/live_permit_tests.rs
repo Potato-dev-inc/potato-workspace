@@ -336,7 +336,7 @@ impl crate::bridge::startup_gate::GateIo for LivePane {
 /// Codex, zero tokens, nothing typed but the product's own fixed dismiss key: when the installed release shows its
 /// "Update available" menu, the pane is a startup gate (never ready, never idle), the status heuristics do not
 /// call it idle-able, and the one gate step closes it with Esc only. Skips (passes) when no menu is shown.
-/// `PM_LIVE_CWD=D:/pm-tour/fresh-1 cargo test --lib live_permit_codex_update_menu -- --ignored --nocapture`
+/// `PM_LIVE_CWD=D:/demo/fresh-1 cargo test --lib live_permit_codex_update_menu -- --ignored --nocapture`
 #[cfg(windows)]
 #[test]
 #[ignore = "live: starts the real codex CLI (no turn); presses only Esc on its update menu"]

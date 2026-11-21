@@ -2,8 +2,9 @@
 // (src-tauri/src/pane_outbox) keeps them in a short list per pane, types the first one when the agent is ready
 // and tells the windows about every change with the `pane-outbox` event. This file is the typed command surface
 // and the pure rules the view uses; nothing else.
-import { invoke } from '@tauri-apps/api/core';
-import { listen, type UnlistenFn } from '@tauri-apps/api/event';
+import type { UnlistenFn } from '@tauri-apps/api/event';
+import { localHost } from './host/local';
+import type { Host } from './host/host';
 import type { ChatAttachment } from './attachFiles';
 
 export type OutboxState = 'queued' | 'sending' | 'sent' | 'failed' | 'cancelled';
@@ -33,13 +34,7 @@ export const MAX_MESSAGE_CHARS = 8000;
 /** How long a sent message stays as a bubble if the real message has not shown up in the chat yet. */
 export const SENT_BUBBLE_MS = 10_000;
 
-const isTauri = (): boolean => typeof window !== 'undefined' && '__TAURI_INTERNALS__' in window;
 const noopUnlisten: UnlistenFn = () => {};
-
-async function call<T>(command: string, args: Record<string, unknown>): Promise<T> {
-  if (!isTauri()) throw new Error(`Desktop shell required: ${command}`);
-  return invoke<T>(command, args);
-}
 
 /** The most files one message carries (the backend refuses more). */
 export const MAX_MESSAGE_ATTACHMENTS = 20;
@@ -48,34 +43,34 @@ export const MAX_MESSAGE_ATTACHMENTS = 20;
  * Adds a message to the pane's list. `attachments` is left out when there are none. Rejects with one plain sentence
  * when the backend refuses it.
  */
-export function sendPaneMessage(paneId: string, text: string, attachments?: readonly ChatAttachment[]): Promise<OutboxMessage> {
-  if (attachments && attachments.length > 0) return call<OutboxMessage>('pane_message_send', { paneId, text, attachments: [...attachments] });
-  return call<OutboxMessage>('pane_message_send', { paneId, text });
+export function sendPaneMessage(paneId: string, text: string, attachments?: readonly ChatAttachment[], host: Host = localHost): Promise<OutboxMessage> {
+  if (attachments && attachments.length > 0) return host.invoke<OutboxMessage>('pane_message_send', { paneId, text, attachments: [...attachments] });
+  return host.invoke<OutboxMessage>('pane_message_send', { paneId, text });
 }
 
 /** Cancels a message that has not started to be typed. */
-export function cancelPaneMessage(paneId: string, messageId: string): Promise<OutboxMessage> {
-  return call<OutboxMessage>('pane_message_cancel', { paneId, messageId });
+export function cancelPaneMessage(paneId: string, messageId: string, host: Host = localHost): Promise<OutboxMessage> {
+  return host.invoke<OutboxMessage>('pane_message_cancel', { paneId, messageId });
 }
 
 /** Holds a waiting message back while the person edits it (`hold` true), or lets it go on (false). */
-export function holdPaneMessage(paneId: string, messageId: string, hold: boolean): Promise<OutboxMessage> {
-  return call<OutboxMessage>('pane_message_hold', { paneId, messageId, hold });
+export function holdPaneMessage(paneId: string, messageId: string, hold: boolean, host: Host = localHost): Promise<OutboxMessage> {
+  return host.invoke<OutboxMessage>('pane_message_hold', { paneId, messageId, hold });
 }
 
 /** Saves new text for a waiting message, in the same place in the list. */
-export function editPaneMessage(paneId: string, messageId: string, text: string): Promise<OutboxMessage> {
-  return call<OutboxMessage>('pane_message_edit', { paneId, messageId, text });
+export function editPaneMessage(paneId: string, messageId: string, text: string, host: Host = localHost): Promise<OutboxMessage> {
+  return host.invoke<OutboxMessage>('pane_message_edit', { paneId, messageId, text });
 }
 
-export async function listPaneMessages(paneId: string): Promise<OutboxMessage[]> {
-  const list = await call<OutboxMessage[] | null>('pane_messages_list', { paneId });
+export async function listPaneMessages(paneId: string, host: Host = localHost): Promise<OutboxMessage[]> {
+  const list = await host.invoke<OutboxMessage[] | null>('pane_messages_list', { paneId });
   return Array.isArray(list) ? list : [];
 }
 
-export function onPaneOutbox(cb: (event: PaneOutboxEvent) => void): Promise<UnlistenFn> {
-  if (!isTauri()) return Promise.resolve(noopUnlisten);
-  return listen<PaneOutboxEvent>('pane-outbox', (e) => cb({ paneId: e.payload.paneId, messages: Array.isArray(e.payload.messages) ? e.payload.messages : [] }));
+export function onPaneOutbox(cb: (event: PaneOutboxEvent) => void, host: Host = localHost): Promise<UnlistenFn> {
+  if (!host.live) return Promise.resolve(noopUnlisten);
+  return host.listen<PaneOutboxEvent>('pane-outbox', (p) => cb({ paneId: p.paneId, messages: Array.isArray(p.messages) ? p.messages : [] }));
 }
 
 /** Why the message box is switched off, or null when the person can write. Plain words. */
@@ -148,27 +143,32 @@ export interface OutboxTransport {
   watch(paneId: string, cb: (messages: OutboxMessage[]) => void): () => void;
 }
 
+/** The message box's transport at a place: the `pane_message_*` commands and the `pane-outbox` event of that place (this PC's, or a far PC's rows and frame). */
+export function paneOutboxTransport(host: Host = localHost): OutboxTransport {
+  return {
+    send: (paneId, text, attachments) => sendPaneMessage(paneId, text, attachments, host),
+    cancel: (paneId, messageId) => cancelPaneMessage(paneId, messageId, host),
+    hold: (paneId, messageId, hold) => holdPaneMessage(paneId, messageId, hold, host),
+    edit: (paneId, messageId, text) => editPaneMessage(paneId, messageId, text, host),
+    list: (paneId) => listPaneMessages(paneId, host),
+    watch(paneId, cb) {
+      let live = true;
+      let unlisten: UnlistenFn | null = null;
+      void onPaneOutbox((event) => {
+        if (live && event.paneId === paneId) cb(event.messages);
+      }, host)
+        .then((off) => {
+          if (live) unlisten = off;
+          else off();
+        })
+        .catch(() => undefined);
+      return () => {
+        live = false;
+        unlisten?.();
+      };
+    },
+  };
+}
+
 /** The desktop implementation: the Tauri commands and the `pane-outbox` event. */
-export const tauriOutboxTransport: OutboxTransport = {
-  send: sendPaneMessage,
-  cancel: cancelPaneMessage,
-  hold: holdPaneMessage,
-  edit: editPaneMessage,
-  list: listPaneMessages,
-  watch(paneId, cb) {
-    let live = true;
-    let unlisten: UnlistenFn | null = null;
-    void onPaneOutbox((event) => {
-      if (live && event.paneId === paneId) cb(event.messages);
-    })
-      .then((off) => {
-        if (live) unlisten = off;
-        else off();
-      })
-      .catch(() => undefined);
-    return () => {
-      live = false;
-      unlisten?.();
-    };
-  },
-};
+export const tauriOutboxTransport: OutboxTransport = paneOutboxTransport(localHost);

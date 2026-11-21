@@ -3,6 +3,7 @@
 export const settings = {
   "settings.region": "Settings",
   "settings.back": "Back",
+  "settings.cancel": "Cancel",
   "settings.close": "Close settings",
   "settings.search": "Search settings",
   "settings.searchPlaceholder": "Search",

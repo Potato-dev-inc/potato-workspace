@@ -3,6 +3,8 @@
 // The crew shape is shared with the command line (`@potato-workspace/shared`, crews.ts).
 import { invoke } from '@tauri-apps/api/core';
 import { open as openDialog, save as saveDialog } from '@tauri-apps/plugin-dialog';
+import { localHost } from './host/local';
+import type { Host } from './host/host';
 import type { Crew, CrewApplied, CrewOpened, CrewPermissions, CrewProblem, CrewRole, CrewRoutePreview, CrewSummary } from '@potato-workspace/shared';
 
 export type { Crew, CrewApplied, CrewOpened, CrewPermissions, CrewProblem, CrewRole, CrewRoutePreview, CrewSummary };
@@ -106,40 +108,41 @@ export interface CrewsApi {
 
 const isTauri = (): boolean => typeof window !== 'undefined' && '__TAURI_INTERNALS__' in window;
 
-async function call<T>(command: string, args?: Record<string, unknown>): Promise<T> {
-  if (!isTauri()) throw new Error(`Desktop shell required: ${command}`);
-  return invoke<T>(command, args);
+/** The crew commands of one place: this PC, or another PC over the PC link (the far PC runs them with its own crews and agents). The file dialogs are this PC's own. */
+export function crewsApiFor(host: Host): CrewsApi {
+  const call = <T,>(command: string, args?: Record<string, unknown>): Promise<T> => host.invoke<T>(command, args);
+  return {
+    list: () => call<CrewSummary[]>('crews_list'),
+    starters: () => call<CrewSummary[]>('crews_starters'),
+    get: (slug) => call<Crew>('crews_get', { slug }),
+    agents: () => call<CrewAgents>('crews_agents'),
+    draft: (paneId) => call<CrewDraft>('crews_draft', { paneId }),
+    save: (crew, replace = false) => call<CrewSaveOutcome>('crews_save', { crew, replace }),
+    remove: (slug) => call<void>('crews_remove', { slug }),
+    start: (slug, folder, agents) => call<CrewStartOutcome>('crews_start', { slug, folder, agents }),
+    templates: () => call<CrewSummary[]>('crews_templates'),
+    open: (slug) => call<CrewOpened>('crews_open', { slug }),
+    check: (crew) => call<CrewProblem[]>('crews_check', { crew }),
+    saveCanvas: (crew, routingText, replace = false) => call<CrewSaveOutcome>('crews_save_canvas', { crew, routingText, replace }),
+    tryTask: (crew, routingText, task) => call<CrewRoutePreview | null>('crews_try_task', { crew, routingText, task }),
+    apply: (crew, folder, raiseLimit = false) => call<CrewApplied>('crews_apply', { crew, folder, raiseLimit }),
+    follow: (crew) => call<CrewFollowTask[]>('crews_follow', { crew }),
+    exportFile: async (crew, routingText) => {
+      if (!isTauri()) throw new Error('Desktop shell required: crews_export_file');
+      const target = await saveDialog({ defaultPath: `${crew.name.trim() || 'crew'}.crew.json`, filters: [{ name: 'Potato crew', extensions: ['json'] }] });
+      if (!target) return null;
+      return invoke<string>('crews_export_file', { crew, routingText, target });
+    },
+    importFile: async () => {
+      if (!isTauri()) throw new Error('Desktop shell required: crews_import_read');
+      const source = await openDialog({ multiple: false, filters: [{ name: 'Potato crew', extensions: ['json'] }] });
+      if (!source || Array.isArray(source)) return null;
+      return invoke<CrewShareCheck>('crews_import_read', { source });
+    },
+  };
 }
 
-export const crewsApi: CrewsApi = {
-  list: () => call<CrewSummary[]>('crews_list'),
-  starters: () => call<CrewSummary[]>('crews_starters'),
-  get: (slug) => call<Crew>('crews_get', { slug }),
-  agents: () => call<CrewAgents>('crews_agents'),
-  draft: (paneId) => call<CrewDraft>('crews_draft', { paneId }),
-  save: (crew, replace = false) => call<CrewSaveOutcome>('crews_save', { crew, replace }),
-  remove: (slug) => call<void>('crews_remove', { slug }),
-  start: (slug, folder, agents) => call<CrewStartOutcome>('crews_start', { slug, folder, agents }),
-  templates: () => call<CrewSummary[]>('crews_templates'),
-  open: (slug) => call<CrewOpened>('crews_open', { slug }),
-  check: (crew) => call<CrewProblem[]>('crews_check', { crew }),
-  saveCanvas: (crew, routingText, replace = false) => call<CrewSaveOutcome>('crews_save_canvas', { crew, routingText, replace }),
-  tryTask: (crew, routingText, task) => call<CrewRoutePreview | null>('crews_try_task', { crew, routingText, task }),
-  apply: (crew, folder, raiseLimit = false) => call<CrewApplied>('crews_apply', { crew, folder, raiseLimit }),
-  follow: (crew) => call<CrewFollowTask[]>('crews_follow', { crew }),
-  exportFile: async (crew, routingText) => {
-    if (!isTauri()) throw new Error('Desktop shell required: crews_export_file');
-    const target = await saveDialog({ defaultPath: `${crew.name.trim() || 'crew'}.crew.json`, filters: [{ name: 'Potato crew', extensions: ['json'] }] });
-    if (!target) return null;
-    return invoke<string>('crews_export_file', { crew, routingText, target });
-  },
-  importFile: async () => {
-    if (!isTauri()) throw new Error('Desktop shell required: crews_import_read');
-    const source = await openDialog({ multiple: false, filters: [{ name: 'Potato crew', extensions: ['json'] }] });
-    if (!source || Array.isArray(source)) return null;
-    return invoke<CrewShareCheck>('crews_import_read', { source });
-  },
-};
+export const crewsApi: CrewsApi = crewsApiFor(localHost);
 
 /** A command error is `CODE: message`; the message is the part to show. */
 export function crewErrorText(err: unknown): string {

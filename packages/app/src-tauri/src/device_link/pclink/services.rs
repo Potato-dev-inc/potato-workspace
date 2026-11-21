@@ -24,8 +24,6 @@ pub trait Services: Send + Sync {
     fn transcript(&self, session: &str, since: Option<u64>) -> (u16, Value);
     fn transcript_earlier(&self, session: &str, before: &str, limit: Option<usize>) -> (u16, Value);
     fn picture(&self, session: &str, path: &str) -> (u16, Value);
-    /// A terminal's screen text, `{ content }`.
-    fn screen(&self, session: &str) -> (u16, Value);
     /// `{ projects: [{ id, name, state }] }`: folders this PC knows, by opaque id (a path never travels).
     fn projects(&self) -> (u16, Value);
     /// `{ rows: [...], refreshed_at_ms }`: this PC's own usage and limits, in the shape of its own usage bar. Lent and borrowed
@@ -51,8 +49,6 @@ pub trait Services: Send + Sync {
 
     // ----- Full -----
     fn set_config(&self, node: &str, session: &str, option: &str, value: &str, hold: bool) -> (u16, Value);
-    /// Raw text into a terminal session (a chat session is refused).
-    fn input(&self, node: &str, session: &str, text: &str) -> (u16, Value);
     fn models(&self, agent: &str) -> (u16, Value);
     /// `GET /pclink/browse`: the places this PC lets another browse (no `root`), or the folders inside one (`root`, `sub`). No path travels.
     fn browse(&self, root: Option<&str>, sub: &str) -> (u16, Value);
@@ -66,6 +62,11 @@ pub trait Services: Send + Sync {
     fn known_folder(&self, path: &str) -> bool;
     /// The far side of "Take the conversation and the work": a git bundle checked out in one of this PC's known projects.
     fn move_work(&self, project: &str, branch: &str, bundle_b64: &str) -> (u16, Value);
+
+    /// `POST /pclink/call/<cmd>` (`calls.rs`): the same inner function the Tauri command `cmd` runs, with `args` (the body). The level
+    /// and the pane's own rule were checked before; the press-and-hold rule (`hold: true`) is this method's to enforce. The answer is
+    /// what the command returns; an error is `{ code, error }` with its status.
+    fn call(&self, node: &str, cmd: &str, args: &Value) -> (u16, Value);
 
     /// A PC asked for Full: show the person on this PC a card (the app emits its window event). Never grants anything.
     fn notify_full_request(&self, ask: &Ask);
