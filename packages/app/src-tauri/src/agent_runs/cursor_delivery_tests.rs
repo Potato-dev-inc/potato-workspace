@@ -261,7 +261,7 @@ fn unconfirmed_pane_model_warns_through_the_profile() {
 fn an_answered_trust_dialog_in_the_scrollback_is_not_a_result() {
     // Real capture (2026-10-04): the dialog box stays on screen after "Trusting workspace..." and
     // the banner is redrawn below it. It used to be returned as the run's result.
-    let screen = include_str!("../tui/cursor/fixtures/workspace_trust_visible_resolved.txt");
+    let screen = include_str!("../../crates/pm-core/src/tui/cursor/fixtures/workspace_trust_visible_resolved.txt");
     assert_eq!(crate::agent_runs::completion::tui_turn_evidence(screen, "", AGENT), None);
     let with_reply = format!("{screen}\nPONG\n");
     assert_eq!(
@@ -345,7 +345,7 @@ fn a_reply_that_is_a_slice_of_a_one_line_prompt_is_still_the_reply() {
     // Live capture: the prompt "Reply with exactly this sentence, no tools: S" is echoed as ONE
     // row, and the reply S is the tail of that row. S was dropped as an echo (issue: the standalone
     // "Composer 2.5 ..." sentence vanished). The footer is not involved.
-    let screen = include_str!("../tui/cursor/fixtures/reply_composer_sentence_screen.txt");
+    let screen = include_str!("../../crates/pm-core/src/tui/cursor/fixtures/reply_composer_sentence_screen.txt");
     let task = "Reply with exactly this sentence, no tools: Composer 2.5 is mentioned in this answer.";
     let previous = "Reply with only {}, no tools, no explanation.";
     let reply = scrollback_reply(screen, task, previous, AGENT);
@@ -377,7 +377,7 @@ fn a_turn_where_cursor_printed_no_reply_stays_without_a_result() {
     // Live capture (verify5-1): follow-up "Reply with only []..." after PONG. The pane shows the
     // prompt echo and the idle input box and nothing else; Cursor's own chat store holds an
     // assistant message with only (redacted) reasoning and no text part. Nothing may be invented.
-    let screen = include_str!("../tui/cursor/fixtures/reply_empty_data_screen.txt");
+    let screen = include_str!("../../crates/pm-core/src/tui/cursor/fixtures/reply_empty_data_screen.txt");
     let task = "Reply with only [], no tools, no explanation.";
     assert_eq!(scrollback_reply(screen, task, "Reply with only PONG, no tools.", AGENT), None);
     let baseline = screen.split("  Reply with only [], no tools").next().unwrap().to_string();
@@ -390,7 +390,7 @@ fn a_turn_where_cursor_printed_no_reply_stays_without_a_result() {
 
 #[test]
 fn tool_blocks_and_commentary_are_not_part_of_the_final_message() {
-    let full = include_str!("../tui/cursor/fixtures/reply_pytest_turn_full.txt");
+    let full = include_str!("../../crates/pm-core/src/tui/cursor/fixtures/reply_pytest_turn_full.txt");
     let reply = scrollback_reply(
         full,
         PYTEST_TASK,
@@ -403,7 +403,7 @@ fn tool_blocks_and_commentary_are_not_part_of_the_final_message() {
 
 #[test]
 fn the_testers_pytest_turn_yields_only_the_final_message() {
-    let full = include_str!("../tui/cursor/fixtures/reply_pytest_tester_turn_full.txt");
+    let full = include_str!("../../crates/pm-core/src/tui/cursor/fixtures/reply_pytest_tester_turn_full.txt");
     let reply = scrollback_reply(full, PYTEST_TASK, "", AGENT).expect("final message");
     assert!(reply.starts_with("Added test_todo.py with seven tests"), "{reply}");
     assert!(reply.ends_with("7 passed, 0 failed."), "{reply}");
@@ -417,7 +417,7 @@ fn the_testers_pytest_turn_yields_only_the_final_message() {
 
 #[test]
 fn the_visible_rows_of_a_finished_tool_turn_give_the_final_message_too() {
-    let screen = include_str!("../tui/cursor/fixtures/reply_pytest_final_screen.txt");
+    let screen = include_str!("../../crates/pm-core/src/tui/cursor/fixtures/reply_pytest_final_screen.txt");
     let baseline = "  Cursor Agent\n  → Add a follow-up\n  Composer 2.5 · 7.3%";
     let evidence = tui_turn_evidence(screen, baseline, AGENT).expect("new text");
     let reply = clean_extracted_result_after(&evidence, PYTEST_TASK, "", AGENT).expect("reply");
@@ -438,7 +438,7 @@ fn a_final_message_that_quotes_commands_keeps_them() {
 fn a_shell_header_wrapped_by_the_terminal_is_not_part_of_the_final_message() {
     // Live capture (verify5-1, build b694b47): the `$ cd "<long path>" && python ... 5.7s` header
     // is hard-wrapped, so its first row has no duration and the second starts at column 0.
-    let full = include_str!("../tui/cursor/fixtures/reply_pytest_wrapped_header.txt");
+    let full = include_str!("../../crates/pm-core/src/tui/cursor/fixtures/reply_pytest_wrapped_header.txt");
     let reply = scrollback_reply(full, PYTEST_TASK, "", AGENT).expect("final message");
     assert!(!reply.contains("$ cd"), "{reply}");
     assert!(!reply.contains("5.7s"), "{reply}");
@@ -451,7 +451,7 @@ fn a_shell_header_wrapped_by_the_terminal_is_not_part_of_the_final_message() {
 fn a_search_result_row_under_a_grep_header_is_tool_output_not_the_answer() {
     // Live capture (verify5-1, build 5114177): `Grepped "def " in .` prints `Found 14 matches`
     // under it, at the header's own indent.
-    let full = include_str!("../tui/cursor/fixtures/reply_grep_turn.txt");
+    let full = include_str!("../../crates/pm-core/src/tui/cursor/fixtures/reply_grep_turn.txt");
     let task = "Use your grep search tool (not the shell) to find the text \"def \" in the files of this folder, then in one sentence tell me how many matches you found.";
     let reply = scrollback_reply(full, task, "", AGENT).expect("final message");
     assert_eq!(reply, "I found 14 matches for def  across 5 files in this folder.");

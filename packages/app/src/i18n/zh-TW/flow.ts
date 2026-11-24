@@ -32,7 +32,7 @@ export const flow: Partial<Record<EnglishKey, string>> = {
   'flow.signin.useOther': '改用 {agent} 處理',
   // 沒有對話時的「重新登入」（用量卡、問題清單、設定）：同樣兩個步驟，在一個小視窗裡。
   'signin.again.title': '重新登入 {agent}',
-  'signin.again.lead': '登入只留在這台電腦。不會新增任何對話或代理。',
+  'signin.again.lead': '登入只留在這台電腦。不會新增任何對話或 AI 助理。',
   'signin.again.working': '請完成登入。用量卡會自動更新。',
   'signin.again.done': '已登入，可以關閉了。',
   'signin.again.gaveUp': '還沒有完成。請先完成登入，再按「再試一次」。',

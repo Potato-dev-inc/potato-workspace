@@ -3,7 +3,7 @@ import { t, useT } from '../../i18n';
 import { teamApi, type MemberView, type TeamApi } from '../../lib/team';
 import { devicesApi, type Device, type DevicesApi } from '../../lib/devices';
 import { useDevices } from '../devices/useDevices';
-import { agentLabel, cleanName, comingSoonAgents, comingSoonText, DEFAULT_SECS, durationProblem, durationWords, errText, lendApi, MAX_REASON, offerable, refusedSwitch, supportTag, type LendApi, type LendRequest, type LendState, type Offer, type OffersResult, type RefusedSwitch } from '../../lib/lend';
+import { agentLabel, cleanName, comingSoonAgents, comingSoonText, DEFAULT_SECS, durationProblem, durationWords, displayName, errText, lendApi, MAX_REASON, offerable, refusedSwitch, supportTag, type LendApi, type LendRequest, type LendState, type Offer, type OffersResult, type RefusedSwitch } from '../../lib/lend';
 import { requestNewAgent } from '../../lib/newAgentRequest';
 import { openDeviceAt } from '../../lib/openDevice';
 import { openSettingsAt } from '../../lib/openSettingsAt';
@@ -22,10 +22,14 @@ export interface Source {
   mine: boolean;
   /** One of my own paired PCs on the device link (no Team needed): its node. */
   node?: string;
+  /** One of my paired PCs whose "Borrow my agent sign-ins" switch is off on this PC: asking still works for an account PC, but the form says where the switch is. */
+  blocked?: boolean;
 }
 
+const norm = (n: string): string => n.trim().toLowerCase();
+
 /** My other computers first ("My PCs"), then the teammates. A member's devices come from the roster. */
-export function sourcesOf(members: readonly MemberView[], devices: readonly Device[] = []): { mine: Source[]; others: Source[] } {
+export function sourcesOf(members: readonly MemberView[], devices: readonly Device[] = [], selfNames: readonly string[] = []): { mine: Source[]; others: Source[] } {
   const mine: Source[] = [];
   const others: Source[] = [];
   for (const m of members) {
@@ -41,29 +45,70 @@ export function sourcesOf(members: readonly MemberView[], devices: readonly Devi
     }
   }
   // My other PCs are the Devices list: the ones that let me borrow come first. A team roster PC with the same name is the same PC.
-  const names = new Set(devices.map((d) => d.name.toLowerCase()));
-  const fromTeam = mine.filter((s) => !names.has(s.label.toLowerCase()));
-  const fromDevices: Source[] = devices.filter((d) => d.lets_lend).map((d) => ({ value: `node:${d.node}`, label: d.name, memberId: '', deviceId: null, mine: true, node: d.node }));
-  return { mine: [...fromDevices, ...fromTeam], others };
+  const names = new Set(devices.map((d) => norm(d.name)));
+  const self = new Set(selfNames.map(norm).filter(Boolean));
+  const fromTeam = mine.filter((s) => !names.has(norm(s.label)));
+  // Every paired PC is listed; one that cannot lend to me yet is marked, so the form says which switch to turn on.
+  const fromDevices: Source[] = devices.map((d) => ({ value: `node:${d.node}`, label: d.name, memberId: '', deviceId: null, mine: true, node: d.node, blocked: !d.lets_lend }));
+  // Each machine once: a teammate who is one of my own PCs (their name, or any computer they list, matches one of mine) is that PC; this PC is never offered to itself.
+  const mineNames = new Set([...names, ...self, ...fromTeam.map((s) => norm(s.label))]);
+  const memberDevices = new Map(members.map((m) => [m.id, (m.deviceList ?? []).map((d) => norm(d.name))]));
+  // This PC is one of the member's computers (ids from the roster): that member is me, never a teammate.
+  const hasThisPc = new Set(members.filter((m) => (m.deviceList ?? []).some((d) => d.current)).map((m) => m.id));
+  const isMine = (o: Source) => hasThisPc.has(o.memberId) || mineNames.has(norm(o.label)) || (memberDevices.get(o.memberId) ?? []).some((n) => mineNames.has(n));
+  return { mine: [...fromDevices, ...fromTeam], others: others.filter((o) => !isMine(o)) };
 }
 
-/** Paired PCs that do not let borrowing happen yet: each gets one plain line. */
-export const waitingDevices = (devices: readonly Device[]): Device[] => devices.filter((d) => !d.lets_lend);
+/** What the Ask form opens on: the first of my PCs with its switch on, else the first of my PCs (its line says where the switch is), else the first teammate. */
+export function defaultSource(mine: readonly Source[], others: readonly Source[]): Source | undefined {
+  return mine.find((s) => !s.blocked) ?? mine[0] ?? others[0];
+}
+
 
 const NO_DEVICES: Device[] = [];
+/** How long a refusal line stays when nothing new arrives. */
+export const REFUSAL_MS = 10_000;
 
 /** Waiting / Ready / Said no. */
 export const askStatus = (r: Pick<LendRequest, 'state'>): string => (r.state === 'open' ? t('lend.ask.waiting') : r.state === 'accepted' ? t('lend.ask.ready') : t('lend.ask.saidNo'));
 
+/** The one name a lender goes by in this list, whichever way the ask was sent (a person's name, or their PC's). */
+const askedName = (r: LendRequest): string => (r.for_other_person ? r.device_name || r.member_name || t('lend.request.myOtherPc') : displayName({ device: r.device_name, label: r.member_name }));
+/** "REN (founder-dev3)" and "REN" are the same lender. */
+const lenderKey = (r: LendRequest): string => (r.member_name || r.device_name).replace(/\s*\([^)]*\)\s*$/, '').trim().toLowerCase();
+
 const askWords = (r: LendRequest, state: LendState | null): string => {
   const profile = cleanName(r.profile_name);
-  const parts = [r.member_name || t('lend.teammate'), ...(profile ? [profile] : []), agentLabel(state, r.agent_id), durationWords(r.secs)];
+  const parts = [askedName(r), ...(profile ? [profile] : []), agentLabel(state, r.agent_id), durationWords(r.secs)];
   return parts.join(' · ');
 };
 
-/** The newest asks of mine that are still worth seeing: waiting, or answered in the last day. */
-export const recentAsks = (state: LendState | null, now: number): LendRequest[] =>
-  (state?.requests_out ?? []).filter((r) => r.state === 'open' || now - r.at_ms < 24 * 3600_000).slice(-3);
+const DAY_MS = 24 * 3600_000;
+/** A Ready row is only the gap between "yes" and the borrow showing up: ten minutes at most. */
+const READY_MS = 10 * 60_000;
+
+/**
+ * The asks of mine still worth seeing, one row per (lender, agent) showing the newest state: waiting; Ready only for ten minutes and while no borrow of that agent has begun since (the borrow shows itself); Said no for a day (then gone, or at once with Remove). `dismissed`: ids removed by hand.
+ */
+export const recentAsks = (state: LendState | null, now: number, dismissed: readonly string[] = []): LendRequest[] => {
+  const grants = state?.grants ?? [];
+  const live = (state?.requests_out ?? [])
+    .filter((r) => !dismissed.includes(r.id))
+    .filter((r) => now < r.at_ms + Math.max(r.secs, 3600) * 1000)
+    .filter((r) => r.state === 'open' || (now - r.at_ms < (r.state === 'accepted' ? READY_MS : DAY_MS) && (r.state !== 'accepted' || !grants.some((g) => g.direction === 'in' && g.agent_id === r.agent_id && g.started_ms >= r.at_ms - 120_000))));
+  // The same lender and agent asked again (by the person, then by their PC, or once more later) is one row: the newest.
+  return live.filter((r) => !live.some((o) => o !== r && lenderKey(o) === lenderKey(r) && o.agent_id === r.agent_id && o.at_ms >= r.at_ms && (o.at_ms > r.at_ms || o.id > r.id))).sort((a, b) => a.at_ms - b.at_ms).slice(-3);
+};
+
+const DISMISS_KEY = 'pm.lend.asksDismissed';
+function readDismissed(): string[] {
+  try {
+    const v = JSON.parse(window.localStorage.getItem(DISMISS_KEY) ?? '[]') as unknown;
+    return Array.isArray(v) ? v.filter((x): x is string => typeof x === 'string').slice(-50) : [];
+  } catch {
+    return [];
+  }
+}
 
 /**
  * "Request usage": a button, the sheet it opens, and the status of what was asked (Waiting / Ready / Said no).
@@ -87,9 +132,19 @@ export function RequestUsage({
   const own = useLend(api);
   const handle = lend ?? own;
   const [open, setOpen] = useState(false);
+  const [dismissed, setDismissed] = useState<string[]>(readDismissed);
+  const remove = (id: string) => {
+    const next = [...dismissed, id].slice(-50);
+    setDismissed(next);
+    try {
+      window.localStorage.setItem(DISMISS_KEY, JSON.stringify(next));
+    } catch {
+      /* the row only stays hidden until this screen closes */
+    }
+  };
   // With lending off this stays on screen: the one line below says which switch is off, and opens it here.
   if (!handle.known) return null;
-  const asks = handle.state ? recentAsks(handle.state, handle.now) : [];
+  const asks = handle.state ? recentAsks(handle.state, handle.now, dismissed) : [];
   return (
     <div className="lend-entry" data-lend-entry={variant}>
       <button type="button" className="lend-btn" onClick={() => setOpen(true)}>
@@ -103,6 +158,11 @@ export function RequestUsage({
               <span className="lend-status" data-state={r.state}>
                 {askStatus(r)}
               </span>
+              {r.state === 'declined' && (
+                <button type="button" className="lend-btn is-small is-plain" onClick={() => remove(r.id)}>
+                  {t('lend.ask.remove')}
+                </button>
+              )}
             </li>
           ))}
         </ul>
@@ -134,7 +194,7 @@ function RequestSheet({ api, team, devices, lend, onClose }: { api: LendApi; tea
  * One plain line: exactly which switch is off and on which PC. When the switch is on THIS PC it has the button
  * that opens it here; the other PC only ever gets a sentence (nothing is switched on there from here).
  */
-function SwitchOffLine({ kind, name, onOpen }: { kind: 'thisGlobal' | 'thisDevice' | RefusedSwitch; name?: string; onOpen?: () => void }) {
+function SwitchOffLine({ kind, name, onOpen, onRetry }: { kind: 'thisGlobal' | 'thisDevice' | RefusedSwitch; name?: string; onOpen?: () => void; /** The other PC's switch state is not something this PC reads: the person turns it on there and asks again. */ onRetry?: () => void }) {
   const t = useT();
   const line =
     kind === 'thisGlobal'
@@ -152,6 +212,11 @@ function SwitchOffLine({ kind, name, onOpen }: { kind: 'thisGlobal' | 'thisDevic
           {t('lend.switch.open')}
         </button>
       )}
+      {onRetry && (
+        <button type="button" className="lend-btn is-small" data-testid="lend-switch-retry" onClick={onRetry}>
+          {t('lend.signin.tryAgain')}
+        </button>
+      )}
     </div>
   );
 }
@@ -160,6 +225,7 @@ function RequestForm({ api, team, devices, lend, onClose }: { api: LendApi; team
   const t = useT();
   const deviceList = useDevices(devices ?? devicesApi);
   const [members, setMembers] = useState<MemberView[] | null>(null);
+  const [teamName, setTeamName] = useState('');
   const [loadError, setLoadError] = useState(false);
   const [from, setFrom] = useState('');
   const [agent, setAgent] = useState('');
@@ -168,7 +234,7 @@ function RequestForm({ api, team, devices, lend, onClose }: { api: LendApi; team
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   // A refused ask: the other PC said which of its switches is off. Kept apart from other errors (it is not an error of this form).
-  const [refused, setRefused] = useState<{ kind: RefusedSwitch; name: string } | null>(null);
+  const [refused, setRefused] = useState<{ kind: RefusedSwitch; name: string; seen: string } | null>(null);
   const [sent, setSent] = useState<{ id: string; offer: Offer | null } | null>(null);
   // What the picked person's PC offers: null while asking, then what came back.
   const [offered, setOffered] = useState<OffersResult | null>(null);
@@ -179,20 +245,48 @@ function RequestForm({ api, team, devices, lend, onClose }: { api: LendApi; team
     let alive = true;
     team
       .configGet()
-      .then((v) => alive && setMembers(v.members))
+      // Team off (or never joined): its roster, if any is left over, is nobody to ask.
+      // A team that is not running (removed, stopped) cannot be asked either.
+      .then((v) => {
+        if (!alive) return;
+        setTeamName(v.name ?? '');
+        setMembers(v.enabled === false || v.team === '' || v.transport === null ? [] : v.members);
+      })
       .catch(() => alive && setLoadError(true));
     return () => {
       alive = false;
     };
   }, [team]);
 
+  // The other PC's switches change while this sheet is open: read the devices again on every lend state event, and every few seconds while a switch is said to be off.
+  const { refresh: refreshDevices } = deviceList;
+  useEffect(() => {
+    refreshDevices();
+  }, [state, refreshDevices]);
   const paired = (deviceList.enabled && deviceList.view?.devices) || NO_DEVICES;
-  const { mine, others } = useMemo(() => sourcesOf(members ?? [], paired), [members, paired]);
-  const waiting = waitingDevices(paired);
+  const thisPc = deviceList.view?.name ?? '';
+  const { mine, others } = useMemo(() => sourcesOf(members ?? [], paired, [thisPc, teamName]), [members, paired, thisPc, teamName]);
   const all = [...mine, ...others];
   const agents = offerable(state.drivers);
-  const picked = all.find((s) => s.value === (from || all[0]?.value));
+  const picked = all.find((s) => s.value === from) ?? defaultSource(mine, others);
   const pickedValue = picked?.value ?? '';
+  const stillOff = refused !== null || picked?.blocked === true;
+  useEffect(() => {
+    if (!stillOff) return;
+    const timer = window.setInterval(refreshDevices, 3000);
+    return () => window.clearInterval(timer);
+  }, [stillOff, refreshDevices]);
+  // What this PC knows of the picked PC's switches. A refusal is only told while this stays as it was: when the other PC's switch is turned on, the line goes and Ask is open again, no reopening.
+  const knownNow = JSON.stringify([picked?.blocked ?? null, state.enabled]);
+  useEffect(() => {
+    if (refused && refused.seen !== knownNow) setRefused(null);
+  }, [refused, knownNow]);
+  // The refusal is the answer to the LAST ask, not the other PC's live switch (this PC does not read that one): it goes after 10 s, and "Try again" asks at once.
+  useEffect(() => {
+    if (!refused) return;
+    const gone = window.setTimeout(() => setRefused(null), REFUSAL_MS);
+    return () => window.clearTimeout(gone);
+  }, [refused]);
 
   // When the person to ask is picked, ask their PC what it can lend (the answer comes in a few seconds, or not at all).
   useEffect(() => {
@@ -231,10 +325,10 @@ function RequestForm({ api, team, devices, lend, onClose }: { api: LendApi; team
   const agentId = offer?.agent_id ?? (agent || agents[0]?.agent_id || '');
   const forOther = picked ? !picked.mine : true;
   const problem = durationProblem(secs, forOther) ?? (offer && secs > offer.max_secs ? t('lend.dur.mostHere', { time: durationWords(offer.max_secs) }) : null);
-  const canAsk = !!picked && !problem && !busy && (offer !== null || (fallback && !!agentId));
+  const canAsk = !!picked && !refused && !problem && !busy && (offer !== null || (fallback && !!agentId));
   const askedName = picked?.label ?? '';
   // Why Ask is off, said on screen (not only on hover).
-  const askReason = canAsk || busy ? null : !picked ? t('lend.request.pickFirst') : problem ?? (offered === null ? t('lend.request.asking', { name: askedName }) : null);
+  const askReason = canAsk || busy ? null : !picked ? t('lend.request.pickFirst') : refused ? null /* the switch line below says it */ : problem ?? (offered === null ? t('lend.request.asking', { name: askedName }) : null);
 
   const ask = async () => {
     if (!picked) return;
@@ -252,7 +346,7 @@ function RequestForm({ api, team, devices, lend, onClose }: { api: LendApi; team
     } catch (err) {
       // The other PC is the only side that can say one of its switches is off; say it in our words, with no button.
       const kind = picked.node ? refusedSwitch(err) : null;
-      if (kind) setRefused({ kind, name: picked.label });
+      if (kind) setRefused({ kind, name: picked.label, seen: knownNow });
       else setError(errText(err));
     } finally {
       setBusy(false);
@@ -299,6 +393,11 @@ function RequestForm({ api, team, devices, lend, onClose }: { api: LendApi; team
 
   return (
     <LendSheet title={t('lend.request.title')} labelledBy="lend-ask-t" onClose={busy ? undefined : onClose}>
+      {members === null && !loadError && (
+        <p className="lend-note" role="status" data-testid="lend-ask-loading">
+          {t('lend.request.loading')}
+        </p>
+      )}
       {loadError || (members && all.length === 0) ? (
         <p className="lend-note">{t('lend.request.nobody')}</p>
       ) : (
@@ -326,17 +425,16 @@ function RequestForm({ api, team, devices, lend, onClose }: { api: LendApi; team
           </select>
         </label>
       )}
-      {waiting.map((d) => (
+      {picked?.blocked && picked.node && (
         <SwitchOffLine
-          key={d.node}
           kind="thisDevice"
-          name={d.name}
+          name={picked.label}
           onOpen={() => {
             onClose();
-            openDeviceAt(d.node);
+            openDeviceAt(picked.node!);
           }}
         />
-      ))}
+      )}
       {picked && (
         <fieldset className="lend-cards" aria-label={t('lend.request.what')} data-testid="lend-offers">
           <legend className="lend-legend">{t('lend.request.what')}</legend>
@@ -409,7 +507,7 @@ function RequestForm({ api, team, devices, lend, onClose }: { api: LendApi; team
         </span>
       </label>
       {forOther && picked && <p className="lend-note">{t('lend.request.decides', { name: picked.label })}</p>}
-      {refused && <SwitchOffLine kind={refused.kind} name={refused.name} />}
+      {refused && <SwitchOffLine kind={refused.kind} name={refused.name} onRetry={() => void ask()} />}
       {error && (
         <p className="lend-error" role="alert">
           {error}

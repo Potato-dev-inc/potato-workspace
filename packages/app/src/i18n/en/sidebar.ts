@@ -13,6 +13,7 @@ export const sidebar = {
   'sidebar.working': 'Working',
   'sidebar.idle': 'Idle',
   'sidebar.ended': 'Ended',
+  'sidebar.away': 'Away',
   'sidebar.moreFor': 'More for {name}',
   'sidebar.more': 'More',
   'sidebar.helpersOf': 'Agents {name} started',

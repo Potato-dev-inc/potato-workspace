@@ -2,7 +2,8 @@
 // event. Only the desktop window can call them. The bot token goes IN to `telegramSetToken` and is
 // never sent back: the status only has the bot's `@name`.
 import { invoke } from '@tauri-apps/api/core';
-import { listen, type UnlistenFn } from '@tauri-apps/api/event';
+import { listen } from './events';
+import type { UnlistenFn } from '@tauri-apps/api/event';
 
 /** What the chat may do. `control` is never offered: the Rust side refuses it too. */
 export type TelegramCap = 'watch' | 'answer' | 'type';

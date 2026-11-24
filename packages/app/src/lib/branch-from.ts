@@ -5,7 +5,8 @@
 // exactly: `BranchFrom` is snake_case, the views and `Preview` are camelCase. Tauri maps the Rust
 // argument names to camelCase (`pane_id` is `paneId`). Offers reuse the keep-going shape.
 import { invoke } from '@tauri-apps/api/core';
-import { listen, type UnlistenFn } from '@tauri-apps/api/event';
+import { listen } from './events';
+import type { UnlistenFn } from '@tauri-apps/api/event';
 import type { KeepGoingOffer } from './keep-going';
 
 /** Which side of a chat turn the branch starts from (Rust `When`). */

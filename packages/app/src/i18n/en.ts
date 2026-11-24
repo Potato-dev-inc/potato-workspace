@@ -61,11 +61,23 @@ import { pet } from './en/pet';
 import { minions } from './en/minions';
 import { taskDrag } from './en/taskDrag';
 import { crewChip } from './en/crewChip';
+import { r15misc } from './en/r15misc';
+import { r21 } from './en/r21';
 import { phoneCompose } from './en/phoneCompose';
 import { phoneShell } from './en/phoneShell';
 import { phoneHalf } from './en/phoneHalf';
 import { chatUx } from './en/chatUx';
 import { chatMore } from './en/chatMore';
+import { r9 } from './en/r9';
+import { r10 } from './en/r10';
+import { r12ui } from './en/r12ui';
+import { r13ui } from './en/r13ui';
+import { r14review } from './en/r14review';
+import { r14ui } from './en/r14ui';
+import { r15far } from './en/r15far';
+import { r21fn } from './en/r21fn';
+import { r23ui } from './en/r23ui';
+import { r11ui } from './en/r11ui';
 import { point } from './en/point';
 import { markup } from './en/markup';
 import { check } from './en/check';
@@ -73,6 +85,7 @@ import { flow } from './en/flow';
 import { appUx } from './en/appUx';
 import { deskReview } from './en/deskReview';
 import { devices } from './en/devices';
+import { myAgents } from './en/myAgents';
 import { crews } from './en/crews';
 import { workflows } from './en/workflows';
 import { workflowCard, markupCard } from './en/workflowCard';
@@ -144,6 +157,16 @@ export const en = {
   ...phoneHalf,
   ...chatUx,
   ...chatMore,
+  ...r9,
+  ...r10,
+  ...r12ui,
+  ...r13ui,
+  ...r14review,
+  ...r14ui,
+  ...r15far,
+  ...r21fn,
+  ...r23ui,
+  ...r11ui,
   ...flow,
   ...point,
   ...markup,
@@ -151,6 +174,7 @@ export const en = {
   ...appUx,
   ...deskReview,
   ...devices,
+  ...myAgents,
   ...crews,
   ...crewCanvas,
   ...workflows,
@@ -165,6 +189,8 @@ export const en = {
   ...minions,
   ...taskDrag,
   ...crewChip,
+  ...r15misc,
+  ...r21,
 } as const;
 
 export type MessageKey = Exclude<keyof typeof en, `${string}_one` | `${string}_other`> | PluralKey;

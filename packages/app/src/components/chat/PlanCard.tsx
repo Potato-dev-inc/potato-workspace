@@ -1,6 +1,7 @@
 // The agent's task list, pinned at the top of the chat: a collapsible "Plan · 4 steps" with "2 of 4" beside it, then each
 // step with a mark (empty ring: to do, turning ring: in progress, tick: done). Shows only; the head folds the list.
 import { useState } from 'react';
+import { t } from '../../i18n';
 import type { ChatTurn, PlanItem, PlanStatus } from '../../lib/sessionChatModel';
 import '../../styles/chat-agent-cards.css';
 import { CheckIcon, Chevron, ListIcon, SpinMark } from './chatCardIcons';
@@ -16,9 +17,15 @@ export function currentPlan(turns: readonly ChatTurn[]): PlanItem[] {
 }
 
 const GLYPH_LABEL: Record<PlanStatus, string> = {
-  pending: 'To do',
-  in_progress: 'In progress',
-  completed: 'Done',
+  get pending() {
+    return t('r10.plan.todo');
+  },
+  get in_progress() {
+    return t('r10.plan.inProgress');
+  },
+  get completed() {
+    return t('r10.status.done');
+  },
 };
 
 export function PlanMark({ status }: { status: PlanStatus }) {

@@ -30,6 +30,8 @@ export interface SignInFixCardProps {
   onRetry: () => Promise<unknown> | void;
   /** Starts a chat with the other agent and puts the kept words in its message box. */
   onUseOther: (id: string, kept: string) => Promise<unknown> | void;
+  /** A far chat on that PC's own signed-out login while this PC has an active lend of the agent to it: starts a new chat there on the lend. */
+  onUseLend?: () => Promise<unknown> | void;
   /** The sign-in without a terminal. Absent: "Sign in again" calls `onOpen`, which opens the agent's terminal as a pane. */
   signIn?: ChatSignIn;
   /** Draws the terminal of the hidden sign-in pane under Details. Defaults to the lend sheet's small terminal. */
@@ -57,7 +59,7 @@ type Step = 'ask' | 'waiting' | 'gaveUp' | 'sent' | 'cannotCheck';
 
 const shorten = (text: string, max = 60): string => (text.length > max ? `${text.slice(0, max - 1).trimEnd()}…` : text);
 
-export function SignInFixCard({ label, hint, kept, other, onOpen, onRetry, onUseOther, signIn, renderTerminal, lookMs = SIGNIN_LOOK_MS, pollMs = SIGNIN_POLL_MS, giveUpMs = SIGNIN_GIVE_UP_MS, plain = false, onSent }: SignInFixCardProps) {
+export function SignInFixCard({ label, hint, kept, other, onOpen, onRetry, onUseOther, signIn, onUseLend, renderTerminal, lookMs = SIGNIN_LOOK_MS, pollMs = SIGNIN_POLL_MS, giveUpMs = SIGNIN_GIVE_UP_MS, plain = false, onSent }: SignInFixCardProps) {
   const t = useT();
   const host = useHost();
   const [step, setStep] = useState<Step>('ask');
@@ -180,6 +182,18 @@ export function SignInFixCard({ label, hint, kept, other, onOpen, onRetry, onUse
     setError(t('flow.signin.stillOut', { agent: label }));
     setStep((s) => (s === 'gaveUp' ? 'waiting' : s));
   };
+  const useLend = async () => {
+    if (!onUseLend) return;
+    setBusy(true);
+    setError(null);
+    try {
+      await onUseLend();
+    } catch (e) {
+      setError(errorSentence(e));
+    } finally {
+      setBusy(false);
+    }
+  };
   const useOther = async () => {
     if (!other) return;
     setBusy(true);
@@ -250,6 +264,11 @@ export function SignInFixCard({ label, hint, kept, other, onOpen, onRetry, onUse
           ) : (
             <button type="button" className="ck-btn" disabled={busy} onClick={() => void signInAgain()}>
               {signIn ? (busy ? t('chat.signin.starting') : step === 'waiting' && !closedEarly ? t('flow.signin.openAgain') : t('chat.signin.start')) : step === 'waiting' ? t('flow.signin.openAgain') : t('flow.signin.again')}
+            </button>
+          )}
+          {onUseLend && (
+            <button type="button" className="ck-btn" disabled={busy} data-testid="signin-use-lend" onClick={() => void useLend()}>
+              {t('chat.signin.useLend')}
             </button>
           )}
           {other && (

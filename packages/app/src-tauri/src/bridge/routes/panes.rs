@@ -194,7 +194,7 @@ pub(super) fn spawn(cx: &Ctx) -> RouteResult {
         &mut req,
         session,
         &crate::accounts::Store::default_location(),
-        &|| crate::questions::routes::publish_changed(app),
+        &|| crate::questions::routes::publish_changed(),
     )
     .map_err(operation_http_error)?;
     let agent_type = req.agent_type.clone();
@@ -210,7 +210,7 @@ pub(super) fn spawn(cx: &Ctx) -> RouteResult {
         .and_then(|v| v.get("viewer").and_then(|p| p.as_str().map(str::to_string)));
     let phone_size = req.cols.zip(req.rows);
     let pane_id =
-        registry_spawn_pane(registry, app, req).map_err(|err| (500, json!({ "error": err })))?;
+        registry_spawn_pane(registry, req).map_err(|err| (500, json!({ "error": err })))?;
     if let (Some(viewer), Some((cols, rows))) = (viewer.as_deref(), phone_size) {
         let _ = crate::pty::viewer_size::claim(registry, &pane_id, viewer, cols, rows);
     }
@@ -343,7 +343,6 @@ fn input(cx: &Ctx, pane_id: &str) -> RouteResult {
     crate::flight::with_tag(bridge_tag(cx), || {
         registry_write_input(
             registry,
-            app,
             pane_id,
             &req.text,
             req.append_newline,
@@ -377,7 +376,7 @@ fn message_send(cx: &Ctx, pane_id: &str) -> RouteResult {
         let error = format!("{} was not sent from this phone.", stranger.name);
         return Err((400, json!({ "error": error, "code": "ATTACHMENT_REFUSED" })));
     }
-    let message = crate::pane_outbox::global(cx.registry, cx.app)
+    let message = crate::pane_outbox::global(cx.registry)
         .send_from(pane_id, &req.text, &req.attachments, super::sender::sender_of(cx).as_deref())
         .map_err(|error| {
             let code = if error == crate::acp::chat::TOOK_BACK_SENTENCE { crate::acp::chat::drive::TOOK_BACK_CODE } else { "MESSAGE_REFUSED" };
@@ -388,7 +387,7 @@ fn message_send(cx: &Ctx, pane_id: &str) -> RouteResult {
 
 /// `GET /panes/{id}/messages`: the pane's waiting messages and those that finished in the last two minutes.
 fn messages_list(cx: &Ctx, pane_id: &str) -> RouteResult {
-    let messages: Vec<_> = crate::pane_outbox::global(cx.registry, cx.app)
+    let messages: Vec<_> = crate::pane_outbox::global(cx.registry)
         .list(pane_id)
         .iter()
         .map(crate::pane_outbox::redacted)
@@ -398,7 +397,7 @@ fn messages_list(cx: &Ctx, pane_id: &str) -> RouteResult {
 
 /// `DELETE /panes/{id}/messages/{messageId}`: cancels a message that has not started to be typed.
 fn message_cancel(cx: &Ctx, pane_id: &str, message_id: &str) -> RouteResult {
-    let message = crate::pane_outbox::global(cx.registry, cx.app)
+    let message = crate::pane_outbox::global(cx.registry)
         .cancel(pane_id, message_id)
         .map_err(|error| (409, json!({ "error": error, "code": "MESSAGE_NOT_CANCELLABLE" })))?;
     Ok((200, json!({ "message": crate::pane_outbox::redacted(&message) })))
@@ -411,7 +410,7 @@ fn message_hold(cx: &Ctx, pane_id: &str, message_id: &str) -> RouteResult {
         hold: bool,
     }
     let req: Body = parse_json(cx.body)?;
-    let message = crate::pane_outbox::global(cx.registry, cx.app)
+    let message = crate::pane_outbox::global(cx.registry)
         .hold(pane_id, message_id, req.hold)
         .map_err(|error| (409, json!({ "error": error, "code": "MESSAGE_NOT_EDITABLE" })))?;
     Ok((200, json!({ "message": crate::pane_outbox::redacted(&message) })))
@@ -424,7 +423,7 @@ fn message_edit(cx: &Ctx, pane_id: &str, message_id: &str) -> RouteResult {
         text: String,
     }
     let req: Body = parse_json(cx.body)?;
-    let message = crate::pane_outbox::global(cx.registry, cx.app)
+    let message = crate::pane_outbox::global(cx.registry)
         .edit(pane_id, message_id, &req.text)
         .map_err(|error| (409, json!({ "error": error, "code": "MESSAGE_NOT_EDITABLE" })))?;
     Ok((200, json!({ "message": crate::pane_outbox::redacted(&message) })))
@@ -469,12 +468,12 @@ fn bridge_tag(cx: &Ctx) -> crate::flight::InputTag {
 fn key(cx: &Ctx, pane_id: &str) -> RouteResult {
     let body = cx.body;
     let registry = cx.registry;
-    let app = cx.app;
+    let _app = cx.app;
     let req: PressKeyBody = parse_json(body)?;
     let seq = crate::pty::keys::sequence(&req.key).map_err(|err| (400, json!({ "error": err })))?;
     let bytes = seq.len();
     raw_keys_gate(cx, pane_id, &format!("the {} key", req.key))?;
-    crate::flight::with_tag(bridge_tag(cx), || registry_write_input(registry, app, pane_id, &seq, false, false, None, crate::pty::WriteOrigin::Api))
+    crate::flight::with_tag(bridge_tag(cx), || registry_write_input(registry, pane_id, &seq, false, false, None, crate::pty::WriteOrigin::Api))
         .map_err(|err| (404, json!({ "error": err })))?;
     Ok((200, json!({ "ok": true, "key": req.key, "bytes": bytes })))
 }

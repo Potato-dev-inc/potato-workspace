@@ -913,6 +913,6 @@
   color: var(--label);
   white-space: pre;
   overflow: auto;
-  max-height: calc(100vh - 220px);
+  max-height: calc(calc(100vh / var(--ui-scale, 1)) - 220px);
   tab-size: 4;
 }

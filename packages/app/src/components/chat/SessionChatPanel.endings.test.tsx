@@ -37,7 +37,7 @@ const lines = () => [...host.querySelectorAll('[data-testid="turn-ending"]')];
 function turn(n: number, kind: string, text: string): ChatItem[] {
   return [
     { kind: 'user', id: `u${n}`, at: null, text: `please do ${n}` },
-    { kind: 'assistant', id: `a${n}.1`, at: null, text: 'ok', model: null, finalAnswer: false },
+    { kind: 'assistant', id: `a${n}.1`, at: null, text: 'ok', model: null, finalAnswer: true },
     { kind: 'notice', id: `n:ending:x:${n}`, at: null, noticeKind: `ending:${kind}`, text },
     { kind: 'turnEnd', id: `end:${n}`, at: null, outcome: kind === 'done' ? 'completed' : 'failed', durationMs: 1000 },
   ] as ChatItem[];
@@ -242,5 +242,18 @@ describe('a message waiting for the turn to end', () => {
     queued = [{ ...waiting(), waitingFor: 'The agent asks something. Answer it first.' }];
     await mount({ blockedReason: null, onInterrupt: vi.fn() });
     expect(host.querySelector('[data-testid="chat-pending"]')!.textContent).not.toContain('Send now');
+  });
+});
+
+describe('Retry under the last reply', () => {
+  it('stays when a line with no message of its own follows the turn (a far chat sends such lines)', async () => {
+    items = [
+      ...turn(1, 'done', 'Done'),
+      { kind: 'toolCall', id: 'late', callId: 'c-late', name: 'Bash', at: null, summary: 'ls', paths: [], writes: false },
+    ] as ChatItem[];
+    await mount();
+    await act(async () => host.querySelector<HTMLButtonElement>('button[aria-label="Retry"]')!.click());
+    await flush();
+    expect(invoke).toHaveBeenCalledWith('pane_message_send', expect.objectContaining({ text: 'please do 1' }));
   });
 });

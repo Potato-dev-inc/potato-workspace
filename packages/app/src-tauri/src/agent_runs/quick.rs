@@ -148,7 +148,7 @@ pub fn quick_ask(
         &mut run,
         session_id.as_deref(),
         &crate::accounts::Store::default_location(),
-        &|| crate::questions::routes::publish_changed(&app),
+        &|| crate::questions::routes::publish_changed(),
     )?;
     let view = super::runtime::run_agent(run, registry, app, session_id)?;
     project(&view)

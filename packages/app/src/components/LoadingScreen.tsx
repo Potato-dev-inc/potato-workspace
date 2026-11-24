@@ -1,5 +1,6 @@
 import { PotatoMark } from './cockpit/Icons';
 import type { BootStep } from '../hooks/useBootGate';
+import { t } from '../i18n';
 
 interface Props {
   steps: BootStep[];
@@ -24,7 +25,7 @@ export function LoadingScreen({ steps, progress, exiting = false }: Props) {
     <main
       className={['pm-boot-screen', exiting ? 'pm-boot-screen--exit' : ''].filter(Boolean).join(' ')}
       aria-busy={!exiting}
-      aria-label="Potato Workspace is starting"
+      aria-label={t('r21.sw.potatoWorkspaceIsStarting')}
     >
       <div className="pm-boot-grid-bg" aria-hidden />
 
@@ -33,7 +34,7 @@ export function LoadingScreen({ steps, progress, exiting = false }: Props) {
           <PotatoMark size={48} className="pm-boot-logo" state="loading" />
           <div>
             <p className="pm-boot-kicker">Potato Workspace</p>
-            <h1 className="pm-boot-title">Starting control room</h1>
+            <h1 className="pm-boot-title">{t('r21.sw.startingControlRoom')}</h1>
           </div>
         </header>
 

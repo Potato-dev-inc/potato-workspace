@@ -18,10 +18,10 @@ use std::time::Duration;
 const PROMPT: &str = "Reply with the single word FIVE. Do not use any tools.";
 
 /// Codex 0.159.3 with history above the composer: the typed prompt waiting unsent, the turn done.
-const READY: &str = include_str!("../tui/codex/fixtures/standby_ready_live.txt");
-const UNSENT: &str = include_str!("../tui/codex/fixtures/composer_unsent_glued_live.txt");
-const SUBMITTED: &str = include_str!("../tui/codex/fixtures/submitted_live.txt");
-const UPDATE_MENU: &str = include_str!("../tui/codex/fixtures/update_prompt_live.txt");
+const READY: &str = include_str!("../../crates/pm-core/src/tui/codex/fixtures/standby_ready_live.txt");
+const UNSENT: &str = include_str!("../../crates/pm-core/src/tui/codex/fixtures/composer_unsent_glued_live.txt");
+const SUBMITTED: &str = include_str!("../../crates/pm-core/src/tui/codex/fixtures/submitted_live.txt");
+const UPDATE_MENU: &str = include_str!("../../crates/pm-core/src/tui/codex/fixtures/update_prompt_live.txt");
 
 /// Live: Enter 0 ms and 50 ms after the text stayed unsent, 100 ms (plus HTTP latency) submitted.
 /// Codex's own window is about this long.
@@ -220,7 +220,7 @@ fn text_still_waiting_in_a_busy_looking_pane_is_never_reported_as_started() {
 fn a_pasted_content_placeholder_is_the_typed_prompt() {
     // Codex collapses a paste over 1000 characters into "[Pasted Content N chars]".
     let long = "Summarize in one word: lorem ipsum dolor sit amet consectetur. ".repeat(30);
-    let placeholder = include_str!("../tui/codex/fixtures/composer_pasted_live.txt");
+    let placeholder = include_str!("../../crates/pm-core/src/tui/codex/fixtures/composer_pasted_live.txt");
     assert!(prompt_visible_in_input(placeholder, long.trim()));
     // A short prompt is not excused by a placeholder from an earlier paste.
     assert!(!prompt_visible_in_input(placeholder, PROMPT));

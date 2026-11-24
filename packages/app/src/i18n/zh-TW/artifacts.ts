@@ -2,7 +2,7 @@
 import type { EnglishKey } from '../en';
 
 export const artifacts: Partial<Record<EnglishKey, string>> = {
-  'artifacts.cardLabel': '代理做的頁面：{title}',
+  'artifacts.cardLabel': 'AI 助理做的頁面：{title}',
   'artifacts.cardOpen': '開啟',
   'artifacts.cardMeta': '{kind} · 第 {n} 版',
   'artifacts.kindHtml': '網頁',
@@ -19,7 +19,7 @@ export const artifacts: Partial<Record<EnglishKey, string>> = {
   'artifacts.pathCopied': '已複製檔案路徑。',
   'artifacts.copyFailed': '無法複製檔案路徑。',
   'artifacts.reload': '重新載入',
-  'artifacts.newer': '代理做了較新的版本。',
+  'artifacts.newer': 'AI 助理做了較新的版本。',
   'artifacts.showNewest': '顯示最新版',
   'artifacts.loading': '載入中…',
   'artifacts.failed': '無法開啟這個頁面。',

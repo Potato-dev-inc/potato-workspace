@@ -27,6 +27,8 @@ let host: HTMLDivElement;
 let root: Root;
 beforeEach(() => {
   vi.useFakeTimers();
+  // jsdom has no layout: a row needs a box, or the card (rightly) does not open from it.
+  vi.spyOn(HTMLElement.prototype, 'getBoundingClientRect').mockReturnValue({ x: 0, y: 0, left: 0, top: 0, right: 200, bottom: 28, width: 200, height: 28, toJSON: () => ({}) });
   localStorage.clear();
   localStorage.setItem(LS_SIDEBAR_PROJECTS, JSON.stringify([{ path: 'C:\\work\\shop' }]));
   host = document.createElement('div');

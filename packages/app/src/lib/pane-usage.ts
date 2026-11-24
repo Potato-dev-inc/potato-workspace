@@ -2,6 +2,7 @@
 // (only when it did). Shape mirrors the Rust `budgets::usage_of_pane` (src-tauri/src/budgets/pane_usage.rs).
 // Turns come from the operation records; tokens from the chat's own usage item, never from the screen.
 import { invoke } from '@tauri-apps/api/core';
+import type { Host } from './host/host';
 
 export interface UsageTokens {
   input: number;
@@ -29,6 +30,11 @@ export interface PaneUsage {
 }
 
 const inTauri = (): boolean => typeof window !== 'undefined' && '__TAURI_INTERNALS__' in window;
+
+/** The usage of a pane and its helpers on `host`; `null` outside the desktop shell. This PC reads its own; another PC answers the same shape (`pane_usage`). */
+export async function paneUsageFor(host: Host, paneId: string): Promise<PaneUsage | null> {
+  return host.place.kind === 'local' ? paneUsage(paneId) : host.invoke<PaneUsage>('pane_usage', { paneId });
+}
 
 /** The usage of a pane and its helpers; `null` outside the desktop shell. */
 export async function paneUsage(paneId: string): Promise<PaneUsage | null> {

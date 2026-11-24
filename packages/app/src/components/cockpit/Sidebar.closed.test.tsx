@@ -7,7 +7,8 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { PaneInfo } from '@potato-workspace/shared';
 import type { CockpitApi } from '../../hooks/useCockpit';
 import { fakeAcpApi } from '../../lib/acpChatFake';
-import type { ClosedChat, ClosedChatsApi } from '../../lib/closedChats';
+import { closedChatsAcross, type ClosedChat, type ClosedChatsApi } from '../../lib/closedChats';
+import { ALL_CAPS, type Host } from '../../lib/host/host';
 import type { ShipApi } from '../../lib/ship-api';
 import { Sidebar } from './Sidebar';
 
@@ -101,5 +102,30 @@ describe('Sidebar Closed chats entry', () => {
     expect(reopen).toHaveBeenCalledWith('acp-1');
     expect(select).toHaveBeenCalledWith('acp-1');
     expect(entry()).toBeNull();
+  });
+});
+
+describe('Sidebar Closed chats across PCs (P4a)', () => {
+  it('lists a far PC\'s closed chat with its name in the same sheet', async () => {
+    const { c } = cockpit();
+    const farChat: ClosedChat = { id: 'far1', agent: 'claude', label: 'Claude', cwd: 'site', updated_ms: Date.now() - 60_000, title: 'Far bug' };
+    const hostOf: Host = {
+      place: { kind: 'pc', node: 'n1', name: 'Mac mini' },
+      live: true,
+      caps: ALL_CAPS,
+      invoke: (async (cmd: string) => (cmd === 'acp_closed_list' ? [farChat] : null)) as Host['invoke'],
+      listen: async () => () => undefined,
+    };
+    const { api } = closedApi([closedChat]);
+    const merged = closedChatsAcross(api, [hostOf]);
+    await render(c, merged);
+    // The number is this PC's own (1): the far PC's chat is in the sheet, never added to it.
+    expect(entry()!.textContent).toBe('Closed chats1');
+    await act(async () => entry()!.click());
+    const rows = [...document.querySelectorAll('[data-testid="closed-chat-row"]')].map((r) => r.textContent ?? '');
+    expect(rows).toHaveLength(2);
+    expect(rows[0]).toContain('Far bug');
+    expect(rows[0]).toContain('Mac mini');
+    expect(rows[1]).not.toContain('Mac mini');
   });
 });

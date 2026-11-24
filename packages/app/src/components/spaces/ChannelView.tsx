@@ -4,6 +4,7 @@ import {
 } from '../../lib/spaces';
 import { MessageRow } from './MessageRow';
 import { Composer } from './Composer';
+import { t } from '../../i18n';
 
 export interface ChannelViewProps {
   space: string;
@@ -51,7 +52,7 @@ export function ChannelView({ space, channel, menu, onReact, readOnly }: Channel
         {ch.atStart ? (
           <li className="ck-spaces-start">This is the start of #{channel.name}.</li>
         ) : (
-          <li><button type="button" className="ck-spaces-link" onClick={() => void ch.loadOlder()}>Show older messages</button></li>
+          <li><button type="button" className="ck-spaces-link" onClick={() => void ch.loadOlder()}>{t('r21.sw.showOlderMessages')}</button></li>
         )}
         {ch.messages.map((m) => (
           <MessageRow key={m.id} message={m} onReply={setReplyTo} menu={menu} onReact={onReact}

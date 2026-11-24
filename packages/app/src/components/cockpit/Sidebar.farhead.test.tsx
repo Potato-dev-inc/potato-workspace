@@ -92,11 +92,26 @@ describe('sidebar: the header of a project on another PC', () => {
     expect(onOpenNewAgent.mock.calls[0]![0]).toMatchObject({ node: NODE_MAC, path: 'remote:p-/Users/me/app' });
   });
 
-  it('More lists the same items, greyed with the one reason', async () => {
+  it('More lists Rename and Remove from sidebar, both working (a name and a hide that live on this PC)', async () => {
     await act(async () => head(far()).querySelector<HTMLButtonElement>('button[aria-label^="More for"]')!.click());
     const items = [...document.querySelectorAll<HTMLButtonElement>('[role="menuitem"]')];
     expect(items.map((i) => i.firstChild?.textContent)).toEqual(['Rename', 'Remove from sidebar']);
-    expect(items.every((i) => i.disabled)).toBe(true);
-    expect(items.map((i) => i.querySelector('.dis-reason')?.textContent)).toEqual(['Not on Mac mini yet', 'Not on Mac mini yet']);
+    expect(items.every((i) => !i.disabled)).toBe(true);
+    expect(document.querySelector('.dis-reason')).toBeNull();
+  });
+
+  it('Rename gives the project a name of this PC; Remove hides it from this PC only', async () => {
+    await act(async () => head(far()).querySelector<HTMLButtonElement>('button[aria-label^="More for"]')!.click());
+    await act(async () => document.querySelectorAll<HTMLButtonElement>('[role="menuitem"]')[0]!.click());
+    const input = head(far()).querySelector<HTMLInputElement>('input.ck-proj-rename')!;
+    await act(async () => {
+      Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value')!.set!.call(input, 'My shop');
+      input.dispatchEvent(new Event('input', { bubbles: true }));
+    });
+    await act(async () => input.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true })));
+    expect(head(far()).querySelector('.ck-proj-name')!.textContent).toBe('My shop');
+    await act(async () => head(far()).querySelector<HTMLButtonElement>('button[aria-label^="More for"]')!.click());
+    await act(async () => document.querySelectorAll<HTMLButtonElement>('[role="menuitem"]')[1]!.click());
+    expect(host.querySelector(far())).toBeNull();
   });
 });

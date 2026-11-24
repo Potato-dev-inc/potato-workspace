@@ -6,7 +6,7 @@
 
 pub mod badge;
 pub mod store;
-pub mod title;
+pub use pm_core::ambient::title;
 #[cfg(test)]
 mod title_tests;
 

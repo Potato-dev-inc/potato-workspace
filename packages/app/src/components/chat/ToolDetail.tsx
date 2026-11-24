@@ -6,6 +6,7 @@ import '../../styles/chat-agent-cards.css';
 import { kindOfCall } from './chatActivity';
 import { diffHunks, diffStats, editPairs, lineDiff, patchLines, patchOf, patchText, type DiffLine, type DiffOp } from './chatDiff';
 import { baseName } from './chatFormat';
+import { t } from '../../i18n';
 import { useCopy } from './useCopy';
 import { FoldButton, useFold } from './chatFold';
 import { useChatPane } from './ChatPane';
@@ -52,7 +53,7 @@ export function PathChips({ paths }: { paths: readonly string[] }) {
   const [problem, setProblem] = useState<string | null>(null);
   return (
     <>
-      <ul className="flex flex-wrap gap-1 ck-chat-chips" aria-label="Files">
+      <ul className="flex flex-wrap gap-1 ck-chat-chips" aria-label={t('r9.tool.files')}>
         {paths.map((path) => (
           <li key={path} className="min-w-0">
             {paneId ? (
@@ -118,7 +119,7 @@ export function DiffBlock({ lines, path }: { lines: readonly DiffLine[]; path?: 
         <span className="ck-agc-diff-stat">+{added}</span>
         <span className="ck-agc-diff-stat">{'−'}{removed}</span>
         <span className="ck-agc-grow" />
-        <CopyButton text={patchText(lines, path)} label="Copy patch" />
+        <CopyButton text={patchText(lines, path)} label={t('r9.tool.copyPatch')} />
       </div>
       <div className="ck-agc-diff-scroll">
         {hunks.map((hunk, h) => (
@@ -155,15 +156,15 @@ export function OutputBlock({ result, failed = false }: { result: ToolResultItem
   const fold = useFold(result?.output ?? '');
   return (
     <>
-      <DetailLabel>Output</DetailLabel>
+      <DetailLabel>{t('r9.tool.output')}</DetailLabel>
       <div className="ck-agc-term" data-failed={failed || undefined}>
         <div className="ck-agc-term-head">
-          <span>{failed ? 'Terminal · failed' : 'Terminal'}</span>
+          <span>{failed ? t('r9.tool.terminalFailed') : t('r9.tool.terminal')}</span>
           <span className="ck-agc-grow" />
           {result && result.output !== '' && <CopyButton text={result.output} target={() => (fold.folded ? null : ref.current)} />}
         </div>
         <pre ref={ref} data-testid="tool-output" tabIndex={0} className="ck-agc-term-body max-h-48 overflow-auto whitespace-pre-wrap break-all">
-          {result ? fold.shown : 'No output yet.'}
+          {result ? fold.shown : t('r9.tool.noOutput')}
         </pre>
         <FoldButton fold={fold} className="ck-agc-fold" />
       </div>
@@ -181,13 +182,13 @@ export function ToolDetail({ step, failed = false }: { step: ToolStep; failed?: 
       {paths.length > 0 && <PathChips paths={paths} />}
       {diff ? (
         <>
-          <DetailLabel>Changes</DetailLabel>
+          <DetailLabel>{t('r9.tool.changes')}</DetailLabel>
           <DiffBlock lines={diff} path={paths[0] ?? null} />
         </>
       ) : command !== null ? (
-        <CodeBlock label="Command" text={command} />
+        <CodeBlock label={t('r9.tool.command')} text={command} />
       ) : call.input != null ? (
-        <CodeBlock label="Input" text={jsonOf(call.input)} />
+        <CodeBlock label={t('r9.tool.input')} text={jsonOf(call.input)} />
       ) : null}
       <OutputBlock result={result} failed={failed} />
     </div>

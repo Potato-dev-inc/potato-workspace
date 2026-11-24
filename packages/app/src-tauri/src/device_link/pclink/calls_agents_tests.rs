@@ -75,3 +75,23 @@ fn the_real_services_answer_with_the_same_shape_this_pcs_own_page_reads() {
     assert_eq!(crate::commands::agent_default_models_of(&json!({ "agent_default_models": "x" })), json!({}));
     assert_eq!(crate::commands::agent_default_models_of(&json!({})), json!({}));
 }
+
+#[test]
+fn a_far_project_shows_its_git_state_as_it_is_now() {
+    // A real folder: no Git, then `git init`, then a first commit. The same list shape each time, the state read at the ask.
+    let dir = std::env::current_exe().unwrap().with_file_name(format!("far-git-{}", std::process::id()));
+    let _ = std::fs::remove_dir_all(&dir);
+    std::fs::create_dir_all(&dir).unwrap();
+    let path = dir.to_string_lossy().into_owned();
+    let state = |p: &str| crate::worktrees::folder::git_state(&crate::worktrees::folder::path_of(p));
+    let ask = || calls_agents::recent_rows(vec![(path.clone(), "far".into(), "folder".into())], state)[0]["state"].clone();
+    assert_eq!(ask(), "folder");
+    let git = |args: &[&str]| assert!(std::process::Command::new("git").args(["-c", "user.name=t", "-c", "user.email=t@t"]).args(args).current_dir(&dir).output().unwrap().status.success(), "{args:?}");
+    git(&["init", "-q"]);
+    assert_eq!(ask(), "no_commits");
+    std::fs::write(dir.join("a.txt"), "a").unwrap();
+    git(&["add", "-A"]);
+    git(&["commit", "-q", "-m", "first"]);
+    assert_eq!(ask(), "repo", "after a commit the far menu offers the repo, with no restart");
+    let _ = std::fs::remove_dir_all(&dir);
+}

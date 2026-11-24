@@ -31,8 +31,7 @@ use std::sync::Arc;
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
 use triggers::{Kind, PromptInfo, Verdict};
 
-pub const VAPID_FILE_NAME: &str = "potato-workspace.push-vapid.json";
-pub const SUBSCRIPTIONS_FILE_NAME: &str = "potato-workspace.push.json";
+pub use crate::app_paths::{PUSH_SUBSCRIPTIONS_FILE_NAME as SUBSCRIPTIONS_FILE_NAME, PUSH_VAPID_FILE_NAME as VAPID_FILE_NAME};
 
 struct Ctx {
     hub: Arc<PushHub>,

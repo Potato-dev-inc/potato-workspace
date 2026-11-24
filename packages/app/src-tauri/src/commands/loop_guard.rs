@@ -3,13 +3,13 @@
 use super::*;
 
 /// The signal currently shown for one pane, or `null`.
-#[tauri::command]
+#[tauri::command(async)]
 pub fn loop_status(pane_id: String) -> Option<crate::loop_guard::LoopSignal> {
     crate::loop_guard::status(&pane_id)
 }
 
 /// Every pane that currently shows a stuck warning.
-#[tauri::command]
+#[tauri::command(async)]
 pub fn loop_signals() -> Vec<crate::loop_guard::LoopSignal> {
     crate::loop_guard::all_active()
 }

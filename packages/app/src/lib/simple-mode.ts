@@ -2,7 +2,7 @@
 // Off unless chosen, so the normal cockpit is unchanged. The last known value is kept in
 // localStorage only so the first frame is right; the settings file stays the truth.
 import { useEffect, useState } from 'react';
-import { listen } from '@tauri-apps/api/event';
+import { listen } from './events';
 import { loadSettings } from './settings';
 
 const CACHE_KEY = 'pm-simple-mode';

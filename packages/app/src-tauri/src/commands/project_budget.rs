@@ -17,6 +17,8 @@ pub fn project_budget_limits(project: String) -> crate::project_budget::Limits {
 #[tauri::command]
 pub fn project_budget_set(project: String, limits: crate::project_budget::Limits) -> crate::project_budget::Limits {
     crate::project_budget::set_limits(&project, limits);
+    // A card above a chat that says the budget is reached re-reads at once (a limit removed or raised clears it).
+    pm_core::host::emit("project-budget://changed", Value::Null);
     crate::project_budget::limits(&project)
 }
 

@@ -252,8 +252,8 @@ export function GoLiveSheet({
       </label>
 
       <div className="ck-live-field">
-        <span className="ck-live-field-label">Ends after</span>
-        <SegTabs options={MINUTE_OPTIONS} value={String(minutes)} onChange={(v) => setMinutes(Number(v))} label="Ends after" small />
+        <span className="ck-live-field-label">{t('r21.sw.endsAfter')}</span>
+        <SegTabs options={MINUTE_OPTIONS} value={String(minutes)} onChange={(v) => setMinutes(Number(v))} label={t('r21.sw.endsAfter')} small />
       </div>
 
       <div className="ck-live-field">
@@ -274,7 +274,7 @@ export function GoLiveSheet({
         </div>
       )}
 
-      <div className="ck-live-field-label">What viewers see</div>
+      <div className="ck-live-field-label">{t('r21.sw.whatViewersSee')}</div>
       <LivePreview items={preview?.items ?? []} hidden={preview?.hidden ?? 0} panes={preview?.panes} />
 
       <p className="ck-sub ck-live-help">
@@ -288,10 +288,10 @@ export function GoLiveSheet({
             Live Room needs a relay address. Paste the link of the server that carries the room, or your team's.
           </p>
           <label className="ck-live-field">
-            <span className="ck-live-field-label">Relay address</span>
+            <span className="ck-live-field-label">{t('r21.sw.relayAddress')}</span>
             <input
               className="ck-live-input"
-              aria-label="Relay address"
+              aria-label={t('r21.sw.relayAddress')}
               value={relayDraft}
               placeholder="https://relay.example.com"
               spellCheck={false}

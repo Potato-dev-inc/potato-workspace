@@ -5,7 +5,7 @@ use std::path::{Path, PathBuf};
 use std::process::Command;
 use std::sync::Arc;
 
-use super::workspace_tests::{agents, conversations_in, deps_for};
+use pm_core::test_support::chat_rig::{agents, conversations_in, deps_for};
 use super::{copy, start::start, trial, AcpChat, StartDeps, StartRequest};
 use crate::acp::conversations::Conversations;
 use crate::test_support::wait::wait_until;

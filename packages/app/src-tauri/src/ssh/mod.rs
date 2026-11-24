@@ -1,7 +1,8 @@
 //! Over SSH (Devices phase 3): any machine that takes an SSH login becomes a place to run a terminal or a CLI agent.
 //!
 //! Rules (DEVICES-RUNTIMES-1115 section 5, phase 3):
-//! * Nothing is installed on the far machine, and the check runs one fixed read-only script.
+//! * The check runs one fixed read-only script. "Set it up" (`install`) is the only thing that puts anything on the far machine: the
+//!   `potato-host` program, in the user's home folder, through fixed command lines only (a guard test reads the source).
 //! * The system `ssh` does everything. Its argument list is built from validated parts only (`command`): the
 //!   destination follows `--`, and a folder or program is quoted for the far shell or refused.
 //! * `StrictHostKeyChecking` is never turned off. A changed host key stops the connection and is said plainly.
@@ -18,13 +19,16 @@ pub mod acp;
 pub mod browse;
 pub mod check;
 pub mod command;
-pub mod model;
-pub mod once;
+pub mod install;
+pub use pm_core::ssh::model;
+pub use pm_core::ssh::once;
 pub mod run;
 pub mod store;
 
 #[cfg(test)]
 mod guard_tests;
+#[cfg(test)]
+mod install_tests;
 #[cfg(test)]
 mod tests;
 #[cfg(test)]

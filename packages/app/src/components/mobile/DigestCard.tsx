@@ -3,6 +3,7 @@
 import { useEffect, useState } from 'react';
 import type { BridgeClient } from '../../lib/bridge-types';
 import type { Digest } from '../../lib/cockpit-api';
+import { t } from '../../i18n';
 
 type DigestResult = Digest & { empty: boolean; previousSeenMs: number | null };
 
@@ -82,10 +83,10 @@ export function DigestCard({
   const needs = digest.needsYou.length;
 
   return (
-    <section aria-label="While you were away" className="ph-cards">
+    <section aria-label={t('r21.sw.whileYouWereAway')} className="ph-cards">
       <div className="ph-card">
         <div className="ph-card-cap">
-          <span>While you were away</span>
+          <span>{t('r21.sw.whileYouWereAway')}</span>
           <button type="button" onClick={dismiss} className="ph-btn ph-btn--plain">
             Got it
           </button>

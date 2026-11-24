@@ -21,6 +21,7 @@ export const dnd = {
   'split.place.rightDown': 'Bottom right',
   'split.needAnother': 'Open another agent to split down',
   'split.full': 'Four chats are already open',
+  'split.alreadyOpen': 'Already open here',
   'dnd.stays': 'Stays here',
   'dnd.staysTop': 'Stays on top',
   'dnd.halfAndHalf': 'half and half',

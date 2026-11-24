@@ -42,7 +42,7 @@ fn interrupt(cx: &Ctx, pane_id: &str) -> RouteResult {
     if crate::acp::chat::is_chat_pane(cx.registry, pane_id) {
         return crate::acp::chat::api::cancel(pane_id);
     }
-    crate::pty::registry_write_input(cx.registry, cx.app, pane_id, "\u{3}", false, false, None, crate::pty::WriteOrigin::User)
+    crate::pty::registry_write_input(cx.registry, pane_id, "\u{3}", false, false, None, crate::pty::WriteOrigin::User)
         .map_err(|error| (502, json!({ "error": error, "code": "INTERRUPT_FAILED" })))?;
     Ok((200, json!({ "pane_id": pane_id, "stopped": true })))
 }

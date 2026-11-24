@@ -1,4 +1,5 @@
 // @vitest-environment jsdom
+import { resetEventHub } from './events';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 const invoke = vi.fn();
@@ -19,6 +20,7 @@ import {
 const LINK = 'https://relay.example.test/r/#aaaaaaaaaaaaaaaaaaaaaaaaaa.c2VjcmV0LXRva2VuLWhlcmU.Y29udGVudC1rZXktc2VjcmV0LWhlcmUtMzItYnl0ZXM';
 
 beforeEach(() => {
+  resetEventHub();
   invoke.mockReset();
   listen.mockReset();
   (window as unknown as Record<string, unknown>).__TAURI_INTERNALS__ = {};
@@ -101,7 +103,8 @@ describe('onLiveState', () => {
     const status: LiveStatus = { live: true, paused: false, viewers: 2, endsAtMs: 5, paneIds: ['p1'], hidden: 0, stopped: null };
     handler?.({ payload: status });
     expect(seen).toEqual([status]);
-    expect(stop).toBe(unlisten);
+    stop();
+    expect(unlisten).toHaveBeenCalledTimes(1);
   });
 
   it('is a no-op outside the desktop shell', async () => {

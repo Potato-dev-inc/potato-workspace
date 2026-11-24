@@ -562,7 +562,7 @@ dir = "~/.fakehost/skills"
     #[test]
     fn the_trusted_overlay_parses_and_every_entry_validates() {
         use crate::tui::declarative::hosts_overlay;
-        let text = include_str!("../tui/declarative/agent-hosts.toml");
+        let text = include_str!("../../crates/pm-core/src/tui/declarative/agent-hosts.toml");
         assert_eq!(hosts_overlay::problems(text), Vec::<String>::new());
         let ids = hosts_overlay::ids();
         assert!(ids.len() >= 8, "{ids:?}");

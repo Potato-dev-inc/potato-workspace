@@ -2,52 +2,25 @@
 //! agent can do to it through the agent tools. Fake agent, real processes and pipes; no real agent.
 
 use std::collections::BTreeMap;
-use std::path::{Path, PathBuf};
+use std::path::PathBuf;
 use std::sync::Arc;
 use std::time::{Duration, Instant};
 
 use parking_lot::Mutex;
 use serde_json::{json, Value};
 
+use pm_core::test_support::chat_rig::{agents, conversations_in, deps_for, Agents, Env};
 use super::start::start;
 use super::surface::{self, intercept};
-use super::{get, on_pane_closed, AcpChat, AgentAnswerError, QuietHost, SendError, StartDeps, StartRequest};
-use crate::acp::config::{AgentConfig, HostEnv};
+use super::{get, on_pane_closed, AcpChat, AgentAnswerError, SendError, StartDeps, StartRequest};
+use crate::acp::config::HostEnv;
 use crate::acp::conversations::{AgentSource, Conversations};
-use crate::acp::fake_agent;
 use crate::acp::handover::{PaneActivity, PaneHost, TerminalStart};
 use crate::acp::record::{LastState, RecordStore};
 use crate::acp::supervisor::{Supervisor, SupervisorConfig};
 use crate::audit::Who;
 use crate::pty::PaneRegistry;
 use crate::session_chat::PushedSource;
-
-struct Env {
-    root: PathBuf,
-}
-
-impl HostEnv for Env {
-    fn var(&self, name: &str) -> Option<std::ffi::OsString> {
-        std::env::var_os(name)
-    }
-    fn which(&self, _: &str) -> Option<PathBuf> {
-        None
-    }
-    fn adapters_dir(&self) -> PathBuf {
-        self.root.join("adapters")
-    }
-    fn homes_dir(&self) -> PathBuf {
-        self.root.join("homes")
-    }
-}
-
-pub(super) struct Agents(pub(super) BTreeMap<String, Arc<AgentConfig>>);
-
-impl AgentSource for Agents {
-    fn config(&self, agent: &str) -> Option<Arc<AgentConfig>> {
-        self.0.get(agent).cloned()
-    }
-}
 
 /// Terminal panes that exist only as a table.
 #[derive(Default)]
@@ -82,26 +55,6 @@ struct Rig {
     panes: Panes,
     /// Held while the rig's agent process runs: at most 2 rigs start real processes at once.
     _gate: crate::test_support::wait::Permit<'static>,
-}
-
-pub(super) fn agents(opts: &str, dir: &Path) -> Arc<Agents> {
-    let mut cfg = fake_agent::agent_config(opts, &dir.join("agent-sessions"));
-    cfg.resume_command = vec!["resume".into(), "{session}".into()];
-    // `read_only=plan` (its own read-only mode only), `read_only=ask` (asks before every tool), `read_only=plan_ask` (both): the fake's `[acp.read_only]`.
-    if let Some(kind) = opts.split(';').find_map(|pair| pair.trim().strip_prefix("read_only=")) {
-        let mode = if kind.starts_with("plan") { "plan" } else { "" };
-        cfg.read_only = Some(crate::acp::config::ReadOnlyChat { mode: mode.into(), mode_option: if mode.is_empty() { String::new() } else { "mode".into() }, asks_before_tools: kind.ends_with("ask") });
-    }
-    Arc::new(Agents(BTreeMap::from([("fake".to_string(), Arc::new(cfg))])))
-}
-
-pub(super) fn conversations_in(dir: &Path, opts: &str) -> Conversations {
-    let env: Arc<dyn HostEnv> = Arc::new(Env { root: dir.to_path_buf() });
-    Conversations::new(RecordStore::at(dir.join("conversations.json")), Arc::new(Supervisor::new(SupervisorConfig::default())), env, agents(opts, dir))
-}
-
-pub(super) fn deps_for(dir: &Path, conversations: &Conversations) -> StartDeps {
-    StartDeps { registry: Arc::new(Mutex::new(PaneRegistry::new())), host: Arc::new(QuietHost), env: Arc::new(Env { root: dir.to_path_buf() }), conversations: Some(conversations.clone()) }
 }
 
 impl Rig {

@@ -149,10 +149,10 @@ export function SideQuestionBox({ paneId, api, turns, recent = NO_RECENT, onAnsw
   // The answer on screen is not repeated under "Earlier".
   const earlier = recent.filter((entry) => phase.kind !== 'answer' || entry.id !== phase.id);
   return (
-    <section className="ck-sq" role="dialog" aria-label="Ask about this session" data-testid="side-question">
+    <section className="ck-sq" role="dialog" aria-label={t('r9.sq.title')} data-testid="side-question">
       <header className="ck-sq-head">
-        <h2 className="ck-sq-title">Ask about this session</h2>
-        <button type="button" className="ck-sq-close" aria-label="Close side question" onClick={onClose}>
+        <h2 className="ck-sq-title">{t('r9.sq.title')}</h2>
+        <button type="button" className="ck-sq-close" aria-label={t('r9.sq.close')} onClick={onClose}>
           Esc
         </button>
       </header>
@@ -172,20 +172,20 @@ export function SideQuestionBox({ paneId, api, turns, recent = NO_RECENT, onAnsw
           value={text}
           maxLength={MAX_QUESTION}
           disabled={unavailable}
-          aria-label="Your question"
-          placeholder="What do you want to know?"
+          aria-label={t('r9.sq.yourQ')}
+          placeholder={t('r9.sq.placeholder')}
           className="ck-sq-field"
           onChange={(event) => setText(event.target.value)}
           onKeyDown={onFieldKeyDown}
         />
         <button type="submit" className="ck-btn ck-btn--primary" disabled={!target || asking || text.trim() === ''}>
-          Ask
+          {t('r9.sq.ask')}
         </button>
       </form>
       {asking && (
         <p className="ck-sq-status" role="status" data-testid="side-question-loading">
-          <DotSpinner status="running" size={3} label="Asking" />
-          <span>{target ? `Asking ${target.label}…` : 'Asking…'}</span>
+          <DotSpinner status="running" size={3} label={t('r9.sq.asking')} />
+          <span>{target ? t('r9.sq.askingTarget', { name: target.label }) : t('r9.sq.askingDots')}</span>
         </p>
       )}
       {phase.kind === 'error' && (
@@ -200,13 +200,13 @@ export function SideQuestionBox({ paneId, api, turns, recent = NO_RECENT, onAnsw
           </div>
           <div className="ck-sq-actions">
             <button type="button" className="ck-btn" onClick={() => void copy()}>
-              {copied ? 'Copied' : 'Copy'}
+              {copied ? t('resp.copied') : t('resp.copy')}
             </button>
             <button type="button" className="ck-btn" onClick={() => ask(phase.question)}>
-              Ask again
+              {t('r9.sq.again')}
             </button>
-            <button type="button" className="ck-btn" title="Remember for all agents" onClick={() => void rememberAnswer(phase.text)}>
-              Remember
+            <button type="button" className="ck-btn" title={t('r9.sq.rememberTip')} onClick={() => void rememberAnswer(phase.text)}>
+              {t('r9.sq.remember')}
             </button>
           </div>
           {saved && (
@@ -214,7 +214,7 @@ export function SideQuestionBox({ paneId, api, turns, recent = NO_RECENT, onAnsw
               <span>{saved.message}</span>
               {saved.undo !== undefined && (
                 <button type="button" className="ck-btn" onClick={() => void undoRemember(saved.undo ?? '')}>
-                  Undo
+                  {t('r9.sq.undo')}
                 </button>
               )}
             </p>
@@ -223,7 +223,7 @@ export function SideQuestionBox({ paneId, api, turns, recent = NO_RECENT, onAnsw
       )}
       {earlier.length > 0 && (
         <div className="ck-sq-earlier" data-testid="side-question-earlier">
-          <h3 className="ck-sq-earlier-title">Earlier</h3>
+          <h3 className="ck-sq-earlier-title">{t('r9.sq.earlier')}</h3>
           <ul className="ck-sq-earlier-list">
             {earlier.map((entry) => {
               const expanded = openEarlier === entry.id;

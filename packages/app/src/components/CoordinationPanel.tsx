@@ -20,6 +20,7 @@ import {
   paneRoleLabel,
 } from './coordination-panel-model';
 import { DataList, Metric, relativeTime, shortId } from './coordination/coordination-parts';
+import { t } from '../i18n';
 
 type TabKey = 'overview' | 'tasks' | 'locks' | 'audit' | 'session' | 'context' | 'agents';
 
@@ -284,7 +285,7 @@ export function CoordinationPanel({ bridge, bridgeReady }: Props) {
 
       {error && <div className="pm-coordination-error">{error}</div>}
 
-      <div className="pm-coordination-tabs" role="tablist" aria-label="Coordination views">
+      <div className="pm-coordination-tabs" role="tablist" aria-label={t('r21.sw.coordinationViews')}>
         {(['overview', 'tasks', 'locks', 'audit', 'session', 'context', 'agents'] as TabKey[]).map((key) => (
           <button
             key={key}
@@ -324,7 +325,7 @@ export function CoordinationPanel({ bridge, bridgeReady }: Props) {
               <input
                 value={taskTitle}
                 onChange={(event) => setTaskTitle(event.target.value)}
-                placeholder="Task title"
+                placeholder={t('r21.sw.taskTitle')}
               />
               <button type="button" disabled={!bridgeReady || actionBusy} onClick={() => void createTask()}>
                 Create
@@ -451,7 +452,7 @@ export function CoordinationPanel({ bridge, bridgeReady }: Props) {
             ) : delegationPreview ? (
               <pre className="pm-coordination-pre">{delegationPreview}</pre>
             ) : (
-              <div className="pm-coordination-empty">No context pack built yet.</div>
+              <div className="pm-coordination-empty">{t('r21.sw.noContextPackBuilt')}</div>
             )}
           </div>
         )}

@@ -67,11 +67,11 @@ describe('How started agents show', () => {
     await settle(10);
     expect(choice()?.value).toBe('always_show');
     expect([...choice()!.options].map((o) => o.textContent)).toEqual([
-      'Always show them: each helper gets a pane',
+      'Always show them: each one gets its own chat',
       'Let the agent choose: it decides each time',
       'Always run in the background: they show in your Inbox',
     ]);
-    expect(hasText(m.host, 'Where helpers show up.')).toBe(true);
+    expect(hasText(m.host, 'Choose whether agents an agent starts')).toBe(true);
     expect(hasText(m.host, 'Claude Code')).toBe(false);
   });
 
@@ -146,7 +146,7 @@ describe('Close started agents when their agent closes', () => {
     m = await mountRows(closeRow);
     await settle(10);
     expect(closeToggle()?.getAttribute('aria-checked')).toBe('true');
-    expect(hasText(m.host, 'the helpers it started close too')).toBe(true);
+    expect(hasText(m.host, 'the agents it started close too')).toBe(true);
     expect(hasText(m.host, 'Claude Code')).toBe(false);
   });
 
@@ -190,7 +190,7 @@ describe('Most started agents at once', () => {
     m = await mountRows(mostRow);
     await settle(10);
     expect(select()?.value).toBe('8');
-    expect(hasText(m.host, 'wait their turn')).toBe(true);
+    expect(hasText(m.host, 'How many started agents run together')).toBe(true);
   });
 
   it('saves through its own command, not the phone-patchable settings', async () => {

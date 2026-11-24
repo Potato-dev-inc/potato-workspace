@@ -5,7 +5,7 @@ use crate::point::target::{targets, Target, TargetFacts};
 
 // The outbox's own sentences. The file is read from its place so this test fails when the wording
 // there changes and the copies in `target.rs` do not follow.
-#[path = "../../pane_outbox/model.rs"]
+#[path = "../../../crates/pm-core/src/pane_outbox/model.rs"]
 #[allow(dead_code)]
 mod outbox_model;
 

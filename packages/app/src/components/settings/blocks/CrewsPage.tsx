@@ -7,6 +7,7 @@ import { useT } from '../../../i18n';
 import { crewErrorText, crewsApi as liveCrewsApi, type CrewShareCheck, type CrewsApi, type CrewSummary } from '../../../lib/crews-api';
 import { CrewCanvas } from '../../crews/CrewCanvas';
 import { CrewGallery } from '../../crews/CrewGallery';
+import { crewName } from '../../../lib/crewNames';
 import { ImportSheet } from '../../crews/ImportSheet';
 import '../../../styles/crews.css';
 
@@ -42,7 +43,7 @@ export function CrewsPage({ api = liveCrewsApi, workflows = false }: { api?: Pic
 
   const row = (crew: CrewSummary, action: string) => (
     <li key={crew.slug} className="crews-row" data-testid="crew-row">
-      <span className="crews-row-name">{crew.name}</span>
+      <span className="crews-row-name">{crewName(crew)}</span>
       <span className="crews-row-meta">
         {t('crews.page.roles', { count: crew.roles })}
         {crew.agents.length > 0 ? ` · ${crew.agents.join(', ')}` : ''}

@@ -34,7 +34,7 @@ impl PaneHost for AppPanes {
             account: None,
             guard_env: None,
         };
-        let pane = registry_spawn_pane(&self.registry, &self.app, args)?;
+        let pane = registry_spawn_pane(&self.registry, args)?;
         let _ = self.app.emit("pty://panes-changed", ());
         Ok(pane)
     }
@@ -76,7 +76,7 @@ fn answer<T: serde::Serialize>(result: Result<T, HandOverError>) -> Result<Value
 }
 
 /// Every chat conversation, with its notices and who may write to it.
-#[tauri::command]
+#[tauri::command(async)]
 pub fn acp_conversations_list() -> Value {
     json!({ "labs_enabled": crate::acp::chat_enabled(), "conversations": global().list() })
 }
@@ -111,28 +111,34 @@ pub fn acp_closed_list() -> Value {
 /// used, as after a restart). Returns the pane id. Refused for a chat that is not closed.
 #[tauri::command]
 pub async fn acp_reopen_closed(app: AppHandle, state: State<'_, AppState>, id: String) -> Result<String, String> {
+    let registry = state.registry.clone();
+    tauri::async_runtime::spawn_blocking(move || reopen_closed_blocking(&app, &registry, id)).await.map_err(|e| format!("INTERNAL: {e}"))?
+}
+
+/// The blocking body of `acp_reopen_closed`, also run for a paired PC.
+pub(crate) fn reopen_closed_blocking(app: &AppHandle, registry: &std::sync::Arc<parking_lot::Mutex<crate::pty::PaneRegistry>>, id: String) -> Result<String, String> {
     if !crate::acp::chat_enabled() {
         return Err("FEATURE_OFF: chat (ACP) is switched off in Labs".into());
     }
-    let deps = super::acp_chat::live_deps(&app, &state.registry);
-    let opened = tauri::async_runtime::spawn_blocking(move || {
-        global().reopen_closed(&id).map_err(|e| match e {
-            crate::acp::conversations::ConversationError::Unknown => "This chat is not closed any more.".to_string(),
-            other => other.to_string(),
-        })?;
-        crate::acp::chat::restore_panes(&deps);
-        Ok::<String, String>(id)
-    })
-    .await
-    .map_err(|e| format!("INTERNAL: {e}"))??;
+    let deps = super::acp_chat::live_deps(app, registry);
+    global().reopen_closed(&id).map_err(|e| match e {
+        crate::acp::conversations::ConversationError::Unknown => "This chat is not closed any more.".to_string(),
+        other => other.to_string(),
+    })?;
+    crate::acp::chat::restore_panes(&deps);
     let _ = app.emit("acp-conversations-changed", ());
-    Ok(opened)
+    Ok(id)
 }
 
 /// "Delete" on a closed chat: its record and its journal files go for good. Refused for a chat that is not closed.
 #[tauri::command]
 pub fn acp_delete_closed(app: AppHandle, id: String) -> Result<(), String> {
-    global().delete_closed(&id).map_err(|_| "This chat is not closed any more.".to_string())?;
+    delete_closed_of(&app, &id)
+}
+
+/// The body of `acp_delete_closed`, also run for a paired PC.
+pub(crate) fn delete_closed_of(app: &AppHandle, id: &str) -> Result<(), String> {
+    global().delete_closed(id).map_err(|_| "This chat is not closed any more.".to_string())?;
     let _ = app.emit("acp-conversations-changed", ());
     Ok(())
 }
@@ -180,7 +186,7 @@ pub async fn acp_back_to_chat(app: AppHandle, state: State<'_, AppState>, conver
 
 /// Does this ordinary terminal pane hold a chat conversation (it was opened with "Open in terminal")? Then
 /// `{conversation, agent}`, so its header can offer "Back to chat". `null` for any other pane.
-#[tauri::command]
+#[tauri::command(async)]
 pub fn acp_conversation_of_terminal(pane_id: String) -> Value {
     match global().of_terminal(&pane_id) {
         Some(view) => json!({ "conversation": view.id, "agent": view.agent }),

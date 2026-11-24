@@ -2,7 +2,7 @@
 // lists and the `pty://preview` event for changes (see src-tauri pane_preview.rs).
 import { useEffect, useState } from 'react';
 import { invoke } from '@tauri-apps/api/core';
-import { listen } from '@tauri-apps/api/event';
+import { listen } from './events';
 
 export interface PreviewUrl {
   url: string;

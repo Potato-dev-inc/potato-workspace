@@ -11,6 +11,7 @@ import { MissionCard } from './MissionCards';
 import { MissionGlyph, PreviewTag } from './MissionGlyph';
 import '../../../styles/chips.css';
 import '../../../styles/missions.css';
+import { t } from '../../../i18n';
 
 const SHOWN = 8;
 
@@ -70,38 +71,38 @@ function Row({ row, onOpenPane }: { row: TimelineRow; onOpenPane?: (paneId: stri
 /** The Done review (DESIGN-MISSIONS 6.6). Nothing has been merged: the person reviews the copy. */
 export function MissionDone({ m, onReview }: { m: MissionView; onReview?: () => void }) {
   return (
-    <section className="ck-mission-done" aria-label="Mission done">
+    <section className="ck-mission-done" aria-label={t('r12ui.ms.doneLabel')}>
       <div className="ck-mission-done-head">
         <MissionGlyph glyph={m.glyph} />
         <span className="ck-row-title">{m.state_text}</span>
       </div>
       <dl className="ck-kv ck-mission-kv">
         <div className="ck-kv-row">
-          <dt>Checks</dt>
+          <dt>{t('r12ui.ms.checks')}</dt>
           <dd>
-            {m.checks.map((c) => `${c.name} ${c.passed ? 'pass' : 'fail'}`).join(' · ')}
-            {m.start ? <span className="ck-mission-hint"> ({m.start} at the start)</span> : null}
+            {m.checks.map((c) => `${c.name} ${c.passed ? t('r12ui.ms.pass') : t('r12ui.ms.fail')}`).join(' · ')}
+            {m.start ? <span className="ck-mission-hint"> {t('r12ui.ms.atStart', { start: m.start })}</span> : null}
           </dd>
         </div>
         <div className="ck-kv-row">
-          <dt>Work</dt>
+          <dt>{t('r12ui.ms.work')}</dt>
           <dd>{m.work_text}</dd>
         </div>
         <div className="ck-kv-row">
-          <dt>Test changes</dt>
+          <dt>{t('r12ui.ms.testChanges')}</dt>
           <dd>{m.test_changes_text}</dd>
         </div>
         {m.budget.text && (
           <div className="ck-kv-row">
-            <dt>Budget</dt>
+            <dt>{t('r12ui.ms.budget')}</dt>
             <dd>{m.budget.text}</dd>
           </div>
         )}
         {m.copy && (
           <div className="ck-kv-row">
-            <dt>Where</dt>
+            <dt>{t('r12ui.ms.where')}</dt>
             <dd>
-              {m.project_name} · separate copy from {m.copy.base}
+              {t('r12ui.ms.whereLine', { project: m.project_name, base: m.copy.base })}
             </dd>
           </div>
         )}
@@ -109,11 +110,11 @@ export function MissionDone({ m, onReview }: { m: MissionView; onReview?: () => 
       {onReview && (
         <div className="ck-mission-done-actions">
           <button type="button" className="ck-btn ck-btn--primary" onClick={onReview}>
-            Review changes
+            {t('r12ui.ms.review')}
           </button>
         </div>
       )}
-      <p className="ck-mission-foot">Nothing has been merged. The separate copy stays until you merge or discard it.</p>
+      <p className="ck-mission-foot">{t('r12ui.ms.foot')}</p>
     </section>
   );
 }
@@ -187,20 +188,20 @@ export function MissionProgress({
         {isActive(m) && (
           <div className="ck-mission-actions">
             {m.state === 'paused' ? (
-              <button type="button" className="ck-btn ck-btn--secondary ck-btn--sm" onClick={() => void run(api.resume(m.id), 'Resumed.')}>
-                Resume
+              <button type="button" className="ck-btn ck-btn--secondary ck-btn--sm" onClick={() => void run(api.resume(m.id), t('r12ui.ms.resumed'))}>
+                {t('r12ui.ms.resume')}
               </button>
             ) : m.pause_requested ? (
               <button type="button" className="ck-btn ck-btn--secondary ck-btn--sm" onClick={() => void run(api.resume(m.id))}>
-                Keep going after this turn
+                {t('r12ui.ms.keepGoing')}
               </button>
             ) : (
-              <button type="button" className="ck-btn ck-btn--secondary ck-btn--sm" onClick={() => void run(api.pause(m.id), 'Pauses after this turn.')}>
-                Pause after this turn
+              <button type="button" className="ck-btn ck-btn--secondary ck-btn--sm" onClick={() => void run(api.pause(m.id), t('r12ui.ms.pausedSaid'))}>
+                {t('r12ui.ms.pause')}
               </button>
             )}
             <button type="button" className="ck-btn ck-btn--plain ck-btn--sm" onClick={() => setConfirmStop(true)}>
-              Stop mission…
+              {t('r12ui.ms.stopAsk')}
             </button>
           </div>
         )}
@@ -208,12 +209,12 @@ export function MissionProgress({
 
       <div className="ck-tabs-bar">
         <SegTabs
-          label="Mission view"
+          label={t('r12ui.ms.view')}
           value={tab}
           onChange={setTab}
           options={[
-            { id: 'progress', label: 'Progress' },
-            { id: 'notes', label: 'Notes' },
+            { id: 'progress', label: t('r12ui.ms.progress') },
+            { id: 'notes', label: t('r12ui.ms.notes') },
           ]}
         />
       </div>
@@ -235,26 +236,26 @@ export function MissionProgress({
               {m.budget.text && <span className="ck-mission-hint">{m.budget.text}</span>}
             </div>
           )}
-          <ul className="ck-mission-rows" aria-label="Progress">
+          <ul className="ck-mission-rows" aria-label={t('r12ui.ms.progress')}>
             {rows.map((r, i) => (
               <Row key={`${r.kind}-${r.turn ?? ''}-${r.at_ms}-${i}`} row={r} onOpenPane={onOpenPane} />
             ))}
           </ul>
           {!all && m.timeline.length > SHOWN && (
             <button type="button" className="ck-btn ck-btn--plain ck-btn--sm ck-mission-all" onClick={() => setAll(true)}>
-              Show all {turns} turns
+              {t('r12ui.ms.showAll', { turns })}
             </button>
           )}
         </div>
       ) : (
         <div className="ck-mission-body">
-          <p className="ck-mission-hint">From MISSION.md in the separate copy. Agents add a few lines after each turn.</p>
+          <p className="ck-mission-hint">{t('r12ui.ms.notesHint')}</p>
           {notes === null ? (
-            <p className="ck-sub">Loading…</p>
+            <p className="ck-sub">{t('r12ui.ms.loading')}</p>
           ) : notes.trim() ? (
             <pre className="ck-mission-notes">{notes}</pre>
           ) : (
-            <p className="ck-sub">No notes from agents yet.</p>
+            <p className="ck-sub">{t('r12ui.ms.noNotes')}</p>
           )}
         </div>
       )}
@@ -262,24 +263,24 @@ export function MissionProgress({
       {confirmStop && (
         <Sheet labelledBy="ck-mission-stop-t" onClose={() => setConfirmStop(false)}>
           <h2 className="ck-section" id="ck-mission-stop-t">
-            Stop this mission?
+            {t('r12ui.ms.stopTitle')}
           </h2>
           <p className="ck-sub">
-            {m.current_agent ? `${m.current_agent} stops now. ` : ''}Its separate copy and notes stay, so you can review or merge what&apos;s there.
+            {m.current_agent ? t('r12ui.ms.stopsNow', { agent: m.current_agent }) : ''}{t('r12ui.ms.copyStays')}
           </p>
           <div className="ck-sheet-actions">
             <button type="button" className="ck-btn ck-btn--secondary" autoFocus onClick={() => setConfirmStop(false)}>
-              Cancel
+              {t('r12ui.ms.cancel')}
             </button>
             <button
               type="button"
               className="ck-btn ck-btn--primary"
               onClick={() => {
                 setConfirmStop(false);
-                void run(api.stop(m.id), 'Mission stopped. Its separate copy stays.');
+                void run(api.stop(m.id), t('r12ui.ms.stoppedSaid'));
               }}
             >
-              Stop mission
+              {t('r12ui.ms.stop')}
             </button>
           </div>
         </Sheet>

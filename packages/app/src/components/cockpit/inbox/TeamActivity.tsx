@@ -72,7 +72,7 @@ export function TeamActivity({
             const expanded = open === r.id;
             return (
               <li key={r.id} data-team-activity={r.id}>
-                <div className="ib-row" tabIndex={0} {...rowOpenProps(() => setOpen(expanded ? null : r.id))}>
+                <div className="ib-row" {...rowOpenProps(() => setOpen(expanded ? null : r.id))}>
                   <span className={`ib-tile ib-tile--${r.tone}`} data-tone={r.tone}>
                     <Icon />
                   </span>

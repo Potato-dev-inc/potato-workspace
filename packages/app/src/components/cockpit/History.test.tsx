@@ -118,7 +118,7 @@ describe('History timeline', () => {
     expect(rows[1].textContent).toContain('Add a login page');
     expect(rows[1].textContent).toContain('10 min ago');
     expect(rows[2].textContent).toContain('3 h ago');
-    expect(rows[2].textContent).toContain('No file changes');
+    expect(rows[2].textContent).toContain('Starting point');
     expect(host.textContent).toContain("doesn't change what the agent remembers");
   });
 

@@ -1,4 +1,5 @@
 // @vitest-environment jsdom
+import { resetEventHub } from './events';
 import { invoke } from '@tauri-apps/api/core';
 import { listen } from '@tauri-apps/api/event';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
@@ -54,6 +55,7 @@ const draft: CompanionDraft = {
 
 describe('tauriCompanionTransport', () => {
   beforeEach(() => {
+    resetEventHub();
     tauriWindow().__TAURI_INTERNALS__ = {};
     vi.mocked(invoke).mockReset();
     vi.mocked(invoke).mockResolvedValue(undefined);
@@ -142,11 +144,13 @@ describe('tauriCompanionTransport', () => {
 
   it('hears the companion://changed event with the whole list', async () => {
     const cb = vi.fn();
+    let fire: (e: { payload: CompanionView[] }) => void = () => {};
     vi.mocked(listen).mockImplementationOnce(async (_event, handler) => {
-      (handler as (e: { payload: CompanionView[] }) => void)({ payload: [view()] });
+      fire = handler as typeof fire;
       return () => {};
     });
     await tauriCompanionTransport.onChanged?.(cb);
+    fire({ payload: [view()] });
     expect(listen).toHaveBeenCalledWith('companion://changed', expect.any(Function));
     expect(cb).toHaveBeenCalledWith([expect.objectContaining({ id: 'mochi-1' })]);
   });
@@ -160,6 +164,7 @@ describe('bridgeCompanionTransport routes', () => {
   }
 
   beforeEach(() => {
+    resetEventHub();
     fetchMock = vi.fn();
     vi.stubGlobal('fetch', fetchMock);
   });

@@ -3,7 +3,8 @@
 // file in the message box, V marks it looked at; a diff scrolled to its end counts as looked at too. "Changed since you
 // looked" shows when the agent edited a file again after it was ticked. Everything reads the turn's save points, so it
 // works in any folder, with or without Git, for every agent.
-import { useCallback, useEffect, useRef, useState, type KeyboardEvent } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState, type KeyboardEvent, type ReactNode } from 'react';
+import { useHost } from '../../../lib/host/context';
 import { useT } from '../../../i18n';
 import { requestChatTab } from '../../../lib/chatTab';
 import { pushComposerInsert } from '../../../lib/composer-insert';
@@ -15,10 +16,11 @@ import {
   countsFor,
   keepFile,
   lookedAt,
+  paneFilesTouched,
   putBackMark,
   stateOf,
-  turnReviewApi,
   useReviewMarks,
+  turnReviewApiFor,
   useTurnReview,
   type ReviewFile,
   type TurnReviewApi,
@@ -44,16 +46,25 @@ export function counterParts(t: ReturnType<typeof useT>, c: { kept: number; back
 export function TurnFiles({
   paneId,
   status,
-  api = turnReviewApi,
+  api: given,
   editor = editorApi,
+  whenNone,
+  onCount,
 }: {
   paneId: string;
   /** The pane's status: a change reads the turn again, and `running` turns Put back off. */
   status: string;
   api?: TurnReviewApi;
   editor?: EditorApi;
+  /** Drawn in place of "The last turn changed no files" when there is no review at all. */
+  whenNone?: ReactNode;
+  /** Tells the screen how many files this review lists (null while it is not known), so a summary line above agrees with it. */
+  onCount?: (count: number | null) => void;
 }) {
   const t = useT();
+  // A far chat's review, patches and Put back go to its own PC: the api is the host's unless a test gives one.
+  const host = useHost();
+  const api = useMemo(() => given ?? turnReviewApiFor(host), [given, host]);
   const { load, reload } = useTurnReview(paneId, status, api);
   useReviewMarks();
   const opener = useOpenInEditor(paneId, editor);
@@ -65,6 +76,8 @@ export function TurnFiles({
   const running = status === 'running';
   const review: TurnReviewData | null = load.state === 'ready' ? load.review : null;
   const files = review?.files ?? [];
+  const known = load.state === 'ready' ? files.length : null;
+  useEffect(() => onCount?.(known), [known]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // A new turn is a new list: forget the open diff and the cursor.
   const turnKey = review ? `${review.afterId}` : '';
@@ -116,6 +129,7 @@ export function TurnFiles({
       if (!review || !safetyId) return clearDecision(paneId, f.path);
       await api.putBack(paneId, safetyId, f.path);
       clearDecision(paneId, f.path);
+      paneFilesTouched(paneId);
       reload();
     },
     [api, paneId, reload, review],
@@ -131,6 +145,7 @@ export function TurnFiles({
       setNotice(null);
       const text =
         report.action === 'removed' ? t('review.putBackRemoved', { name }) : report.action === 'nothing' ? t('review.putBackNothing', { name }) : t('review.putBackDone', { name });
+      paneFilesTouched(paneId);
       showUndo({
         text,
         undo: report.action === 'nothing' ? undefined : () => bringBack(f, report.safetyId),
@@ -199,6 +214,7 @@ export function TurnFiles({
       </section>
     );
   }
+  if (!review && whenNone) return <>{whenNone}</>;
   if (!review) {
     return (
       <section className="ck-tf" aria-label={t('review.title')} data-testid="turn-files">
@@ -286,7 +302,8 @@ export function TurnFiles({
                   <button type="button" className="ck-btn ck-btn--sm ck-btn--plain" title={t('review.tellTip')} onClick={() => tell(f)}>
                     {t('review.tell')}
                   </button>
-                  {f.status !== 'D' && (
+                  {/* My editor opens files of this PC only: a file on another PC cannot be opened there. */}
+                  {f.status !== 'D' && host.place.kind !== 'pc' && (
                     <button
                       type="button"
                       className="ck-btn ck-btn--sm ck-btn--plain"

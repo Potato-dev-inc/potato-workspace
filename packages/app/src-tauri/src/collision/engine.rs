@@ -71,6 +71,10 @@ pub struct Engine {
     /// source and its Branch from here copies. A copy starts with the save point's files, so those files are
     /// new in both sides without either agent having made them: such a pair is never compared.
     kin: BTreeMap<String, String>,
+    /// The same file written by two chats (`paths`), as the watch thread last read it. Its alerts are kept apart from the git ones,
+    /// so a step with no git look never counts a miss against a git alert.
+    path_findings: Vec<Finding>,
+    path_alerts: Alerts,
 }
 
 type HunkCache = BTreeMap<(String, String, u64), Result<FileHunks, ProbeError>>;
@@ -118,7 +122,14 @@ impl Engine {
             armed: BTreeSet::new(),
             hunks: BTreeMap::new(),
             kin: BTreeMap::new(),
+            path_findings: Vec::new(),
+            path_alerts: Alerts::default(),
         }
+    }
+
+    /// What the chats say about shared files (`paths::findings`). Applies from the next step.
+    pub fn set_path_findings(&mut self, findings: Vec<Finding>) {
+        self.path_findings = findings;
     }
 
     /// Tells the engine which panes are copies of each other: `links` are (source pane, copy pane) pairs.
@@ -156,11 +167,12 @@ impl Engine {
         for cmd in cmds {
             match cmd {
                 Cmd::Ignore(id) => {
-                    self.alerts.ignore(id);
+                    let _ = self.alerts.ignore(id) || self.path_alerts.ignore(id);
                 }
                 Cmd::SetEnabled(true) => self.enabled = true,
                 Cmd::SetEnabled(false) => {
                     changes.extend(self.alerts.clear_all());
+                    changes.extend(self.path_alerts.clear_all());
                     // Everything is dropped except what the engine cannot learn again by looking:
                     // when each pane began working (the "same folder" window starts there) and which
                     // panes are copies of each other.
@@ -239,7 +251,19 @@ impl Engine {
             let findings = self.findings(probe, &grouped, now_ms);
             changes.extend(self.alerts.apply(&findings, &gone, now_ms));
         }
-        Out { changes, alerts: self.alerts.visible().into_iter().cloned().collect() }
+
+        // 6. The same file written by two chats, in any folder. A pair the git watch already shows is shown once (the git card wins),
+        // and the path set's own changes for that pair are not told.
+        let git_shown: BTreeSet<String> = self.alerts.visible().iter().map(|a| a.id.clone()).collect();
+        let extra: Vec<Finding> = self.path_findings.iter().filter(|f| !self.are_kin(&f.panes[0].pane_id, &f.panes[1].pane_id)).cloned().collect();
+        let path_changes = self.path_alerts.apply(&extra, &gone, now_ms);
+        let told = |c: &Change| match c {
+            Change::Raised(id) | Change::Updated(id) | Change::Resolved(id) => !git_shown.contains(id),
+        };
+        changes.extend(path_changes.into_iter().filter(told));
+        let mut shown: Vec<Alert> = self.alerts.visible().into_iter().cloned().collect();
+        shown.extend(self.path_alerts.visible().into_iter().filter(|a| !git_shown.contains(&a.id)).cloned());
+        Out { changes, alerts: shown }
     }
 
     /// The pane bookkeeping of a step, without the repo lookup: leavers dropped, run changes noted.
@@ -971,5 +995,40 @@ mod tests {
         assert_eq!(out.changes.len(), 3);
         assert_eq!(out.alerts.len(), 3);
         assert!(out.alerts.iter().all(|a| a.level == Level::Clash));
+    }
+
+    #[test]
+    fn a_file_written_by_two_chats_outside_any_repo_raises_and_then_resolves() {
+        use crate::collision::paths::{findings, key_of, Write, PATH_WINDOW_MS};
+        let probe = FakeProbe::new(); // no repo anywhere: git sees nothing
+        let panes = [pane(A, r"D:
+otes", PaneRun::Working, 0), pane(B, r"D:\other", PaneRun::Working, 0)];
+        let w = |at| vec![Write { key: key_of(r"D:\work\shared.txt", "").unwrap(), name: "shared.txt".into(), at_ms: at }];
+        let mut engine = Engine::new();
+        engine.set_path_findings(findings(&[(panes[0].clone(), w(1_000)), (panes[1].clone(), w(17_000))], 20_000));
+        let out = run(&mut engine, &panes, &probe, 20_000);
+        assert_eq!(out.alerts.len(), 1, "one heads-up for the pair");
+        assert_eq!(out.alerts[0].level, Level::SameFile);
+        assert!(matches!(out.changes[0], Change::Raised(_)));
+        // The writes age out of the window: gone after two quiet steps.
+        engine.set_path_findings(findings(&[(panes[0].clone(), w(1_000)), (panes[1].clone(), w(17_000))], 17_000 + PATH_WINDOW_MS + 1));
+        run(&mut engine, &panes, &probe, 21_000);
+        let out = run(&mut engine, &panes, &probe, 22_000);
+        assert!(out.alerts.is_empty());
+    }
+
+    #[test]
+    fn a_pair_the_git_watch_shows_is_shown_once() {
+        use crate::collision::paths::{findings, key_of, Write};
+        let (first, _) = poll_ms();
+        let (probe, panes) = seeded_copy_world();
+        let w = |at| vec![Write { key: key_of("D:/notes/shared.txt", "").unwrap(), name: "shared.txt".into(), at_ms: at }];
+        let mut engine = Engine::new();
+        engine.set_path_findings(findings(&[(panes[0].clone(), w(1_000)), (panes[1].clone(), w(2_000))], 3_000));
+        let out = run(&mut engine, &panes, &probe, 0);
+        assert_eq!(out.alerts.len(), 1, "the chats' own report raises the pair first");
+        let out = run(&mut engine, &panes, &probe, first);
+        assert_eq!(out.alerts.iter().filter(|a| a.id == pair_id()).count(), 1, "then the git card replaces it: one card");
+        assert!(!out.changes.iter().any(|c| matches!(c, Change::Resolved(_))), "no stray Resolved while a card for the pair is on screen");
     }
 }

@@ -13,6 +13,7 @@ import {
   type AcpValue,
 } from '../../../lib/agentWizardAcp';
 import { BTN, INPUT } from './AgentWizardCapture';
+import { t } from '../../../i18n';
 
 /** What the chat step keeps while the person goes back and forth. */
 export interface AcpDraft {
@@ -98,7 +99,7 @@ export function AcpStep({
 
   return (
     <div className="mt-4" data-testid="acp-step">
-      <p className="text-sm font-semibold">How does the chat start?</p>
+      <p className="text-sm font-semibold">{t('r21.sw.howDoesTheChat')}</p>
       <p className="mt-1 text-xs text-pm-muted">
         {intro ??
           'Chat agents talk to Potato Workspace through a small add-on program (the Agent Client Protocol). Pick what looks right, or type it yourself. Nothing is run to find this: the wizard only read the help text.'}
@@ -109,7 +110,7 @@ export function AcpStep({
         </p>
       ) : (
         <fieldset className="mt-3">
-          <legend className="text-xs font-medium">What the wizard found</legend>
+          <legend className="text-xs font-medium">{t('r21.sw.whatTheWizardFound')}</legend>
           {!hideNotes && draft.detectError && (
             <p data-testid="acp-detect-error" className="mt-1 text-xs text-pm-muted">
               Could not look for it: {draft.detectError} You can still enter it yourself.
@@ -145,7 +146,7 @@ export function AcpStep({
             ))}
             <label className="flex cursor-pointer items-start gap-2 text-xs">
               <input type="radio" name="wizard-acp-pick" checked={draft.pick === 'mine'} onChange={() => onDraft({ ...draft, pick: 'mine' })} />
-              <span className="font-medium">Enter it myself</span>
+              <span className="font-medium">{t('r21.sw.enterItMyself')}</span>
             </label>
           </div>
         </fieldset>

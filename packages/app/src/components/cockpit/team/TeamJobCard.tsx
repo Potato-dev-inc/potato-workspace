@@ -1,6 +1,6 @@
 import { errorSentence } from '../../../lib/sayError';
 import { useMemo, useState } from 'react';
-import { useT } from '../../../i18n';
+import { t, useT } from '../../../i18n';
 import type { WorktreeItem } from '../../../lib/cockpit-api';
 import { jobSub, jobTitle, type TeamApi, type TeamJob } from '../../../lib/team';
 import { Changes, type ChangesApi } from '../Changes';
@@ -115,7 +115,7 @@ export function TeamJobCard({ job, api, paneName, onDone }: { job: TeamJob; api:
               )}
               {ready && (
                 <CardButton tone="secondary" role="answer" disabled={busy} onClick={() => void run(() => api.apply(job.id))}>
-                  Apply to my branch
+                  {t('r21.sw.applyToMyBranch')}
                 </CardButton>
               )}
               {ready && (
@@ -139,7 +139,7 @@ export function TeamJobCard({ job, api, paneName, onDone }: { job: TeamJob; api:
           <h2 className="ck-section" id="ck-team-discard-t">
             {ready ? t('team.discardAsk') : t('team.dismissAsk')}
           </h2>
-          <p className="ck-sub">Deletes the separate copy and what the agent did in it. Your branch stays as it is.</p>
+          <p className="ck-sub">{t('r21.sw.deletesTheSeparateCopy')}</p>
           <div className="ck-sheet-actions">
             <button type="button" className="ck-btn ck-btn--secondary" autoFocus disabled={busy} onClick={() => setConfirmDiscard(false)}>
               Cancel

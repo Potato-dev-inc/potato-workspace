@@ -27,7 +27,7 @@ impl From<PaneRule> for PaneRemote {
 }
 
 /// The rule for one agent pane (no rule stored: on, full control, as before).
-#[tauri::command]
+#[tauri::command(async)]
 pub fn get_pane_remote(pane_id: String) -> PaneRemote {
     pane_rules::stored(&pane_id).into()
 }

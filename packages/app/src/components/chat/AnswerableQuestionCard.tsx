@@ -21,6 +21,8 @@ export const FAILED_NOTICE = 'That did not go through. Try again.';
 /** The keys that pick the first three options. */
 const KEY_OPTIONS = 3;
 
+import { t } from '../../i18n';
+
 export function titleFor(agent: string, kind: TerminalChatPromptView['kind']): string {
   if (kind === 'trust') return `${agent} asks to trust this folder`;
   if (kind === 'permission') return `${agent} asks to run something`;
@@ -120,7 +122,7 @@ export function AnswerableQuestionCard({
   return (
     <div className="ck-chat-dock" ref={rootRef}>
       <div className="ck-dock">
-        <div className="ib-dock" role="group" aria-label="Agent question">
+        <div className="ib-dock" role="group" aria-label={t('r10.agentQuestion')}>
           <InboxCard
             kind={prompt.kind === 'question' ? 'question' : 'approval'}
             glyph="needs"

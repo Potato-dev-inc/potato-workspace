@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { useT } from '../../i18n';
-import { agentLabel, borrowedName, cleanName, errText, isActiveIn, isActiveOut, leftText, lendApi, problemText, urgencyOf, usageText, type Grant, type LendApi } from '../../lib/lend';
+import { agentLabel, borrowedName, cleanName, errText, isActiveIn, isActiveOut, leftText, lendApi, peerLabel, problemText, urgencyOf, usageText, type Grant, type LendApi } from '../../lib/lend';
 import { openSettingsAt } from '../../lib/openSettingsAt';
 import { teamApi, type TeamApi } from '../../lib/team';
 import { IncomingRequestCard } from '../lend/IncomingRequestCard';
@@ -69,7 +69,7 @@ export function UsageTab({ lend, api = lendApi, team = teamApi }: { lend: LendHa
           {t('teamHub.usage.left', { time: leftText(left) })}
         </span>
         {g.direction === 'out' ? (
-          <TakeBack profile={g.profile_name || agent} peer={g.peer_name} busy={busy === g.id} onConfirm={() => void act(g)} />
+          <TakeBack profile={g.profile_name || agent} peer={peerLabel(g)} busy={busy === g.id} onConfirm={() => void act(g)} />
         ) : (
           <button type="button" className="lend-btn is-small" disabled={busy === g.id} onClick={() => void act(g)}>
             {t('lend.giveBack')}

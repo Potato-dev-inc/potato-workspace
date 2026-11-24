@@ -3,6 +3,7 @@
 import { t } from '../../i18n';
 import { tauriAcpAddonApi } from '../acpAddon';
 import { agentHealthApi } from '../agent-health';
+import { ownLoginApi } from '../../components/settings/agents/ownSignIn';
 import { checkAddons } from './addons';
 import { checkAgents } from './agents';
 import { checkBridge } from './bridge';
@@ -15,6 +16,7 @@ export { loadTestMemory, rememberTest, type TestMemory } from './test-memory';
 
 export const tauriSetupDeps: SetupCheckDeps = {
   agentHealth: () => agentHealthApi.check(),
+  logins: () => ownLoginApi.states(),
   addons: () => tauriAcpAddonApi.list(),
   tests: loadTestMemory,
 };
@@ -92,7 +94,10 @@ export async function runAllChecks(deps: SetupCheckDeps, ctx: SetupCheckContext,
   const timeoutMs = options.timeoutMs ?? CHECK_TIMEOUT_MS;
   const work: Record<CheckGroupId, () => Promise<CheckRow[]> | CheckRow[]> = {
     bridge: () => checkBridge(ctx),
-    agents: async () => checkAgents(await deps.agentHealth(), deps.tests?.() ?? {}),
+    agents: async () => {
+      const [health, logins] = await Promise.all([deps.agentHealth(), deps.logins ? deps.logins().catch(() => null) : null]);
+      return checkAgents(health, deps.tests?.() ?? {}, logins);
+    },
     addons: async () => checkAddons(await deps.addons()),
   };
   const ids = groupsFor(ctx);

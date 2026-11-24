@@ -18,9 +18,11 @@ import {
 } from '../../../lib/crews-api';
 import { shipApi, type ShipApi } from '../../../lib/ship-api';
 import { Sheet } from '../Sheet';
+import { crewName } from '../../../lib/crewNames';
 import { failureText, roleLine } from './model';
 import { SaveCrewSheet } from './SaveCrewSheet';
 import '../../../styles/cockpit-crews.css';
+import { t } from '../../../i18n';
 
 const folderName = (path: string) => path.split(/[\\/]/).filter(Boolean).pop() ?? path;
 
@@ -58,8 +60,10 @@ export function StartCrewSheet({
   const label = (id: string) => (id === DEFAULT_AGENT ? 'Default agent' : agentName(id));
 
   const load = useCallback(() => {
-    Promise.all([api.list(), api.starters(), api.agents()])
-      .then(([mine, built, choices]) => {
+    // The same ready-made crews as Settings: the starters, then the templates ("Our way", "How we work").
+    Promise.all([api.list(), api.starters(), (api.templates ? api.templates() : Promise.resolve([] as CrewSummary[])).catch(() => [] as CrewSummary[]), api.agents()])
+      .then(([mine, starts, templates, choices]) => {
+        const built = [...starts, ...templates];
         setSaved(mine);
         setStarters(built);
         setAgents(choices);
@@ -179,7 +183,7 @@ export function StartCrewSheet({
           )}
           {outcome.not_started.map((name) => (
             <li key={name} className="is-waiting">
-              <span className="ck-crew-mark">Not started</span>
+              <span className="ck-crew-mark">{t('r21.sw.notStarted')}</span>
               <span className="ck-crew-result-name">{name}</span>
             </li>
           ))}
@@ -189,7 +193,7 @@ export function StartCrewSheet({
             {failure}
           </p>
         )}
-        {!outcome.failed && <p className="ck-sub">If an agent asks you something, the question waits in its own pane.</p>}
+        {!outcome.failed && <p className="ck-sub">{t('r21.sw.ifAnAgentAsks')}</p>}
         <div className="ck-sheet-actions">
           <button type="button" className="ck-btn ck-btn--primary" onClick={onClose} autoFocus>
             Done
@@ -210,7 +214,7 @@ export function StartCrewSheet({
         onClick={() => setSlug(c.slug)}
         disabled={busy}
       >
-        <span className="ck-crew-name">{c.name}</span>
+        <span className="ck-crew-name">{crewName(c)}</span>
         <span className="ck-crew-role-meta">
           {c.roles} {c.roles === 1 ? 'agent' : 'agents'}
           {c.agents.length > 0 && ` · ${c.agents.map(label).join(', ')}`}
@@ -232,7 +236,7 @@ export function StartCrewSheet({
       <h2 className="ck-section" id="ck-crew-start-t">
         Start crew
       </h2>
-      {!saved && !error && <p className="ck-sub">Looking for crews…</p>}
+      {!saved && !error && <p className="ck-sub">{t('r21.sw.lookingForCrews')}</p>}
       {notice && (
         <p className="ck-sub" role="status">
           {notice}
@@ -241,7 +245,7 @@ export function StartCrewSheet({
       {saved && (
         <section aria-labelledby="ck-crew-mine-t">
           <p className="ck-crew-folder-label" id="ck-crew-mine-t">
-            My crews
+            {t('r21.sw.myCrews')}
           </p>
           {saved.length === 0 && (
             <p className="ck-sub" data-testid="crew-empty">
@@ -249,11 +253,11 @@ export function StartCrewSheet({
             </p>
           )}
           {saved.length > 0 && (
-            <ul className="ck-crew-list" role="radiogroup" aria-label="My crews">
+            <ul className="ck-crew-list" role="radiogroup" aria-label={t('r21.sw.myCrews')}>
               {saved.map((c) =>
                 row(
                   c,
-                  <button type="button" className="ck-btn ck-btn--plain ck-btn--sm" onClick={() => void remove(c)} disabled={busy} title={`Remove ${c.name}`}>
+                  <button type="button" className="ck-btn ck-btn--plain ck-btn--sm" onClick={() => void remove(c)} disabled={busy} title={`Remove ${crewName(c)}`}>
                     Remove
                   </button>,
                 ),
@@ -271,7 +275,7 @@ export function StartCrewSheet({
             {starters.map((c) =>
               row(
                 c,
-                <button type="button" className="ck-btn ck-btn--plain ck-btn--sm" onClick={() => void copy(c)} disabled={busy} title={`Copy ${c.name} to My crews`}>
+                <button type="button" className="ck-btn ck-btn--plain ck-btn--sm" onClick={() => void copy(c)} disabled={busy} title={`Copy ${crewName(c)} to My crews`}>
                   Copy to My crews
                 </button>,
               ),
@@ -297,7 +301,7 @@ export function StartCrewSheet({
                       disabled={busy}
                       onChange={(e) => setChosen((cur) => ({ ...cur, [role.name]: e.target.value }))}
                     >
-                      {!current && <option value="">Choose an agent</option>}
+                      {!current && <option value="">{t('r21.sw.chooseAnAgent')}</option>}
                       {agentOptions(current).map((a) => (
                         <option key={a.id} value={a.id}>
                           {a.label}
@@ -310,7 +314,7 @@ export function StartCrewSheet({
             })}
           </ul>
           {!defaultAgent && roles.some((r) => r.agent_type === DEFAULT_AGENT) && (
-            <p className="ck-sub">No agent is set up on this computer for the default role. Pick one above, or set one up first.</p>
+            <p className="ck-sub">{t('r21.sw.noAgentIsSet')}</p>
           )}
         </div>
       )}

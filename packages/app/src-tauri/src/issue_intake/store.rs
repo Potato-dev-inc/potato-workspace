@@ -105,12 +105,14 @@ impl Store {
     }
 
     /// The empty `GH_CONFIG_DIR` for guarded panes. Created private; PM never puts a file in it.
+    #[cfg(test)]
     pub fn gh_empty_dir(&self) -> Result<PathBuf, String> {
         self.empty_dir("gh-empty")
     }
 
     /// The folder `core.hooksPath` points at for guarded panes: one `pre-push` hook that refuses every
     /// push. Created private; the hook is written again at every call, so an edit does not last.
+    #[cfg(test)]
     pub fn push_block_hooks_dir(&self) -> Result<PathBuf, String> {
         let dir = self.empty_dir("push-blocked-hooks")?;
         crate::pty::env_guard::write_push_block_hook(&dir)?;

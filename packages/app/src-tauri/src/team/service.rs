@@ -83,6 +83,8 @@ struct Inner {
     last_join_poll_ms: u64,
     /// The roster or the relay says this device is no longer on the team (`team_*` tools: `NOT_A_MEMBER`).
     removed: bool,
+    /// How the last roster look failed (a plain kind word), for "Why am I seeing this?". None when it worked.
+    last_refresh_kind: Option<&'static str>,
     /// Red-default-branch banners raised in the attention list (`team_ci:<card id>`).
     raised: HashSet<String>,
     /// Teammates' presence (memory only: never saved, never a card).
@@ -240,6 +242,41 @@ pub(crate) fn load_config(dir: &Path) -> (TeamConfig, Option<String>) {
     }
 }
 
+/// This PC's device is on the saved team list (so it was on the team once).
+pub(crate) fn device_on_roster(config: &TeamConfig, roster: Option<&Roster>) -> bool {
+    config.has_team() && !config.device.is_empty() && roster.is_some_and(|r| r.device(&config.device).is_some())
+}
+
+/// The removal message is the current error (not a stale flag), on a PC that was on this team.
+fn shows_removed(inner: &Inner) -> bool {
+    removed_showing(inner.error.as_deref(), &inner.config) && !stale_removal(inner)
+}
+
+/// The removal message is still the error but nothing says removed any more (a join or a new team came after it, and the
+/// stopped link never looked again): the refusal is stale, so the line and the banner go.
+fn stale_removal(inner: &Inner) -> bool {
+    inner.error.as_deref() == Some(REMOVED_MSG) && !inner.removed && !inner.transport.as_ref().is_some_and(|t| t.lost_access())
+}
+
+/// The error line the screens show.
+fn visible_error(inner: &Inner) -> Option<String> {
+    inner.error.clone().filter(|_| !stale_removal(inner))
+}
+
+fn removed_showing(error: Option<&str>, config: &TeamConfig) -> bool {
+    error == Some(REMOVED_MSG) && config.was_on_team && config.has_team()
+}
+
+const REMOVED_MSG: &str = "You're no longer on this team. The admin removed this computer.";
+
+/// The error line after a roster look: the "removed" sentence only for a PC that was on a team, and gone again once it is not removed.
+pub(crate) fn removed_error(old: Option<String>, removed: bool, config: &TeamConfig) -> Option<String> {
+    if removed && config.was_on_team && config.has_team() {
+        return Some(REMOVED_MSG.into());
+    }
+    old.filter(|e| e != REMOVED_MSG)
+}
+
 /// The roster and keys should be read again: nudged (a `RosterChanged`, or a message under a key
 /// I don't have), or the last look is older than `max_age_ms`.
 pub(crate) fn roster_due(nudged: bool, last_refresh_ms: u64, now: u64, max_age_ms: u64) -> bool {
@@ -331,9 +368,12 @@ impl Service {
     /// `new` without an `AppHandle` parameter: a unit test builds its service here, so no drop glue
     /// for the Tauri runtime is linked into the test binary (see `changed`).
     fn make(app: std::mem::ManuallyDrop<Option<tauri::AppHandle>>, registry: Registry, dir: PathBuf, keystore: KeyStore, gh: Arc<dyn Gh>) -> Self {
-        let (config, read_error) = load_config(&dir);
+        let (mut config, read_error) = load_config(&dir);
         let store = TeamStore::load(&dir.join("state.json"));
         let session = load_roster(&dir, &config).map(|r| Session::new(r, keystore.clone()));
+        // A team saved before the marker existed: this PC's own device is on the saved roster, so it was on the team.
+        // A team file and roster that never listed this device (copied, or a fresh PC) say nothing: no "removed" message.
+        config.was_on_team |= device_on_roster(&config, session.as_ref().map(|s| &s.roster));
         Self {
             app,
             registry,
@@ -355,6 +395,7 @@ impl Service {
                 last_refresh_ms: 0,
                 last_join_poll_ms: 0,
                 removed: false,
+                last_refresh_kind: None,
                 raised: HashSet::new(),
                 presence: presence::Table::default(),
                 report: None,
@@ -697,8 +738,12 @@ impl Service {
                 }
                 let mut inner = self.inner.lock();
                 inner.removed = found.removed;
+                inner.last_refresh_kind = None;
+                if !found.removed {
+                    inner.config.was_on_team |= inner.config.has_team();
+                }
+                inner.error = removed_error(inner.error.take(), found.removed, &inner.config);
                 if found.removed {
-                    inner.error = Some("You're no longer on this team. The admin removed this computer.".into());
                     if let Some(t) = inner.transport.take() {
                         t.stop();
                     }
@@ -712,7 +757,10 @@ impl Service {
                     self.changed();
                 }
             }
-            Err(error) => tracing::debug!(%error, "team: couldn't refresh the team list"),
+            Err(error) => {
+                tracing::debug!(%error, "team: couldn't refresh the team list");
+                self.inner.lock().last_refresh_kind = Some(transport::problem_kind(&transport::TransportError::new(error)));
+            }
         }
     }
 
@@ -804,6 +852,7 @@ impl Service {
         let config = {
             let mut inner = self.inner.lock();
             inner.config.join = None;
+            inner.config.was_on_team = true;
             inner.removed = false;
             inner.session = Some(Session::new(roster.clone(), self.keystore.clone()));
             inner.config.clone()
@@ -1531,6 +1580,8 @@ pub struct TeamView {
     /// What the link is doing right now (relay only): host, step, last failure kind, retry countdown.
     pub link_detail: Option<transport::LinkDetail>,
     pub error: Option<String>,
+    /// The "You're no longer on this team" message is showing: the Inbox offers "Dismiss", which forgets the team on this PC.
+    pub removed: bool,
     /// Messages from teammates known to be missing (gap detection).
     pub missing: u64,
     pub drafts: Vec<Draft>,
@@ -1540,6 +1591,19 @@ pub struct TeamView {
     pub presence: Vec<presence::View>,
     /// What I share about myself.
     pub share: presence::ShareView,
+}
+
+/// Facts behind a "removed" or "refused" line, so a live test can tell a real removal from a stale team file.
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct Why {
+    pub team_saved: bool,
+    /// This computer's device is on the saved team list.
+    pub on_roster: bool,
+    /// The removal message is showing.
+    pub removed: bool,
+    /// Plain kind of the last failed roster look (`problem_kind`), or none.
+    pub last_check: Option<&'static str>,
 }
 
 #[derive(Debug, Clone, Serialize)]
@@ -1558,6 +1622,8 @@ pub struct ConfigView {
     /// `team.json` is there but could not be read.
     pub read_error: Option<String>,
     pub error: Option<String>,
+    /// "Why am I seeing this?": plain facts for a removal or a refused link.
+    pub why: Why,
     /// Waiting for the admin's yes.
     pub joining: Option<String>,
     pub admin: bool,
@@ -1573,9 +1639,14 @@ pub struct ConfigView {
 
 fn config_view(svc: &Service, inner: &Inner) -> ConfigView {
     let session = inner.session.as_ref();
-    let me = session.and_then(|s| s.my_member().ok()).unwrap_or_default();
-    let my_device = session.and_then(|s| s.my_device().ok()).unwrap_or_default();
     let roster = session.map(|s| &s.roster);
+    // After a removal the session cannot name me; this PC's saved device key still finds me on the list, so I am never shown as someone else.
+    let my_device = session.and_then(|s| s.my_device().ok()).unwrap_or_else(|| inner.config.device.clone());
+    let me = session
+        .and_then(|s| s.my_member().ok())
+        .filter(|m| !m.is_empty())
+        .or_else(|| roster.and_then(|r| r.members.iter().find(|m| !my_device.is_empty() && m.devices.iter().any(|d| d.id == my_device)).map(|m| m.id.clone())))
+        .unwrap_or_default();
     let members = roster
         .map(|r| {
             r.members
@@ -1604,7 +1675,13 @@ fn config_view(svc: &Service, inner: &Inner) -> ConfigView {
         projects: inner.config.projects.clone(),
         profile: crate::app_paths::profile(),
         read_error: inner.read_error.clone(),
-        error: inner.error.clone(),
+        error: visible_error(inner),
+        why: Why {
+            team_saved: inner.config.has_team(),
+            on_roster: device_on_roster(&inner.config, roster),
+            removed: shows_removed(inner),
+            last_check: inner.last_refresh_kind,
+        },
         joining: inner.config.join.as_ref().map(|j| j.link.name.clone()),
         admin: roster.is_some_and(|r| r.is_admin(&me)),
         members,
@@ -1630,7 +1707,7 @@ fn config_view(svc: &Service, inner: &Inner) -> ConfigView {
 
 pub fn view() -> Result<TeamView, String> {
     let svc = service()?;
-    let (config, store, transport, link, link_detail, error, names, presence_views) = {
+    let (config, store, transport, link, link_detail, error, removed, names, presence_views) = {
         let mut inner = svc.inner.lock();
         // People who are no longer on the roster do not show.
         let on_roster: HashSet<String> = inner.session.as_ref().map(|s| s.roster.members.iter().map(|m| m.id.clone()).collect()).unwrap_or_default();
@@ -1647,7 +1724,8 @@ pub fn view() -> Result<TeamView, String> {
             inner.transport.as_ref().map(|t| t.kind()),
             inner.transport.as_ref().map(|t| t.status()),
             inner.transport.as_ref().and_then(|t| t.detail()),
-            inner.error.clone().or_else(|| inner.read_error.clone()),
+            visible_error(&inner).or_else(|| inner.read_error.clone()),
+            shows_removed(&inner),
             names,
             inner.presence.views(now_ms()),
         )
@@ -1686,6 +1764,7 @@ pub fn view() -> Result<TeamView, String> {
         link,
         link_detail,
         error,
+        removed,
         missing: store.seq.missing(),
         drafts: store.drafts.iter().rev().cloned().collect(),
         cards,
@@ -1822,6 +1901,7 @@ pub fn create(input: CreateInput) -> Result<ConfigView, String> {
     next.device = svc.keystore.device_sign().map(|k| super::crypto::key_id(&k))?;
     next.enabled = true;
     next.join = None;
+    next.was_on_team = true;
     {
         let mut inner = svc.inner.lock();
         inner.store = TeamStore::default();
@@ -1988,6 +2068,8 @@ pub fn leave() -> Result<ConfigView, String> {
     {
         let mut inner = svc.inner.lock();
         inner.session = None;
+        inner.removed = false;
+        inner.error = None;
         inner.store = TeamStore::default();
         svc.save(&inner);
     }
@@ -2563,4 +2645,57 @@ pub fn join_by_link(link: &str, name: String, github: Option<String>) -> Result<
     let target = super::invite_web::parse_target(link)?;
     let claimed = super::invite_web::claim(&target.base_url(), &target)?;
     join(JoinInput { link: claimed.link, code: claimed.code, name, github })
+}
+
+#[cfg(test)]
+mod removed_error_tests {
+    use super::*;
+
+    fn on_team() -> TeamConfig {
+        TeamConfig { team: "t".into(), root: "r".into(), folder: "f".into(), was_on_team: true, ..TeamConfig::default() }
+    }
+
+    #[test]
+    fn removed_message_needs_a_team_that_was_joined() {
+        assert!(removed_error(None, true, &on_team()).is_some());
+        assert_eq!(removed_error(None, true, &TeamConfig::default()), None, "never on a team: no message");
+        let mut no_marker = on_team();
+        no_marker.was_on_team = false;
+        assert_eq!(removed_error(None, true, &no_marker), None);
+    }
+
+    #[test]
+    fn removed_showing_only_for_the_message_on_a_saved_team_and_not_after_leaving() {
+        assert!(removed_showing(Some(REMOVED_MSG), &on_team()));
+        assert!(!removed_showing(Some("other"), &on_team()));
+        assert!(!removed_showing(None, &on_team()));
+        // Leaving (Dismiss) clears the team, so the message can never come back for it.
+        let mut left = on_team();
+        left.team.clear();
+        assert!(!removed_showing(Some(REMOVED_MSG), &left));
+    }
+
+    #[test]
+    fn a_roster_that_never_listed_this_device_does_not_mark_the_pc_as_removed() {
+        use super::super::roster::certify_device;
+        let admin = ed25519_dalek::SigningKey::from_bytes(&[1; 32]);
+        let device = ed25519_dalek::SigningKey::from_bytes(&[2; 32]);
+        let roster = Roster::create("t", &admin, "Admin", |team| certify_device(team, &admin, &device, &super::super::crypto::KemSecret::generate().public_b64(), "Admin PC"), 1).unwrap();
+        let mut config = on_team();
+        config.device = super::super::crypto::key_id(&device);
+        assert!(device_on_roster(&config, Some(&roster)), "its own device is on the list: it was on the team");
+        config.device = super::super::crypto::key_id(&ed25519_dalek::SigningKey::from_bytes(&[3; 32]));
+        assert!(!device_on_roster(&config, Some(&roster)), "another device's list says nothing about this PC");
+        config.device.clear();
+        assert!(!device_on_roster(&config, Some(&roster)));
+        assert!(!device_on_roster(&TeamConfig::default(), Some(&roster)));
+        assert!(!device_on_roster(&config, None));
+    }
+
+    #[test]
+    fn a_stale_removed_message_clears_but_other_errors_stay() {
+        assert_eq!(removed_error(Some(REMOVED_MSG.into()), false, &on_team()), None);
+        assert_eq!(removed_error(Some(REMOVED_MSG.into()), true, &TeamConfig::default()), None);
+        assert_eq!(removed_error(Some("other".into()), false, &on_team()).as_deref(), Some("other"));
+    }
 }

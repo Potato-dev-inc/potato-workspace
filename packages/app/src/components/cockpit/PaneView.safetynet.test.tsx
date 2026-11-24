@@ -12,6 +12,7 @@ import { PaneView } from './PaneView';
 
 const invoke = vi.fn(async (_cmd: string, _args?: unknown) => null as unknown);
 vi.mock('@tauri-apps/api/core', () => ({ invoke: (...a: unknown[]) => (invoke as (...x: unknown[]) => unknown)(...(a as [string])) }));
+vi.mock('@tauri-apps/api/event', () => ({ listen: async () => () => undefined, emit: async () => undefined }));
 vi.mock('../TerminalViewport', () => ({ TerminalViewport: () => <div data-testid="term" /> }));
 vi.mock('../../lib/sessionChat', async (importOriginal) => ({
   ...(await importOriginal<typeof import('../../lib/sessionChat')>()),
@@ -31,7 +32,7 @@ class NoopResizeObserver {
 Element.prototype.scrollIntoView = () => {};
 
 const SAMPLE: ChatItem[] = [{ kind: 'user', id: '10:0', at: null, text: 'List the files' }];
-const fixture = (path: string) => readFileSync(resolve(__dirname, '../../../src-tauri/src', path), 'utf8');
+const fixture = (path: string) => readFileSync(resolve(__dirname, '../../../src-tauri/crates/pm-core/src', path), 'utf8');
 const THEME = fixture('tui/claude/fixtures/first_run_theme_2_1_312.txt');
 const CLAUDE_IDLE = fixture('tui/claude/fixtures/first_run_idle_box_2_1_312.txt');
 const CODEX_IDLE = fixture('tui/codex/fixtures/standby_ready_live.txt');

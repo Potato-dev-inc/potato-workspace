@@ -19,7 +19,7 @@ use std::path::{Path, PathBuf};
 use super::live::{CopyRead, DeskIo};
 use super::model::{strip_controls, Clean, Facts, FileRow, Item, ItemKey, Keep, Marks, TITLE_MAX, WINDOW_MS};
 use super::risk;
-use super::sources::copies::{from_copies, status_of, tidy, CopyInput};
+use super::sources::copies::{from_copies, status_of, tidy, tidy_path, CopyInput};
 use super::sources::folder::{from_turns, PaneFacts};
 use super::sources::group::group_of;
 use super::sources::issues::from_issues;
@@ -310,10 +310,10 @@ fn fill_folder(io: &dyn DeskIo, turns: &Turns, item: &mut Item, clean: &Clean) {
     // No save points: only the names the turn summaries kept, and no line scan.
     let raw: Vec<String> = item.facts.files.iter().flatten().map(|row| row.path.clone()).collect();
     for row in item.facts.files.iter_mut().flatten() {
-        row.path = tidy(&row.path, clean);
+        row.path = tidy_path(&row.path, clean);
     }
-    item.facts.secret_files = secret_paths(&raw).iter().map(|path| tidy(path, clean)).collect();
-    item.facts.ci_files = ci_paths(&raw).iter().map(|path| tidy(path, clean)).collect();
+    item.facts.secret_files = secret_paths(&raw).iter().map(|path| tidy_path(path, clean)).collect();
+    item.facts.ci_files = ci_paths(&raw).iter().map(|path| tidy_path(path, clean)).collect();
     item.facts.lines_scanned = false;
 }
 
@@ -328,7 +328,7 @@ fn apply_read(facts: &mut Facts, read: &CopyRead, clean: &Clean, full: bool) {
             .files
             .iter()
             .map(|file| FileRow {
-                path: tidy(&file.path, clean),
+                path: tidy_path(&file.path, clean),
                 status: status_of(&file.status),
                 added: file.additions,
                 deleted: file.deletions,
@@ -344,12 +344,12 @@ fn apply_read(facts: &mut Facts, read: &CopyRead, clean: &Clean, full: bool) {
     facts.deleted = changes.deletions;
     // Found on the raw paths (a cleaned name could hide the pattern), shown cleaned.
     let raw: Vec<String> = changes.files.iter().map(|file| file.path.clone()).collect();
-    facts.secret_files = secret_paths(&raw).iter().map(|path| tidy(path, clean)).collect();
-    facts.ci_files = ci_paths(&raw).iter().map(|path| tidy(path, clean)).collect();
+    facts.secret_files = secret_paths(&raw).iter().map(|path| tidy_path(path, clean)).collect();
+    facts.ci_files = ci_paths(&raw).iter().map(|path| tidy_path(path, clean)).collect();
     match &read.scan {
         Some(scan) => {
             let lines = |lines: &[(String, u32)]| -> Vec<(String, u32)> {
-                lines.iter().map(|(path, line)| (tidy(path, clean), *line)).collect()
+                lines.iter().map(|(path, line)| (tidy_path(path, clean), *line)).collect()
             };
             facts.secret_lines = lines(&scan.secret_lines);
             facts.home_lines = lines(&scan.home_lines);
@@ -420,7 +420,7 @@ mod tests {
 
     #[test]
     fn a_title_is_one_clean_line() {
-        let clean = Clean { text: Box::new(|raw| raw.replace("secret", "[x]")) };
+        let clean = Clean { text: Box::new(|raw| raw.replace("secret", "[x]")), path: None };
         assert_eq!(title_line(&clean, "\n  #4 fix secret  \nsecond line"), "#4 fix [x]");
         assert_eq!(title_line(&clean, &"a".repeat(300)).chars().count(), TITLE_MAX);
     }

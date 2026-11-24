@@ -7,24 +7,24 @@
 //
 // Anything the program printed (help text, live test output) is untrusted data. It sits inside <<<...>>> blocks
 // and the rules tell the AI never to follow instructions found there. The checker, not the AI, is the guard.
-import formatDoc from '../../src-tauri/src/tui/declarative/DEFINITION-FORMAT.md?raw';
+import formatDoc from '../../src-tauri/crates/pm-core/src/tui/declarative/DEFINITION-FORMAT.md?raw';
 import kiloToml from '../../src-tauri/tests/agent-definitions/kilo.toml?raw';
 import kiroToml from '../../src-tauri/tests/agent-definitions/kiro.toml?raw';
 import nimbusToml from '../../src-tauri/tests/agent-definitions/nimbus.toml?raw';
-import nimbusExpectIdle from '../../src-tauri/src/tui/declarative/fixtures/nimbus/tui_idle.expect.toml?raw';
-import nimbusExpectPermission from '../../src-tauri/src/tui/declarative/fixtures/nimbus/tui_permission.expect.toml?raw';
-import nimbusExpectReply from '../../src-tauri/src/tui/declarative/fixtures/nimbus/tui_reply.expect.toml?raw';
-import nimbusExpectTrust from '../../src-tauri/src/tui/declarative/fixtures/nimbus/tui_trust.expect.toml?raw';
-import nimbusExpectWorking from '../../src-tauri/src/tui/declarative/fixtures/nimbus/tui_working.expect.toml?raw';
-import nimbusExpectWorkReply from '../../src-tauri/src/tui/declarative/fixtures/nimbus/tui_work_reply.expect.toml?raw';
-import nimbusExpectWorkWorking from '../../src-tauri/src/tui/declarative/fixtures/nimbus/tui_work_working.expect.toml?raw';
-import nimbusTextIdle from '../../src-tauri/src/tui/declarative/fixtures/nimbus/tui_idle.txt?raw';
-import nimbusTextPermission from '../../src-tauri/src/tui/declarative/fixtures/nimbus/tui_permission.txt?raw';
-import nimbusTextReply from '../../src-tauri/src/tui/declarative/fixtures/nimbus/tui_reply.txt?raw';
-import nimbusTextTrust from '../../src-tauri/src/tui/declarative/fixtures/nimbus/tui_trust.txt?raw';
-import nimbusTextWorking from '../../src-tauri/src/tui/declarative/fixtures/nimbus/tui_working.txt?raw';
-import nimbusTextWorkReply from '../../src-tauri/src/tui/declarative/fixtures/nimbus/tui_work_reply.txt?raw';
-import nimbusTextWorkWorking from '../../src-tauri/src/tui/declarative/fixtures/nimbus/tui_work_working.txt?raw';
+import nimbusExpectIdle from '../../src-tauri/crates/pm-core/src/tui/declarative/fixtures/nimbus/tui_idle.expect.toml?raw';
+import nimbusExpectPermission from '../../src-tauri/crates/pm-core/src/tui/declarative/fixtures/nimbus/tui_permission.expect.toml?raw';
+import nimbusExpectReply from '../../src-tauri/crates/pm-core/src/tui/declarative/fixtures/nimbus/tui_reply.expect.toml?raw';
+import nimbusExpectTrust from '../../src-tauri/crates/pm-core/src/tui/declarative/fixtures/nimbus/tui_trust.expect.toml?raw';
+import nimbusExpectWorking from '../../src-tauri/crates/pm-core/src/tui/declarative/fixtures/nimbus/tui_working.expect.toml?raw';
+import nimbusExpectWorkReply from '../../src-tauri/crates/pm-core/src/tui/declarative/fixtures/nimbus/tui_work_reply.expect.toml?raw';
+import nimbusExpectWorkWorking from '../../src-tauri/crates/pm-core/src/tui/declarative/fixtures/nimbus/tui_work_working.expect.toml?raw';
+import nimbusTextIdle from '../../src-tauri/crates/pm-core/src/tui/declarative/fixtures/nimbus/tui_idle.txt?raw';
+import nimbusTextPermission from '../../src-tauri/crates/pm-core/src/tui/declarative/fixtures/nimbus/tui_permission.txt?raw';
+import nimbusTextReply from '../../src-tauri/crates/pm-core/src/tui/declarative/fixtures/nimbus/tui_reply.txt?raw';
+import nimbusTextTrust from '../../src-tauri/crates/pm-core/src/tui/declarative/fixtures/nimbus/tui_trust.txt?raw';
+import nimbusTextWorking from '../../src-tauri/crates/pm-core/src/tui/declarative/fixtures/nimbus/tui_working.txt?raw';
+import nimbusTextWorkReply from '../../src-tauri/crates/pm-core/src/tui/declarative/fixtures/nimbus/tui_work_reply.txt?raw';
+import nimbusTextWorkWorking from '../../src-tauri/crates/pm-core/src/tui/declarative/fixtures/nimbus/tui_work_working.txt?raw';
 
 /**
  * Every email address in `text` replaced by `<email>`: the same rule as Rust's `redact::mask_emails` (SPEC 11.21), a last net

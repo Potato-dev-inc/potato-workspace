@@ -186,6 +186,13 @@ pub fn clean_line(raw: &str, ctx: &RedactContext, home: Option<&str>) -> String 
     strip_controls(&crate::session_chat::home_to_tilde(&redacted, home))
 }
 
+/// A file path made safe to show: known secrets and token shapes masked, the home folder as `~`, controls removed. Unlike
+/// [`clean_line`] it keeps long file names (strict mode would mask them as opaque runs).
+pub fn clean_path(raw: &str, ctx: &RedactContext, home: Option<&str>) -> String {
+    let redacted = crate::redact::text_with(raw, ctx).into_inner();
+    strip_controls(&crate::session_chat::home_to_tilde(&redacted, home))
+}
+
 /// The check changes of save points as the copy's `Changes` (so one fill path serves both).
 pub fn changes_of(points: &[PointChange]) -> Changes {
     let files: Vec<FileChange> = points
@@ -292,7 +299,11 @@ impl DeskIo for LiveIo {
 
     fn clean(&self) -> Clean {
         let (ctx, home) = self.context();
-        Clean { text: Box::new(move |raw| clean_line(raw, &ctx, home.as_deref())) }
+        let (ctx2, home2) = (ctx.clone(), home.clone());
+        Clean {
+            text: Box::new(move |raw| clean_line(raw, &ctx, home.as_deref())),
+            path: Some(Box::new(move |raw| clean_path(raw, &ctx2, home2.as_deref()))),
+        }
     }
 
     fn clean_patch(&self, raw: &str) -> String {
@@ -487,6 +498,13 @@ mod tests {
 
     fn ctx() -> RedactContext {
         RedactContext { env_values: Vec::new(), home: Some(r"C:\Users\you".to_string()) }
+    }
+
+    #[test]
+    fn a_long_file_name_is_kept_in_a_path_but_a_token_still_goes() {
+        let long = "src/components/ScreenQuestionCardSafetynetCases.screen.test.tsx";
+        assert_eq!(clean_path(long, &ctx(), None), long);
+        assert!(clean_path("src/ghp_abcdefghijklmnopqrstuvwxyz0123456789.txt", &ctx(), None).contains("[REDACTED]"));
     }
 
     #[test]

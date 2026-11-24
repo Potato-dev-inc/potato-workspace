@@ -23,7 +23,17 @@ interface Props {
 export function ForceYesChip({ paneId, isAcp, state, agent, cwd, chatApi = tauriAcpChatApi, rulesApi = tauriAgentRulesApi }: Props) {
   const t = useT();
   // A place that does not let this person change this draws the same chip switched off, with its one reason.
-  const denied = useHost().denied?.('change') ?? null;
+  const host = useHost();
+  const denied = host.denied?.('change') ?? null;
+  // A far PC that does not count this PC as its person's own does not let Force yes be turned on from here (it auto-approves commands).
+  const [notOwn, setNotOwn] = useState<string | null>(null);
+  useEffect(() => {
+    let alive = true;
+    void host.forceYesDenied?.().then((why) => alive && setNotOwn(why));
+    return () => {
+      alive = false;
+    };
+  }, [host]);
   const [open, setOpen] = useState(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -98,8 +108,8 @@ export function ForceYesChip({ paneId, isAcp, state, agent, cwd, chatApi = tauri
         aria-pressed={on}
         aria-haspopup={on ? undefined : 'dialog'}
         aria-expanded={on ? undefined : open}
-        title={denied ?? (on ? t('forceYes.chipOnTip') : t('forceYes.chipOffTip'))}
-        disabled={busy || denied !== null}
+        title={denied ?? (!on && notOwn ? notOwn : on ? t('forceYes.chipOnTip') : t('forceYes.chipOffTip'))}
+        disabled={busy || denied !== null || (!on && notOwn !== null)}
         onClick={click}
       >
         {on ? t('forceYes.chipOn') : t('forceYes.chip')}

@@ -104,7 +104,7 @@ describe('the Used bar in Traditional Chinese', () => {
     expect(pop.getAttribute('aria-label')).toBe(t('status.usage'));
     expect(pop.querySelector('.ck-usage-pop-title')!.textContent).toBe(t('status.usage'));
     expect(pop.querySelector('.ck-usage-link')!.textContent).toBe(t('status.usagePage'));
-    expect(pop.querySelector('[role="meter"]')!.getAttribute('aria-label')).toBe(t('status.windowUsed', { name: '5-hour' }));
+    expect(pop.querySelector('[role="meter"]')!.getAttribute('aria-label')).toBe(t('status.windowUsed', { name: t('state.usage.win.hours', { n: 5 }) }));
     expect([...pop.querySelectorAll('.ck-usage-win-pct')].map((n) => n.textContent)).toContain(t('status.percentUsed', { pct: 87 }));
     expect(visibleEnglish(pop.querySelector('.ck-usage-pop-top')!)).toEqual([]);
   });

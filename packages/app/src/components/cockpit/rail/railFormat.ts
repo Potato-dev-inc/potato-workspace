@@ -68,6 +68,15 @@ export function relativeTo(cwd: string, abs: string): string {
   return path.toLowerCase().startsWith(`${root.toLowerCase()}/`) ? path.slice(root.length + 1) : path;
 }
 
+/** Whether `abs` is inside the project folder `cwd` (a relative path is; an unknown folder keeps everything). "/C:/x" and "C:\x" are the same place. */
+export function insideProject(cwd: string, abs: string): boolean {
+  const norm = (p: string) => slashes(p).replace(/^\/(?=[a-zA-Z]:)/, '').replace(/[/]+$/, '').toLowerCase();
+  const root = norm(cwd);
+  const path = norm(abs);
+  if (!root || !/^([a-z]:)?\//.test(path)) return true;
+  return path === root || path.startsWith(`${root}/`);
+}
+
 /** "1,204": a count with thousands separators. */
 export const withCommas = (n: number): string => n.toLocaleString('en-US');
 

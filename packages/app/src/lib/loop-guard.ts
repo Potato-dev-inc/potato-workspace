@@ -2,7 +2,7 @@
 import { createContext, useCallback, useContext, useEffect, useState } from 'react';
 import { t } from '../i18n';
 import { invoke } from '@tauri-apps/api/core';
-import { listen } from '@tauri-apps/api/event';
+import { listen } from './events';
 
 export type LoopKind = 'repeated_error' | 'repeated_action' | 'no_progress' | 'stalled';
 

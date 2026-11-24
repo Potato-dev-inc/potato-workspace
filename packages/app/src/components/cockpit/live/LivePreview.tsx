@@ -3,6 +3,7 @@
 // `<b>` written in a chat stays text.
 import type { LiveItem, LivePane, LiveTask } from '../../../lib/live-room';
 import '../../../styles/cockpit-live.css';
+import { t } from '../../../i18n';
 
 const WHO: Record<LiveItem['t'], string> = {
   user: 'Prompt',
@@ -53,11 +54,11 @@ export function LivePreview({
   panes?: LivePane[];
 }) {
   if (items.length === 0 && hidden === 0) {
-    return <p className="ck-live-empty">Nothing to show yet. The chat appears here when an agent answers.</p>;
+    return <p className="ck-live-empty">{t('r21.sw.nothingToShowYet')}</p>;
   }
   return (
     <>
-      <ol className="ck-live-preview" aria-label="What viewers see">
+      <ol className="ck-live-preview" aria-label={t('r21.sw.whatViewersSee')}>
         {items.map((item) => {
           const label = panes.find((p) => p.key === item.pane)?.label;
           return (
@@ -80,7 +81,7 @@ export function LivePreview({
           );
         })}
       </ol>
-      {hidden > 0 && <p className="ck-live-hidden">Some steps were not shared</p>}
+      {hidden > 0 && <p className="ck-live-hidden">{t('r21.sw.someStepsWereNot')}</p>}
     </>
   );
 }

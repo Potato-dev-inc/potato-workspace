@@ -6,7 +6,7 @@ import { act, useState } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { DevicesFake, MAC_MINI, WORK_LAPTOP } from '../../dev/devices-fixtures';
-import { createFakeLendApi, GRANT_OUT, lendState } from '../../dev/lend-fixtures';
+import { createFakeLendApi, GRANT_IN, GRANT_OUT, lendState } from '../../dev/lend-fixtures';
 import { setLanguagePref } from '../../i18n';
 import { connectTabFor, CONNECT_TABS, normalizeConnectTab, rememberedConnectTab, type ConnectTab } from '../../lib/openConnect';
 import { tauri } from '../../lib/tauri';
@@ -217,7 +217,8 @@ describe('Connect > Devices', () => {
     });
     const devices = new DevicesFake({ enabled: true, name: 'REN-DESK', devices: [MAC_MINI] });
     await h.mount(makeApi({ tunnel: fakeTunnel(stable('linked')).api, devices, account }));
-    expect(text('[data-testid="account-pc-a"]')).toContain('REN-LAPTOP');
+    // A paired PC shows the name of its own sheet (so a rename sticks), not the account's.
+    expect(text('[data-testid="account-pc-a"]')).toContain('Mac mini');
     expect(q('[data-testid="account-pc-open-a"]')).not.toBeNull();
     expect(text('[data-testid="account-pc-line-b"]')).toBe('PC · Online. Press Allow on REN-WORK first.');
     expect(q('[data-testid="account-pc-open-b"]')).toBeNull();
@@ -259,12 +260,53 @@ describe('Connect > Team and Lending', () => {
     expect(q('[data-testid="connect-main-lending"]')).not.toBeNull();
   });
 
+  it('Lending switch turns off at once while the lend state still says on, is locked while saving, and reverts with a note on failure', async () => {
+    const api = makeApi({ settings: { lend_enabled: true } });
+    const real = api.patchSettings!;
+    let release: () => void = () => undefined;
+    let fail = false;
+    api.patchSettings = async (p) => {
+      await new Promise<void>((r) => (release = r));
+      if (fail) throw new Error('boom');
+      return real(p);
+    };
+    await h.mount(api, 'lending');
+    const sw = () => q<HTMLInputElement>('[data-testid="connect-lending-switch"]')!;
+    expect(sw().checked).toBe(true);
+    await click(sw());
+    expect(sw().checked).toBe(false);
+    expect(sw().disabled).toBe(true);
+    await act(async () => release());
+    await settle(8);
+    // the fake lend state still reports enabled: the saved setting wins
+    expect(sw().checked).toBe(false);
+    expect(sw().disabled).toBe(false);
+    fail = true;
+    await click(sw());
+    expect(sw().checked).toBe(true);
+    await act(async () => release());
+    await settle(8);
+    expect(sw().checked).toBe(false);
+    expect(q('[data-testid="connect-lending-switch-error"]')).not.toBeNull();
+  });
+
   it('Lending working: counts what is lent, and shows the reach line when this PC is broken', async () => {
     const lend = createFakeLendApi(lendState({ grants: [GRANT_OUT] }));
     await h.mount(makeApi({ lend, tunnel: fakeTunnel(stable('failed')).api }), 'lending');
     expect(text('[data-testid="connect-status-lending"]')).toContain('Lending 1');
     expect(q('[data-testid="connect-reach"]')).not.toBeNull();
     expect(q('[data-testid="connect-main-lending"]')).not.toBeNull();
+  });
+});
+
+describe('Connect > Lending with a borrow running', () => {
+  it('Ask to borrow still opens its sheet while a borrow is active', async () => {
+    const lend = createFakeLendApi(lendState({ grants: [GRANT_IN] }));
+    await h.mount(makeApi({ lend }), 'lending');
+    const btn = [...document.querySelectorAll('[data-testid="connect-main-lending"] button')].find((b) => b.textContent === 'Ask to borrow')!;
+    await click(btn);
+    await settle(8);
+    expect(document.querySelector('.lend-sheet [aria-label="Ask to borrow"], .lend-sheet')).not.toBeNull();
   });
 });
 

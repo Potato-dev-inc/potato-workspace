@@ -2,6 +2,7 @@
 // Click it to open the rows. While the turn runs, it shows a live spinner and the running row's label instead, a timer
 // beside it, and a short step list under it (a spinner turning into a tick as each step ends). Open, a finished turn
 // ends with "Done in 14s · 4 steps".
+import { t, useT } from '../../i18n';
 import { useEffect, useState } from 'react';
 import type { ToolStep } from '../../lib/sessionChatModel';
 import { DotSpinner } from '../cockpit/DotSpinner';
@@ -77,6 +78,7 @@ function StepMark({ step, live }: { step: ToolStep; live: boolean }) {
 }
 
 export function ActivityLine({ steps, live, fromScreen, verbose }: ActivityLineProps) {
+  const t = useT();
   const [toggled, setToggled] = useState<boolean | null>(null);
   const foundHere = useStepsFindOpen(steps);
   const open = toggled ?? (verbose || foundHere);
@@ -97,14 +99,14 @@ export function ActivityLine({ steps, live, fromScreen, verbose }: ActivityLineP
           className="ck-chat-activity ck-agc-grouptoggle"
           data-live={running !== null || undefined}
         >
-          {running !== null && <DotSpinner status="running" size={3} label="Working" className="shrink-0" />}
+          {running !== null && <DotSpinner status="running" size={3} label={t('state.working')} className="shrink-0" />}
           <span className={`ck-chat-activity-text ck-agc-grouptext${running !== null ? ' ck-agc-shim' : ''}`}>
-            {running !== null ? `Working · ${running}` : <SummaryText parts={parts} time={span !== null ? formatDuration(span) : null} />}
+            {running !== null ? `${t('state.working')} · ${running}` : <SummaryText parts={parts} time={span !== null ? formatDuration(span) : null} />}
           </span>
           <Chevron />
         </button>
         {live && (
-          <span className="ck-agc-elapsed" data-testid="activity-elapsed" aria-label="Time so far">
+          <span className="ck-agc-elapsed" data-testid="activity-elapsed" aria-label={t('r21.sw.timeSoFar')}>
             {formatDuration(elapsed)}
           </span>
         )}

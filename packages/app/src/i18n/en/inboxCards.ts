@@ -16,6 +16,18 @@ export const inboxCards = {
   'inboxCards.runs': 'Runs:',
 
   // QuestionCard
+  'inboxCards.question.wants': '{who} wants to {action}',
+  // The verbs an agent's tool titles start with, and the readable name of an MCP tool ("mcp__server__tool").
+  'inboxCards.verb.Write': 'Write',
+  'inboxCards.verb.Edit': 'Edit',
+  'inboxCards.verb.Run': 'Run',
+  'inboxCards.verb.Read': 'Read',
+  'inboxCards.verb.Delete': 'Delete',
+  'inboxCards.verb.Move': 'Move',
+  'inboxCards.verb.Fetch': 'Fetch',
+  'inboxCards.verb.Search': 'Search',
+  'inboxCards.verb.mcp': 'use the {tool} tool',
+  'inboxCards.question.gap': '',
   'inboxCards.question.alwaysUse': 'Always use this',
   'inboxCards.question.orType': 'Or type an answer',
   'inboxCards.question.typeAnswer': 'Type an answer',
@@ -158,4 +170,11 @@ export const inboxCards = {
   // A risky ask of a minion, docked in the chat of the agent that started it
   'inboxCards.minionAsks': 'A minion of {parent} asks',
   'inboxCards.openMinion': 'See what it is doing',
+
+  // The jump-out card over the work area (a blocking question that only the Inbox shows)
+  'inboxCards.jumpOut.region': 'Needs you now',
+  'inboxCards.jumpOut.later': 'Later',
+  'inboxCards.jumpOut.show': 'Show',
+  'inboxCards.jumpOut.laterTip': 'Hide this. It stays in your Inbox.',
+  'inboxCards.jumpOut.more': '{n} more in Inbox >',
 } as const;

@@ -40,7 +40,7 @@ export const settingsPreload: Partial<Record<EnglishKey, string>> = {
   'preload.closesIn': '若沒有使用，{time} 後進入休眠',
   'preload.staysReady': '保持待命',
   'preload.neverClose': '永不關閉',
-  'preload.neverCloseHelp': '待命代理會一直完整執行並持續占用記憶體，直到你關閉它們。',
+  'preload.neverCloseHelp': '待命 AI 助理會一直完整執行並持續占用記憶體，直到你關閉它們。',
   'preload.moreDetails': '更多細節',
   'preload.act.dialog': '無法保持待命：它停在一個提示畫面。請自己打開一次並回答。',
   'preload.act.needs_attention': '無法保持待命：它停在登入或更新畫面。請自己完成一次。',

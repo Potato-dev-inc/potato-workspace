@@ -122,6 +122,57 @@ describe('Add a device > Over SSH', () => {
     expect(q('[data-testid="ssh-empty"]')!.textContent).toBe('No SSH machines yet.');
   });
 
+  it('Set it up saves the machine, runs the setup once, shows its steps, and the finished machine can be updated', async () => {
+    const fake = new SshFake({ check: CHECK_OK });
+    fake.setupProgress = [
+      { id: '', step: 'look', state: 'doing', attempt: 0 },
+      { id: '', step: 'look', state: 'done', attempt: 0 },
+      { id: '', step: 'copy', state: 'retrying', attempt: 1 },
+    ];
+    await mount(fake);
+    await fill('dev@build.local');
+    await click(q('[data-testid="ssh-check"]'));
+    await settle(4);
+    expect(q('[data-testid="ssh-save"]')!.textContent).toBe('Set it up');
+    await click(q('[data-testid="ssh-save"]'));
+    await settle(6);
+    expect(fake.calls.map((c) => c.method)).toEqual(['check', 'add', 'setup']);
+    expect(q('[data-testid="add-device-sheet"]')).toBeNull();
+    await click(q('[data-testid="ssh-update-ssh-1"]'));
+    await settle(4);
+    expect(fake.calls.at(-1)).toEqual({ method: 'update', args: ['ssh-1'] });
+  });
+
+  it('a step that fails three times hands over: the fixed line, Copy, Open a shell, and Try again runs only the setup', async () => {
+    const line = "/bin/sh -c 'nohup potato-host run'";
+    const fake = new SshFake({ check: CHECK_OK });
+    fake.setupResult = { ok: false, alreadyCurrent: false, failure: { step: 'start', why: 'step_failed', line: 'bus <b>x</b>', handoff: line } };
+    fake.setupProgress = [{ id: '', step: 'start', state: 'retrying', attempt: 2 }];
+    const written: string[] = [];
+    Object.assign(navigator, { clipboard: { writeText: async (s: string) => void written.push(s) } });
+    await mount(fake);
+    await fill('dev@build.local');
+    await click(q('[data-testid="ssh-check"]'));
+    await settle(4);
+    await click(q('[data-testid="ssh-save"]'));
+    await settle(6);
+    expect(q('[data-testid="ssh-step-start"]')!.textContent).toBe('Starting it: that did not work, trying again (2 of 3)');
+    const failed = q('[data-testid="ssh-setup-failed"]')!;
+    expect(failed.textContent).toContain('A step did not work after three tries. bus <b>x</b>');
+    expect(failed.querySelector('b')).toBeNull();
+    expect(q('[data-testid="ssh-handoff-line"]')!.textContent).toBe(line);
+    await click(q('[data-testid="ssh-handoff-copy"]'));
+    expect(written).toEqual([line]);
+    await click(q('[data-testid="ssh-handoff-shell"]'));
+    expect(fake.opened).toEqual([{ id: 'ssh-1', agent: 'shell' }]);
+    fake.setupResult = { ok: true, alreadyCurrent: false, failure: null };
+    expect(q('[data-testid="ssh-save"]')!.textContent).toBe('Try again');
+    await click(q('[data-testid="ssh-save"]'));
+    await settle(6);
+    expect(fake.calls.map((c) => c.method)).toEqual(['check', 'add', 'setup', 'open', 'setup']);
+    expect(q('[data-testid="add-device-sheet"]')).toBeNull();
+  });
+
   it('saved machines show without opening the sheet, and nothing renders while the Labs switch is off', async () => {
     await act(async () => root.render(<DevicesPage api={new DevicesFake({ enabled: true })} ssh={new SshFake({ hosts: [BUILD_BOX] })} />));
     await settle(6);

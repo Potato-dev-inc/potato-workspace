@@ -6,9 +6,9 @@ use super::delivery::{delivery_summary, record_delivery, Delivery};
 use super::transcript;
 
 /// Codex 0.159.3, update notice closed first (op 3f82886d).
-const CODEX_TRACE: &str = include_str!("../tui/codex/fixtures/delivery_trace_live.txt");
+const CODEX_TRACE: &str = include_str!("../../crates/pm-core/src/tui/codex/fixtures/delivery_trace_live.txt");
 /// Claude 2.1.299 in manual mode (the edit run).
-const CLAUDE_TRACE: &str = include_str!("../tui/claude/fixtures/delivery_trace_live.txt");
+const CLAUDE_TRACE: &str = include_str!("../../crates/pm-core/src/tui/claude/fixtures/delivery_trace_live.txt");
 
 fn trace_of(raw: &str) -> Vec<String> {
     raw.lines().skip(1).map(str::to_string).collect()

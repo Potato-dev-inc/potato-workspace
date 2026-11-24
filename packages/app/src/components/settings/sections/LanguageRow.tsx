@@ -1,4 +1,4 @@
-// Settings > Look and feel > Language: Automatic (follows Windows), English or Traditional Chinese.
+// Settings > Look and feel > Language: Automatic (follows the system), English or Traditional Chinese.
 // Saves to the settings file (`ui_language`) and switches the whole app live, no restart.
 import { LANGUAGE_PREFS, isLanguagePref, setLanguagePref, useT, type LanguagePref } from '../../../i18n';
 import type { RowDef, SettingsEnv } from '../model';
@@ -37,7 +37,7 @@ function LanguageRow({ env }: { env: SettingsEnv }) {
 export const languageRow: RowDef = {
   id: 'language',
   label: 'Language',
-  hint: 'Automatic follows Windows.',
+  hint: 'Automatic follows your system.',
   keywords: 'language locale chinese traditional taiwan english translate zh-tw 繁體中文 語言',
   group: 'Appearance',
   render: (env) => <LanguageRow env={env} />,

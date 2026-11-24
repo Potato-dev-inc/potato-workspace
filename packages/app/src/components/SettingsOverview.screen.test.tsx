@@ -23,7 +23,7 @@ const api = (): SettingsApi => ({
 
 const MIXED: CheckRow[] = [
   { id: 'bridge', status: 'fail', sentence: 'Potato Workspace needs a restart. Close it and open it again.', fix: null },
-  { id: 'agent-claude', status: 'warn', sentence: 'Claude is not tested yet', fix: { kind: 'test', label: 'Test', agentId: 'claude' } },
+  { id: 'agent-claude', status: 'warn', sentence: 'Claude is not checked yet', fix: { kind: 'test', label: 'Test', agentId: 'claude' } },
   { id: 'agent-codex', status: 'warn', sentence: 'Codex needs sign-in', fix: { kind: 'signin', label: 'Sign in', agentId: 'codex' } },
   { id: 'agent-gemini', status: 'fail', sentence: 'Gemini was found but did not start (exit code 1)', fix: { kind: 'test', label: 'Try again', agentId: 'gemini' } },
 ];
@@ -100,7 +100,7 @@ describe('Settings > Overview on the real page', () => {
   const FRESH = (tested: boolean): CheckRow[] => [
     tested
       ? { id: 'agent-claude', status: 'ok', sentence: 'Claude is signed in', fix: { kind: 'test', label: 'Test again', agentId: 'claude' } }
-      : { id: 'agent-claude', status: 'warn', sentence: 'Claude is not tested yet', fix: { kind: 'test', label: 'Test', agentId: 'claude' } },
+      : { id: 'agent-claude', status: 'warn', sentence: 'Claude is not checked yet', fix: { kind: 'test', label: 'Test', agentId: 'claude' } },
   ];
 
   const mountFresh = async () => {

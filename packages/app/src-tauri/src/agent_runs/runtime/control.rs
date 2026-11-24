@@ -125,7 +125,7 @@ pub(in crate::agent_runs) fn settle_native_abort(
 fn request_interrupt(
     snapshot: &OperationSnapshot,
     registry: &Arc<Mutex<crate::pty::PaneRegistry>>,
-    app: &tauri::AppHandle,
+    _app: &tauri::AppHandle,
 ) -> Result<(), OperationError> {
     match messaging::interrupt_action(snapshot) {
         Some(messaging::InterruptAction::AbortNative) => {
@@ -172,7 +172,7 @@ fn request_interrupt(
             };
             let sequence = crate::pty::keys::sequence("ctrl+c")
                 .map_err(|error| OperationError::new("INTERRUPT_FAILED", error, false))?;
-            crate::pty::registry_write_input(registry, app, pane_id, &sequence, false, false, None, crate::pty::WriteOrigin::Nudge)
+            crate::pty::registry_write_input(registry, pane_id, &sequence, false, false, None, crate::pty::WriteOrigin::Nudge)
                 .map_err(|error| OperationError::new("INTERRUPT_FAILED", error, true))?;
             Ok(())
         }

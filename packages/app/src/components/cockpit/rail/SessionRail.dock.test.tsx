@@ -4,7 +4,7 @@
 // takes the window.
 import { act } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, onTestFinished, vi } from 'vitest';
 import { useEnglish } from '../../../i18n/test-utils';
 import { SessionRail } from './SessionRail';
 import { resetRailFoldForTests } from './railFold';
@@ -211,6 +211,10 @@ describe('the dock', () => {
   });
 
   it('the column edge drags and remembers its width', async () => {
+    // A wide window: the dock is only squeezed when the chat would get under its floor.
+    const was = window.innerWidth;
+    Object.defineProperty(window, 'innerWidth', { value: 1920, configurable: true });
+    onTestFinished(() => void Object.defineProperty(window, 'innerWidth', { value: was, configurable: true }));
     await mount();
     await act(async () => openMinionView('p1', 'm1'));
     const edge = host.querySelector<HTMLElement>('.ck-resize--dock')!;

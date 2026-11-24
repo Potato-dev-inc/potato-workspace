@@ -10,6 +10,8 @@ export const SIDE_MAX = 420;
 /** Dragging the sidebar narrower than this snaps it to the thin icon strip. */
 export const SIDE_SNAP = 140;
 export const SIDE_STRIP = 52;
+/** A window narrower than this shows the sidebar as the thin strip, so the content pane keeps the room. */
+export const NARROW_WINDOW = 800;
 export const RAIL_DEFAULT = 300;
 export const RAIL_MIN = 240;
 export const RAIL_MAX = 520;
@@ -46,6 +48,11 @@ export function sideFromPx(px: number): SideSize {
   if (!Number.isFinite(px)) return { width: SIDE_DEFAULT, strip: false };
   if (px < SIDE_SNAP) return { width: SIDE_MIN, strip: true };
   return { width: Math.round(clamp(px, SIDE_MIN, SIDE_MAX)), strip: false };
+}
+
+/** Whether the sidebar is the strip at this window width: chosen by the person, or forced by a narrow window. */
+export function sideIsStrip(size: SideSize, windowWidth: number): boolean {
+  return size.strip || windowWidth < NARROW_WINDOW;
 }
 
 /** The pixels a sidebar size takes. */
@@ -89,6 +96,16 @@ export function railFits(windowWidth: number, side: number): boolean {
 /** The width the right panel shows at: what was chosen, held back so the chat keeps its minimum. */
 export function railShown(chosen: number, windowWidth: number, side: number): number {
   return Math.max(RAIL_MIN, Math.min(chosen, railRoom(windowWidth, side)));
+}
+
+/** The chat beside the right panel and the dock keeps at least this much (the composer stays usable); the dock gives way first. */
+export const CHAT_FLOOR = 320;
+/** The narrowest the dock gets squeezed to for that (a dragged width is still held to DOCK_MIN). */
+export const DOCK_SQUEEZE_MIN = 240;
+
+/** The width the dock shows at: what was chosen, held back so the chat keeps CHAT_FLOOR. */
+export function dockShown(chosen: number, windowWidth: number, side: number, rail: number): number {
+  return Math.max(DOCK_SQUEEZE_MIN, Math.min(chosen, windowWidth - side - rail - CHAT_FLOOR));
 }
 
 // ---------------------------------------------------------------- storage
@@ -248,6 +265,7 @@ export function useLayout(): Layout {
   const { side, rail } = usePanelWidths();
   const w = useWindowInnerWidth();
   const focus = useSyncExternalStore(subscribeFocusMode, isFocusMode, isFocusMode);
-  const s = focus ? 0 : sidePx(side);
-  return { sidePx: s, railPx: railShown(rail, w, s), railFits: railFits(w, s), strip: side.strip && !focus };
+  const strip = sideIsStrip(side, w);
+  const s = focus ? 0 : sidePx({ ...side, strip });
+  return { sidePx: s, railPx: railShown(rail, w, s), railFits: railFits(w, s), strip: strip && !focus };
 }

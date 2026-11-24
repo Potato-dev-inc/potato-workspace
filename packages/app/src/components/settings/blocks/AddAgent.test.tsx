@@ -83,7 +83,7 @@ describe('Add an agent', () => {
   it('adds a native agent in one click and shows chips', async () => {
     const api = mockAddAgentApi('native_ok');
     await mount(api);
-    expect(host.querySelector('section[aria-label="Add an agent"]')).toBeTruthy();
+    expect(host.querySelector('section.aa')).toBeTruthy();
     // The typing box is under Advanced, collapsed: not shown first.
     expect(text()).not.toContain('Or type a name, or paste its install command.');
     expect(input()).toBeNull();
@@ -367,7 +367,7 @@ describe('Add an agent', () => {
     expect(agentsRows[0].id).toBe('add-agent');
     const m = await mountRows([agentsRows[0]]);
     try {
-      expect(m.host.querySelector('section[aria-label="Add an agent"]')).toBeTruthy();
+      expect(m.host.querySelector('section.aa')).toBeTruthy();
       expect(hasText(m.host, 'Or type a name, or paste its install command.')).toBe(false);
       await click(buttonByText(m.host, 'Advanced'));
       expect(hasText(m.host, 'Or type a name, or paste its install command.')).toBe(true);

@@ -20,6 +20,12 @@ function definedTokens(): Set<string> {
 }
 
 describe('new agent page styles', () => {
+  it('lets the footer chips shrink and cut their text, so a long one never spills over its neighbour', () => {
+    const rule = (selector: string) => bare.replace(/\s+/g, ' ').includes(selector);
+    expect(rule('.cockpit .ck-na-row > .ck-na-pop, .cockpit .ck-na-row > .mp { flex: 0 1 auto; min-width: 0; }')).toBe(true);
+    expect(rule('.cockpit .ck-na-row .ck-na-chip { max-width: min(220px, 100%); }')).toBe(true);
+    expect(rule('.cockpit .ck-na-row .mp-chip { max-width: min(320px, 100%); }')).toBe(true);
+  });
   it('uses no colour literals (hex, colour functions or named colours)', () => {
     expect(bare).not.toMatch(/#[0-9a-fA-F]{3,8}\b/);
     expect(bare).not.toMatch(/\b(rgba?|hsla?|hwb|lab|lch|oklab|oklch|color)\(/i);

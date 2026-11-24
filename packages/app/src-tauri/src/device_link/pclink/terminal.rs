@@ -44,7 +44,6 @@ pub(super) fn admit(shells: &mut HashMap<String, HashSet<String>>, node: &str, a
 #[cfg_attr(test, allow(dead_code))] // (a test never reaches a real pane: see `run`)
 pub struct Env<'a> {
     pub registry: &'a std::sync::Arc<parking_lot::Mutex<crate::pty::PaneRegistry>>,
-    pub app: &'a tauri::AppHandle,
     /// A folder (path or project id) to the path of the project this PC knows by it.
     pub folder: &'a dyn Fn(&str) -> Option<String>,
 }
@@ -120,7 +119,7 @@ mod run {
                     return Some(refused);
                 }
                 // The text goes into the pty and nowhere else: no opencode API route, no model.
-                match crate::pty::registry_write_input(env.registry, env.app, &pane, text, newline, false, None, crate::pty::WriteOrigin::User) {
+                match crate::pty::registry_write_input(env.registry, &pane, text, newline, false, None, crate::pty::WriteOrigin::User) {
                     Ok(()) => (200, Value::Null),
                     Err(text) => failed(&text),
                 }
@@ -196,7 +195,7 @@ mod run {
             account: None,
             guard_env: None,
         };
-        match crate::pty::registry_spawn_pane(env.registry, env.app, spawn_args) {
+        match crate::pty::registry_spawn_pane(env.registry, spawn_args) {
             Ok(id) => {
                 SHELLS.lock().unwrap_or_else(|p| p.into_inner()).entry(node.to_string()).or_default().insert(id.clone());
                 audit(node, &id, "A paired PC opened a terminal");

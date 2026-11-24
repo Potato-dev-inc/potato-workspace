@@ -23,6 +23,8 @@ export interface LayoutGroup {
 }
 
 export const LABS_GROUP = 'Early features (Labs)';
+/** Early features with more than a switch keep their own row here: a closed group, so the page is not longer than its areas. */
+export const LABS_MORE_GROUP = 'Early features with their own settings';
 /** Row id of the Labs overview (a deep link to Advanced > Early features (Labs)). */
 export const LABS_INDEX_ID = 'labs-index';
 /** The group that catches a row nobody placed. */
@@ -92,7 +94,7 @@ export const LAYOUT: Record<SectionId, LayoutGroup[]> = {
     { group: 'Comfort', rows: ['text-size', 'strong-contrast', 'less-motion', 'speak-results'] },
     { group: 'You', rows: ['your-name'] },
     { group: 'Startup', rows: ['start-at-sign-in'] },
-    { group: 'While agents work', rows: ['confirm-close', 'close-to-tray', 'keep-awake', 'away-minutes', 'quiet-hours', 'pc-notifications', 'discord-alerts'] },
+    { group: 'While agents work', rows: ['confirm-close', 'close-to-tray', 'keep-awake', 'jump-out', 'away-minutes', 'quiet-hours', 'pc-notifications', 'discord-alerts'] },
   ],
   keys: [
     { group: 'Provider keys', rows: ['key-anthropic', 'key-openai', 'key-openrouter'] },
@@ -206,7 +208,7 @@ export function arrangeSections(base: BaseSectionDef[], layout: Partial<Record<S
         // One with more than a switch (Ask bar, Live updates, Telegram...) keeps its own row, which the Labs
         // page's Open button and a deep link jump to.
         if (entry === '@labs') {
-          for (const row of labs) if (!LABS_SWITCH_KEYS[row.id]) rows.push({ ...row, group: g.group, keywords: `${row.keywords ?? ''} labs early`, ...(page.id === 'labs' ? { level: 'basic' as const } : {}) });
+          for (const row of labs) if (!LABS_SWITCH_KEYS[row.id]) rows.push({ ...row, group: page.id === 'labs' ? LABS_MORE_GROUP : g.group, keywords: `${row.keywords ?? ''} labs early`, ...(page.id === 'labs' ? { level: 'basic' as const } : {}) });
           continue;
         }
         if (typeof entry === 'string' && entry.startsWith('@base:')) {
@@ -225,6 +227,7 @@ export function arrangeSections(base: BaseSectionDef[], layout: Partial<Record<S
     let closedGroups: string[] | undefined;
     let leadGroups: string[] | undefined;
     if (page.id === 'advanced') closedGroups = ADVANCED_CLOSED_GROUPS;
+    if (page.id === 'labs') closedGroups = [LABS_MORE_GROUP];
     if (page.id === 'agents') {
       leadGroups = AGENTS_LEAD_GROUPS;
       closedGroups = [...new Set(rows.map((r) => r.group).filter((g): g is string => Boolean(g) && !AGENTS_LEAD_GROUPS.includes(g as string)))];

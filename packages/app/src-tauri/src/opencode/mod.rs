@@ -1,8 +1,8 @@
-pub mod client;
+pub use pm_core::opencode::client;
 pub mod delivery;
-pub mod edition;
+pub use pm_core::opencode::edition;
 pub mod keys;
-pub mod link;
+pub use pm_core::opencode::link;
 pub mod messages;
 pub mod native;
 pub mod quota;
@@ -328,12 +328,6 @@ pub fn refresh_native_tui(
     pane_id: &str,
 ) {
     spawn_reattach_tui(Arc::clone(registry), app.clone(), pane_id.to_string());
-}
-
-pub fn kill_serve_if_present(pane: &mut crate::pty::registry::PaneState) {
-    if let Some(link) = pane.opencode.take() {
-        link.kill_serve();
-    }
 }
 
 fn permission_matches_session(permission: &OpenCodePermission, session_id: &str) -> bool {

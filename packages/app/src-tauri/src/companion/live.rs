@@ -136,7 +136,7 @@ impl Host for LiveHost {
             account: spec.account.clone(),
             guard_env: None,
         };
-        let pane_id = registry_spawn_pane(&self.registry, &self.app, args)?;
+        let pane_id = registry_spawn_pane(&self.registry, args)?;
         let info = self.registry.lock().list().into_iter().find(|pane| pane.id == pane_id);
         if let Some(pane) = info {
             // `Background` places nothing: no window, no focus. The person opens it from the sidebar.
@@ -152,11 +152,11 @@ impl Host for LiveHost {
     }
 
     fn send(&self, pane_id: &str, text: &str) -> Result<(), String> {
-        crate::pane_outbox::global(&self.registry, &self.app).send(pane_id, text).map(|_| ())
+        crate::pane_outbox::global(&self.registry).send(pane_id, text).map(|_| ())
     }
 
     fn waiting(&self, pane_id: &str) -> Vec<String> {
-        crate::pane_outbox::global(&self.registry, &self.app)
+        crate::pane_outbox::global(&self.registry)
             .list(pane_id)
             .into_iter()
             .filter(|message| message.state.active())

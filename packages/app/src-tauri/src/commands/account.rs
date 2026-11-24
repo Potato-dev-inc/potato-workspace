@@ -50,6 +50,13 @@ pub async fn account_revoke_device(webview: tauri::Webview, id: String, action: 
     Ok(reply)
 }
 
+/// The answer to "Add <machine> to your account?" for a screen-less machine: `allow` false is "Not me".
+#[tauri::command(rename_all = "snake_case")]
+pub async fn account_approve_device(webview: tauri::Webview, code: String, allow: bool) -> Result<(), String> {
+    guard(&webview)?;
+    tauri::async_runtime::spawn_blocking(move || service().approve_device_code(&code, allow)).await.map_err(|e| e.to_string())?
+}
+
 #[tauri::command(rename_all = "snake_case")]
 pub async fn account_sign_out_here(webview: tauri::Webview) -> Result<AccountView, String> {
     guard(&webview)?;

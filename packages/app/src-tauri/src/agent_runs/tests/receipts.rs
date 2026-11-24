@@ -279,7 +279,7 @@ fn the_worktree_survives_a_snapshot_round_trip_so_a_restart_does_not_lose_it() {
 /// the receipt flagged nothing. The screen is the real capture
 /// (`tui/codex/fixtures/result_tool_failed_live.txt`); the result is read from it the way a pane run does.
 fn codex_failed_tool_snapshot() -> operations::OperationSnapshot {
-    let screen = include_str!("../../tui/codex/fixtures/result_tool_failed_live.txt");
+    let screen = include_str!("../../../crates/pm-core/src/tui/codex/fixtures/result_tool_failed_live.txt");
     let task = "Read README.md and tell me in one sentence what this project is. Do not change any files.";
     let result = crate::agent_runs::completion::clean_extracted_result(screen, task, "codex")
         .expect("the reply is read off the screen");

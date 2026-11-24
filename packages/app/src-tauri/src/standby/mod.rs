@@ -19,13 +19,13 @@
 //! standby is keyed by, `tests.rs` the pool rules. Agent-specific screen/launch knowledge lives in
 //! `tui/<agent>/` behind `TuiProfile::{standby_support, standby_screen, headless_standby_*}`.
 
-pub mod config;
-pub mod helpers;
+pub use pm_core::standby::config;
+pub use pm_core::standby::helpers;
 mod host;
-pub mod key;
+pub use pm_core::standby::key;
 pub mod pool;
-pub mod seat_log;
-pub mod seat_panes;
+pub use pm_core::standby::seat_log;
+pub use pm_core::standby::seat_panes;
 mod stillness;
 #[cfg(test)]
 mod tests;

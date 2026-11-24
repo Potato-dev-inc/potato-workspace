@@ -560,3 +560,34 @@ describe('War Room', () => {
     expect(unclaimedRed({ ...state, enabled: false })).toEqual([]);
   });
 });
+
+describe('TeamSection removal message', () => {
+  it('offers Dismiss only for the removal line, and Dismiss leaves the team here', async () => {
+    const api = fakeApi();
+    const state = teamState({ error: "You're no longer on this team. The admin removed this computer.", removed: true });
+    await act(async () => root.render(<TeamSection api={api} now={Date.now()} team={{ state, refresh: () => {} } as never} />));
+    const dismiss = [...host.querySelectorAll('button')].find((b) => b.textContent === 'Dismiss');
+    expect(dismiss).toBeTruthy();
+    await act(async () => dismiss!.click());
+    expect(api.calls).toContain('leave()');
+    await act(async () => root.render(<TeamSection api={api} now={Date.now()} team={{ state: teamState({ error: 'The relay is down.' }), refresh: () => {} } as never} />));
+    expect([...host.querySelectorAll('button')].some((b) => b.textContent === 'Dismiss')).toBe(false);
+  });
+  it('a dismissed removal stays dismissed after a restart (even if Leave could not clear it), until a look shows it is gone', async () => {
+    window.localStorage.removeItem('pm.team.removedDismissed.v1');
+    const api = fakeApi();
+    const removed = teamState({ error: "You're no longer on this team. The admin removed this computer.", removed: true });
+    await act(async () => root.render(<TeamSection api={api} now={Date.now()} team={{ state: removed, refresh: () => {} } as never} />));
+    await act(async () => [...host.querySelectorAll('button')].find((b) => b.textContent === 'Dismiss')!.click());
+    // A restart: a new section reads the same removed state from the backend.
+    await act(async () => root.unmount());
+    root = createRoot(host);
+    await act(async () => root.render(<TeamSection api={api} now={Date.now()} team={{ state: removed, refresh: () => {} } as never} />));
+    expect(host.textContent).not.toContain("You're no longer on this team");
+    // Not removed any more (a rejoin): forgotten, so a later removal shows again.
+    await act(async () => root.render(<TeamSection api={api} now={Date.now()} team={{ state: teamState({}), refresh: () => {} } as never} />));
+    await act(async () => root.render(<TeamSection api={api} now={Date.now()} team={{ state: removed, refresh: () => {} } as never} />));
+    expect(host.textContent).toContain("You're no longer on this team");
+    window.localStorage.removeItem('pm.team.removedDismissed.v1');
+  });
+});

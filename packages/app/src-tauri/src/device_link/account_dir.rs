@@ -234,6 +234,11 @@ impl AccountDir {
         self.rows(LIST_FRESH_SECS)
     }
 
+    /// The list read fresh (a failed dial asks: the cached one may be what went stale).
+    pub fn fresh_rows(&self) -> Result<Option<Vec<PcRow>>, String> {
+        self.rows(0)
+    }
+
     /// One row by the account's id for it, read fresh.
     pub fn fresh_row(&self, id: &str) -> Result<Option<PcRow>, String> {
         let rows = self.rows(0)?.unwrap_or_default();

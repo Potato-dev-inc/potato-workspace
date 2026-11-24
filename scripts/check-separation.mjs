@@ -7,7 +7,7 @@ import { dirname, join, relative, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 const root = resolve(dirname(fileURLToPath(import.meta.url)), '..');
-const scanRoots = ['packages/app/src-tauri/src', 'packages/app/src', 'packages/shared/src', 'packages/cli/src', 'packages/mcp-server/src'];
+const scanRoots = ['packages/app/src-tauri/src', 'packages/app/src-tauri/crates', 'packages/app/src', 'packages/shared/src', 'packages/cli/src', 'packages/mcp-server/src'];
 
 const banned = [
   // A production path or env var belonging to the other product.

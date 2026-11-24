@@ -36,3 +36,12 @@ describe('visible rows', () => {
     expect(parentOf('a.ts')).toBe('');
   });
 });
+
+describe('row cap', () => {
+  it('draws at most the limit and keeps small lists whole', async () => {
+    const { capRows, TREE_ROWS_STEP } = await import('./tree-model');
+    const many = Array.from({ length: TREE_ROWS_STEP + 5 }, (_, i) => i);
+    expect(capRows(many, TREE_ROWS_STEP)).toHaveLength(TREE_ROWS_STEP);
+    expect(capRows(many, TREE_ROWS_STEP * 2)).toBe(many);
+  });
+});

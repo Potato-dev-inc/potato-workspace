@@ -2,6 +2,7 @@
 // agent reported its token counts) about how many tokens it added. Built only from what the chat already holds; no
 // model call. A turn far above what is usual for the same chat is marked "heavy". Pure code.
 import { classifyTool } from './chatToolKinds';
+import { distinctPaths } from './samePath';
 import type { ChatTurn, ToolStep } from './sessionChatModel';
 
 /** The least tokens a turn must add before the tag mentions tokens: smaller numbers are noise. */
@@ -47,7 +48,7 @@ export function changedFiles(steps: readonly ToolStep[]): string[] {
     if (step.call.writes !== true) continue;
     for (const path of step.call.paths ?? []) if (typeof path === 'string' && path !== '') seen.add(path);
   }
-  return [...seen];
+  return distinctPaths(seen);
 }
 
 /** A price for each finished turn that did something (a step, or a changed file). Turns still running have none. */

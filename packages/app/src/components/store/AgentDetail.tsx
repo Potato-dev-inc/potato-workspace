@@ -2,6 +2,7 @@
 // commands, and plain Add, Remove and Uninstall steps. The Store never types into a pane and never reads a
 // credential. Catalog text is data: it is shown as plain text, and a link is shown in full and opens only
 // through the app's external-link helper.
+import { useAgentReadiness } from '../../lib/useAgentReadiness';
 import { useCallback, useEffect, useState, type ReactNode } from 'react';
 import { agentInstallApi, type AgentInstallApi, type InstallPlan } from '../../lib/agent-install';
 import { agentStoreApi, type AgentStoreApi, type StoreDetail } from '../../lib/agent-store';
@@ -10,6 +11,7 @@ import { tauri } from '../../lib/tauri';
 import { InstallSheet } from '../cockpit/InstallSheet';
 import { Sheet } from '../cockpit/Sheet';
 import { errText, useInstallChain, type ChainOutcome } from './useInstallChain';
+import { t } from '../../i18n';
 
 const TITLE_ID = 'ck-store-detail-t';
 const COPY_FAILED = 'Could not copy. Select the command and copy it by hand.';
@@ -45,6 +47,7 @@ export function AgentDetail({
   onCheck,
   openExternal = openInBrowser,
 }: AgentDetailProps) {
+  const readiness = useAgentReadiness();
   const [detail, setDetail] = useState<StoreDetail | null>(null);
   const [loadError, setLoadError] = useState<string | null>(null);
   const [view, setView] = useState<View>('detail');
@@ -219,7 +222,7 @@ export function AgentDetail({
           <span className="ck-chip-name">{licenseWords(detail)}</span>
         </span>
       </p>
-      <p className="ck-sub">{detail.state_reason}</p>
+      <p className="ck-sub">{detail.state === 'ready' ? [readiness.of(detail.id).label, readiness.of(detail.id).detail].filter(Boolean).join('. ') : detail.state_reason}</p>
       {notice && <p className={`ck-sub${notice.tone === 'problem' ? ' ck-doctor-error' : ''}`}>{notice.text}</p>}
       {error && <p className="ck-sub ck-doctor-error">{error}</p>}
       {loadError && <p className="ck-sub ck-doctor-error">{loadError}</p>}
@@ -252,9 +255,9 @@ export function AgentDetail({
         {detail.last_check &&
           ` Our check: ${detail.last_check.passed} of ${detail.last_check.total} checks passed on version ${detail.last_check.version}.`}
       </Fact>
-      {!detail.checked.windows_tested && <p className="ck-sub">We have not run this on Windows ourselves.</p>}
-      {detail.installed_version && <Fact label="Installed version">{detail.installed_version}</Fact>}
-      {detail.found_path_display && <Fact label="Found at">{detail.found_path_display}</Fact>}
+      {!detail.checked.windows_tested && <p className="ck-sub">{t('r21.sw.weHaveNotRun')}</p>}
+      {detail.installed_version && <Fact label={t('r21.sw.installedVersion')}>{detail.installed_version}</Fact>}
+      {detail.found_path_display && <Fact label={t('r21.sw.foundAt')}>{detail.found_path_display}</Fact>}
       {detail.status === 'deprecated' && (
         <p className="ck-sub">This entry is no longer updated. Its replacement is {detail.replaced_by || 'not named yet'}.</p>
       )}
@@ -286,7 +289,7 @@ export function AgentDetail({
 
       {view === 'uninstall' && uninstallPlan && (
         <>
-          <p className="ck-sub">Potato Workspace runs this command in a window you can watch:</p>
+          <p className="ck-sub">{t('r21.sw.potatoWorkspaceRunsThis')}</p>
           <code className="ck-doctor-cmd" data-testid="uninstall-command">
             {uninstallPlan.steps[0]?.command}
           </code>

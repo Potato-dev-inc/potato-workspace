@@ -2,7 +2,8 @@
 // groups a turn's steps and writes that line. Pure code.
 import type { ToolCallItem, ToolStep, TurnStep } from '../../lib/sessionChatModel';
 import { classifyTool, type ToolKind } from '../../lib/chatToolKinds';
-import { formatDuration, plural } from './chatFormat';
+import { distinctPaths } from '../../lib/samePath';
+import { formatDuration } from './chatFormat';
 import { t } from '../../i18n';
 import { questionsOfCall } from './questionCall';
 
@@ -52,18 +53,18 @@ export function countActivity(steps: readonly ToolStep[]): ActivityCount[] {
     if (FILE_KINDS.has(kind) && paths.length > 0) for (const path of paths) slot.paths.add(path);
     else slot.loose += 1;
   }
-  return [...slots].map(([kind, slot]) => ({ kind, count: slot.paths.size + slot.loose }));
+  return [...slots].map(([kind, slot]) => ({ kind, count: distinctPaths(slot.paths).length + slot.loose }));
 }
 
 const WORDS: Record<ToolKind, (count: number) => string> = {
-  read: (n) => `Read ${plural(n, 'file')}`,
-  search: (n) => `Searched ${plural(n, 'time')}`,
-  edit: (n) => `Edited ${plural(n, 'file')}`,
-  write: (n) => `Wrote ${plural(n, 'file')}`,
-  run: (n) => `Ran ${plural(n, 'command')}`,
-  web: (n) => `Used the web ${plural(n, 'time')}`,
+  read: (n) => t('r9.act.read', { count: n }),
+  search: (n) => t('r9.act.search', { count: n }),
+  edit: (n) => t('r9.act.edit', { count: n }),
+  write: (n) => t('r9.act.write', { count: n }),
+  run: (n) => t('r9.act.run', { count: n }),
+  web: (n) => t('r9.act.web', { count: n }),
   helper: (n) => t('minion.activity.started', { count: n }),
-  other: (n) => `Used ${plural(n, 'tool')}`,
+  other: (n) => t('r9.act.other', { count: n }),
 };
 
 /** How many rows of each kind ended in an error. A row with no status (read off the screen) never counts. */
@@ -87,7 +88,7 @@ export function activitySummaryParts(steps: readonly ToolStep[]): SummaryPart[] 
   const failed = failedByKind(steps);
   return countActivity(steps).map((part) => {
     const n = failed.get(part.kind) ?? 0;
-    return { text: WORDS[part.kind](part.count), failed: n > 0 ? `(${n} failed)` : null };
+    return { text: WORDS[part.kind](part.count), failed: n > 0 ? t('r9.act.failed', { n }) : null };
   });
 }
 
@@ -134,6 +135,6 @@ export function stepElapsedMs(step: ToolStep): number | null {
 /** The folded line of a finished turn: "Done in 14s · 4 steps" (no time when the rows carry none). */
 export function doneSummary(steps: readonly ToolStep[]): string {
   const span = activitySpanMs(steps);
-  const count = plural(steps.length, 'step');
-  return span !== null ? `Done in ${formatDuration(span)} · ${count}` : `Done · ${count}`;
+  const count = t('r9.act.step', { count: steps.length });
+  return span !== null ? t('r9.act.doneIn', { time: formatDuration(span), steps: count }) : t('r9.act.done', { steps: count });
 }

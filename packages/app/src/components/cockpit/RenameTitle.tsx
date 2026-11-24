@@ -15,22 +15,25 @@ export interface RenameTitleProps {
 
 export function RenameTitle({ text, current, editing, onEditingChange, onSave }: RenameTitleProps) {
   const t = useT();
-  const [draft, setDraft] = useState(current);
+  // The editor starts from the name shown, so renaming a long name or fixing a typo does not start from nothing.
+  const start = current || cleanTitleInput(text);
+  const [draft, setDraft] = useState(start);
   const inputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
     if (editing) {
-      setDraft(current);
+      setDraft(start);
       inputRef.current?.focus();
       inputRef.current?.select();
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [editing, current]);
 
   if (!editing) {
     return (
       <h1
         className="ck-title ck-title--sm ck-title--editable"
-        title={t('pane.renameTip')}
+        title={`${text} · ${t('pane.renameTip')}`}
         onDoubleClick={() => onEditingChange(true)}
       >
         {text}
@@ -41,10 +44,11 @@ export function RenameTitle({ text, current, editing, onEditingChange, onSave }:
   const commit = () => {
     onEditingChange(false);
     const next = cleanTitleInput(draft);
-    if (next !== current) onSave(next);
+    if (next !== start && (next || current)) onSave(next);
   };
 
   return (
+    <>
     <input
       ref={inputRef}
       className="ck-title-input"
@@ -64,5 +68,9 @@ export function RenameTitle({ text, current, editing, onEditingChange, onSave }:
         }
       }}
     />
+    <span className="ck-title-count" aria-hidden="true">
+      {draft.length}/{MAX_TITLE_CHARS}
+    </span>
+    </>
   );
 }

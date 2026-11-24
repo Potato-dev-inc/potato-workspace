@@ -1,7 +1,7 @@
 // "Team activity" on the Inbox: the team's recent events as one short row each (icon colour, line, second line, time).
 // Text comes from the same helpers the Team cards use, so teammates' words stay plain text.
 import { t } from '../i18n';
-import { agentLabel, durationWords, type LendRequest, type LendState } from './lend';
+import { agentLabel, cleanName, displayName, durationWords, peerLabel, type LendRequest, type LendState } from './lend';
 import { cardMeta, cardTitle, isRedBanner, type TeamCard } from './team';
 
 export type ActivityTone = 'pr' | 'push' | 'lend' | 'ok' | 'danger' | 'note';
@@ -40,7 +40,7 @@ export function activityRows(cards: readonly TeamCard[], requests: readonly Lend
     rows.push({
       id: `lend:${r.id}`,
       tone: 'lend',
-      line: t('inbox.teamBorrow', { who: r.member_name, agent: agentLabel(lend, r.agent_id) }),
+      line: t('inbox.teamBorrow', { who: r.for_other_person ? cleanName(r.member_name) || peerLabel({ peer_name: '', peer_device_name: r.device_name }) : displayName({ device: r.device_name, label: r.member_name }), agent: agentLabel(lend, r.agent_id) }),
       sub: durationWords(r.secs),
       atMs: r.at_ms,
       request: r,

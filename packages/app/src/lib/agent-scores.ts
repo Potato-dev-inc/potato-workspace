@@ -3,6 +3,7 @@
 // a prompt or chat text. Numbers are plain counts ("8 of 10"); there is no overall score and no ranking here.
 import { invoke } from '@tauri-apps/api/core';
 import { formatBusy } from './plans-report';
+import { t } from '../i18n';
 
 /** `none` = no turns, `not_enough` = 1 to 4, `early` = 5 to 9, `steady` = 10 or more. */
 export type ScoreSample = 'none' | 'not_enough' | 'early' | 'steady';
@@ -85,14 +86,15 @@ export const scoresApi: ScoresApi = {
 
 /** The one-line explanation of the `ahead` chip (3.3). Shown as the chip's title. */
 export const AHEAD_TITLE = 'With this many runs the gap is unlikely to be luck.';
+export const aheadTitle = (): string => t('r21.sc.aheadTitle');
 
 /** The window choices of the page, in the order of the select. */
 export const SCORE_WINDOWS: readonly (number | null)[] = [30, 90, null];
 
 /** "Last 30 days", "Last 90 days", "All time". */
 export function windowLabel(days: number | null | undefined): string {
-  if (days === null || days === undefined) return 'All time';
-  return `Last ${days} days`;
+  if (days === null || days === undefined) return t('r21.sc.allTime');
+  return t('r21.sc.lastDays', { days });
 }
 
 function clampedCount(rate: ScoreRate): number {
@@ -102,7 +104,7 @@ function clampedCount(rate: ScoreRate): number {
 /** "8 of 10" for early and steady samples. A dash when there are too few runs to show a number. */
 export function rateText(rate: ScoreRate): string {
   if (rate.sample === 'none' || rate.sample === 'not_enough') return '-';
-  return `${clampedCount(rate)} of ${rate.total}`;
+  return t('r21.sc.ofTotal', { count: clampedCount(rate), total: rate.total });
 }
 
 /** "80%", only for a steady sample (10 or more). Null otherwise. */
@@ -114,28 +116,26 @@ export function percentText(rate: ScoreRate): string | null {
 /** Why a cell shows a dash: "Only 3 so far. A number needs 5." Null once there is a number to show. */
 export function sampleHint(rate: ScoreRate, minSample: number): string | null {
   if (rate.sample !== 'none' && rate.sample !== 'not_enough') return null;
-  return `Only ${rate.total} so far. A number needs ${minSample}.`;
+  return t('r21.sc.only', { total: rate.total, min: minSample });
 }
 
-function plural(n: number, one: string, many: string): string {
-  return `${n} ${n === 1 ? one : many}`;
-}
+const plural = (n: number, noun: 'turn' | 'line' | 'time'): string => t(`r21.n.${noun}`, { count: n });
 
 /** "2 turns · 14 min" for the typical merged run. Null when there is no typical value (under 3 merged runs). */
 export function perMergedText(pm: ScorePerMerged | null | undefined): string | null {
   if (!pm) return null;
-  return `${plural(pm.turnsMedian, 'turn', 'turns')} · ${formatBusy(pm.busyMsMedian)}`;
+  return `${plural(pm.turnsMedian, 'turn')} · ${formatBusy(pm.busyMsMedian)}`;
 }
 
 /** "Broke the tests 2 times", "Broke the tests 1 time". Null when the count is 0 (nothing to say). */
 export function brokeTestsText(row: Pick<ScoreRow, 'brokeTests'>): string | null {
   if (!(row.brokeTests > 0)) return null;
-  return `Broke the tests ${plural(row.brokeTests, 'time', 'times')}`;
+  return t('r21.sc.broke', { times: plural(row.brokeTests, 'time') });
 }
 
 /** "Not enough runs yet. 3 turns so far." */
 export function notEnoughText(row: Pick<ScoreRow, 'turns'>): string {
-  return `Not enough runs yet. ${plural(row.turns, 'turn', 'turns')} so far.`;
+  return t('r21.sc.notEnough', { turns: plural(row.turns, 'turn') });
 }
 
 /**
@@ -145,11 +145,11 @@ export function notEnoughText(row: Pick<ScoreRow, 'turns'>): string {
 export function detailLine(row: Pick<ScoreRow, 'turnMsMedian' | 'linesMedian' | 'waitingReview'>): string {
   const parts: string[] = [];
   if (row.turnMsMedian !== null && row.turnMsMedian !== undefined) {
-    parts.push(`Typical turn ${formatBusy(row.turnMsMedian)}`);
+    parts.push(t('r21.sc.typical', { time: formatBusy(row.turnMsMedian) }));
   }
   if (row.linesMedian !== null && row.linesMedian !== undefined) {
-    parts.push(plural(row.linesMedian, 'line', 'lines'));
+    parts.push(plural(row.linesMedian, 'line'));
   }
-  if (row.waitingReview > 0) parts.push(`${row.waitingReview} waiting for review`);
+  if (row.waitingReview > 0) parts.push(t('r21.sc.waitingReview', { n: row.waitingReview }));
   return parts.join(' · ');
 }

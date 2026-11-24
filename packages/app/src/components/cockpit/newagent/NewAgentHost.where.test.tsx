@@ -259,7 +259,7 @@ describe('New agent page: Where', () => {
     expect(q('[data-testid="na-plus"]')).not.toBeNull();
     await pickDevice();
     await settle(8);
-    expect(q('[data-testid="na-plus"]')).toBeNull();
+    // The + menu stays for "Work on a copy" on a far PC (P4b); it never offers this PC's file dialog there.
     await click(q('[data-testid="na-folder"]'));
     // The picker is grouped by device now: This PC's Add project and the PC's own, and no one-off system folder dialog.
     expect(q(`[data-testid="na-group-${NODE_MAC}"]`)!.textContent).not.toContain('other folder');

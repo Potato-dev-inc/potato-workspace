@@ -86,6 +86,30 @@ pub fn terminal_argv(host: &SshHost, folder: Option<&str>, remote: &Remote) -> R
     Ok(a)
 }
 
+/// The arguments of `ssh` for one fixed setup line (`install.rs`): the same hardening as the check, and no forwarding of anything.
+/// Never a prompt, and `ClearAllForwardings` so nothing is tunnelled to this PC (plan S1).
+pub fn setup_argv(host: &SshHost, line: &str) -> Vec<String> {
+    let mut a = vec!["-T".to_string()];
+    a.extend(base(host));
+    for o in [
+        "BatchMode=yes",
+        "StrictHostKeyChecking=yes",
+        "ConnectTimeout=10",
+        "ServerAliveInterval=15",
+        "NumberOfPasswordPrompts=0",
+        "ClearAllForwardings=yes",
+        "ForwardAgent=no",
+        "ForwardX11=no",
+    ] {
+        a.push("-o".into());
+        a.push(o.into());
+    }
+    a.push("--".into());
+    a.push(host.destination());
+    a.push(line.to_string());
+    a
+}
+
 /// The arguments of `ssh` for the read-only check: no screen, no prompt, a short timeout. `script` is fixed text
 /// built by `check::script`.
 pub fn check_argv(host: &SshHost, script: &str) -> Vec<String> {

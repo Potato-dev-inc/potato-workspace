@@ -213,7 +213,6 @@ fn route_answer_inner(
         }
         return crate::pane_prompt::answer_with(
             registry,
-            app,
             pane_id,
             &request.prompt_id,
             &request.choice,
@@ -514,7 +513,7 @@ fn answer_prompt(
             &choice_key,
             crate::pane_prompt::answers::now_ms(),
             || {
-                crate::pty::registry::write_input(registry, app, pane_id, &text, true, false, None, origin)
+                crate::pty::registry::write_input(registry, pane_id, &text, true, false, None, origin)
                     .map_err(|error| OperationError::new("PROMPT_REPLY_FAILED", error, true))
             },
         )?;

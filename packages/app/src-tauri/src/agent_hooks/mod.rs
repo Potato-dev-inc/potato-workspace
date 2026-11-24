@@ -211,12 +211,7 @@ pub enum InstallState {
     BlockedFile,
 }
 
-/// What `prepare_spawn` adds to a pane's launch.
-#[derive(Debug, Clone, Default, PartialEq, Eq)]
-pub struct HookLaunch {
-    pub env: Vec<(String, String)>,
-    pub extra_args: Vec<String>,
-}
+pub use pm_core::hooks::HookLaunch;
 
 /// Mint the pane's token and install PM's hooks for this spawn (§4.1, §5). Returns nothing to add
 /// when the agent has no hooks, hooks are off, or anything is missing: the pane then starts exactly

@@ -101,7 +101,7 @@ export const guide: Partial<Record<EnglishKey, string>> = {
   'guide.videoRowTime': '時間',
   'guide.videoRowTimeValue': '約 2 到 5 分鐘（你可以繼續工作）',
   'guide.videoRowUsage': '用量',
-  'guide.videoRowUsageValue': '沒有。不會使用任何代理。',
+  'guide.videoRowUsageValue': '沒有。不會使用任何 AI 助理。',
   'guide.videoRowStays': '存放',
   'guide.videoRowStaysValue': '在這台電腦的 .potato/guide/video/。沒有配音，也不會上傳任何東西。',
   'guide.videoVertical': '也製作手機用的直式影片（時間加倍）',

@@ -1,6 +1,8 @@
 // Artifacts: a page an agent made (HTML, Markdown, SVG or a Mermaid diagram). The chat carries it as a card (a notice of
 // kind `artifact`); this file knows the card's address, the calls to the PC, and the page each kind is shown as.
 import { invoke } from '@tauri-apps/api/core';
+import type { Host } from './host/host';
+import { forHost } from './host/hostApi';
 
 export type ArtifactKind = 'html' | 'markdown' | 'svg' | 'mermaid';
 
@@ -127,6 +129,23 @@ export const artifactsApi: ArtifactsApi = {
   popOut: (paneId, id, title) => invoke<void>('artifacts_pop_out', { paneId, id, title }),
   openInAgentBrowser: (paneId, id) => invoke<void>('artifacts_open_in_agent_browser', { paneId, id }),
 };
+
+/** The same api over another PC's host. The page and the list are far calls; share links, pop out and the browsers are that PC's own windows, so the host answers them with its one sentence. */
+function farArtifactsApi(host: Host): ArtifactsApi {
+  const call = <T,>(cmd: string, args: Record<string, unknown>) => host.invoke<T>(cmd, args);
+  return {
+    sync: (paneId) => call<Artifact[]>('artifacts_sync', { paneId }),
+    read: (paneId, id, version) => call<ArtifactPage>('artifacts_read', { paneId, id, version }),
+    openInBrowser: (paneId, id, version) => call<void>('artifacts_open_in_browser', { paneId, id, version }),
+    shareMake: (paneId, id, version, ttlHours) => call<ArtifactShareMade>('artifacts_share_make', { paneId, id, version, ttlHours }),
+    shareList: (paneId, id) => call<ArtifactShareView[]>('artifacts_share_list', { paneId, id }),
+    shareStop: (paneId, id) => call<number>('artifacts_share_stop', { paneId, id }),
+    popOut: (paneId, id, title) => call<void>('artifacts_pop_out', { paneId, id, title }),
+    openInAgentBrowser: (paneId, id) => call<void>('artifacts_open_in_agent_browser', { paneId, id }),
+  };
+}
+
+export const artifactsApiFor = (host: Host): ArtifactsApi => forHost(host, artifactsApi, farArtifactsApi);
 
 /** Whether the system's browser can show this kind by itself. */
 export const opensInBrowser = (kind: ArtifactKind) => kind === 'html' || kind === 'svg';

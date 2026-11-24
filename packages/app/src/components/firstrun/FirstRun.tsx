@@ -185,9 +185,11 @@ export function FirstRun({ c, seed, onFinish, deps }: { c: CockpitApi; seed: See
         </main>
 
         <footer className="fr-foot">
-          <button type="button" className="ck-btn ck-btn--plain" disabled={stepIndex(step) === 0} onClick={() => dispatch({ type: 'back' })}>
-            {T.back}
-          </button>
+          {stepIndex(step) > 0 && (
+            <button type="button" className="ck-btn ck-btn--plain" onClick={() => dispatch({ type: 'back' })}>
+              {T.back}
+            </button>
+          )}
           <span className="fr-foot-gap" />
           <button type="button" className="ck-btn ck-btn--primary" data-testid="first-run-next" onClick={() => dispatch({ type: 'next' })}>
             {primaryLabel}

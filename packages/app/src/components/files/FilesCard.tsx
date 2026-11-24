@@ -3,15 +3,17 @@
 // the project, a click opens the file in a tab, and a right-click (or the menu key) offers Copy path, Show in
 // Explorer and Mention in chat. The project folder is the pane's folder: the backend refuses anything outside it.
 import { useCallback, useEffect, useMemo, useRef, useState, type KeyboardEvent, type MouseEvent } from 'react';
-import { filesApi, type ContentHit, type ContentSearch, type FileMark, type FilesApi, type FolderListing } from '../../lib/files-api';
+import { filesApiFor, OnOtherPc, type ContentHit, type ContentSearch, type FileMark, type FilesApi, type FolderListing } from '../../lib/files-api';
 import { clearContentSearchRequest, usePendingContentSearch } from '../../lib/files-search-request';
 import { ContentResults } from './ContentResults';
-import { searchProjectFiles, type ProjectFileHit } from '../../lib/projectFiles';
+import { CopyPathButton } from './CopyPathButton';
+import { searchProjectFilesOn, type ProjectFileHit } from '../../lib/projectFiles';
 import { openFileTab } from '../../lib/file-tabs';
 import { pushComposerInsert } from '../../lib/composer-insert';
 import { requestChatTab } from '../../lib/chatTab';
 import { errorSentence } from '../../lib/sayError';
 import { useT } from '../../i18n';
+import { useHost } from '../../lib/host/context';
 import { ruleError, tauriAgentRulesApi, type AgentRulesApi } from '../../lib/agentRules';
 import { projectOfCwd } from '../../lib/ship-model';
 import { FloatingMenu } from '../cockpit/FloatingMenu';
@@ -20,7 +22,7 @@ import { RailSection } from '../cockpit/rail/RailSection';
 import { EmptyState } from '../common/EmptyState';
 import { setRailSectionClosed } from '../cockpit/rail/railFold';
 import { FileGlyph } from '../cockpit/rail/FileGlyph';
-import { baseOf, fileMark, folderHasChanges, visibleRows, type Mark } from './tree-model';
+import { baseOf, capRows, fileMark, folderHasChanges, TREE_ROWS_STEP, visibleRows, type Mark } from './tree-model';
 import '../../styles/files.css';
 
 const SEARCH_MS = 150;
@@ -30,6 +32,11 @@ const CONTENT_MIN_CHARS = 2;
 const CONTENT_MS = 300;
 
 type SearchMode = 'names' | 'inside';
+
+/** How often the shown card reads its folders again. */
+/** Re-read cadence: quick while the agent works (it is changing files), slow when idle (a far PC pays a call for each). */
+const REREAD_WORKING_MS = 5000;
+const REREAD_IDLE_MS = 15_000;
 
 export interface FilesCardProps {
   paneId: string;
@@ -58,8 +65,13 @@ interface MenuAt {
   anchor: HTMLElement;
 }
 
-export function FilesCard({ paneId, cwd, canMention = true, refreshKey = '', api = filesApi, rules = tauriAgentRulesApi, search = searchProjectFiles }: FilesCardProps) {
+export function FilesCard({ paneId, cwd, canMention = true, refreshKey = '', api: given, rules = tauriAgentRulesApi, search: givenSearch }: FilesCardProps) {
   const t = useT();
+  const host = useHost();
+  // Show in Explorer and Fence start things on THIS PC: they have no meaning for a file on another PC.
+  const far = host.place.kind !== 'local';
+  const api = useMemo(() => given ?? filesApiFor(host), [given, host]);
+  const search = useMemo(() => givenSearch ?? searchProjectFilesOn(host), [givenSearch, host]);
   const [listings, setListings] = useState<Record<string, FolderListing | undefined>>({});
   const [failed, setFailed] = useState<Record<string, string | undefined>>({});
   const [open, setOpen] = useState<ReadonlySet<string>>(() => new Set());
@@ -71,6 +83,8 @@ export function FilesCard({ paneId, cwd, canMention = true, refreshKey = '', api
   const filterRef = useRef<HTMLInputElement>(null);
   const [menu, setMenu] = useState<MenuAt | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
+  // A folder on another PC cannot be shown here: the note says so, and offers the path to copy.
+  const [farNote, setFarNote] = useState<{ text: string; path: string } | null>(null);
   const treeRef = useRef<HTMLUListElement>(null);
   const openRef = useRef(open);
   openRef.current = open;
@@ -88,6 +102,28 @@ export function FilesCard({ paneId, cwd, canMention = true, refreshKey = '', api
     [api, paneId],
   );
 
+  // Files change outside the chat too (deleted in Explorer, made by a build): read again when the window gets focus back and every few seconds while shown.
+  const [seen, setSeen] = useState(0);
+  // Not asked while the section is folded (its filter box is not drawn) or scrolled out of view (no IntersectionObserver: always shown).
+  const onScreen = useRef(true);
+  useEffect(() => {
+    const el = filterRef.current;
+    if (!el || typeof IntersectionObserver === 'undefined') return;
+    const io = new IntersectionObserver((entries) => entries.forEach((e) => (onScreen.current = e.isIntersecting)));
+    io.observe(el);
+    return () => io.disconnect();
+  }, []);
+  const working = refreshKey.startsWith('running|');
+  useEffect(() => {
+    const again = () => document.visibilityState !== 'hidden' && filterRef.current !== null && onScreen.current && setSeen((n) => n + 1);
+    window.addEventListener('focus', again);
+    const timer = window.setInterval(again, working ? REREAD_WORKING_MS : REREAD_IDLE_MS);
+    return () => {
+      window.removeEventListener('focus', again);
+      window.clearInterval(timer);
+    };
+  }, [working]);
+
   // The top folder when the card shows, and again with everything that is open whenever the agent may have changed files.
   useEffect(() => {
     load('');
@@ -100,7 +136,7 @@ export function FilesCard({ paneId, cwd, canMention = true, refreshKey = '', api
     return () => {
       cancelled = true;
     };
-  }, [api, paneId, refreshKey, load]);
+  }, [api, paneId, refreshKey, seen, load]);
 
   // The filter finds files anywhere in the project by name (the same search the @ picker uses).
   useEffect(() => {
@@ -169,7 +205,9 @@ export function FilesCard({ paneId, cwd, canMention = true, refreshKey = '', api
     if (!listings[path]) load(path);
   };
 
-  const rows = useMemo(() => visibleRows('', 0, listings, open), [listings, open]);
+  const allRows = useMemo(() => visibleRows('', 0, listings, open), [listings, open]);
+  const [limit, setLimit] = useState(TREE_ROWS_STEP);
+  const rows = useMemo(() => capRows(allRows, limit), [allRows, limit]);
   const focusRow = (path: string) => {
     const el = [...(treeRef.current?.querySelectorAll<HTMLElement>('[data-path]') ?? [])].find((e) => e.dataset.path === path);
     el?.focus();
@@ -237,7 +275,14 @@ export function FilesCard({ paneId, cwd, canMention = true, refreshKey = '', api
     requestChatTab(paneId);
   };
   const reveal = (path: string) => {
-    api.reveal(paneId, path).catch((err: unknown) => say(errorSentence(err)));
+    api.reveal(paneId, path).catch((err: unknown) => {
+      const text = errorSentence(err);
+      // This note stays until the next one, so Copy path can be clicked; any other fades.
+      if (err instanceof OnOtherPc) {
+        setNotice(text);
+        setFarNote({ text, path: err.path });
+      } else say(text);
+    });
   };
 
   const markFor = (path: string): Mark | null => fileMark(path, marks);
@@ -274,6 +319,7 @@ export function FilesCard({ paneId, cwd, canMention = true, refreshKey = '', api
       {notice && (
         <p className="ck-rail-line" role="status">
           {notice}
+          {farNote && farNote.path && farNote.text === notice && <CopyPathButton path={farNote.path} onDone={say} />}
         </p>
       )}
       {filtering && mode === 'inside' ? (
@@ -378,6 +424,16 @@ export function FilesCard({ paneId, cwd, canMention = true, refreshKey = '', api
           })}
         </ul>
       )}
+      {!filtering && allRows.length > rows.length && (
+        <>
+          <p className="ck-rail-more" data-testid="files-showing">
+            {t('r15far.files.showing', { shown: rows.length, total: allRows.length })}
+          </p>
+          <button type="button" className="ck-btn ck-btn--plain" onClick={() => setLimit((n) => n + TREE_ROWS_STEP)}>
+            {t('files.showMore', { count: allRows.length - rows.length })}
+          </button>
+        </>
+      )}
       {!filtering && rootLoaded?.truncated && <p className="ck-rail-more">{t('files.truncated')}</p>}
       {menu && (
         <FloatingMenu
@@ -413,30 +469,34 @@ export function FilesCard({ paneId, cwd, canMention = true, refreshKey = '', api
           >
             {t('files.menuCopy')}
           </button>
-          <button
-            type="button"
-            role="menuitem"
-            className="ck-menu-item"
-            onClick={() => {
-              setMenu(null);
-              reveal(menu.path);
-            }}
-          >
-            {t('files.menuReveal')}
-          </button>
+          {!far && (
+            <button
+              type="button"
+              role="menuitem"
+              className="ck-menu-item"
+              onClick={() => {
+                setMenu(null);
+                reveal(menu.path);
+              }}
+            >
+              {t('files.menuReveal')}
+            </button>
+          )}
           {!menu.isDir && <EditorMenuItems paneId={paneId} path={menu.path} onDone={() => setMenu(null)} onFail={say} />}
-          <button
-            type="button"
-            role="menuitem"
-            className="ck-menu-item"
-            data-testid="menu-fence"
-            onClick={() => {
-              setMenu(null);
-              fence(menu.path);
-            }}
-          >
-            {menu.isDir ? t('files.fenceFolder') : t('files.fenceFile')}
-          </button>
+          {!far && (
+            <button
+              type="button"
+              role="menuitem"
+              className="ck-menu-item"
+              data-testid="menu-fence"
+              onClick={() => {
+                setMenu(null);
+                fence(menu.path);
+              }}
+            >
+              {menu.isDir ? t('files.fenceFolder') : t('files.fenceFile')}
+            </button>
+          )}
           {canMention && (
             <button
               type="button"

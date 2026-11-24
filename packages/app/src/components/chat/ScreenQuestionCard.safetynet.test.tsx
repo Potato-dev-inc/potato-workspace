@@ -22,7 +22,7 @@ import { hasStuckMessage, ScreenQuestionCard, STABLE_MS, STUCK_MS } from './Scre
 
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 
-const fixture = (path: string) => readFileSync(resolve(__dirname, '../../../src-tauri/src', path), 'utf8');
+const fixture = (path: string) => readFileSync(resolve(__dirname, '../../../src-tauri/crates/pm-core/src', path), 'utf8');
 const THEME = fixture('tui/claude/fixtures/first_run_theme_2_1_312.txt');
 const CLAUDE_IDLE = fixture('tui/claude/fixtures/first_run_idle_box_2_1_312.txt');
 const CODEX_IDLE = fixture('tui/codex/fixtures/standby_ready_live.txt');

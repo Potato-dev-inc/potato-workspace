@@ -3,7 +3,7 @@ import { act } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { AgentHealth, AgentHealthApi } from '../../lib/agent-health';
-import { AgentDoctor, glyphFor, stateLabel } from './AgentDoctor';
+import { AgentDoctor, glyphFor } from './AgentDoctor';
 import { Inbox } from './Inbox';
 import type { CockpitApi } from '../../hooks/useCockpit';
 
@@ -50,14 +50,13 @@ const button = (scope: ParentNode, text: string) =>
   Array.from(scope.querySelectorAll('button')).find((b) => b.textContent === text) as HTMLButtonElement | undefined;
 
 describe('AgentDoctor', () => {
-  it('maps states to plain labels and DotSpinner glyphs', () => {
-    expect(glyphFor('unchecked')).toBe('idle');
+  it('maps readiness states to DotSpinner glyphs', () => {
+    expect(glyphFor('not_checked')).toBe('idle');
     expect(glyphFor('not_installed')).toBe('idle');
     expect(glyphFor('ready')).toBe('exited');
-    expect(glyphFor('needs_login')).toBe('waiting_input');
-    expect(glyphFor('error')).toBe('error');
-    expect(stateLabel('needs_login')).toBe('Needs login');
-    expect(stateLabel('unchecked')).toBe('Not tested');
+    expect(glyphFor('signed_in')).toBe('exited');
+    expect(glyphFor('needs_sign_in')).toBe('waiting_input');
+    expect(glyphFor('broken')).toBe('error');
   });
 
   it('lists agents with status, version and reason; install command only when missing', async () => {
@@ -80,7 +79,7 @@ describe('AgentDoctor', () => {
     await mount(api);
     const a = rowOf('first');
     expect(a.textContent).toContain('Agent A');
-    expect(a.textContent).toContain('Not tested');
+    expect(a.textContent).toContain('Not checked yet');
     expect(a.textContent).toContain('1.2.3');
     expect(a.querySelector('[aria-label="Idle"]')).not.toBeNull();
     expect(button(a, 'Copy install command')).toBeUndefined();
@@ -180,7 +179,7 @@ describe('AgentDoctor', () => {
     await mount(api);
     await act(async () => button(host, 'Test')!.click());
     await flush();
-    expect(host.textContent).toContain('Problem');
+    expect(host.textContent).toContain('Did not pass the test');
     expect(host.textContent).toContain('boom');
   });
 

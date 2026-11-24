@@ -34,3 +34,20 @@ describe('agent count', () => {
     expect(usableAgents(watchedRows(all as never))).toHaveLength(4);
   });
 });
+
+describe('welcome agent rows follow the login read Settings > Agents uses', () => {
+  const row = (state: string) => ({ id: 'cursor_agent', label: 'Cursor', installed: true, state }) as never;
+  it('a signed-in login turns a needs-sign-in row ready, a signed-out one the other way', () => {
+    expect(watchedRows([row('needs_login')], {}, [{ agent_id: 'cursor_agent', state: 'signed_in', why: null }])[0]!.state).toBe('ready');
+    expect(watchedRows([row('ready')], {}, [{ agent_id: 'cursor_agent', state: 'signed_out', why: null }])[0]!.state).toBe('needs_login');
+    expect(watchedRows([row('needs_login')], {}, [{ agent_id: 'cursor_agent', state: 'unknown', why: null }])[0]!.state).toBe('needs_login');
+    expect(watchedRows([row('needs_login')], {}, null)[0]!.state).toBe('needs_login');
+  });
+});
+
+describe('Welcome says the same word as the Agents cards', () => {
+  it('a login read as signed in is "Signed in", not "Ready"', () => {
+    const row = { id: 'cursor_agent', label: 'Cursor', state: 'needs_login', installed: true };
+    expect((watchedRows([row] as never, {}, [{ agent_id: 'cursor_agent', state: 'signed_in', why: null }])[0] as { standing?: string }).standing).toBe('Signed in');
+  });
+});

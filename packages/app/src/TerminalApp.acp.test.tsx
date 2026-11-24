@@ -112,6 +112,19 @@ describe('pane window of a chat session over ACP', () => {
     expect(host.textContent).not.toMatch(/no terminal|not available/i);
   });
 
+  it('applies the saved text size at open and follows a change from another window', async () => {
+    state.lane = 'acp';
+    localStorage.setItem('potato.comfort.v1', JSON.stringify({ textScale: 110 }));
+    const { refreshComfortFromStorage } = await import('./lib/comfort/store');
+    refreshComfortFromStorage();
+    await act(async () => root.render(<TerminalApp />));
+    await flush();
+    expect(document.documentElement.style.getPropertyValue('--ui-scale')).toBe('1.1');
+    localStorage.setItem('potato.comfort.v1', JSON.stringify({ textScale: 130 }));
+    await act(async () => { window.dispatchEvent(new StorageEvent('storage', { key: 'potato.comfort.v1' })); });
+    expect(document.documentElement.style.getPropertyValue('--ui-scale')).toBe('1.3');
+  });
+
   it('a terminal pane keeps its terminal viewport', async () => {
     state.lane = undefined;
     await act(async () => root.render(<TerminalApp />));

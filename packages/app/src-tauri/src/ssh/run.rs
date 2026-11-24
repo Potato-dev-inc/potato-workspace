@@ -28,6 +28,10 @@ pub trait Runner {
     fn run_capped(&self, argv: &[String], deadline: Duration, _cap: usize) -> Result<Output, String> {
         self.run(argv, deadline)
     }
+    /// Like `run`, with `input` written to the far command's stdin and then closed (the program copy and the pairing line).
+    fn run_input(&self, _argv: &[String], _input: &[u8], _deadline: Duration) -> Result<Output, String> {
+        Err("this runner cannot send input".into())
+    }
 }
 
 /// The system `ssh`, looked for in `path_var` (the process `PATH` when `None`), then in the Windows OpenSSH folder.
@@ -84,9 +88,25 @@ impl Runner for LiveRunner {
     }
 
     fn run_capped(&self, argv: &[String], deadline: Duration, cap: usize) -> Result<Output, String> {
+        self.exec(argv, None, deadline, cap)
+    }
+
+    fn run_input(&self, argv: &[String], input: &[u8], deadline: Duration) -> Result<Output, String> {
+        self.exec(argv, Some(input), deadline, OUTPUT_CAP)
+    }
+}
+
+impl LiveRunner {
+    fn exec(&self, argv: &[String], input: Option<&[u8]>, deadline: Duration, cap: usize) -> Result<Output, String> {
         let mut cmd = crate::proc_util::hidden_command(&self.exe);
-        cmd.args(&self.pre).args(argv).stdin(Stdio::null()).stdout(Stdio::piped()).stderr(Stdio::piped());
+        cmd.args(&self.pre).args(argv).stdin(if input.is_some() { Stdio::piped() } else { Stdio::null() }).stdout(Stdio::piped()).stderr(Stdio::piped());
         let mut child = cmd.spawn().map_err(|e| format!("ssh did not start: {e}"))?;
+        // The input goes in from its own thread so a full pipe never blocks the reads; the pipe closes once it is all written.
+        if let (Some(bytes), Some(mut stdin)) = (input.map(<[u8]>::to_vec), child.stdin.take()) {
+            std::thread::spawn(move || {
+                let _ = std::io::Write::write_all(&mut stdin, &bytes);
+            });
+        }
         let out = read_capped(child.stdout.take().ok_or("no stdout")?, cap);
         let err = read_capped(child.stderr.take().ok_or("no stderr")?, OUTPUT_CAP);
         let started = Instant::now();

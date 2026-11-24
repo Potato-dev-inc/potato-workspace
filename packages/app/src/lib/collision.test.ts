@@ -1,4 +1,5 @@
 // @vitest-environment jsdom
+import { resetEventHub } from './events';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 const invoke = vi.fn();
@@ -52,6 +53,7 @@ function setTauri(on: boolean): void {
 }
 
 beforeEach(() => {
+  resetEventHub();
   setTauri(true);
   invoke.mockReset();
   listen.mockReset();
@@ -127,7 +129,8 @@ describe('onCollisionChanged', () => {
   it('the returned function is the Tauri unlisten', async () => {
     listen.mockResolvedValueOnce(unlisten);
     const off = await tauriCollisionApi.onChanged(() => {});
-    expect(off).toBe(unlisten);
+    off();
+    expect(unlisten).toHaveBeenCalledTimes(1);
   });
 
   it('outside the desktop shell it does nothing and registers no listener', async () => {

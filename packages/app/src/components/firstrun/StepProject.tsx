@@ -35,6 +35,12 @@ export function folderText(code: string | null): string {
  */
 export const refusal = (check: { ok: boolean; code?: string }): string | null => (check.ok || check.code === 'FOLDER_TOO_BIG' ? null : (check.code ?? 'FOLDER_FAILED'));
 
+/** The app's own scratch folders (the doctor's, a side question's, anything in the temp or app-data folder) are not projects. */
+export function isInternalFolder(path: string): boolean {
+  const p = path.replace(/\\/g, '/').replace(/\/+$/, '').toLowerCase();
+  return /(^|\/)(potato-workspace-doctor|side-question|pm-store-check-[^/]*)$/.test(p) || /\/appdata\/local\/temp(\/|$)/.test(p) || p.includes('/com.potatodev.workspace') || /^\/tmp(\/|$)/.test(p);
+}
+
 /** A recent folder inside another listed one (a subfolder of a repo already there) is left out. */
 export function withoutNested<T extends { path: string; state: string }>(list: T[]): T[] {
   const norm = (p: string) => p.replace(/\\/g, '/').replace(/\/+$/, '').toLowerCase();
@@ -65,7 +71,7 @@ export function StepProject({
     ship
       .recent()
       .then((list) => {
-        const shown = withoutNested(list);
+        const shown = withoutNested(list.filter((p) => !isInternalFolder(p.path)));
         setRecent(shown);
         for (const p of shown) {
           if (p.state === 'missing') continue;

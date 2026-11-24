@@ -17,7 +17,7 @@ use crate::acp::registry::{self, Choice, Registry, RegistryAgent};
 use crate::agent_install::plan::Tools;
 use crate::agent_store::catalog;
 use crate::tui::declarative::schema::parse_definition;
-use crate::tui::declarative::wizard::ladder::{
+use crate::wizard_ladder::{
     AddAgentRun, AddonPlan, Backends, CatalogHit, HandshakeRecord, InstallPlanView, Ladder, LadderCfg,
 };
 use crate::tui::declarative::wizard::session::WizardEnv;

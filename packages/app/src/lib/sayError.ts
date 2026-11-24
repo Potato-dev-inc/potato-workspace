@@ -34,6 +34,9 @@ const TECHNICAL = [
   /\bUnexpected (token|end of JSON|identifier)/i,
   /^\s*at\s.+\(.*:\d+:\d+\)/m,
   /\bTauri command unavailable\b/i,
+  /\binvalid args `/i,
+  /\bmissing required key\b/i,
+  /\bunknown pane:/i,
   /\bfailed to fetch\b/i,
   /\bload failed\b/i,
   /\bNetworkError\b/i,
@@ -72,10 +75,14 @@ export function sayError(e: unknown, where = '', fallback?: string): SaidError {
   const cleaned = raw.trim().replace(CODE_PREFIX, '').replace(TYPE_PREFIX, '').trim();
   const details = [where && `Where: ${where}`, code && `Code: ${code}`, raw.trim() && `Message: ${raw.trim()}`].filter(Boolean).join('\n');
 
+  if (code === 'FILES_NOT_FOUND' && cleaned === 'That file is not there any more.') return { text: t('r9.err.fileGone'), details };
+  if (code === 'FILES_NOT_FOUND' && cleaned === 'That folder is not there any more.') return { text: t('r9.err.folderGone'), details };
   if (code && CODE_KEYS[code]) return { text: t(CODE_KEYS[code]), details };
   // The operating system's key store failing is not something a person can read: say what it means.
   if (/secure storage failure.*error code 8(?!\d)/i.test(cleaned)) return { text: t('common.err.secureStoreFull'), details };
   if (/secure storage failure/i.test(cleaned)) return { text: t('common.err.secureStore'), details };
+  // An agent without its sign-in variable ("Missing environment variable: SABLE_API_KEY.") is a setup problem.
+  if (/^Missing environment variable/i.test(cleaned)) return { text: t('r13.end.codexUnset'), details };
   // The relay's raw network error ("Connection Failed ... os error 10061") is for the log; the person gets the address and what to do.
   const relayDown = /^Can't reach the relay: https?:\/\/([^/\s]+)/i.exec(cleaned);
   if (relayDown) return { text: t('common.err.relayDown', { host: relayDown[1] }), details };
@@ -84,6 +91,9 @@ export function sayError(e: unknown, where = '', fallback?: string): SaidError {
   }
   return { text: cleaned, details };
 }
+
+/** The caught value's own text, unprocessed: for matching a known code or marker, never for showing. */
+export const rawText = (e: unknown): string => rawOf(e).raw;
 
 /** Just the sentence, for the many places that only show one line. */
 export const errorSentence = (e: unknown, fallback?: string): string => sayError(e, '', fallback).text;

@@ -118,6 +118,17 @@ export function useLayerHost() {
 
 const ITEMS = '[role^="menuitem"]:not(:disabled), [role="radio"]:not(:disabled)';
 
+/**
+ * The one-popover-at-a-time rule: every open layer is listed here, and a layer that opens closes the others that are not its parents
+ * (a press outside already closes them; this covers an opener that sends no press, such as a keyboard or screen-reader activation).
+ */
+interface OpenLayer {
+  el: () => HTMLElement | null;
+  kids: () => ReadonlySet<HTMLElement>;
+  close: () => void;
+}
+const openLayers = new Set<OpenLayer>();
+
 export interface FloatProps {
   /** The button that opened it. Give this or `point`. */
   anchorRef?: RefObject<HTMLElement | null>;
@@ -158,6 +169,12 @@ function Float({ menu, role, as = 'div', ...p }: FloatProps & { menu: boolean })
   close.current = p.onClose;
   const { layer, kids, extra } = useLayerHost();
   useLayoutEffect(() => (ref.current && parent ? parent.register(ref.current) : undefined), [parent]);
+  useLayoutEffect(() => {
+    const me: OpenLayer = { el: () => ref.current, kids: () => kids.current, close: () => close.current(false) };
+    for (const other of [...openLayers]) if (!(ref.current && other.kids().has(ref.current))) other.close();
+    openLayers.add(me);
+    return () => void openLayers.delete(me);
+  }, [kids]);
 
   const measure = () => {
     const el = ref.current;

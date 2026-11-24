@@ -3,6 +3,7 @@
 // terminal: `TerminalViewport` draws the far pane exactly as it draws a local one.
 import type { PaneInfo, PtyResizedEvent } from '../tauri-types';
 import type { Host, Unlisten } from './host';
+import { idOfKey } from './placeKey';
 
 /** A chunk of a pane's output (`terminal-data`): the same event the window gets, with bytes instead of a number list. */
 export interface PaneBytes {
@@ -47,6 +48,8 @@ export function farPaneIo(host: Host): PaneIo {
   const asked = new Map<string, string>();
   // Below Full the far PC refuses keys and resizes (403): the viewer only watches, so they are not sent.
   const may = host.caps.terminal;
+  // The far host turns every pane id of an event into this screen's key (`dev:<node>:<id>`); the registry and the viewer hold the far PC's own id, so it is turned back.
+  const own = (id: string): string => (host.place.kind === 'pc' ? idOfKey(host.place.node, id) : id);
   return {
     // Listing a far PC's terminals names folders: only a place that may use its terminals lists them.
     listPanes: async () => (host.caps.terminal ? host.invoke<PaneInfo[]>('list_panes') : []),
@@ -54,12 +57,13 @@ export function farPaneIo(host: Host): PaneIo {
     killPane: (paneId) => host.invoke<void>('kill_pane_cmd', { paneId }),
     killAllPanes: () => Promise.reject(new Error('Close the terminals one by one on another PC.')),
     writeInput: async (paneId, text, appendNewline = true) => {
-      if (may) await host.invoke<void>('write_pane_input', { paneId, args: { text, append_newline: appendNewline } });
+      // A pane the far PC lost (it restarted) answers "unknown pane": nothing to type into, and no unhandled rejection.
+      if (may) await host.invoke<void>('write_pane_input', { paneId, args: { text, append_newline: appendNewline } }).catch(() => undefined);
     },
     resize: (paneId, cols, rows) => {
       if (!may) return Promise.resolve();
       asked.set(paneId, `${cols}x${rows}`);
-      const call = host.invoke<void>('resize_pane', { paneId, cols, rows });
+      const call = host.invoke<void>('resize_pane', { paneId, cols, rows }).catch(() => undefined);
       const tracked: Promise<unknown> = call.catch(() => undefined).finally(() => {
         if (resizing.get(paneId) === tracked) resizing.delete(paneId);
       });
@@ -67,20 +71,21 @@ export function farPaneIo(host: Host): PaneIo {
       return call;
     },
     // Output and screen may hold secrets: the far PC shows them at Full only (S11), so below Full nothing is asked.
-    readScreenReplay: async (paneId) => (may ? host.invoke<PaneScreenReplay>('read_pane_screen_replay', { paneId }) : null),
-    readRawBuffer: async (paneId, lines) => (may ? host.invoke<number[]>('read_pane_raw_buffer', { paneId, lines }) : []),
+    readScreenReplay: async (paneId) => (may ? host.invoke<PaneScreenReplay>('read_pane_screen_replay', { paneId }).catch(() => null) : null),
+    readRawBuffer: async (paneId, lines) => (may ? host.invoke<number[]>('read_pane_raw_buffer', { paneId, lines }).catch(() => []) : []),
     pendingResize: (paneId) => resizing.get(paneId),
     onPanesChanged: async (cb) => {
       const timer = setInterval(() => cb(null), FAR_PANES_POLL_MS);
       return () => clearInterval(timer);
     },
-    onTerminalData: (cb) => host.listen<{ pane_id: string; b64: string; offset?: number | null }>('terminal-data', (e) => cb({ pane_id: e.pane_id, data: bytesOfBase64(e.b64), offset: e.offset ?? undefined })),
+    onTerminalData: (cb) => host.listen<{ pane_id: string; b64: string; offset?: number | null }>('terminal-data', (e) => cb({ pane_id: own(e.pane_id), data: bytesOfBase64(e.b64), offset: e.offset ?? undefined })),
     onPtyResized: (cb) =>
       host.listen<PtyResizedEvent>('pty://resized', (e) => {
-        const ours = asked.get(e.pane_id) === `${e.cols}x${e.rows}`;
-        asked.delete(e.pane_id);
-        if (!ours) cb({ ...e, offset: e.offset ?? undefined });
+        const id = own(e.pane_id);
+        const ours = asked.get(id) === `${e.cols}x${e.rows}`;
+        asked.delete(id);
+        if (!ours) cb({ ...e, pane_id: id, offset: e.offset ?? undefined });
       }),
-    onTerminalLag: (cb) => host.listen<{ pane_id: string }>('terminal-lag', (e) => cb(e.pane_id)),
+    onTerminalLag: (cb) => host.listen<{ pane_id: string }>('terminal-lag', (e) => cb(own(e.pane_id))),
   };
 }

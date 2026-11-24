@@ -1,6 +1,7 @@
 // The helpers a pane's agent started through Potato Workspace (run_agent, delegate_work, spawn_agent), as compact rows
 // in that pane's chat ("Helper: <task> ... working"). They come from the pane list (`parent_pane_id`), not from the
 // session file, and are placed in the turn during which they were started. Pure, no React.
+import { t } from '../i18n';
 import type { ChatTurn } from './sessionChatModel';
 import { liveParentId, taskTitle } from './pane-helpers';
 
@@ -25,10 +26,18 @@ interface PaneLike {
 }
 
 export const HELPER_STATUS_LABEL: Record<ChatHelperStatus, string> = {
-  working: 'working',
-  'needs-you': 'needs you',
-  done: 'done',
-  failed: 'failed',
+  get working() {
+    return t('r10.helper.working');
+  },
+  get 'needs-you'() {
+    return t('r10.helper.needsYou');
+  },
+  get done() {
+    return t('r10.helper.done');
+  },
+  get failed() {
+    return t('r10.helper.failed');
+  },
 };
 
 /** `asking`: the pane has a card waiting on the person (a question, an approval), whatever its status says. */

@@ -1,6 +1,7 @@
 // The divider between the two split sides. Drag it to resize (each side keeps its minimum width), double-click
 // it to go back to an even split, or focus it and press Left or Right to move it one step.
 import { useRef, type KeyboardEvent, type PointerEvent, type RefObject } from 'react';
+import { useT } from '../../i18n';
 import { SPLIT_DEFAULT_RATIO, SPLIT_DIVIDER_PX, SPLIT_KEY_STEP_PX, nudgeSplitRatio, ratioFromLeftPx } from './main-view';
 
 export function SplitDivider({
@@ -13,6 +14,7 @@ export function SplitDivider({
   ratio: number;
   onRatio: (ratio: number) => void;
 }) {
+  const t = useT();
   // True while the pointer is held down on the divider (a drag). A ref: each move re-renders this component.
   const dragging = useRef(false);
   const span = () => (colsRef.current ? colsRef.current.getBoundingClientRect().width - SPLIT_DIVIDER_PX : 0);
@@ -48,11 +50,11 @@ export function SplitDivider({
       role="separator"
       tabIndex={0}
       aria-orientation="vertical"
-      aria-label="Resize the two chats"
+      aria-label={t('r10.split.resize')}
       aria-valuemin={0}
       aria-valuemax={100}
       aria-valuenow={Math.round(ratio * 100)}
-      title="Drag to resize. Double-click to split evenly. Left and Right arrows move it."
+      title={t('r10.split.tip')}
       onKeyDown={onKeyDown}
       onPointerDown={onPointerDown}
       onPointerMove={onPointerMove}

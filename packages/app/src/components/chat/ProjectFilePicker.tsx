@@ -1,6 +1,9 @@
 import { forwardRef, useEffect, useImperativeHandle, useRef, useState } from 'react';
 import type { CSSProperties, ReactNode } from 'react';
-import { createProjectFileSearcher, PROJECT_FILE_LIMIT, type ProjectFileHit, type ProjectFileSearcher } from '../../lib/projectFiles';
+import { createProjectFileSearcher, PROJECT_FILE_LIMIT, searchProjectFilesOn, type ProjectFileHit, type ProjectFileSearcher } from '../../lib/projectFiles';
+import { useHost } from '../../lib/host/context';
+import { errorSentence } from '../../lib/sayError';
+import { t } from '../../i18n';
 import { FileGlyph } from '../cockpit/rail/FileGlyph';
 import '../../styles/project-file-picker.css';
 
@@ -76,10 +79,13 @@ function folderOf(path: string, name: string): string {
  */
 export const ProjectFilePicker = forwardRef<ProjectFilePickerHandle, ProjectFilePickerProps>(function ProjectFilePicker(props, ref) {
   const { paneId, query, open, anchorRect, onPick, onClose } = props;
-  const [state, setState] = useState<{ results: ProjectFileHit[]; loading: boolean }>({ results: [], loading: true });
+  // The search runs on the PC the chat is on (a far chat's files are on that PC, not on this one).
+  const host = useHost();
+  const [state, setState] = useState<{ results: ProjectFileHit[]; loading: boolean; error?: string }>({ results: [], loading: true });
   const [active, setActive] = useState(0);
   const searcherRef = useRef<ProjectFileSearcher | null>(null);
-  if (searcherRef.current === null) searcherRef.current = createProjectFileSearcher();
+  // A refusal is told (the far PC may have "Browse and copy files" off for this PC), never shown as "No matching files".
+  if (searcherRef.current === null) searcherRef.current = createProjectFileSearcher(searchProjectFilesOn(host), (e) => setState({ results: [], loading: false, error: errorSentence(e) }));
   const listRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -165,7 +171,7 @@ export const ProjectFilePicker = forwardRef<ProjectFilePickerHandle, ProjectFile
       data-testid="project-file-picker"
     >
       {results.length > 0 && (
-        <div ref={listRef} className="ck-pfp-list" role="listbox" aria-label="Project files" id="ck-pfp-listbox">
+        <div ref={listRef} className="ck-pfp-list" role="listbox" aria-label={t('r10.pfp.files')} id="ck-pfp-listbox">
           {results.map((hit, i) => {
             const selected = i === index;
             return (
@@ -191,10 +197,10 @@ export const ProjectFilePicker = forwardRef<ProjectFilePickerHandle, ProjectFile
         </div>
       )}
       {showLoading && (
-        <div className="ck-pfp-status" role="status">Searching…</div>
+        <div className="ck-pfp-status" role="status">{t('r9.pfp.searching')}</div>
       )}
       {showEmpty && (
-        <div className="ck-pfp-status" role="status">No matching files</div>
+        <div className="ck-pfp-status" role="status">{state.error ?? t('r9.pfp.none')}</div>
       )}
     </div>
   );

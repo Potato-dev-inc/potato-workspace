@@ -48,7 +48,10 @@ function openWith(journal: ChatItem[], held: number) {
   return journal.slice(Math.max(0, journal.length - held));
 }
 
+import { earlierTuning, forgetKnownMore } from '../../hooks/useEarlier';
 beforeEach(() => {
+  earlierTuning.probeMs = 0;
+  forgetKnownMore();
   localStorage.clear();
   (window as unknown as { __TAURI_INTERNALS__: object }).__TAURI_INTERNALS__ = {};
   invoke.mockReset();

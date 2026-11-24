@@ -23,6 +23,8 @@ import {
   tooltip,
   useUsage,
   useUsageBarOn,
+  reasonText,
+  windowName,
   usageApi,
   warns,
   type UsageApi,
@@ -34,6 +36,8 @@ import { devicesApi, type DevicesApi } from '../../lib/devices';
 import { makeRemoteClient } from '../../lib/runtime/remote';
 import { spacedUnits, useFarUsage } from '../../lib/runtime/farUsage';
 import { useT } from '../../i18n';
+import { isActiveOut, type Grant } from '../../lib/lend';
+import { useLend } from '../lend/useLend';
 import { problemsFromUsage, syncProblems } from '../../lib/problems-feed';
 import type { ReactNode } from 'react';
 import '../../styles/chips.css';
@@ -72,13 +76,14 @@ export function signInSuffix(row: UsageRow, agentHasSeveral: boolean): string | 
 const rowKey = (r: UsageRow) => `${r.agent_id}:${r.account_id ?? ''}`;
 
 /** A chip is a picture inside the strip's one button, not a tab stop. A click on it still says which row it is. */
-function Chip({ row, now, suffix, farName }: { row: UsageRow; now: number; suffix: string | null; /** The PC this row belongs to, when it is not this one. */ farName?: string }) {
+function Chip({ row, now, suffix, farName, lent }: { row: UsageRow; now: number; suffix: string | null; /** The PC this row belongs to, when it is not this one. */ farName?: string; /** Requests other PCs made on this sign-in while it is lent (the numbers above lag, so this says it is in use), and the lend's name. */ lent?: { n: number; name: string } }) {
   const t = useT();
   const warn = warns(row);
   const g = groupParts(row, now);
   const full = tooltip(row, now);
   const sentence = groupSentence(row, now);
-  const localTip = (sentence ? `${sentence}\n${full.split('\n').slice(1).join('\n')}` : full).replace(t('state.usage.openPage'), t('status.clickForDetails'));
+  const lentTip = lent ? '\n' + t('status.lentTip', { name: lent.name, n: lent.n, count: lent.n }) : '';
+  const localTip = (sentence ? `${sentence}\n${full.split('\n').slice(1).join('\n')}` : full).replace(t('state.usage.openPage'), t('status.clickForDetails')) + lentTip;
   // Another PC's chip says whose limit it is: "Claude on REN-LAPTOP: 42% of its limit, resets in 2 h".
   const top = headline(row);
   const tip = farName && row.state === 'ok' && top && !top.reset_since ? (top.resets_at_ms ? t('status.far.tipReset', { agent: row.label, name: farName, pct: Math.round(top.used_percent), time: spacedUnits(formatLeft(top.resets_at_ms - now)) }) : t('status.far.tip', { agent: row.label, name: farName, pct: Math.round(top.used_percent) })) : localTip;
@@ -118,6 +123,11 @@ function Chip({ row, now, suffix, farName }: { row: UsageRow; now: number; suffi
           )}
         </>
       )}
+      {lent !== undefined && (
+        <span className="ck-usage-lent" data-testid="usage-lent" aria-hidden="true">
+          {t('status.lent', { n: lent.n, count: lent.n })}
+        </span>
+      )}
     </span>
   );
 }
@@ -143,11 +153,11 @@ function PopRow({ row, now, api, picked, far = false }: { row: UsageRow; now: nu
         const reset = w.reset_since ? t('status.startedAgain') : w.resets_at_ms ? t('status.resetsIn', { time: formatLeftLong(w.resets_at_ms - now) }) : '';
         return (
           <div key={w.name} className="ck-usage-win">
-            <span className="ck-usage-win-name">{w.name}</span>
+            <span className="ck-usage-win-name">{windowName(w.name)}</span>
             <span
               className={`ck-usage-bar${pct >= 80 ? ' is-high' : ''}`}
               role="meter"
-              aria-label={t('status.windowUsed', { name: w.name })}
+              aria-label={t('status.windowUsed', { name: windowName(w.name) })}
               aria-valuemin={0}
               aria-valuemax={100}
               aria-valuenow={pct}
@@ -188,7 +198,7 @@ function PopRow({ row, now, api, picked, far = false }: { row: UsageRow; now: nu
           ))}
         </div>
       )}
-      {row.reason && <p className="ck-usage-pop-reason">{row.reason}</p>}
+      {row.reason && <p className="ck-usage-pop-reason">{reasonText(row.reason)}</p>}
       {row.state === 'expired' && row.link !== 'borrowed' && !far && (
         <div className="ck-usage-pop-foot">
           <button
@@ -265,6 +275,27 @@ export function UsageBar({ api = usageApi, devices, working = 0, needsYou = 0, t
   const measureRow = useRef<HTMLDivElement>(null);
   const pop = useRef<HTMLDivElement>(null);
   const rows = Array.isArray(snap?.rows) ? snap.rows : [];
+  // While this PC's own (main) sign-in is lent out, its chip says how many requests the borrowers made on it: the plan numbers read from the
+  // provider are minutes old, so the chip alone would look unused.
+  const lend = useLend();
+  const lentOf = (r: UsageRow): { n: number; name: string } | undefined => {
+    if (far || !lend.state) return undefined;
+    const agentLive = lend.state.grants.filter((g) => isActiveOut(g, lend.now) && g.agent_id.toLowerCase() === r.agent_id.toLowerCase());
+    if (agentLive.length === 0) return undefined;
+    const profileOf = (g: Grant) => lend.state!.profiles.find((p) => p.id === g.profile_id);
+    // The row of the main sign-in matches the profiles that lend it; a lend sign-in's own row (named by its profile) matches the profiles that lend that account.
+    const own = (g: Grant, row: UsageRow) => {
+      const p = profileOf(g);
+      if (!p) return false;
+      return row.account_id ? p.account.kind === 'account' && p.account.id === row.account_id : p.account.kind === 'main';
+    };
+    const claimed = (g: Grant) => rows.some((x) => x.agent_id.toLowerCase() === r.agent_id.toLowerCase() && own(g, x));
+    // A grant with no profile was made from the main sign-in; one that no row of the agent claims (its profile is gone or lends an account with no row) counts on the agent's first row, so a lend in use is never silent.
+    const mine = agentLive.filter((g) => own(g, r) || (!profileOf(g) && !r.account_id) || (!claimed(g) && rows.find((x) => x.agent_id.toLowerCase() === r.agent_id.toLowerCase()) === r));
+    if (mine.length === 0) return undefined;
+    const name = [...new Set(mine.map((g) => g.profile_name || profileOf(g)?.name || r.account_label || r.label))].join(', ');
+    return { n: mine.reduce((n, g) => n + (g.requests ?? 0), 0), name };
+  };
 
   useEffect(() => {
     const t = window.setInterval(() => setNow(Date.now()), 60_000);
@@ -399,7 +430,7 @@ export function UsageBar({ api = usageApi, devices, working = 0, needsYou = 0, t
         )}
         <span className="ck-sb-chips" ref={row}>
           {rows.slice(0, count).map((r) => (
-            <Chip key={key(r)} row={r} now={now} suffix={suffixOf(r)} farName={far?.name} />
+            <Chip key={key(r)} row={r} now={now} suffix={suffixOf(r)} farName={far?.name} lent={lentOf(r)} />
           ))}
           {far && rows.length === 0 && (
             <span className="ck-usage-text" data-testid="usage-far-none">
@@ -426,7 +457,7 @@ export function UsageBar({ api = usageApi, devices, working = 0, needsYou = 0, t
       {/* The same chips, unseen, so their natural widths can be measured. */}
       <div className="ck-sb-measure" ref={measureRow} aria-hidden="true">
         {rows.map((r) => (
-          <Chip key={key(r)} row={r} now={now} suffix={suffixOf(r)} />
+          <Chip key={key(r)} row={r} now={now} suffix={suffixOf(r)} lent={lentOf(r)} />
         ))}
       </div>
       {refreshBtn}

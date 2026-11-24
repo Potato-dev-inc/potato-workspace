@@ -8,11 +8,11 @@ use std::cell::RefCell;
 use std::path::PathBuf;
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
-const CODEX_TOML: &str = include_str!("../tui/codex/usage.toml");
-const CLAUDE_TOML: &str = include_str!("../tui/claude/usage.toml");
-const CURSOR_TOML: &str = include_str!("../tui/cursor/usage.toml");
-const ROLLOUT: &str = include_str!("../tui/codex/fixtures/usage/rollout-synthetic.jsonl");
-const ROLLOUT_REACHED: &str = include_str!("../tui/codex/fixtures/usage/rollout-synthetic-free-reached.jsonl");
+const CODEX_TOML: &str = include_str!("../../crates/pm-core/src/tui/codex/usage.toml");
+const CLAUDE_TOML: &str = include_str!("../../crates/pm-core/src/tui/claude/usage.toml");
+const CURSOR_TOML: &str = include_str!("../../crates/pm-core/src/tui/cursor/usage.toml");
+const ROLLOUT: &str = include_str!("../../crates/pm-core/src/tui/codex/fixtures/usage/rollout-synthetic.jsonl");
+const ROLLOUT_REACHED: &str = include_str!("../../crates/pm-core/src/tui/codex/fixtures/usage/rollout-synthetic-free-reached.jsonl");
 
 /// 2026-01-02 04:00 UTC: before the fixtures' reset times (2033).
 fn early() -> SystemTime {
@@ -487,13 +487,17 @@ fn own_sign_ins_tell_signed_in_signed_out_and_cannot_tell() {
     let rows = own_sign_ins(&[codex.clone(), cursor.clone()], &none, Some(&user), &no);
     assert_eq!(rows[0].state, "signed_out");
     assert_eq!(rows[1].state, "signed_out");
-    // A folder with other files but no login file, and a status command that never answers: cannot tell, and says why.
+    // A folder with other files but no login file: signed out (macOS keeps its login in the keychain, so there it cannot tell). A status command that never answers: cannot tell, and says why.
     std::fs::create_dir_all(user.join(".codex")).unwrap();
     std::fs::write(user.join(".codex").join("config.toml"), "").unwrap();
     let silent = probe(None);
     let rows = own_sign_ins(&[codex, cursor], &none, Some(&user), &silent);
-    assert_eq!(rows[0].state, "unknown");
-    assert!(rows[0].why.as_deref().unwrap().contains("Codex"));
+    if cfg!(target_os = "macos") {
+        assert_eq!(rows[0].state, "unknown");
+        assert!(rows[0].why.as_deref().unwrap().contains("Codex"));
+    } else {
+        assert_eq!(rows[0].state, "signed_out");
+    }
     assert_eq!(rows[1].state, "unknown");
     assert!(rows[1].why.as_deref().unwrap().contains("did not answer"));
     let _ = std::fs::remove_dir_all(user);

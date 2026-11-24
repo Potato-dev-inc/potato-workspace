@@ -1,0 +1,344 @@
+//! The pane outbox: messages a person wrote in the Chat tab (or on a phone) for the agent in a pane, sent
+//! when the agent can take them. Nothing else queues text for a pane a person started by hand.
+//!
+//! Each pane has a short first-in-first-out list. One worker thread per pane that has messages looks at the
+//! pane about every 400 ms (`agent_runs::readiness::assess`) and types the first waiting message only when the
+//! agent is ready, its input box is empty and its status reads idle. It never presses a key on a dialog or a
+//! question, never clears text the person typed in the terminal box, and never types into a shell.
+//!
+//! - `model`: the message, its states and the sentences shown to the person.
+//! - `host`: what the outbox needs from the outside (`Host`), so the state machine runs without a terminal.
+//! - `worker`: `decide` (one look -> deliver, wait, or fail) and the loop.
+//! - `draft_guard`: a `DeliveryIo` wrapper that refuses to type over someone's text.
+//! - `live`: `Host` over the live pane registry, the Tauri event and the SSE event `pane-outbox`.
+//!
+//! Generic: nothing here names an agent; the profile of the pane decides what ready means.
+
+pub mod chat;
+mod confirm;
+mod draft_guard;
+mod host;
+mod live;
+mod model;
+mod worker;
+
+#[cfg(test)]
+#[path = "outbox_tests.rs"]
+mod tests;
+
+pub use host::{Attempt, Host, Look, PaneKind, Pulse};
+pub use worker::target_block;
+pub use live::{global, look_pane, redacted, LiveHost};
+pub use model::{OutboxMessage, State, MAX_CHARS, MAX_WAITING};
+/// The one decision per look, for the live checks that ask it of a real screen.
+#[cfg(any(test, feature = "test-util"))]
+pub use worker::{decide, Step};
+
+use crate::attach::ChatAttachment;
+use model::*;
+use parking_lot::Mutex;
+use std::collections::HashMap;
+use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
+use std::sync::Arc;
+use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
+
+/// How long a startup notice that ignored its dismiss keys is left alone before the keys are pressed again
+/// (the pane outbox and the companion keeper both use it).
+pub const GATE_RETRY: Duration = Duration::from_secs(20);
+
+/// How long a chat may stay silent after a message went in before the person is told "No answer yet".
+pub const NO_ANSWER_AFTER: Duration = Duration::from_secs(20);
+
+/// How many of the worker's last decisions are kept per pane, for the support text.
+const DECISIONS_KEPT: usize = 20;
+
+/// How often a worker looks, how long a message may wait, how long a finished one stays listed.
+#[derive(Debug, Clone, Copy)]
+pub struct Timing {
+    pub poll: Duration,
+    pub give_up: Duration,
+    pub keep: Duration,
+    /// How long a failed one stays listed. Longer than `keep`: a failure is the one thing the person must see, and a
+    /// Point send closes its window as soon as the message is queued.
+    pub keep_failed: Duration,
+    /// After a message went in, the next one waits this long even if the pane still reads ready (the agent
+    /// may not have drawn the start of its turn yet).
+    pub after_send: Duration,
+    /// After a startup notice ignored its own dismiss keys, the next try to close it waits this long (the keys are
+    /// not pressed again every poll).
+    pub gate_retry: Duration,
+    /// A sent message with no new item in the chat after this long is marked "no answer yet" (it only informs).
+    pub no_answer_after: Duration,
+    /// A worker that died of a panic is started again after this long, doubled for each further restart (at most 3).
+    pub restart_backoff: Duration,
+}
+
+impl Default for Timing {
+    fn default() -> Self {
+        Self {
+            poll: Duration::from_millis(400),
+            give_up: Duration::from_secs(2 * 60 * 60),
+            keep: Duration::from_secs(120),
+            keep_failed: Duration::from_secs(10 * 60),
+            after_send: Duration::from_millis(1500),
+            gate_retry: GATE_RETRY,
+            no_answer_after: NO_ANSWER_AFTER,
+            restart_backoff: Duration::from_secs(1),
+        }
+    }
+}
+
+#[derive(Default)]
+struct PaneQueue {
+    entries: Vec<model::Entry>,
+    worker: bool,
+    last_sent: Option<Instant>,
+    /// When delivery last came back blocked by a startup screen (`Attempt::Gate`).
+    gate_tried: Option<Instant>,
+    /// The last decisions of the worker (time, reason), oldest first; a repeat of the same reason is not listed twice.
+    decisions: std::collections::VecDeque<(u64, String)>,
+    /// How often a worker that died of a panic was started again (cleared when a message goes in).
+    restarts: u8,
+}
+
+struct Inner {
+    host: Arc<dyn Host>,
+    timing: Timing,
+    panes: Mutex<HashMap<String, PaneQueue>>,
+    next_id: AtomicU64,
+    closed: AtomicBool,
+}
+
+pub struct Outbox {
+    inner: Arc<Inner>,
+}
+
+impl Drop for Outbox {
+    fn drop(&mut self) {
+        self.inner.closed.store(true, Ordering::SeqCst);
+    }
+}
+
+pub(crate) fn now_ms() -> u64 {
+    SystemTime::now().duration_since(UNIX_EPOCH).map(|d| d.as_millis() as u64).unwrap_or(0)
+}
+
+impl Outbox {
+    pub fn new(host: Arc<dyn Host>) -> Self {
+        Self::with_timing(host, Timing::default())
+    }
+
+    pub fn with_timing(host: Arc<dyn Host>, timing: Timing) -> Self {
+        Self {
+            inner: Arc::new(Inner {
+                host,
+                timing,
+                panes: Mutex::new(HashMap::new()),
+                next_id: AtomicU64::new(1),
+                closed: AtomicBool::new(false),
+            }),
+        }
+    }
+
+    /// Adds a message to the pane's list. The error is one plain sentence for the person.
+    pub fn send(&self, pane_id: &str, text: &str) -> Result<OutboxMessage, String> {
+        self.send_with(pane_id, text, &[])
+    }
+
+    /// `send` with files and pictures. The text may be empty when there are files; the length limit is for the text.
+    pub fn send_with(&self, pane_id: &str, text: &str, attachments: &[ChatAttachment]) -> Result<OutboxMessage, String> {
+        self.send_from(pane_id, text, attachments, None)
+    }
+
+    /// `send_with` for a message that came from another device (`from`: its identity id; `None`: this PC).
+    ///
+    /// THE SAFE DEFAULT: a message for a chat on another computer is refused for every caller here (a channel, a companion, a PC link, a
+    /// second opinion, a phone). The app window's own command uses `send_including_remote`.
+    pub fn send_from(&self, pane_id: &str, text: &str, attachments: &[ChatAttachment], from: Option<&str>) -> Result<OutboxMessage, String> {
+        if crate::acp::chat::is_remote_pane(pane_id) {
+            return Err(crate::acp::chat::REMOTE_PANE_REFUSED.to_string());
+        }
+        self.send_from_unchecked(pane_id, text, attachments, from)
+    }
+
+    /// `send_with` for a chat on another computer too: ONLY the app window's own send command.
+    pub fn send_including_remote(&self, pane_id: &str, text: &str, attachments: &[ChatAttachment]) -> Result<OutboxMessage, String> {
+        self.send_from_unchecked(pane_id, text, attachments, None)
+    }
+
+    fn send_from_unchecked(&self, pane_id: &str, text: &str, attachments: &[ChatAttachment], from: Option<&str>) -> Result<OutboxMessage, String> {
+        let text = text.trim();
+        if let Some(sentence) = crate::hooks::get().chat_move_send_refusal(pane_id) {
+            return Err(sentence);
+        }
+        if text.is_empty() && attachments.is_empty() {
+            return Err(EMPTY.into());
+        }
+        if attachments.len() > crate::attach::MAX_ATTACHMENTS {
+            return Err(TOO_MANY_FILES.into());
+        }
+        if text.chars().count() > MAX_CHARS {
+            return Err(TOO_LONG.into());
+        }
+        match self.inner.host.pane_kind(pane_id) {
+            None => return Err(NO_SUCH_PANE.into()),
+            Some(PaneKind::Shell) => return Err(NOT_AN_AGENT.into()),
+            Some(PaneKind::Protocol) => return Err(NOT_SUPPORTED.into()),
+            Some(PaneKind::Agent) => {}
+        }
+        if self.inner.host.run_controls(pane_id) {
+            return Err(RUN_CONTROLS.into());
+        }
+        if let Some(sentence) = self.inner.host.refuse_sender(pane_id, from) {
+            return Err(sentence);
+        }
+        // A chat session that takes text while it works (steering) gets the message now, unless messages already
+        // wait for their turn: those go first.
+        let nothing_waiting = self.inner.panes.lock().get(pane_id).map_or(true, |queue| !queue.entries.iter().any(|e| e.message.state.active()));
+        if nothing_waiting {
+            self.inner.host.note_sender(pane_id, from);
+            if let Some(steered) = self.inner.host.steer_with(pane_id, text, attachments) {
+                steered?;
+                return Ok(self.record_sent(pane_id, text, attachments, from));
+            }
+        }
+        let (message, list, start_worker) = {
+            let mut panes = self.inner.panes.lock();
+            let queue = panes.entry(pane_id.to_string()).or_default();
+            worker::prune(queue, &self.inner.timing);
+            if queue.entries.iter().filter(|e| e.message.state.active()).count() >= MAX_WAITING {
+                return Err(TOO_MANY.into());
+            }
+            let id = format!("m{}-{:x}", self.inner.next_id.fetch_add(1, Ordering::SeqCst), now_ms());
+            let message = OutboxMessage {
+                id,
+                text: text.to_string(),
+                created_at: now_ms(),
+                state: State::Queued,
+                waiting_for: None,
+                error: None,
+                no_answer: false,
+                attachments: attachments.to_vec(),
+                from: from.map(str::to_string),
+            };
+            queue.entries.push(Entry { message: message.clone(), created: Instant::now(), finished: None, held: None, watch: None });
+            let start_worker = !queue.worker;
+            if start_worker {
+                // A new send after the worker gave up is a fresh start: the restarts count from zero again.
+                queue.restarts = 0;
+            }
+            queue.worker = true;
+            (message, worker::snapshot(queue), start_worker)
+        };
+        self.inner.host.publish(pane_id, &list);
+        if start_worker {
+            worker::spawn(self.inner.clone(), pane_id);
+        }
+        Ok(message)
+    }
+
+    /// A message that was handed to the agent at once (steering): listed as sent, like any message that finished.
+    fn record_sent(&self, pane_id: &str, text: &str, attachments: &[ChatAttachment], from: Option<&str>) -> OutboxMessage {
+        let (message, list) = {
+            let mut panes = self.inner.panes.lock();
+            let queue = panes.entry(pane_id.to_string()).or_default();
+            worker::prune(queue, &self.inner.timing);
+            let id = format!("m{}-{:x}", self.inner.next_id.fetch_add(1, Ordering::SeqCst), now_ms());
+            let message = OutboxMessage { id, text: text.to_string(), created_at: now_ms(), state: State::Sent, waiting_for: None, error: None, no_answer: false, attachments: attachments.to_vec(), from: from.map(str::to_string) };
+            let mut entry = Entry { message: message.clone(), created: Instant::now(), finished: None, held: None, watch: None };
+            entry.finish(State::Sent, None);
+            queue.entries.push(entry);
+            (message, worker::snapshot(queue))
+        };
+        self.inner.host.publish(pane_id, &list);
+        message
+    }
+
+    /// Cancels a message that has not started to be typed.
+    pub fn cancel(&self, pane_id: &str, message_id: &str) -> Result<OutboxMessage, String> {
+        let (message, list) = {
+            let mut panes = self.inner.panes.lock();
+            let queue = panes.get_mut(pane_id).ok_or_else(|| NO_SUCH_MESSAGE.to_string())?;
+            let entry = queue
+                .entries
+                .iter_mut()
+                .find(|e| e.message.id == message_id)
+                .ok_or_else(|| NO_SUCH_MESSAGE.to_string())?;
+            match entry.message.state {
+                State::Queued => entry.finish(State::Cancelled, None),
+                State::Sending => return Err(ALREADY_SENDING.into()),
+                State::Sent | State::Failed | State::Cancelled => return Err(NO_SUCH_MESSAGE.into()),
+            }
+            let message = entry.message.clone();
+            (message, worker::snapshot(queue))
+        };
+        self.inner.host.publish(pane_id, &list);
+        Ok(message)
+    }
+
+    /// Holds a waiting message back while the person edits it (`hold` true), or lets it go on (false). While the
+    /// first waiting message is held nothing behind it is sent either: the order stays as it was.
+    pub fn hold(&self, pane_id: &str, message_id: &str, hold: bool) -> Result<OutboxMessage, String> {
+        self.change_waiting(pane_id, message_id, |entry| {
+            entry.held = hold.then(Instant::now);
+            Ok(())
+        })
+    }
+
+    /// Saves new text for a waiting message, in the same place in the list, and lets it go on.
+    pub fn edit(&self, pane_id: &str, message_id: &str, text: &str) -> Result<OutboxMessage, String> {
+        let text = text.trim();
+        if text.is_empty() {
+            return Err(EMPTY.into());
+        }
+        if text.chars().count() > MAX_CHARS {
+            return Err(TOO_LONG.into());
+        }
+        self.change_waiting(pane_id, message_id, |entry| {
+            entry.message.text = text.to_string();
+            entry.held = None;
+            Ok(())
+        })
+    }
+
+    /// Applies `change` to a message that still waits (not being typed, not finished) and publishes the list.
+    fn change_waiting(&self, pane_id: &str, message_id: &str, change: impl FnOnce(&mut Entry) -> Result<(), String>) -> Result<OutboxMessage, String> {
+        let (message, list) = {
+            let mut panes = self.inner.panes.lock();
+            let queue = panes.get_mut(pane_id).ok_or_else(|| NO_SUCH_MESSAGE.to_string())?;
+            let entry = queue.entries.iter_mut().find(|e| e.message.id == message_id).ok_or_else(|| NO_SUCH_MESSAGE.to_string())?;
+            match entry.message.state {
+                State::Queued => change(entry)?,
+                State::Sending => return Err(ALREADY_SENDING.into()),
+                State::Sent | State::Failed | State::Cancelled => return Err(NO_SUCH_MESSAGE.into()),
+            }
+            let message = entry.message.clone();
+            (message, worker::snapshot(queue))
+        };
+        self.inner.host.publish(pane_id, &list);
+        Ok(message)
+    }
+
+    /// The worker's last decisions for the pane, one line each (time, reason), for "Copy for support".
+    pub fn support_text(&self, pane_id: &str) -> String {
+        let panes = self.inner.panes.lock();
+        let Some(queue) = panes.get(pane_id) else { return "Message outbox: nothing is waiting.".to_string() };
+        let mut text = format!("Message outbox: {} message(s), worker {}.", queue.entries.len(), if queue.worker { "running" } else { "stopped" });
+        for (at, reason) in &queue.decisions {
+            text.push_str(&format!("\n  {at} {reason}"));
+        }
+        text
+    }
+
+    /// The pane's messages, oldest first: the waiting ones and those that finished in the last two minutes.
+    pub fn list(&self, pane_id: &str) -> Vec<OutboxMessage> {
+        let mut panes = self.inner.panes.lock();
+        match panes.get_mut(pane_id) {
+            Some(queue) => {
+                worker::prune(queue, &self.inner.timing);
+                worker::snapshot(queue)
+            }
+            None => Vec::new(),
+        }
+    }
+}

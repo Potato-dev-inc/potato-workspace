@@ -5,6 +5,7 @@
 // Words follow the shared word list: Live updates, Budgets, Team, Simple mode, Pair a phone.
 import type { ReactNode } from 'react';
 import type { CockpitApi } from '../../hooks/useCockpit';
+import { t } from '../../i18n';
 import { openStartMission } from '../../lib/missions';
 import { openTonight } from '../../lib/night-host';
 import { patchSettings } from '../../lib/settings';
@@ -45,7 +46,11 @@ export function settingsShortcuts(
         desc: 'Preview, in Labs. Turn it on to start one.',
         keywords: 'mission missions goal checks loop until tests pass preview labs',
         icon: <IconLayers />,
-        run: open('missions'),
+        // It opens Labs (the switch is there): say so, so the jump is not a surprise.
+        run: () => {
+          open('missions')();
+          c.notify(t('r15.missions.labs'));
+        },
       };
   // Night Shift (Labs): hidden while the switch is off. The sidebar owns the Tonight sheet; this only asks it to open.
   const night: ShortcutEntry[] = opts.nightOn

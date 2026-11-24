@@ -4,7 +4,8 @@
 import { useRef, useState, type KeyboardEvent } from 'react';
 import { plainMergeError } from '../Changes';
 import { Sheet } from '../Sheet';
-import { plural } from '../diff';
+import { t, useT } from '../../../i18n';
+import { reasonText } from '../../../lib/review-reasons';
 import { reviewDeskApi, reviewDeskError, type ReviewAct, type ReviewItem } from '../../../lib/review-desk';
 
 /** The one call this sheet makes. A test double can stand in for it. */
@@ -26,21 +27,22 @@ const TITLE_ID = 'ck-rd-keep-title';
 export function keepSheetCopy(item: ReviewItem) {
   if (item.keep.kind === 'issue_push') {
     return {
-      title: 'Push as a draft pull request?',
-      primary: 'Push as draft',
-      footer: 'Potato Workspace opens a draft. It never merges.',
+      title: t('r11.rd.pushTitle'),
+      primary: t('r11.rd.pushPrimary'),
+      footer: t('r11.rd.pushFoot'),
     };
   }
-  const into = item.keep.into || 'your project';
+  const into = item.keep.into || t('r11.rd.yourProject');
   const n = item.files.total;
   return {
-    title: `Merge into ${into}?`,
-    primary: 'Merge',
-    body: `The copy's ${plural(n, 'file')} ${n === 1 ? 'goes' : 'go'} into ${into}. The copy is closed after the merge.`,
+    title: t('r11.rd.mergeTitle', { into }),
+    primary: t('r11.rd.mergePrimary'),
+    body: t('r11.rd.mergeBody', { count: n, into }),
   };
 }
 
 export function KeepSheet({ item, extra = [], api = reviewDeskApi, onDone, onCancel }: KeepSheetProps) {
+  useT();
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<{ text: string; title?: string } | null>(null);
   // A ref, not state: a second Enter in the same tick must not call Keep twice.
@@ -48,7 +50,7 @@ export function KeepSheet({ item, extra = [], api = reviewDeskApi, onDone, onCan
   const copy = keepSheetCopy(item);
   const issue = item.keep.kind === 'issue_push';
   // Look first: the riskiest reason, only when the item is at tier 4 or higher (riskier than a test change).
-  const warn = !issue && item.tier <= 4 && item.reasons[0] ? item.reasons[0].sentence : null;
+  const warn = !issue && item.tier <= 4 && item.reasons[0] ? reasonText(item.reasons[0]) : null;
 
   const confirm = async () => {
     if (busyRef.current) return;
@@ -82,7 +84,7 @@ export function KeepSheet({ item, extra = [], api = reviewDeskApi, onDone, onCan
         </h2>
         {issue ? (
           extra === null ? (
-            <p className="ck-sub">Checking the push.</p>
+            <p className="ck-sub">{t('r11.rd.pushChecking')}</p>
           ) : extra.length > 0 ? (
             <ul className="ck-rd-sheet-list">
               {extra.map((line, i) => (
@@ -90,12 +92,12 @@ export function KeepSheet({ item, extra = [], api = reviewDeskApi, onDone, onCan
               ))}
             </ul>
           ) : (
-            <p className="ck-sub">Potato Workspace found no push warnings.</p>
+            <p className="ck-sub">{t('r11.rd.pushClean')}</p>
           )
         ) : (
           <p className="ck-sub">{copy.body}</p>
         )}
-        {warn && <p className="ck-rd-sheet-warn">{`Look first: ${warn}`}</p>}
+        {warn && <p className="ck-rd-sheet-warn">{t('r11.rd.lookFirst', { why: warn })}</p>}
         {error && (
           <p className="ck-rd-sheet-error" role="alert" title={error.title}>
             {error.text}
@@ -104,7 +106,7 @@ export function KeepSheet({ item, extra = [], api = reviewDeskApi, onDone, onCan
         {issue && <p className="ck-rd-sheet-foot">{copy.footer}</p>}
         <div className="ck-sheet-actions">
           <button type="button" className="ck-btn ck-btn--secondary" disabled={busy} onClick={onCancel}>
-            Cancel
+            {t('r11.rd.cancel')}
           </button>
           <button type="button" className="ck-btn ck-btn--primary" autoFocus disabled={busy} onClick={() => void confirm()}>
             {copy.primary}

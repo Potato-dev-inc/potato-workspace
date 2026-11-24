@@ -1,6 +1,6 @@
 // How the eight pages are laid out: group titles, Advanced > Early features (Labs), the rules for all agents, and the catch-all.
 import { describe, expect, it } from 'vitest';
-import { ADVANCED_CLOSED_GROUPS, LABS_GROUP, LABS_INDEX_ID, LAYOUT, MOVED_TO_AGENT_PAGE, OTHER_GROUP, arrangeSections, collectLabs, layoutRowIds, unplacedRowIds } from './arrange';
+import { ADVANCED_CLOSED_GROUPS, LABS_GROUP, LABS_INDEX_ID, LABS_MORE_GROUP, LAYOUT, MOVED_TO_AGENT_PAGE, OTHER_GROUP, arrangeSections, collectLabs, layoutRowIds, unplacedRowIds } from './arrange';
 import { BASE_SECTIONS, SECTIONS } from './catalog';
 import { LABS_SWITCH_KEYS } from './labs-areas';
 import { SECTION_IDS, groupRows, type BaseSectionDef, type RowDef } from './model';
@@ -93,7 +93,7 @@ describe('groups inside the pages', () => {
 });
 
 describe('Advanced > Early features (Labs)', () => {
-  const labsRows = () => section('labs').rows.filter((r) => r.group === LABS_GROUP);
+  const labsRows = () => section('labs').rows.filter((r) => r.group === LABS_GROUP || r.group === LABS_MORE_GROUP);
 
   it('on the Labs page: the Labs index, then each feature that is more than a switch (its Open button lands there)', () => {
     expect(labsRows().map((r) => r.id)).toEqual([LABS_INDEX_ID, 'ask-bar', 'live-updates', 'opencode-automation', 'assign-issue', 'red-to-green', 'workflow-reply-labs']);
@@ -131,7 +131,7 @@ describe('Advanced > Early features (Labs)', () => {
     };
     const base: BaseSectionDef[] = BASE_SECTIONS.map((s) => (s.id === 'crews' ? { ...s, rows: [...s.rows, extra] } : s));
     const arranged = arrangeSections(base);
-    expect(arranged.find((s) => s.id === 'labs')!.rows.filter((r) => r.group === LABS_GROUP).map((r) => r.id)).toEqual([LABS_INDEX_ID, 'ask-bar', 'live-updates', 'opencode-automation', 'assign-issue', 'red-to-green', 'workflow-reply-labs', 'later-feature']);
+    expect(arranged.find((s) => s.id === 'labs')!.rows.filter((r) => r.group === LABS_GROUP || r.group === LABS_MORE_GROUP).map((r) => r.id)).toEqual([LABS_INDEX_ID, 'ask-bar', 'live-updates', 'opencode-automation', 'assign-issue', 'red-to-green', 'workflow-reply-labs', 'later-feature']);
     const labs = collectLabs(base).map((r) => r.id);
     expect(labs.slice(-22)).toEqual(['red-to-green', 'spaces-labs', 'lend-labs', 'devices-labs', 'far-pcs-labs', 'ssh-chat-labs', 'pcdoor-labs', 'account-labs', 'desktop-potato-labs', 'agent-browser-labs', 'companion-vault-labs', 'discord-bot-labs', 'timeline-labs', 'project-guide-labs', 'markup-bar-labs', 'dock-browser-labs', 'smaller-updates-labs', 'opentunnel-labs', 'crews-labs', 'workflows-labs', 'workflow-reply-labs', 'later-feature']);
     expect(arranged.find((s) => s.id === 'look')!.rows.some((r) => r.id === 'later-feature')).toBe(false);
@@ -156,7 +156,7 @@ describe('the Advanced page', () => {
     const withRows = ADVANCED_CLOSED_GROUPS.filter((g) => advanced.rows.some((r) => r.group === g));
     expect(withRows).toEqual(['Connections to other tools', 'Models', 'App and files']);
     // Only Agents has cards besides (every group but Add an agent and Your agents); the rest use the one "Advanced" fold.
-    for (const s of SECTIONS.filter((x) => x.id !== 'advanced' && x.id !== 'agents')) expect(s.closedGroups, s.id).toBeUndefined();
+    for (const s of SECTIONS.filter((x) => x.id !== 'advanced' && x.id !== 'agents' && x.id !== 'labs')) expect(s.closedGroups, s.id).toBeUndefined();
     const agents = section('agents');
     expect(agents.leadGroups).toEqual(['Add an agent', 'Your agents']);
     expect(agents.closedGroups).toContain('Sign in');

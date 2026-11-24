@@ -4,8 +4,9 @@
 // Nothing here picks an answer for the person; the card only reports which option was pressed.
 import { useId, useState } from 'react';
 import type { AcpPermission } from '../../lib/acpChat';
-import { canRemember, decisionOptions, isLong, isRisky, kindWords, whatIsAsked } from '../../lib/decisionCard';
+import { canRemember, decisionOptions, forceYesLeft, isLong, isRisky, kindWords, whatIsAsked } from '../../lib/decisionCard';
 import type { Question } from '../../lib/questions';
+import { useT } from '../../i18n';
 import { HoldButton } from './HoldButton';
 import '../../styles/chips.css';
 import '../../styles/chat-decision-card.css';
@@ -36,7 +37,9 @@ export function DecisionCard({
   onAnswer: (answer: DecisionAnswer) => void;
   onDismiss: () => void;
 }) {
+  const t = useT();
   const [open, setOpen] = useState(false);
+  const left = forceYesLeft(q);
   const [never, setNever] = useState(false);
   const bodyId = useId();
   const kind = permission?.toolKind ?? null;
@@ -49,16 +52,16 @@ export function DecisionCard({
   const answer = (choiceId: string, yes: boolean) => onAnswer({ choiceId, remember: yes && never && rememberable });
 
   return (
-    <div className="ck-dc" role="group" aria-label="Agent permission question" data-testid="decision-card" data-question-id={q.id} data-risky={risky ? '' : undefined}>
+    <div className="ck-dc" role="group" aria-label={t('decision.region')} data-testid="decision-card" data-question-id={q.id} data-risky={risky ? '' : undefined}>
       <div className="ck-dc-head">
         <span className="ck-dc-who">{label}</span>
-        <span className="ck-dc-q">wants to</span>
+        <span className="ck-dc-q">{t('decision.wantsTo')}</span>
         {chip && (
           <span className="ck-dc-chip" data-testid="decision-kind">
             {chip}
           </span>
         )}
-        {risky && <span className="ck-chip-label is-risk ck-dc-chip ck-dc-chip--risk">Risky</span>}
+        {risky && <span className="ck-chip-label is-risk ck-dc-chip ck-dc-chip--risk">{t('decision.risky')}</span>}
       </div>
       {what && (
         <>
@@ -67,18 +70,23 @@ export function DecisionCard({
           </div>
           {isLong(what) && (
             <button type="button" className="ck-dc-more" aria-expanded={open} aria-controls={bodyId} onClick={() => setOpen(!open)}>
-              {open ? 'Show less' : 'Show full'}
+              {open ? t('decision.showLess') : t('decision.showFull')}
             </button>
           )}
         </>
+      )}
+      {left && (
+        <div className="ck-dc-queue" data-testid="decision-force-yes-left">
+          {t('forceYes.left')} {t(`forceYes.left.${left}` as never)}
+        </div>
       )}
       <div className="ck-dc-foot">
         {options.map((o) => {
           const cls = `ck-dc-btn${o.tone === 'allow' && o.id === firstAllow ? ' ck-dc-btn--pri' : ''}${o.tone === 'deny' ? ' ck-dc-btn--no' : ''}`;
           if (o.tone === 'allow' && risky) {
             return (
-              <HoldButton key={o.id} className={`${cls} ck-dc-btn--hold`} label={`Hold to choose: ${o.label}`} onDone={() => answer(o.id, true)}>
-                <span>{`Hold: ${o.label}`}</span>
+              <HoldButton key={o.id} className={`${cls} ck-dc-btn--hold`} label={t('decision.holdLabel', { label: o.label })} onDone={() => answer(o.id, true)}>
+                <span>{t('decision.hold', { label: o.label })}</span>
               </HoldButton>
             );
           }
@@ -92,14 +100,14 @@ export function DecisionCard({
           <label className="ck-dc-sw" data-testid="decision-never">
             <input type="checkbox" checked={never} onChange={(e) => setNever(e.target.checked)} />
             <span className="ck-dc-track" aria-hidden="true" />
-            <span>Don&rsquo;t ask again in this chat</span>
+            <span>{t('decision.never')}</span>
           </label>
         )}
       </div>
       <button type="button" className="ck-dc-more ck-dc-dismiss" data-role="dismiss" onClick={onDismiss}>
-        Dismiss
+        {t('decision.dismiss')}
       </button>
-      {waiting > 0 && <div className="ck-dc-queue">{waiting} more waiting</div>}
+      {waiting > 0 && <div className="ck-dc-queue">{t('decision.moreWaiting', { n: waiting })}</div>}
     </div>
   );
 }

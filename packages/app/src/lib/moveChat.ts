@@ -5,7 +5,8 @@
 // Order of a move: begin (locks, refuses while a reply runs) -> history text -> [work: bundle to the far project] -> start a
 // chat there -> send the history as its first message -> finish (the old chat becomes read-only). Any failure undoes the lock.
 import { invoke } from '@tauri-apps/api/core';
-import { listen, type UnlistenFn } from '@tauri-apps/api/event';
+import { type UnlistenFn } from '@tauri-apps/api/event';
+import { listen } from './events';
 import { t } from '../i18n';
 import { PcLinkError, type PcLinkClient } from './runtime/pclink';
 import { type Device } from './devices';

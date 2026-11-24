@@ -1,12 +1,13 @@
 //! "Set up agents" that installs: the doctor's Install button.
 //!
-//! Flow, all driven by the person at the desk (these are Tauri commands only; no bridge route or
-//! MCP tool reaches them, so an agent can never trigger an install):
+//! Flow, all driven by a person's click: the window's own Tauri commands, and (P6.2) the four far call rows a paired PC at Full
+//! may use for the same inner functions (`device_link::pclink::calls_install`). No bridge route or MCP tool reaches them, so an
+//! agent can never trigger an install:
 //!
 //! 1. `plan` reads the agent's install spec (profile data, `tui::install`) and what this PC has
 //!    (`plan::Tools`), and returns the exact commands, in order, with where each comes from.
 //! 2. The UI shows them and asks. Nothing runs yet.
-//! 3. `start` runs one step in a VISIBLE PowerShell pane. It rebuilds the plan itself and refuses
+//! 3. `start` runs one step in a VISIBLE pane (PowerShell on Windows, `bash` on Linux and macOS, no root). It rebuilds the plan itself and refuses
 //!    unless the command text equals what the person saw (`INSTALL_COMMAND_CHANGED`), and unless
 //!    a high-risk step (a vendor script) was confirmed a second time.
 //! 4. `status` reads the pane for the done marker; `finish` refreshes PATH for this process
@@ -17,7 +18,7 @@
 //! the agent itself opens.
 
 pub mod command;
-pub mod path_refresh;
+pub use pm_core::path_refresh;
 pub mod plan;
 
 use parking_lot::Mutex;
@@ -137,10 +138,12 @@ pub fn store_probe(entry: &CatalogEntry, here: &Path) -> Option<Probe> {
     })
 }
 
-/// `agents_install_plan`.
+/// `agents_install_plan`. `source`: the vendor page, for a plan with no step to show it from (the hand-over names it).
 pub fn plan(agent_id: &str) -> Result<Value, String> {
     let (plan, hint) = plan_for(agent_id, &Tools::detect())?;
-    Ok(plan_view(&plan, hint.as_deref()))
+    let mut view = plan_view(&plan, hint.as_deref());
+    view["source"] = json!(crate::tui::profile_for(&plan.agent_id).install_spec().map(|s| s.source));
+    Ok(view)
 }
 
 /// Checks a run request against a freshly built plan. Pure, so the refusals are unit tests.
@@ -166,7 +169,7 @@ pub fn check_request<'a>(
     Ok(step)
 }
 
-/// `agents_install_run`: runs one confirmed step in a visible PowerShell pane. Returns the pane id.
+/// `agents_install_run`: runs one confirmed step in a visible pane. Returns the pane id.
 pub fn start(
     app: &tauri::AppHandle,
     registry: &Arc<Mutex<PaneRegistry>>,
@@ -179,7 +182,7 @@ pub fn start(
     start_plan(app, registry, &plan, step_index, shown_command, acknowledged_risk, "Install")
 }
 
-/// Runs one step of a plan the person confirmed, in a visible PowerShell pane. The plan must be
+/// Runs one step of a plan the person confirmed, in a visible pane. The plan must be
 /// built fresh from the current state; the step's command must equal `shown_command`. `verb` starts
 /// the pane title ("Install", "Uninstall"), so the step label reads "Install <label>".
 pub fn start_plan(
@@ -193,20 +196,24 @@ pub fn start_plan(
 ) -> Result<Value, String> {
     use tauri::Emitter;
     let step = check_request(plan, step_index, shown_command, acknowledged_risk)?.clone();
-    let script = command::powershell_script(&step);
+    // Windows runs the step in PowerShell; Linux and macOS in a login bash (`-c`), which ends in a shell that stays open.
+    let (pane_type, extra_args) = if cfg!(windows) {
+        ("powershell", vec!["-Command".to_string(), command::powershell_script(&step)])
+    } else {
+        ("bash", vec!["-c".to_string(), command::shell_script(&step)])
+    };
 
     // A neutral folder: an install must not sync project memory into the active project.
     let dir = std::env::temp_dir().join("potato-workspace-doctor");
     let _ = std::fs::create_dir_all(&dir);
     let pane_id = crate::pty::registry_spawn_pane(
         registry,
-        app,
         crate::pty::SpawnPaneArgs {
-            agent_type: "powershell".into(),
+            agent_type: pane_type.into(),
             cwd: Some(dir.to_string_lossy().into_owned()),
             cols: None,
             rows: None,
-            extra_args: Some(vec!["-Command".into(), script]),
+            extra_args: Some(extra_args),
             pane_id: None,
             read_only: false,
             account: None,
@@ -223,7 +230,7 @@ pub fn start_plan(
         .find(|p| p.id == pane_id)
         .map(|p| (p.cols, p.rows))
         .unwrap_or((120, 30));
-    crate::cockpit::present_pane(app, &pane_id, "powershell", cols, rows, crate::cockpit::Origin::CockpitUi);
+    crate::cockpit::present_pane(app, &pane_id, pane_type, cols, rows, crate::cockpit::Origin::CockpitUi);
     let _ = app.emit("pty://panes-changed", ());
     tracing::info!(agent = plan.agent_id.as_str(), step = step_index, command = %step.command, pane = %pane_id, "agent install: started in a visible pane");
     Ok(json!({ "pane_id": pane_id, "command": step.command, "label": step.label }))

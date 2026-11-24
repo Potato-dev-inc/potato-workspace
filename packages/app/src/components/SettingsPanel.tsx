@@ -170,6 +170,21 @@ const SECTION_ICONS: Record<SettingsPageId, JSX.Element> = {
   ),
 };
 
+/** True while the window is narrower than `px` CSS pixels (false where matchMedia does not exist, as in tests). */
+function useNarrow(px: number): boolean {
+  const query = `(max-width: ${px - 1}px)`;
+  const [narrow, setNarrow] = useState(() => typeof window !== 'undefined' && !!window.matchMedia && window.matchMedia(query).matches);
+  useEffect(() => {
+    if (typeof window === 'undefined' || !window.matchMedia) return;
+    const mq = window.matchMedia(query);
+    const on = () => setNarrow(mq.matches);
+    on();
+    mq.addEventListener?.('change', on);
+    return () => mq.removeEventListener?.('change', on);
+  }, [query]);
+  return narrow;
+}
+
 export function SettingsPanel({
   open,
   onClose,
@@ -186,6 +201,7 @@ export function SettingsPanel({
   api = DEFAULT_API,
   overviewSources,
 }: Props) {
+  const narrow = useNarrow(600);
   const t = useT();
   const [page, setPage] = useState<SettingsPageId>(initialTab);
   const [query, setQuery] = useState('');
@@ -526,7 +542,14 @@ export function SettingsPanel({
   const result = trimmed ? searchLocalized(shownEnglish, shown, trimmed) : null;
   const visibleHits = result ? (showAll ? result.hits : limitHits(result.hits, MAX_HITS)) : [];
   // Everything Up/Down can reach: "Go to page" hits first, then the rows, in the order they are drawn.
-  const items: ({ kind: 'page'; page: SectionId } | { kind: 'row'; id: string })[] = [
+  // Settings has no Connect page of its own: a search for the phone, the team or lending ends in one "Open Connect" button.
+  const connectHit = CONNECT_WORDS.test(trimmed) && (withConnect || connectPageAvailable());
+  // "Borrow my agent sign-ins" is a switch per PC (Connect > Devices > the PC): a search for it names it and opens that tab.
+  const borrowHit = BORROW_WORDS.test(trimmed) && (withConnect || connectPageAvailable());
+  const items: ({ kind: 'connect' } | { kind: 'borrow' } | { kind: 'page'; page: SectionId } | { kind: 'row'; id: string })[] = [
+    // The two "Open Connect" buttons are drawn first, so Up/Down reaches them first and Enter opens them.
+    ...(connectHit ? [{ kind: 'connect' as const }] : []),
+    ...(borrowHit ? [{ kind: 'borrow' as const }] : []),
     ...(result?.names ?? []).map((n) => ({ kind: 'page' as const, page: n.page.id })),
     ...visibleHits.flatMap((h) => h.rows.map((r) => ({ kind: 'row' as const, id: r.id }))),
   ];
@@ -538,17 +561,16 @@ export function SettingsPanel({
     setFocus(null);
     setShowChanged(false);
   };
+  const openConnectPage = () => (withConnect ? goToPage('connect') : openConnect('devices'));
   const openItem = (item: (typeof items)[number] | undefined) => {
     if (!item) return;
-    if (item.kind === 'page') goToPage(item.page);
+    if (item.kind === 'connect' || item.kind === 'borrow') openConnectPage();
+    else if (item.kind === 'page') goToPage(item.page);
     else openRow(item.id);
   };
   // A page of a feature that is switched off (the link was kept, or the switch just moved) shows the first page instead.
   const connectOn = withConnect && page === 'connect' && !trimmed && !showChanged;
   const section = connectOn ? undefined : (shown.find((s) => s.id === page) ?? (settings ? shown[0] : undefined));
-  // Settings has no Connect page of its own: a search for the phone, the team or lending ends in one "Open Connect" button.
-  const connectHit = CONNECT_WORDS.test(trimmed) && (withConnect || connectPageAvailable());
-  const openConnectPage = () => (withConnect ? goToPage('connect') : openConnect('devices'));
   const navPages: Array<{ id: SettingsPageId; title: string }> = shown.flatMap((item) => [
     { id: item.id as SettingsPageId, title: item.title },
     ...(withConnect && item.id === 'look' ? [{ id: 'connect' as SettingsPageId, title: t('settings.page.connect.title') }] : []),
@@ -638,7 +660,22 @@ export function SettingsPanel({
             </button>
           )}
         </div>
-        <nav className="st-nav" aria-label={t('settings.pages')}>
+        {narrow && (
+          <select
+            className="st-nav-select"
+            aria-label={t('settings.pages')}
+            value={trimmed || filtering ? '' : connectOn ? 'connect' : (section?.id ?? '')}
+            onChange={(e) => goToPage(e.target.value as SettingsPageId)}
+          >
+            <option value="" disabled hidden />
+            {navPages.map((item) => (
+              <option key={item.id} value={item.id}>
+                {item.title}
+              </option>
+            ))}
+          </select>
+        )}
+        <nav className="st-nav" aria-label={t('settings.pages')} hidden={narrow}>
           {navPages.map((item) => (
             <Fragment key={item.id}>
               {item.id === 'advanced' && <div className="st-navsep" role="separator" />}
@@ -657,7 +694,7 @@ export function SettingsPanel({
         </nav>
       </aside>
 
-      <main className="st-main">
+      <div className="st-main">
         <header className="st-title" data-scrolled={scrolled ? 'true' : undefined}>
           <h1>
             {openAgentLabel ? (
@@ -687,7 +724,8 @@ export function SettingsPanel({
                 <Skeleton />
               ) : result && result.hits.length === 0 && result.names.length === 0 ? (
                 <>
-                  {connectHit && <ConnectResult onOpen={openConnectPage} />}
+                  {connectHit && <ConnectResult onOpen={openConnectPage} active={activeItem?.kind === 'connect'} />}
+                  {borrowHit && <BorrowResult onOpen={openConnectPage} active={activeItem?.kind === 'borrow'} />}
                   <div className="st-emptycard">
                     <p>
                       <b>{t('settings.empty.title', { query: trimmed })}</b>
@@ -713,7 +751,8 @@ export function SettingsPanel({
                 </>
               ) : (
                 <div className="st-results">
-                  {connectHit && <ConnectResult onOpen={openConnectPage} />}
+                  {connectHit && <ConnectResult onOpen={openConnectPage} active={activeItem?.kind === 'connect'} />}
+                  {borrowHit && <BorrowResult onOpen={openConnectPage} active={activeItem?.kind === 'borrow'} />}
                   {result && result.names.length > 0 && (
                     <div className="st-names">
                       {result.names.map((n) => (
@@ -818,7 +857,7 @@ export function SettingsPanel({
         {toast && <div className="st-toast-host">
           <UndoToast key={toast.id} toast={toast} onDone={(id) => setToast((cur) => (cur?.id === id ? null : cur))} onUndo={(state) => void runUndo(state)} />
         </div>}
-      </main>
+      </div>
 
       {pendingConfirm && (
         <ConfirmSheet
@@ -836,11 +875,25 @@ export function SettingsPanel({
 /** The words that mean "the phone, other PCs, the team or lending": all of it is on the Connect page. */
 const CONNECT_WORDS = /\b(phone|phones|pair|pairing|mobile|qr|team|teammate|lend|lending|borrow|devices?|pcs?|tunnel|telegram|connect)\b/i;
 
-function ConnectResult({ onOpen }: { onOpen: () => void }) {
+const BORROW_WORDS = /borrow|lend|lending|借/i;
+
+function BorrowResult({ onOpen, active }: { onOpen: () => void; active?: boolean }) {
+  const t = useT();
+  return (
+    <div className="st-names" data-testid="settings-open-borrow">
+      <button type="button" className="st-name-hit" data-active={active ? 'true' : undefined} onClick={onOpen}>
+        <span>{t('devices.perm.lend')}</span>
+        <small>{t('settings.goToPage')}</small>
+      </button>
+    </div>
+  );
+}
+
+function ConnectResult({ onOpen, active }: { onOpen: () => void; active?: boolean }) {
   const t = useT();
   return (
     <div className="st-names" data-testid="settings-open-connect">
-      <button type="button" className="st-name-hit" onClick={onOpen}>
+      <button type="button" className="st-name-hit" data-active={active ? 'true' : undefined} onClick={onOpen}>
         <span>{t('connect.moved.open')}</span>
         <small>{t('settings.goToPage')}</small>
       </button>

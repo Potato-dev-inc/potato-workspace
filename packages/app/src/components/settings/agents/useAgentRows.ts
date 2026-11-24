@@ -6,6 +6,10 @@ import { t } from '../../../i18n';
 import { agentCapsApi, type AgentCaps, type AgentCapsApi } from '../../../lib/agentCaps';
 import { agentHealthApi, agentHealthApiFor, type AgentHealth, type AgentHealthApi, type HealthState } from '../../../lib/agent-health';
 import { useAgentRegistry } from '../../../lib/agentRegistry';
+import { agentReadiness, type AgentReadiness } from '../../../lib/agentReadiness';
+import { rememberTest, type TestMemory } from '../../../lib/setup-checks/test-memory';
+import type { UsageRow } from '../../../lib/usage';
+import type { OwnLogin } from './ownSignIn';
 
 export interface AgentRow {
   id: string;
@@ -16,6 +20,8 @@ export interface AgentRow {
   /** `unchecked` until the health check answers. */
   state: HealthState;
   version: string | null;
+  /** The quick check's own sentence (why it did not start). */
+  reason?: string;
   loginHint: string | null;
   /** A deep check is possible (the "Check" button). */
   canTest: boolean;
@@ -35,29 +41,20 @@ export const defaultRowsApi: AgentRowsApi = {
   health: { check: () => agentHealthApi.check(), test: (id) => agentHealthApi.test(id) },
 };
 
-/** One short phrase for how the agent stands. "Ready" is not "signed in": the check only says it can start. */
-export function standingWords(row: Pick<AgentRow, 'installed' | 'state' | 'checking'>): string {
-  if (row.checking) return t('agentPage.checking');
-  if (!row.installed || row.state === 'not_installed') return t('keepGoing.notInstalled');
-  switch (row.state) {
-    case 'ready':
-      return t('agentList.ready');
-    case 'needs_login':
-      return t('agentList.notSignedIn');
-    case 'error':
-      return t('agentList.didNotStart');
-    default:
-      return t('linux.notChecked');
-  }
+/** How a row stands, from the one place that says it (`agentReadiness`): the same words on the card, its page, the Overview and the rest. */
+export function rowReadiness(row: Pick<AgentRow, 'id' | 'label' | 'installed' | 'state' | 'reason' | 'canTest' | 'checking'>, logins: readonly OwnLogin[] | null, tests: TestMemory, usage?: readonly UsageRow[]): AgentReadiness {
+  if (row.checking) return { state: 'not_checked', label: t('agentPage.checking'), detail: null };
+  const health = { id: row.id, label: row.label, installed: row.installed, state: row.state, reason: row.reason ?? '', can_test: row.canTest };
+  return agentReadiness(row.id, { health: [health], logins, tests, usage });
 }
 
 export type NextStep = { label: 'Sign in' | 'Install' | 'Check'; kind: 'signin' | 'install' | 'check' };
 
 /** The one next step a row offers beside its words; null when the agent is ready (or cannot be checked). */
-export function nextStep(row: Pick<AgentRow, 'installed' | 'state' | 'canTest'>): NextStep | null {
-  if (!row.installed || row.state === 'not_installed') return { label: 'Install', kind: 'install' };
-  if (row.state === 'needs_login') return { label: 'Sign in', kind: 'signin' };
-  if ((row.state === 'unchecked' || row.state === 'error') && row.canTest) return { label: 'Check', kind: 'check' };
+export function nextStep(row: Pick<AgentRow, 'canTest'>, standing: AgentReadiness): NextStep | null {
+  if (standing.state === 'not_installed') return { label: 'Install', kind: 'install' };
+  if (standing.state === 'needs_sign_in') return { label: 'Sign in', kind: 'signin' };
+  if ((standing.state === 'not_checked' || standing.state === 'broken' || standing.state === 'signed_in') && row.canTest) return { label: 'Check', kind: 'check' };
   return null;
 }
 
@@ -113,6 +110,7 @@ export function useAgentRows(given?: AgentRowsApi): { rows: AgentRow[]; refreshC
       setChecking((cur) => cur.filter((id) => id !== agentId));
     }
     lastChecked.set(agentId, fresh);
+    rememberTest(fresh); // the Overview reads the same memory: both say "works" only after a Test
     setHealth((cur) => (cur.some((h) => h.id === agentId) ? cur.map((h) => (h.id === agentId ? fresh : h)) : [...cur, fresh]));
   };
 
@@ -120,7 +118,7 @@ export function useAgentRows(given?: AgentRowsApi): { rows: AgentRow[]; refreshC
     .filter((a) => a.kind !== 'shell')
     .map<AgentRow>((a) => {
       const quick = health.find((x) => x.id === a.id);
-      // The quick check never says if it is signed in; keep what the last deep check said.
+      // A deep check made in this window stands in for the quick one; what an older Test said is read by `agentReadiness`.
       const h = !quick || quick.state === 'unchecked' ? (lastChecked.get(a.id) ?? quick) : quick;
       return {
         id: a.id,
@@ -128,6 +126,7 @@ export function useAgentRows(given?: AgentRowsApi): { rows: AgentRow[]; refreshC
         icon: a.icon,
         installed: a.installed,
         state: h?.state ?? 'unchecked',
+        reason: h?.reason ?? '',
         version: h?.version ?? caps[a.id]?.program_version ?? null,
         loginHint: h?.login_hint ?? null,
         canTest: h?.can_test ?? false,

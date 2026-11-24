@@ -46,6 +46,7 @@ export const ROW_META: Record<string, Meta> = {
   'confirm-close': { keys: ['confirm_close_running_pane'] },
   'close-to-tray': { keys: ['close_to_tray'] },
   'keep-awake': { keys: ['keep_awake_while_working'] },
+  'jump-out': { keys: ['jump_out_cards_enabled'] },
   'away-minutes': { keys: ['away_minutes'], valueText: (s) => t('settings.value.away', { value: awayWords(s.away_minutes ?? 5) }) },
   checkpoints: { keys: ['checkpoints_enabled'] },
   'budget-turns': { keys: ['budget_default_turns'], valueText: (s) => t('settings.value.turns', { value: turnsWords(s.budget_default_turns) }) },

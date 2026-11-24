@@ -64,7 +64,6 @@ fn act(cx: &Ctx, hub: &crate::push::hub::PushHub, now: u64) -> RouteResult {
     }
     let answered = crate::pane_prompt::answer(
         cx.registry,
-        cx.app,
         &act.grant.pane_id,
         &act.grant.prompt_id,
         &act.choice,

@@ -58,7 +58,7 @@ pub(super) fn auto_approve_allowed_command(
     let prompt_id = action.get("prompt_id").and_then(serde_json::Value::as_str).unwrap_or_default();
     // One key per prompt occurrence, like every other answer (`pane_prompt::answers`).
     let sent = crate::pane_prompt::answers::answer_once(pane_id, prompt_id, "allow_once", crate::pane_prompt::answers::now_ms(), || {
-        crate::pty::registry::write_input(registry, app, pane_id, &text, true, false, None, crate::pty::WriteOrigin::Answer)
+        crate::pty::registry::write_input(registry, pane_id, &text, true, false, None, crate::pty::WriteOrigin::Answer)
     });
     match sent {
         Ok(crate::pane_prompt::answers::Slot::Sent(())) => {}
@@ -99,7 +99,7 @@ pub(super) fn read_tui_screen(
 pub(super) fn redeliver_prompt(
     current: &OperationSnapshot,
     registry: &Arc<Mutex<crate::pty::PaneRegistry>>,
-    app: &tauri::AppHandle,
+    _app: &tauri::AppHandle,
     watch: &mut completion::TuiTurnWatch,
     why: &str,
 ) -> bool {
@@ -121,7 +121,6 @@ pub(super) fn redeliver_prompt(
     );
     let mut io = delivery::PaneIo {
         registry,
-        app,
         pane_id,
     };
     let mut trace = Vec::new();

@@ -37,8 +37,8 @@
   color: var(--label);
 }
 .cockpit .ck-na-gs-hide:focus-visible {
-  outline: 2px solid var(--label-2);
-  outline-offset: 1px;
+  outline: none;
+  box-shadow: var(--focus);
 }
 .cockpit .ck-na-gs-list {
   list-style: none;

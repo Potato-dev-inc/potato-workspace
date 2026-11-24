@@ -4852,6 +4852,57 @@ dependencies = [
 ]
 
 [[package]]
+name = "pm-core"
+version = "0.2.2"
+dependencies = [
+ "anyhow",
+ "arc-swap",
+ "async-trait",
+ "base64 0.22.1",
+ "bytes",
+ "chacha20poly1305",
+ "chrono",
+ "crc32fast",
+ "ed25519-dalek 2.2.0",
+ "flate2",
+ "glob",
+ "hkdf",
+ "hmac",
+ "hpke",
+ "iana-time-zone",
+ "iroh",
+ "keyring",
+ "mdns-sd",
+ "notify",
+ "once_cell",
+ "parking_lot",
+ "pm-relay-protocol",
+ "portable-pty",
+ "rand 0.8.6",
+ "regex",
+ "rusqlite",
+ "ruzstd",
+ "semver",
+ "serde",
+ "serde_json",
+ "serde_path_to_error",
+ "sha2 0.10.9",
+ "shlex",
+ "strsim",
+ "subtle",
+ "thiserror 1.0.69",
+ "tokio",
+ "toml 0.8.2",
+ "toml_edit 0.20.2",
+ "tracing",
+ "tracing-subscriber",
+ "ureq",
+ "uuid",
+ "vt100",
+ "windows-sys 0.52.0",
+]
+
+[[package]]
 name = "pm-relay"
 version = "0.1.0"
 dependencies = [
@@ -4994,6 +5045,18 @@ dependencies = [
 ]
 
 [[package]]
+name = "potato-host"
+version = "0.2.2"
+dependencies = [
+ "async-trait",
+ "pm-core",
+ "serde_json",
+ "sha2 0.10.9",
+ "tokio",
+ "uuid",
+]
+
+[[package]]
 name = "potential_utf"
 version = "0.1.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -5129,10 +5192,12 @@ dependencies = [
  "iroh",
  "keyring",
  "mdns-sd",
+ "minisign-verify",
  "notify",
  "once_cell",
  "opentunnel",
  "parking_lot",
+ "pm-core",
  "pm-relay",
  "pm-relay-protocol",
  "png 0.18.1",

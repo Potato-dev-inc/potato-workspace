@@ -1,0 +1,23 @@
+[package]
+name = "potato-host"
+version = "0.2.2"
+description = "Potato Workspace without a window: serves the PC link (pm/agents/1) on a screen-less machine"
+edition = "2021"
+rust-version = "1.91"
+publish = false
+
+[[bin]]
+name = "potato-host"
+path = "src/main.rs"
+
+# Only crates the app already uses (same versions).
+[dependencies]
+pm-core = { path = "../pm-core" }
+serde_json = "1"
+tokio = { version = "1", features = ["rt-multi-thread", "sync", "macros", "time", "io-util", "io-std"] }
+async-trait = "0.1"
+sha2 = "0.10"
+uuid = { version = "1", features = ["v4"] }
+
+[dev-dependencies]
+pm-core = { path = "../pm-core", features = ["test-util"] }

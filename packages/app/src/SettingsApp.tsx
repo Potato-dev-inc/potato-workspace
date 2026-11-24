@@ -11,11 +11,15 @@ import { useProjectPath } from './hooks/useProjectPath';
 import { cockpitApi } from './lib/cockpit-api';
 import { settingsEntryTarget } from './lib/settings-target';
 import { useComfortRoot } from './lib/comfort/root';
+import { t } from './i18n';
 import { setWhatsNewRemote } from './whatsnew/store';
 // The Connect page (Individual mode's Settings window draws it) is styled by the cockpit's scoped rules.
 import './styles/cockpit.css';
 
 export default function SettingsApp() {
+  useEffect(() => {
+    document.title = `${t('sidebar.settings')} — Potato Workspace`;
+  }, []);
   useComfortRoot();
   // This window has no tour or guide: "Take the tour" and "Feature guide" are answered by the cockpit window.
   useEffect(() => {

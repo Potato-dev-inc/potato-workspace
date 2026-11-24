@@ -50,7 +50,7 @@ fn ask(level: Option<Level>, fake: &FarPc, cmd: &str, body: &Value) -> (u16, Val
 /// This block's rows: the table lines from the `// ---- P3.1 workflows ----` marker to the next `// ---- ` marker (any block), so another phase
 /// adding its block before or after this one never changes what is pinned here.
 fn block() -> Vec<(&'static str, &'static str, bool)> {
-    let source = include_str!("calls.rs");
+    let source = include_str!("../../../crates/pm-core/src/device_link/pclink/calls.rs");
     let from = source.find("    // ---- P3.1 workflows ----").expect("the P3.1 marker");
     let body = &source[from..];
     let mut lines = body.lines();

@@ -15,6 +15,7 @@ import { detachedWindowSizeFromGrid, openDetachedPaneWindow } from './lib/detach
 import { detachedCloseAction } from './lib/detached-close';
 import { applyTheme, loadSettings } from './lib/settings';
 import { subscribeSettingsTheme } from './lib/settings-sync';
+import { useComfortRoot } from './lib/comfort/root';
 import { ClosePaneConfirm } from './components/ClosePaneConfirm';
 import { TerminalViewport } from './components/TerminalViewport';
 import { AcpPaneWindow } from './components/acp/AcpPaneWindow';
@@ -33,6 +34,8 @@ function apiSnippet(baseUrl: string, paneId: string | null, draft: string, appen
   ].join('\n');
 }
 export default function TerminalApp() {
+  // The pop-out follows Settings > Text size, contrast and motion like the main window (it never mounted this, so its scale stayed 1).
+  useComfortRoot();
   const params = useMemo(() => new URLSearchParams(window.location.search), []);
   const lockedPaneId = params.get('pane');
   const detached = params.has('detached');

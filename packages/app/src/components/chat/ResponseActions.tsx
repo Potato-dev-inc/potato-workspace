@@ -3,6 +3,7 @@
 import { useState } from 'react';
 import { formatKey, isMacPlatform } from '../../lib/shortcuts';
 import { useCopy } from './useCopy';
+import { t } from '../../i18n';
 
 const COPY = 'M5.5 5.5h6v7h-6zM3.5 10.5v-7h6';
 const TICK = 'M3.5 8.5l3 3 6-7';
@@ -25,16 +26,16 @@ export function ResponseActions({ text, targetRef, onRetry }: { text: string; ta
     setBusy(true);
     setNote(null);
     onRetry()
-      .then(setNote, () => setNote('That did not work. Try again.'))
+      .then(setNote, () => setNote(t('resp.failed')))
       .finally(() => setBusy(false));
   };
   return (
-    <div className="ck-acts" role="group" aria-label="Message actions" data-testid="response-actions">
-      <button type="button" className="ck-act" aria-label={state === 'idle' ? 'Copy' : state === 'copied' ? 'Copied' : `Selected, press ${formatKey('Mod+C', isMacPlatform())}`} data-tip={state === 'idle' ? 'Copy' : state === 'copied' ? 'Copied' : 'Selected: copy it yourself'} onClick={() => void copy(text, targetRef.current)}>
+    <div className="ck-acts" role="group" aria-label={t('resp.actions')} data-testid="response-actions">
+      <button type="button" className="ck-act" aria-label={state === 'idle' ? t('resp.copy') : state === 'copied' ? t('resp.copied') : `Selected, press ${formatKey('Mod+C', isMacPlatform())}`} data-tip={state === 'idle' ? t('resp.copy') : state === 'copied' ? t('resp.copied') : 'Selected: copy it yourself'} onClick={() => void copy(text, targetRef.current)}>
         <Svg d={state === 'copied' ? TICK : COPY} />
       </button>
       {onRetry && (
-        <button type="button" className="ck-act" aria-label="Retry" data-tip={busy ? 'Sending…' : 'Retry'} disabled={busy} onClick={retry}>
+        <button type="button" className="ck-act" aria-label={t('resp.retry')} data-tip={busy ? t('resp.sending') : t('resp.retry')} disabled={busy} onClick={retry}>
           <Svg d={RETRY} />
         </button>
       )}

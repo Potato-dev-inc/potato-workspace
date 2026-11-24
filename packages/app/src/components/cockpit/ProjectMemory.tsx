@@ -2,6 +2,7 @@
 // Memory is the one text every agent in a project reads. It is saved to
 // `<project>/.potato-workspace/memory.md` and rendered into each agent's own instruction file.
 import { errorSentence } from '../../lib/sayError';
+import { t, useT } from '../../i18n';
 import { useCallback, useEffect, useState } from 'react';
 import { memoryApi, type MemoryApi, type MemoryTargetStatus, type MemoryView } from '../../lib/memory-api';
 import { agentLabel, useAgentRegistry } from '../../lib/agentRegistry';
@@ -10,20 +11,20 @@ import { SegTabs } from './SegTabs';
 import { projectOfCwd } from '../../lib/ship-model';
 import { projectLabel } from './shell-labels';
 
-const STATUS_TEXT: Record<MemoryTargetStatus, string> = {
-  in_sync: 'In sync',
-  will_create: 'Will create',
-  will_add: 'Will add a block',
-  will_update: 'Will update',
-  will_remove: 'Will remove',
-  nothing: 'Nothing to write',
-  blocked: 'Markers damaged',
-};
+const STATUS_KEY = {
+  in_sync: 'r21.mem.inSync',
+  will_create: 'r21.mem.willCreate',
+  will_add: 'r21.mem.willAdd',
+  will_update: 'r21.mem.willUpdate',
+  will_remove: 'r21.mem.willRemove',
+  nothing: 'r21.mem.nothing',
+  blocked: 'r21.mem.blocked',
+} as const satisfies Record<MemoryTargetStatus, string>;
 
 /** The count of memory lines, shown when nothing else is: "3 lines". */
 function lineCount(text: string): string {
   const n = text.split('\n').filter((line) => line.trim() !== '').length;
-  return n === 0 ? '' : `${n} ${n === 1 ? 'line' : 'lines'}`;
+  return n === 0 ? '' : t('r21.n.line', { count: n });
 }
 
 export function ProjectMemory({
@@ -36,6 +37,7 @@ export function ProjectMemory({
   api?: MemoryApi;
   onClose: () => void;
 }) {
+  useT();
   const listing = useAgentRegistry();
   const [view, setView] = useState<MemoryView | null>(null);
   const [draft, setDraft] = useState('');
@@ -79,8 +81,8 @@ export function ProjectMemory({
     }
   };
 
-  const save = () => run(() => api.save(draft, project), 'Saved. Agents in this project will read it.');
-  const sync = () => run(() => api.sync(project), 'Synced.', true);
+  const save = () => run(() => api.save(draft, project), t('r21.mem.saved'));
+  const sync = () => run(() => api.sync(project), t('r21.mem.synced'), true);
 
   const onKeyDown = (e: React.KeyboardEvent) => {
     if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 's') {
@@ -95,22 +97,22 @@ export function ProjectMemory({
     <div className="ck-memory" onKeyDown={onKeyDown}>
       <header className="ck-memory-head">
         <div>
-          <h1 className="ck-title">{view ? projectLabel(view.project) : projectLabel(project) || 'Project'}</h1>
-          <p className="ck-sub">{tab === 'copies' ? 'How a new separate copy of this project gets ready.' : 'Every agent in this project reads this.'}</p>
+          <h1 className="ck-title">{view ? projectLabel(view.project) : projectLabel(project) || t('r21.mem.project')}</h1>
+          <p className="ck-sub">{tab === 'copies' ? t('r21.mem.subCopies') : t('r21.mem.subMemory')}</p>
         </div>
         <button type="button" className="ck-btn ck-btn--plain" onClick={onClose}>
-          Close
+          {t('r21.mem.close')}
         </button>
       </header>
 
       <div className="ck-memory-tabs">
         <SegTabs
-          label="Project"
+          label={t('r21.mem.project')}
           value={tab}
           onChange={setTab}
           options={[
-            { id: 'memory', label: 'Memory' },
-            { id: 'copies', label: 'Copies' },
+            { id: 'memory', label: t('r21.mem.tabMemory') },
+            { id: 'copies', label: t('r21.mem.tabCopies') },
           ]}
         />
       </div>
@@ -121,9 +123,9 @@ export function ProjectMemory({
         <>
       <textarea
         className="ck-memory-editor"
-        aria-label="Project memory"
+        aria-label={t('r21.mem.editor')}
         value={draft}
-        placeholder={'What every agent should know about this project.\nStack, commands, conventions, decisions.'}
+        placeholder={t('r21.mem.placeholder')}
         spellCheck={false}
         onChange={(e) => setDraft(e.target.value)}
         disabled={view === null}
@@ -131,41 +133,41 @@ export function ProjectMemory({
 
       <div className="ck-memory-actions">
         <button type="button" className="ck-btn ck-btn--primary" disabled={!dirty || busy} onClick={() => void save()}>
-          Save
+          {t('r21.mem.save')}
         </button>
         <button type="button" className="ck-btn ck-btn--secondary" disabled={view === null || busy} onClick={() => void sync()}>
-          Sync now
+          {t('r21.mem.sync')}
         </button>
         <span className="ck-memory-msg" role="status" aria-live="polite">
-          {error ? <span className="ck-memory-err">{error}</span> : (note ?? (dirty ? 'Unsaved changes' : view ? lineCount(view.memory) : ''))}
+          {error ? <span className="ck-memory-err">{error}</span> : (note ?? (dirty ? t('r21.mem.unsaved') : view ? lineCount(view.memory) : ''))}
         </span>
       </div>
 
-      <section aria-label="Agent files">
-        <h2 className="ck-section">Files agents read</h2>
+      <section aria-label={t('r21.mem.agentFiles')}>
+        <h2 className="ck-section">{t('r21.mem.filesRead')}</h2>
         {off && (
           <p className="ck-sub ck-memory-off">
             {view && !view.global_enabled
-              ? 'Shared project memory is off in Settings.'
-              : 'Shared project memory is off for this project.'}{' '}
-            Agent files carry no memory block.
+              ? t('r21.mem.offGlobal')
+              : t('r21.mem.offProject')}{' '}
+            {t('r21.mem.noBlock')}
           </p>
         )}
         <ul className="ck-memory-files">
-          {(view?.targets ?? []).map((t) => (
-            <li key={t.path} className="ck-memory-file">
-              <span className="ck-memory-path">{t.path}</span>
-              <span className="ck-memory-agents">{t.agents.map((a) => agentLabel(listing, a)).join(', ')}</span>
-              {t.user_content && <span className="ck-memory-tag">Has your own text</span>}
-              <span className={`ck-memory-status is-${t.status}`}>{STATUS_TEXT[t.status]}</span>
+          {(view?.targets ?? []).map((target) => (
+            <li key={target.path} className="ck-memory-file">
+              <span className="ck-memory-path">{target.path}</span>
+              <span className="ck-memory-agents">{target.agents.map((a) => agentLabel(listing, a)).join(', ')}</span>
+              {target.user_content && <span className="ck-memory-tag">{t('r21.mem.ownText')}</span>}
+              <span className={`ck-memory-status is-${target.status}`}>{t(STATUS_KEY[target.status])}</span>
             </li>
           ))}
         </ul>
-        <p className="ck-sub ck-memory-fine">Only the block between the Potato Workspace markers is ever changed.</p>
+        <p className="ck-sub ck-memory-fine">{t('r21.mem.fine')}</p>
       </section>
 
       <div className="ck-memory-switch">
-        <span id="ck-memory-share">Share memory in this project</span>
+        <span id="ck-memory-share">{t('r21.mem.share')}</span>
         <button
           type="button"
           role="switch"
@@ -175,7 +177,7 @@ export function ProjectMemory({
           disabled={view === null || busy}
           onClick={() => {
             const on = !(view?.project_enabled ?? true);
-            void run(() => api.setProjectEnabled(on, project), on ? 'Shared memory is on for this project.' : 'Removed from agent files.', true);
+            void run(() => api.setProjectEnabled(on, project), on ? t('r21.mem.on') : t('r21.mem.removed'), true);
           }}
         >
           <span className="ck-switch-knob" />

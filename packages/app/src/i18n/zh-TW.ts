@@ -19,6 +19,8 @@ import type { EnglishKey } from './en';
 import { minions } from './zh-TW/minions';
 import { taskDrag } from './zh-TW/taskDrag';
 import { crewChip } from './zh-TW/crewChip';
+import { r15misc } from './zh-TW/r15misc';
+import { r21 } from './zh-TW/r21';
 import { common } from './zh-TW/common';
 import { sidebar } from './zh-TW/sidebar';
 import { whatsnew } from './zh-TW/whatsnew';
@@ -81,6 +83,17 @@ import { phoneShell } from './zh-TW/phoneShell';
 import { phoneHalf } from './zh-TW/phoneHalf';
 import { chatUx } from './zh-TW/chatUx';
 import { chatMore } from './zh-TW/chatMore';
+import { r9 } from './zh-TW/r9';
+import { r10 } from './zh-TW/r10';
+import { r12ui } from './zh-TW/r12ui';
+import { r13ui } from './zh-TW/r13ui';
+import { r14review } from './zh-TW/r14review';
+import { r14ui } from './zh-TW/r14ui';
+import { r15far } from './zh-TW/r15far';
+import { r21fn } from './zh-TW/r21fn';
+import { r23ui } from './zh-TW/r23ui';
+import { pluralOne } from './zh-TW/pluralOne';
+import { r11ui } from './zh-TW/r11ui';
 import { point } from './zh-TW/point';
 import { markup } from './zh-TW/markup';
 import { check } from './zh-TW/check';
@@ -88,6 +101,7 @@ import { flow } from './zh-TW/flow';
 import { appUx } from './zh-TW/appUx';
 import { deskReview } from './zh-TW/deskReview';
 import { devices } from './zh-TW/devices';
+import { myAgents } from './zh-TW/myAgents';
 import { crews } from './zh-TW/crews';
 import { workflows } from './zh-TW/workflows';
 import { workflowCard, markupCard } from './zh-TW/workflowCard';
@@ -161,6 +175,17 @@ export const zhTW: Partial<Record<EnglishKey, string>> = {
   ...phoneHalf,
   ...chatUx,
   ...chatMore,
+  ...r9,
+  ...r10,
+  ...r12ui,
+  ...r13ui,
+  ...r14review,
+  ...r14ui,
+  ...r15far,
+  ...r21fn,
+  ...r23ui,
+  ...pluralOne,
+  ...r11ui,
   ...flow,
   ...point,
   ...markup,
@@ -168,6 +193,7 @@ export const zhTW: Partial<Record<EnglishKey, string>> = {
   ...appUx,
   ...deskReview,
   ...devices,
+  ...myAgents,
   ...crews,
   ...crewCanvas,
   ...workflows,
@@ -181,4 +207,6 @@ export const zhTW: Partial<Record<EnglishKey, string>> = {
   ...minions,
   ...taskDrag,
   ...crewChip,
+  ...r15misc,
+  ...r21,
 };

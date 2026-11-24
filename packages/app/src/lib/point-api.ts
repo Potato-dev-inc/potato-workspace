@@ -1,7 +1,8 @@
 // Typed wrappers for the Point and Fix commands (`commands/point.rs`) and events (`point://state`, `point://draft`).
 // The Rust side owns the picks, the shots and the send rules; this file only names them and mirrors their shapes (camelCase).
 import { invoke } from '@tauri-apps/api/core';
-import { listen, type UnlistenFn } from '@tauri-apps/api/event';
+import { type UnlistenFn } from '@tauri-apps/api/event';
+import { listen } from './events';
 import type { OutboxMessage } from './paneOutbox';
 
 /** One picked element, as the Point box shows it. */

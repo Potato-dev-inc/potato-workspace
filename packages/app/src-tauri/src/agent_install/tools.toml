@@ -6,6 +6,7 @@
 label = "Git"
 # Needed by agents whose install spec says `requires = ["git"]`. Claude Code does not need it.
 programs = ["git.exe"]
+unix_programs = ["git"]
 [tools.git.install.windows]
 source = "https://git-scm.com/download/win"
 winget = "Git.Git"
@@ -15,6 +16,7 @@ note = "Windows may ask if the installer can make changes. That is expected."
 label = "Node.js"
 # npm ships with Node.js; both must be on PATH for `npm install -g` to work.
 programs = ["node.exe", "npm.cmd"]
+unix_programs = ["node", "npm"]
 [tools.node.install.windows]
 source = "https://nodejs.org/en/download"
 winget = "OpenJS.NodeJS.LTS"
@@ -26,6 +28,7 @@ label = "uv"
 # its own folder, so no system Python is touched.
 # UNVERIFIED: `astral-sh.uv` has not been checked with `winget show` yet. Run it before release.
 programs = ["uv.exe"]
+unix_programs = ["uv"]
 [tools.uv.install.windows]
 source = "https://docs.astral.sh/uv/getting-started/installation/"
 winget = "astral-sh.uv"

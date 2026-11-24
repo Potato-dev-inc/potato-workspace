@@ -658,3 +658,13 @@
   min-width: 0;
   overflow-wrap: anywhere;
 }
+
+/* A long chat name ends in an ellipsis and never runs under the menu button that appears on hover. */
+.cockpit .ck-row--slim .ck-row-main {
+  min-width: 0;
+  flex: 1;
+}
+.cockpit .ck-rowwrap:hover .ck-row--slim,
+.cockpit .ck-rowwrap:focus-within .ck-row--slim {
+  padding-right: 30px;
+}

@@ -1,15 +1,16 @@
 // Pure helpers for the History tab.
 import type { Checkpoint } from '../../lib/cockpit-api';
+import { t } from '../../i18n';
 
 /** "just now", "5 min ago", "3 h ago", "2 d ago". */
 export function formatAgo(ms: number): string {
   const s = Math.max(0, Math.floor(ms / 1000));
-  if (s < 45) return 'just now';
+  if (s < 45) return t('r21.ago.now');
   const m = Math.floor(s / 60);
-  if (m < 60) return `${Math.max(1, m)} min ago`;
+  if (m < 60) return t('r21.ago.min', { n: Math.max(1, m) });
   const h = Math.floor(m / 60);
-  if (h < 24) return `${h} h ago`;
-  return `${Math.floor(h / 24)} d ago`;
+  if (h < 24) return t('r21.ago.h', { n: h });
+  return t('r21.ago.d', { n: Math.floor(h / 24) });
 }
 
 /**
@@ -22,9 +23,38 @@ export function checkpointTitle(c: Pick<Checkpoint, 'label'> & Partial<Pick<Chec
 }
 
 /** "3 files +12 −4", or "No file changes". */
-export function formatDelta(c: Pick<Checkpoint, 'files' | 'added' | 'deleted'>): string {
+export function formatDelta(c: Pick<Checkpoint, 'files' | 'added' | 'deleted'> & Partial<Pick<Checkpoint, 'kind'>>): string {
+  // A "Before undo" row says what was saved before the files went back, not a line count of its own.
+  if (c.kind === 'undo' && c.files > 0) return t('r15far.hist.undoSaved', { count: c.files });
   if (c.files === 0) return 'No file changes';
   return `${c.files} ${c.files === 1 ? 'file' : 'files'} +${c.added} −${c.deleted}`;
+}
+
+/**
+ * One "After turn N" row per turn. An agent whose status flickers to idle mid-turn leaves several; the newest stands for the turn,
+ * and carries what the earlier ones counted too. `items` are newest first. (Files are summed, so a file edited before and after
+ * the flicker counts twice: the numbers are a little high, never low.)
+ */
+export function oneEndPerTurn<T extends Pick<Checkpoint, 'turn' | 'kind' | 'files' | 'added' | 'deleted'>>(items: T[]): T[] {
+  const kept = new Map<number, T>();
+  const out: T[] = [];
+  for (const c of items) {
+    if (c.kind !== 'after') {
+      out.push(c);
+      continue;
+    }
+    const newer = kept.get(c.turn);
+    if (!newer) {
+      const own = { ...c };
+      kept.set(c.turn, own);
+      out.push(own);
+    } else {
+      newer.files += c.files;
+      newer.added += c.added;
+      newer.deleted += c.deleted;
+    }
+  }
+  return out;
 }
 
 /**

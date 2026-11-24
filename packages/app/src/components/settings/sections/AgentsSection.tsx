@@ -1,6 +1,7 @@
 // Settings > Agents: signing in, keeping agents warm (preload) and agent definitions (TOML files,
 // consent, review and approval). Most blocks save through their own command; the Live updates row calls env.patch.
 import { SIGN_IN } from '../../../lib/glossary';
+import { backendText } from '../../../lib/backendWords';
 import { requestAddAgentAction } from '../../../lib/addAgentActions';
 import { openSettingsAt } from '../../../lib/openSettingsAt';
 import { AccountsGroup } from '../accounts/AccountsGroup';
@@ -82,7 +83,7 @@ function LiveUpdates({ env }: { env: SettingsEnv }) {
         <SettingToggle
           key={r.id}
           label={t('liveUpdates.from', { agent: r.label })}
-          description={r.hooks?.opt_in_note ?? undefined}
+          description={r.hooks?.opt_in_note ? backendText(r.hooks.opt_in_note) : undefined}
           checked={value !== 'off' && isOn(r)}
           disabled={value === 'off'}
           onChange={(on) => setAgent(r.id, on)}
@@ -302,7 +303,7 @@ export const agentsRows: RowDef[] = [
     render: (env) => (
       <SettingToggle
         label={t('settings.row.show-terminals.label')}
-        description={t('settings.row.show-terminals.hint')}
+        description={t(env.settings.show_terminals ? 'settings.row.show-terminals.on' : 'settings.row.show-terminals.hint')}
         checked={env.settings.show_terminals ?? false}
         onChange={(value) => void env.patch({ show_terminals: value })}
       />

@@ -188,7 +188,8 @@ describe('Settings > Agents', () => {
     expect(rows.map((r) => r.getAttribute('data-agent'))).toEqual(['claude', 'kimi']);
     const claude = q('[data-testid="agent-row-claude"]')!;
     expect(claude.textContent).toContain('Claude');
-    expect(claude.textContent).toContain('Ready');
+    // The quick check only says it starts: "Ready" needs a good Test, so the card says it is not checked yet.
+    expect(claude.textContent).toContain('Not checked yet');
     // The list shows plain grey words, no pills; the page shows the pills.
     expect(chipsOf(claude)).toHaveLength(0);
     expect(claude.querySelector('.ag-chips-text')?.textContent).toBe('Can chat · Remembers the chat · Can pick a model');
@@ -226,8 +227,9 @@ describe('Settings > Agents', () => {
     mocks.logins = [{ agent_id: 'claude', state: 'signed_out', why: null }];
     await mount();
     expect(q('[data-testid="card-state-claude"]')?.textContent).toBe('Not signed in');
-    // No answer for kimi at all: it says so, it never guesses.
-    expect(q('[data-testid="card-state-kimi"]')?.textContent).toContain("Can't tell");
+    // No login answer for kimi, but its quick check wants a sign-in: the header and this row both say Not signed in (one truth).
+    expect(q('[data-testid="card-state-kimi"]')?.textContent).toBe('Not signed in');
+    expect(q('[data-testid="agent-row-kimi"] .ag-standing')?.textContent).toContain('Not signed in');
   });
 
   it('nothing on the cards folds away', async () => {

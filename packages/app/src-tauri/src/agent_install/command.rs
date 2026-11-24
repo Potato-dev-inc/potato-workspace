@@ -23,7 +23,7 @@ pub fn powershell_script(step: &Step) -> String {
             parts.extend(args.iter().map(|a| ps_quote(a)));
             parts.join(" ")
         }
-        Action::Script { url } => format!("irm {} | iex", ps_quote(url)),
+        Action::Script { url } | Action::ShellScript { url } => format!("irm {} | iex", ps_quote(url)),
     };
     [
         "$ErrorActionPreference = 'Stop'".to_string(),
@@ -37,6 +37,33 @@ pub fn powershell_script(step: &Step) -> String {
         "Write-Host ''".to_string(),
         // Split so the marker text never appears in the command line itself.
         "Write-Host (('PM-INSTALL-' + 'EXIT ') + $pmCode)".to_string(),
+    ]
+    .join("; ")
+}
+
+/// `'text'` for a POSIX shell: a quote inside is closed, escaped and opened again.
+pub fn sh_quote(value: &str) -> String {
+    format!("'{}'", value.replace('\'', r"'\''"))
+}
+
+/// The `-c` argument of a Linux or macOS install pane (`bash --login -c <script>`): the same four things as the PowerShell one. It says
+/// what runs, runs it (every token quoted again), prints the done marker with the exit code, and then keeps an interactive shell open
+/// so the person can read the result and the pane stays alive for `status`.
+pub fn shell_script(step: &Step) -> String {
+    let call = match &step.action {
+        Action::Argv { exe, args } => std::iter::once(exe).chain(args).map(|t| sh_quote(t)).collect::<Vec<_>>().join(" "),
+        Action::Script { url } | Action::ShellScript { url } => format!("curl -fsSL {} | bash", sh_quote(url)),
+    };
+    [
+        "set -o pipefail".to_string(),
+        format!("printf '%s\\n' {}", sh_quote("Potato Workspace is running this for you:")),
+        format!("printf '%s\\n' {}", sh_quote(&format!("  {}", step.command))),
+        "echo".to_string(),
+        format!("{call}; pm_code=$?"),
+        "echo".to_string(),
+        // Split so the marker text never appears in the command line itself.
+        "echo \"PM-INSTALL-\"\"EXIT $pm_code\"".to_string(),
+        "exec bash --login".to_string(),
     ]
     .join("; ")
 }
@@ -157,6 +184,36 @@ mod tests {
         // The marker text inside the command line must not count as done.
         assert_eq!(parse_done("PS> Write-Host 'PM-INSTALL-' + 'EXIT '"), None);
         assert_eq!(parse_done("PM-INSTALL-EXIT soon"), None);
+    }
+
+    #[test]
+    fn a_linux_step_is_one_quoted_command_then_the_done_marker_then_a_shell_that_stays_open() {
+        let step = argv_step("npm", &["install", "-g", "--prefix", "/home/pm/.local", "@openai/codex"]);
+        let s = shell_script(&step);
+        assert!(s.contains("'npm' 'install' '-g' '--prefix' '/home/pm/.local' '@openai/codex'; pm_code=$?"), "{s}");
+        assert!(s.ends_with("echo \"PM-INSTALL-\"\"EXIT $pm_code\"; exec bash --login"), "{s}");
+        assert!(!s.contains(DONE_MARKER), "the marker text is never in the command line");
+        assert!(s.starts_with("set -o pipefail; "), "a failed download is not hidden by the shell at the end of the pipe");
+    }
+
+    #[test]
+    fn a_linux_hostile_token_cannot_end_its_string() {
+        let s = shell_script(&argv_step("npm", &["install", "x'; id; '"]));
+        assert!(s.contains(r"'x'\''; id; '\'''"), "{s}");
+        assert_eq!(sh_quote("a b"), "'a b'");
+    }
+
+    #[test]
+    fn a_linux_script_step_downloads_with_curl_into_bash_and_shows_what_it_runs() {
+        let step = Step {
+            action: Action::ShellScript { url: "https://claude.ai/install.sh".into() },
+            command: "curl -fsSL 'https://claude.ai/install.sh' | bash".into(),
+            method: Method::Script,
+            ..argv_step("x", &[])
+        };
+        let s = shell_script(&step);
+        assert!(s.contains("curl -fsSL 'https://claude.ai/install.sh' | bash; pm_code=$?"), "{s}");
+        assert!(s.contains(r"'  curl -fsSL '\''https://claude.ai/install.sh'\'' | bash'"), "{s}");
     }
 
     #[test]

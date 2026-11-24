@@ -12,6 +12,9 @@ function readStored(): ComfortPrefs {
   }
 }
 
+/** The event every window gets when the comfort prefs were saved in one of them. */
+export const COMFORT_EVENT = 'comfort://changed';
+
 let current: ComfortPrefs = readStored();
 const listeners = new Set<() => void>();
 
@@ -39,6 +42,8 @@ export function setComfort(patch: Partial<ComfortPrefs>): ComfortPrefs {
     // Storage is blocked: the change still applies for this session.
   }
   notify();
+  // Tell the app's other windows (a pop-out): the storage event alone was not enough to move their scale.
+  if (typeof window !== 'undefined' && '__TAURI_INTERNALS__' in window) void import('@tauri-apps/api/event').then(({ emit }) => emit(COMFORT_EVENT)).catch(() => undefined);
   return current;
 }
 

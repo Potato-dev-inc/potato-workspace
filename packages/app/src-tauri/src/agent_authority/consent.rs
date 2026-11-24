@@ -290,8 +290,8 @@ fn raise(ask: &Ask, now: u64) -> Option<String> {
     // reaching the app handle's event code links Tauri's window layer into the test binary, which
     // then fails to start on Windows (see docs/REPO_MAP.md, "Tests that touch Tauri window APIs").
     #[cfg(not(test))]
-    if let Some(app) = crate::bridge::live_app() {
-        questions::routes::publish_changed(&app);
+    if crate::bridge::live_app().is_some() {
+        questions::routes::publish_changed();
     }
     Some(created.id)
 }

@@ -58,7 +58,9 @@
 //! names `spawn_spec_with_env` is given. The agent's own env rules (`LaunchSpec::env` / `env_remove`) are
 //! applied inside the bridge.
 
-mod extras;
+pub use pm_core::acp::bridge::extras;
+#[cfg(test)]
+pub use extras::DefinitionTables;
 mod models;
 mod server;
 mod store;
@@ -74,7 +76,6 @@ use super::config::BASE_ENV_ALLOW;
 use super::conn::SpawnSpec;
 use crate::tui::TuiProfile;
 
-pub use extras::DefinitionTables;
 pub use server::{serve, ServeOptions};
 #[cfg(test)]
 pub use turn::{TurnLimits};

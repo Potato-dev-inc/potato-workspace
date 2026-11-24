@@ -219,7 +219,7 @@ fn broad_choices_are_recognised_by_meaning() {
 
 // ---- wiring: detected prompts, serialisation, TOML ---------------------------------------
 
-const CURSOR_APPROVAL: &str = include_str!("../tui/cursor/fixtures/command_approval_visible.txt");
+const CURSOR_APPROVAL: &str = include_str!("../../crates/pm-core/src/tui/cursor/fixtures/command_approval_visible.txt");
 
 #[test]
 fn a_detected_prompt_carries_its_risk_everywhere_it_is_returned() {

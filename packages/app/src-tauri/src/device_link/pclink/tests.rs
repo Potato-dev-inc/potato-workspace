@@ -48,6 +48,7 @@ fn every_route() -> Vec<(&'static str, &'static str, Value, Level)> {
         ("POST", "/pclink/call/agent_model_options", json!({ "agentId": "claude" }), Watch),
         ("POST", "/pclink/call/acp_chat_set_config", json!({ "paneId": "p1", "optionId": "effort", "value": "high" }), Full),
         ("POST", "/pclink/call/acp_chat_set_force_yes", json!({ "paneId": "p1", "on": false }), Full),
+        ("POST", "/pclink/stream/preview", json!({ "paneId": "p1", "port": 5173, "method": "GET", "path": "/" }), Full),
     ]
 }
 
@@ -151,6 +152,9 @@ impl Services for Fake {
     }
     fn notify_full_request(&self, ask: &Ask) {
         self.asked.lock().unwrap().push(ask.clone());
+    }
+    fn preview(&self, _: &str, _: &Value) -> (u16, Value) {
+        self.note("preview")
     }
     fn call(&self, _: &str, cmd: &str, args: &Value) -> (u16, Value) {
         let pane = args["paneId"].as_str().unwrap_or("-");
@@ -323,6 +327,13 @@ fn me_tells_the_asking_pc_its_own_level() {
         let (status, body) = call(Some(level), &fake, &asks, "GET", "/pclink/me", &json!({}));
         assert_eq!((status, body["level"].as_str(), body["name"].as_str(), body["asked"].as_bool()), (200, Some(level.as_str()), Some("Desk"), Some(false)));
     }
+}
+
+#[test]
+fn me_tells_the_asking_pc_the_id_this_pc_names_it_by() {
+    // The id a chat's driver strip uses ("link:<node>"), so the asking PC can tell it is itself the driver.
+    let (fake, asks) = (Fake::default(), Asks::new());
+    assert_eq!(call(Some(Level::Answer), &fake, &asks, "GET", "/pclink/me", &json!({})).1["you"], "link:aa");
 }
 
 #[test]
@@ -717,7 +728,7 @@ fn a_far_call_needs_its_row_and_its_level_on_every_request() {
     }
     // Not in the table (or refused): 404 at Full, nothing reaches the app. The wrong method is no route either.
     let fake = Fake::default();
-    for cmd in ["nothing_here", "account_sign_in", "lend_export_pm", "ssh_open", "adapter_key_set", "devices_set_permission", "audit_recent", "secret_get_masked", "acp_chat_start"] {
+    for cmd in ["nothing_here", "account_sign_in", "lend_export_pm", "ssh_open", "adapter_key_set", "devices_set_permission", "audit_recent", "secret_get_masked", "acp_chat_copy_keep"] {
         let (status, answer) = call(Some(Level::Full), &fake, &asks, "POST", &format!("/pclink/call/{cmd}"), &json!({ "paneId": "p1" }));
         assert_eq!((status, answer["code"].as_str()), (404, Some("UNKNOWN_ROUTE")), "{cmd}");
     }
@@ -778,4 +789,12 @@ async fn a_far_call_changes_effort_on_the_far_pc_and_the_new_state_frame_comes_b
     assert_eq!(*fake_b.effort.lock().unwrap(), "high");
     until("the state frame", || got.lock().unwrap().iter().any(|f| f.starts_with("event: app") && f.contains("acp-chat-state") && f.contains("\"effort\":\"high\""))).await;
     a.link.unsubscribe(&b_node).unwrap();
+}
+
+#[test]
+fn me_tells_a_pc_whether_the_far_pc_counts_it_as_its_persons_own() {
+    // The Force yes button on a far chat is drawn disabled from this, instead of failing after the click.
+    let (fake, asks) = (Fake::default(), Asks::new());
+    assert_eq!(call_as(Some(Level::Full), true, &fake, &asks, "GET", "/pclink/me", &json!({})).1["own"], true);
+    assert_eq!(call_as(Some(Level::Full), false, &fake, &asks, "GET", "/pclink/me", &json!({})).1["own"], false);
 }

@@ -15,6 +15,7 @@ import {
 import { tauri } from '../../lib/tauri';
 import '../../styles/package-facts.css';
 import { CardButton } from './InboxCard';
+import { t } from '../../i18n';
 
 /** Rows painted on the card. The rest are one line in Details. */
 const CARD_ROWS = 3;
@@ -123,7 +124,7 @@ export function usePackageFacts(paneId: string | undefined, prompt: PackagePromp
 
 function LookGlyph() {
   return (
-    <svg className="ck-pc-glyph" viewBox="0 0 10 10" width="9" height="9" role="img" aria-label="Look closer" focusable="false">
+    <svg className="ck-pc-glyph" viewBox="0 0 10 10" width="9" height="9" role="img" aria-label={t('r21.sw.lookCloser')} focusable="false">
       <path d="M5 1.5 9 8.5H1z" fill="currentColor" />
     </svg>
   );
@@ -213,9 +214,9 @@ export function PackageFacts({
   const moreRows = rows.length - shown.length;
 
   return (
-    <section className={variant === 'bar' ? 'ck-pc ck-pc--bar' : 'ck-pc'} aria-label="Package check">
+    <section className={variant === 'bar' ? 'ck-pc ck-pc--bar' : 'ck-pc'} aria-label={t('r21.sw.packageCheck')}>
       <div className="ck-pc-head">
-        <span className="ck-pc-title">Package check</span>
+        <span className="ck-pc-title">{t('r21.sw.packageCheck')}</span>
         <span className="ck-pc-status">{looks > 0 ? `Look closer · ${looks} of ${rows.length}` : facts.status}</span>
       </div>
       {shown.length > 0 && (

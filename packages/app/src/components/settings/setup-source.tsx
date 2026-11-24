@@ -53,9 +53,9 @@ export function loadSavedChecks(): Saved | null {
   }
 }
 
-function saveChecks(groups: Saved['groups'], at: number): void {
+function saveChecks(groups: Saved['groups'], at: number, lang: string): void {
   try {
-    window.localStorage.setItem(KEY, JSON.stringify({ at, lang: getLanguage(), groups } satisfies Saved));
+    window.localStorage.setItem(KEY, JSON.stringify({ at, lang, groups } satisfies Saved));
   } catch {
     /* storage blocked: the list is just read again next time */
   }
@@ -79,6 +79,9 @@ export function useRunSetupChecks(run: (options: RunOptions) => Promise<CheckRow
     if (tick === 0 && saved && Date.now() - saved.at < FRESH_MS) return;
     let alive = true;
     const started = Date.now();
+    // The sentences are written in the language that is on when the checks START: a run that begins before the saved language is
+    // applied would otherwise be saved (and shown) as English under a Chinese label.
+    const lang = getLanguage();
     const arrived = new Map<string, CheckRow[]>();
     const order: string[] = [];
     const before = saved ? new Map(saved.groups.map((g) => [g.id, g.rows])) : new Map<string, CheckRow[]>();
@@ -107,13 +110,18 @@ export function useRunSetupChecks(run: (options: RunOptions) => Promise<CheckRow
       .current(options)
       .then((rows) => {
         if (!alive) return;
+        if (getLanguage() !== lang) {
+          // The language changed while the checks ran: read them again in the new one.
+          setTick((n) => n + 1);
+          return;
+        }
         const done: Saved['groups'] = order.length > 0 && order.every((id) => arrived.has(id)) ? order.map((id) => ({ id, rows: arrived.get(id) ?? [] })) : [{ id: 'all', rows }];
         const at = Date.now();
         console.debug(`[setup-check] all: ${at - started} ms`); // i18n-ok: developer log
         setResult({ state: 'ready', rows });
         setCheckedAt(at);
         setGroups(done.map((g) => ({ ...g, busy: false })));
-        saveChecks(done, at);
+        saveChecks(done, at, lang);
       })
       .catch((error) => {
         if (!alive) return;

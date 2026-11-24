@@ -104,14 +104,14 @@ pub async fn spawn_pane_in_linux(
     args: SpawnPaneArgs,
     distro: String,
     state: State<'_, AppState>,
-    app: AppHandle,
+    _app: AppHandle,
 ) -> Result<String, OperationError> {
     let registry = state.registry.clone();
     off_ui(move || {
         let mut args = args;
         check_linux_spawn(&mut args, &distro)?;
         // The registry emits `pty://panes-changed` when the pane starts, as it does for `spawn_pane`.
-        registry_spawn_pane(&registry, &app, args).map_err(|message| OperationError::new(WSL_START_FAILED, message, true))
+        registry_spawn_pane(&registry, args).map_err(|message| OperationError::new(WSL_START_FAILED, message, true))
     })
     .await?
 }

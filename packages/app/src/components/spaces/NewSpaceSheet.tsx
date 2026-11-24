@@ -1,6 +1,7 @@
 // Spaces (Labs `spaces_enabled`): the New space sheet. The name is the only field.
 import { useId, useState } from 'react';
 import { Sheet } from '../cockpit/Sheet';
+import { t } from '../../i18n';
 
 export interface NewSpaceSheetProps {
   /** Returns the new space id, or null when it failed (the page shows `error`). */
@@ -22,7 +23,7 @@ export function NewSpaceSheet({ onCreate, error, onClose }: NewSpaceSheetProps) 
       <label className="ck-spaces-field">
         <span>Name</span>
         <input value={name} maxLength={40} placeholder="Book club" onChange={(e) => setName(e.target.value)} />
-        <small className="ck-spaces-hint">You can change it later.</small>
+        <small className="ck-spaces-hint">{t('r21.sw.youCanChangeIt')}</small>
       </label>
       {error && (
         <p className="ck-spaces-hint is-error" role="alert">

@@ -8,8 +8,24 @@ import { tauriAskbarApi, useAskNotices, type AskbarApi } from '../lib/askbar';
 import { useLoopGuard } from '../lib/loop-guard';
 import { useStalls } from '../lib/stalls';
 import type { CockpitApi } from './useCockpit';
+import type { FarQuestion } from '../lib/runtime/farQuestions';
 
 export const NeedsYouContext = createContext<NeedsYouItem[] | null>(null);
+
+/** What other PCs wait on (their questions and approvals), for the Inbox to draw and answer. The cockpit provides it from the device groups. */
+export interface FarNeeds {
+  questions: readonly FarQuestion[];
+  /** Every question the far PCs wait on, the Inbox-dismissed ones too: the far chat they belong to keeps drawing its card. Absent: `questions`. */
+  chatQuestions?: readonly FarQuestion[];
+  /** Opens the far chat a card belongs to (its key is `dev:<node>:<pane id>`); false when this PC does not list that chat. */
+  open?: (paneKey: string) => boolean;
+  answer: (key: string, answer: { choice_id?: string; text?: string }) => Promise<void>;
+  hide: (key: string) => void;
+}
+export const FarNeedsContext = createContext<FarNeeds | null>(null);
+
+/** One far question as a needs-you item: it counts once, in every surface that counts (`question:dev:<node>:<id>`). */
+const farItems = (far: ReadonlyArray<Pick<FarQuestion, 'key' | 'seenAt'>>): NeedsYouItem[] => far.map((q) => ({ id: `question:${q.key}`, kind: 'question', since: q.seenAt }));
 
 type CockpitState = Pick<CockpitApi, 'registry' | 'prompts' | 'asked' | 'statusSince'>;
 
@@ -46,10 +62,12 @@ export function useNeedsYouSource(
   teamRed?: AttentionInput['teamRed'],
   /** Share an agent: open requests to borrow from me (`useLend`). */
   lendRequests?: AttentionInput['lendRequests'],
+  /** What other PCs wait on: each counts once, with this PC's own items, so the number, the sidebar and the Inbox agree. */
+  farQuestions?: ReadonlyArray<Pick<FarQuestion, 'key' | 'seenAt'>>,
 ): NeedsYouItem[] {
   const { notices } = useAskNotices(askbar);
   const stalls = useStalls();
-  const items = useMemo(() => derive(c, stuckIds(signals, stalls), notices, missions, companions, teamRed, lendRequests), [c.registry.paneList, c.prompts, c.asked.questions, c.statusSince, signals, stalls, notices, missions, companions, teamRed, lendRequests]); // eslint-disable-line react-hooks/exhaustive-deps
+  const items = useMemo(() => [...derive(c, stuckIds(signals, stalls), notices, missions, companions, teamRed, lendRequests), ...farItems(farQuestions ?? [])], [c.registry.paneList, c.prompts, c.asked.questions, c.statusSince, signals, stalls, notices, missions, companions, teamRed, lendRequests, farQuestions]); // eslint-disable-line react-hooks/exhaustive-deps
   useShadowCheck(items);
   return items;
 }
@@ -63,9 +81,11 @@ function useShadowCheck(items: NeedsYouItem[]): void {
   const snapshot = useAttention();
   useEffect(() => {
     if (!import.meta.env.DEV || !snapshot) return;
-    if (attentionMismatch(items, snapshot, isBlockingKind).length === 0) return;
+    // Another PC's cards are not in this PC's Rust snapshot: they are not compared.
+    const mine = items.filter((i) => !i.id.startsWith('question:dev:'));
+    if (attentionMismatch(mine, snapshot, isBlockingKind).length === 0) return;
     const timer = window.setTimeout(() => {
-      const diff = attentionMismatch(items, snapshot, isBlockingKind);
+      const diff = attentionMismatch(mine, snapshot, isBlockingKind);
       if (diff.length > 0) console.warn('[attention] front-end and Rust lists disagree:', diff);
     }, 1000);
     return () => window.clearTimeout(timer);

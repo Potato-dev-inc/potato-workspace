@@ -22,7 +22,7 @@ use serde::{Deserialize, Serialize};
 use std::fs;
 use std::path::Path;
 
-pub const TUNNEL_FILE_NAME: &str = "potato-workspace.tunnel.json";
+pub use crate::app_paths::TUNNEL_FILE_NAME;
 pub const TUNNEL_TOKEN_ENV: &str = "TUNNEL_TOKEN";
 
 pub fn tunnel_file() -> std::path::PathBuf {

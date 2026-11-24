@@ -43,6 +43,7 @@ fn no_source_file_binds_a_non_loopback_address() {
     let mut files = Vec::new();
     rust_files(&root.join("src"), &mut files);
     rust_files(&root.join("tests"), &mut files);
+    rust_files(&root.join("crates"), &mut files);
     assert!(files.len() > 100, "the scan found only {} files", files.len());
     let words = wildcards();
     let mut bad = Vec::new();

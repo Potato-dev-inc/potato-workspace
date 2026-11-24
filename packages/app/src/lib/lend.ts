@@ -6,8 +6,10 @@
 // untrusted data (rendered as plain text, the reason always in quotes).
 import { errorSentence } from './sayError';
 import { t } from '../i18n';
+import { lessThan, unit } from './unitWords';
 import { invoke } from '@tauri-apps/api/core';
-import { listen, type UnlistenFn } from '@tauri-apps/api/event';
+import { type UnlistenFn } from '@tauri-apps/api/event';
+import { listen } from './events';
 import type { Account } from './accounts';
 
 export type Support = 'verified' | 'lab' | 'no';
@@ -70,8 +72,12 @@ export interface Grant {
   profile_name?: string;
   /** When it ended, in epoch milliseconds. Absent while it runs and for a lend saved by an older build (then `ends_ms`). */
   ended_ms?: number | null;
+  /** `lender restarted` or `borrower restarted` when a PC of the pair restarting ended it, or `not held` when the borrower no longer had the lend (set by this PC, never text from the other one). */
+  end_note?: string | null;
   /** Lender only: which of my profiles this lend comes from (so deleting the profile can say it is lent). */
   profile_id?: string;
+  /** The other PC's device-link node when it is one of my own PCs (Use my own agents: Connect names the PC by it). */
+  peer_node?: string;
 }
 
 /** What a lender offers me (the lender's words and numbers only): one profile of theirs and the agent it lends. */
@@ -174,6 +180,8 @@ export interface LendApi {
   clearPast?: (direction: 'out' | 'in') => Promise<number>;
   /** Test link: opens the real link handshake to the other PC and reports. Absent from an older backend. */
   testLink?: (grantId: string) => Promise<LinkTest>;
+  /** The Lending tab opened: ask each borrower whether it still holds its lend; ones it does not hold end with a note. Absent from an older backend. */
+  recheckLent?: () => Promise<number>;
   startAgent: (grantId: string, projectPath: string) => Promise<{ pane_id: string }>;
   /**
    * A new lend sign-in: an app-managed account folder for `agentId`, marked lend-only. `reuse` (the draft's own account)
@@ -212,6 +220,7 @@ export const lendApi: LendApi = {
   dismissGrant: (grantId) => call('lend_grant_dismiss', { grant_id: grantId }),
   clearPast: (direction) => call('lend_past_clear', { direction }),
   testLink: (grantId) => call('lend_test_link', { grant_id: grantId }),
+  recheckLent: () => call('lend_recheck_lent'),
   startAgent: (grantId, projectPath) => call('lend_start_agent', { grant_id: grantId, project_path: projectPath }),
   accountAdd: (agentId, label, reuse) => call('lend_account_add', { agent_id: agentId, label, reuse: reuse ?? null }),
   signInStart: (accountId) => call('lend_signin_start', { account_id: accountId }),
@@ -276,13 +285,13 @@ export function durationProblem(secs: number, forOtherPerson: boolean): string |
 export function leftText(ms: number): string {
   if (ms <= 0) return t('lend.ended');
   const total = Math.ceil(ms / 60_000);
-  if (total < 1) return '<1m';
+  if (total < 1) return lessThan('m');
   const d = Math.floor(total / 1440);
   const h = Math.floor((total % 1440) / 60);
   const m = total % 60;
-  if (d > 0) return `${d}d ${h}h`;
-  if (h > 0) return `${h}h ${m}m`;
-  return `${m}m`;
+  if (d > 0) return `${unit('d', d)} ${unit('h', h)}`;
+  if (h > 0) return `${unit('h', h)} ${unit('m', m)}`;
+  return unit('m', m);
 }
 
 export type Urgency = 'calm' | 'soon' | 'now';
@@ -295,6 +304,10 @@ export function urgencyOf(msLeft: number): Urgency {
 
 export const isActiveIn = (g: Grant, now: number): boolean => g.direction === 'in' && g.state === 'active' && g.ends_ms > now;
 export const isActiveOut = (g: Grant, now: number): boolean => g.direction === 'out' && g.state === 'active' && g.ends_ms > now;
+
+/** The active lend of `agentId` that this PC gave to the PC `node` (a far chat there can switch to it), if any. */
+export const activeLendTo = (grants: readonly Grant[], now: number, node: string, agentId: string): Grant | undefined =>
+  grants.find((g) => isActiveOut(g, now) && g.peer_node === node && g.agent_id.toLowerCase() === agentId.toLowerCase());
 
 /** The agent's name from the driver list, else the id with a capital. */
 export function agentLabel(state: Pick<LendState, 'drivers'> | null | undefined, id: string): string {
@@ -354,6 +367,15 @@ export function cleanName(raw: string | null | undefined): string {
 
 type NameParts = Pick<Grant, 'peer_name' | 'peer_device_name' | 'for_other_person' | 'profile_name'>;
 
+/** The one name a PC goes by in lend rows, notices, the Inbox and Connect: its device name, else the account label, else plain words. */
+export const displayName = (p: { device?: string | null; label?: string | null }): string => cleanName(p.device) || cleanName(p.label) || t('lend.otherPc');
+
+/** Who the other side is: the person, else the PC (my own other PC has no person), else plain words. */
+export const peerLabel = (g: Pick<Grant, 'peer_name' | 'peer_device_name'>): string => cleanName(g.peer_name) || cleanName(g.peer_device_name) || t('lend.otherPc');
+
+/** The name in a row or notice about a lend: my own PC by `displayName` (the same on both PCs), anyone else by `peerLabel`. */
+export const rowName = (g: Pick<Grant, 'peer_name' | 'peer_device_name' | 'for_other_person'>): string => (g.for_other_person ? peerLabel(g) : displayName({ device: g.peer_device_name, label: g.peer_name }));
+
 const startsWithOwner = (profile: string, owner: string): boolean => owner !== '' && profile.toLowerCase().startsWith(owner.toLowerCase());
 
 /**
@@ -363,7 +385,7 @@ const startsWithOwner = (profile: string, owner: string): boolean => owner !== '
  */
 export function borrowedName(agent: string, g: NameParts): string {
   const profile = cleanName(g.profile_name);
-  const owner = g.peer_name;
+  const owner = peerLabel(g);
   if (!profile) return t('lend.borrowedNamePc', { agent, owner });
   if (!g.for_other_person && g.peer_device_name) return t('lend.borrowedNameMine', { agent, profile, device: g.peer_device_name });
   if (startsWithOwner(profile, owner)) return t('lend.borrowedNameBare', { agent, profile });
@@ -373,9 +395,9 @@ export function borrowedName(agent: string, g: NameParts): string {
 /** The short form for tight places (the pane chip, the 10-minute toast): "Ren's Work account", or "Leo's Claude" with no name. */
 export function borrowedShort(agent: string, g: NameParts): string {
   const profile = cleanName(g.profile_name);
-  if (!profile) return t('lend.ownerOf', { person: g.peer_name, device: agent });
+  if (!profile) return t('lend.ownerOf', { person: peerLabel(g), device: agent });
   // My own other PC: the owner is me, so the name alone says it.
-  return !g.for_other_person || startsWithOwner(profile, g.peer_name) ? profile : t('lend.borrowedShort', { owner: g.peer_name, profile });
+  return !g.for_other_person || startsWithOwner(profile, peerLabel(g)) ? profile : t('lend.borrowedShort', { owner: peerLabel(g), profile });
 }
 
 /** "Lending Claude to Maya · 2h 14m left" / "Borrowing Codex from Leo · 40m left"; with a profile name it leads with the name. */
@@ -383,9 +405,9 @@ export function grantLine(g: Grant, agent: string, now: number): string {
   const time = leftText(g.ends_ms - now);
   const profile = cleanName(g.profile_name);
   if (g.direction === 'out') {
-    return profile ? t('lend.lendingNamed', { profile, peer: g.peer_name, time }) : t('lend.lendingTo', { agent, peer: g.peer_name, time });
+    return profile ? t('lend.lendingNamed', { profile, peer: peerLabel(g), time }) : t('lend.lendingTo', { agent, peer: peerLabel(g), time });
   }
-  return profile ? t('lend.borrowingNamed', { name: borrowedName(agent, g), time }) : t('lend.borrowingFrom', { agent, peer: g.peer_name, time });
+  return profile ? t('lend.borrowingNamed', { name: borrowedName(agent, g), time }) : t('lend.borrowingFrom', { agent, peer: peerLabel(g), time });
 }
 
 /** The sentence shown on both PCs when `problem` is set. The Rust side sends its own words; this is the same text. */
@@ -395,9 +417,9 @@ export const signinProblemText = (): string => t('lend.signinExpired');
  * What to show for a grant's `problem`, picked by its kind: the lender's sign-in (worded for the lender or the borrower),
  * the lender's PC not answering, or a limit. No kind (an older build) is the old sentence. Null when all is fine.
  */
-export function problemText(g: Pick<Grant, 'problem'> & Partial<Pick<Grant, 'problem_kind' | 'direction' | 'peer_name' | 'profile_name'>>): string | null {
+export function problemText(g: Pick<Grant, 'problem'> & Partial<Pick<Grant, 'problem_kind' | 'direction' | 'peer_name' | 'peer_device_name' | 'profile_name'>>): string | null {
   if (!g.problem) return null;
-  const peer = g.peer_name ?? '';
+  const peer = peerLabel({ peer_name: g.peer_name ?? '', peer_device_name: g.peer_device_name ?? '' });
   const profile = cleanName(g.profile_name) || t('lend.thisProfile');
   switch (g.problem_kind) {
     case 'unreachable':
@@ -441,15 +463,37 @@ export const PAST_SHOWN = 5;
 /** The ended rows of one side, newest first, without anything older than a week. */
 export function pastGrants(grants: Grant[], direction: 'out' | 'in', now: number): Grant[] {
   const endedAt = (g: Grant) => g.ended_ms ?? g.ends_ms;
+  // A row saved by an older build has no end time; its planned end can be later than a real one, so those go below the dated rows.
+  const dated = (g: Grant) => (g.ended_ms ? 1 : 0);
   return grants
     .filter((g) => g.state === 'ended' && g.direction === direction && now - endedAt(g) < PAST_KEEP_MS)
-    .sort((a, b) => endedAt(b) - endedAt(a));
+    .sort((a, b) => dated(b) - dated(a) || endedAt(b) - endedAt(a));
+}
+
+/** The one line for a lend that ended on its own (the lender's restart, a take-back, time up); null when the person did it or it is not news. */
+export function endedNotice(g: Grant): string | null {
+  const restarted = g.end_note === 'lender restarted';
+  if (g.direction === 'in' && g.end_note === 'borrower restarted') return t('lend.endedNotice', { reason: t('lend.endedWhy.myRestart') });
+  if (g.direction === 'out') {
+    const why = endNoteWords(g);
+    return why ? t('lend.endedNotice', { reason: why }) : null;
+  }
+  if (g.end_reason === 'returned') return null;
+  return t('lend.endedNotice', { reason: t(restarted ? 'lend.endedWhy.theirRestart' : g.end_reason === 'revoked' ? 'lend.endedWhy.revoked' : 'lend.endedWhy.timeout') });
+}
+
+/** The note a lend ended with, in words (only ever my own two constants: never text from the other PC). Null when it has none. */
+export function endNoteWords(g: Pick<Grant, 'direction' | 'end_note'>): string | null {
+  if (g.end_note === 'borrower restarted') return t(g.direction === 'out' ? 'lend.endedWhy.borrowerRestart' : 'lend.endedWhy.myRestart');
+  if (g.end_note === 'not held') return g.direction === 'out' ? t('lend.endedWhy.notHeld') : null;
+  if (g.end_note === 'lender restarted') return t(g.direction === 'out' ? 'lend.endedWhy.myRestart' : 'lend.endedWhy.theirRestart');
+  return null;
 }
 
 export function endedWords(g: Grant): string {
-  if (g.end_reason === 'revoked') return t('lend.end.revoked');
-  if (g.end_reason === 'returned') return t('lend.end.returned');
-  return t('lend.end.timeout');
+  const base = g.end_reason === 'revoked' ? t('lend.end.revoked') : g.end_reason === 'returned' ? t('lend.end.returned') : t('lend.end.timeout');
+  const note = endNoteWords(g);
+  return note ? `${base} · ${note}` : base;
 }
 
 /** The two messages that come before a grant ends. */

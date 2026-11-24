@@ -28,11 +28,11 @@ pub(super) fn spawn_pane_with_timeout(
     let (tx, rx) = std::sync::mpsc::channel();
     let registry_watch = Arc::clone(registry);
     let registry = Arc::clone(registry);
-    let app = app.clone();
+    let _app = app.clone();
     thread::Builder::new()
         .name("operation-pane-spawn".into())
         .spawn(move || {
-            let _ = tx.send(registry_spawn_pane(&registry, &app, args));
+            let _ = tx.send(registry_spawn_pane(&registry, args));
         })
         .map_err(|err| {
             crate::operations::OperationError::new("PANE_SPAWN_FAILED", err.to_string(), true)

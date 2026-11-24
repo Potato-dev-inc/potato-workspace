@@ -68,7 +68,7 @@ export function useShowTerminals(): boolean {
         .then((s) => !disposed && set(terminalsShown(s as TerminalSwitchSettings)))
         .catch(() => undefined);
     void read();
-    import('@tauri-apps/api/event')
+    import('./events')
       .then(({ listen }) => listen('settings://changed', () => void read()))
       .then((stop) => (disposed ? stop() : (off = stop)))
       .catch(() => undefined);

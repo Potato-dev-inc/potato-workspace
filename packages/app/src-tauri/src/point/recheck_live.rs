@@ -37,7 +37,7 @@ struct LiveTurn {
 
 impl TurnHost for LiveTurn {
     fn delivery(&self) -> Delivery {
-        let list = pane_outbox::global(&self.registry, &self.app).list(&self.pane_id);
+        let list = pane_outbox::global(&self.registry).list(&self.pane_id);
         match list.into_iter().find(|m| m.id == self.message_id) {
             None => Delivery::Lost,
             Some(m) if matches!(m.state, pane_outbox::State::Failed | pane_outbox::State::Cancelled) => Delivery::Lost,

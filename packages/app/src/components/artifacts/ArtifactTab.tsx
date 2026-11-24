@@ -10,9 +10,10 @@
 //
 // Point: the next click in the page is a pick; the person says what should change and it goes to the chat that made the
 // page (`paneId`), as a message in that chat. Share: a read-only link to this version (`ArtifactShare`).
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useT } from '../../i18n';
-import { artifactsApi, opensInBrowser, type ArtifactPage, type ArtifactsApi } from '../../lib/artifacts';
+import { useHost } from '../../lib/host/context';
+import { artifactsApiFor, opensInBrowser, type ArtifactPage, type ArtifactsApi } from '../../lib/artifacts';
 import { takeArtifactPoint } from '../../lib/artifact-side';
 import { noteArtifactTitle } from '../../lib/artifact-tabs';
 import { canPoint, composeArtifactPointMessage, MAX_PICK_REQUEST, pickLabel, type ArtifactPick } from '../../lib/artifact-point';
@@ -40,7 +41,7 @@ export interface SideChrome {
 export function ArtifactTab({
   paneId,
   id,
-  api = artifactsApi,
+  api: given,
   pollMs = POLL_MS,
   side,
   send = sendPaneMessage,
@@ -60,6 +61,8 @@ export function ArtifactTab({
   markup?: MarkupApi;
 }) {
   const t = useT();
+  const host = useHost();
+  const api = useMemo(() => given ?? artifactsApiFor(host), [given, host]);
   const labsOn = useMarkupEnabled();
   const bar = markupOn ?? labsOn;
   const [markOpen, setMarkOpen] = useState(false);

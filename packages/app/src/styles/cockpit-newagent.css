@@ -151,8 +151,9 @@
 /* The footer strip: the pickers and Start, under a hairline. */
 .cockpit .ck-na-row {
   display: flex;
+  flex-wrap: wrap;
   align-items: center;
-  gap: 6px;
+  gap: 4px 6px;
   margin-top: 8px;
   padding-top: 8px;
   min-width: 0;
@@ -160,6 +161,24 @@
 }
 .cockpit .ck-na-spacer {
   flex: 1;
+}
+/* A long chip ("Claude · My sign-in from REN", "Default (recommended)") shrinks and cuts its text with an ellipsis; it never
+   spills over the chip beside it. A percentage max-width needs a parent that shrinks, so the wrappers shrink too. */
+.cockpit .ck-na-row > .ck-na-pop,
+.cockpit .ck-na-row > .mp {
+  flex: 0 1 auto;
+  min-width: 0;
+}
+.cockpit .ck-na-row .ck-na-chip {
+  max-width: min(220px, 100%);
+}
+/* Big text: a chip is never squeezed into a stump ("Cla.."); it keeps its own width (up to the max above) and the row wraps instead. */
+.cockpit .ck-na-row > .ck-na-pop,
+.cockpit .ck-na-row > .mp {
+  min-width: min(max-content, 100%);
+}
+.cockpit .ck-na-row .mp-chip {
+  max-width: min(320px, 100%);
 }
 .cockpit .ck-na-pop {
   position: relative;
@@ -754,4 +773,31 @@
 
 .cockpit .ck-na-ask-line-main + .ck-na-ask-line {
   margin-left: 4px;
+}
+
+/* Large text (140%) or a narrow window: the footer chips wrap their full text instead of cutting it with an ellipsis. */
+@media (max-width: 1000px) {
+  .cockpit .ck-na-row {
+    flex-wrap: wrap;
+  }
+  .cockpit .ck-na-row .ck-na-chip,
+  .cockpit .ck-na-row .mp-chip {
+    height: auto;
+    min-height: 28px;
+    padding-top: 3px;
+    padding-bottom: 3px;
+    max-width: 100%;
+  }
+  .cockpit .ck-na-row .ck-na-chip-text {
+    white-space: normal;
+    overflow: visible;
+    text-overflow: clip;
+    overflow-wrap: anywhere;
+  }
+}
+/* On a phone-width window the "Tab for an example" hint sits on top of the placeholder. */
+@media (max-width: 480px) {
+  .cockpit .ck-na-tabhint {
+    display: none;
+  }
 }

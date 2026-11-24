@@ -3,7 +3,7 @@
 // under the page that opens the file. With no guide it shows one card and a button; nothing starts by itself, and a run
 // starts only from the consent card (`GuideSheet`).
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { listen } from '@tauri-apps/api/event';
+import { listen } from '../../lib/events';
 import { useT } from '../../i18n';
 import { ageWords, citationLabel, guideApi, isRunning, numberCitations, staleCount, type GuideApi, type GuideDiagram, type GuidePage, type GuideState } from '../../lib/guide';
 import { openFileTab } from '../../lib/file-tabs';

@@ -6,14 +6,20 @@ import {
   askerName,
   helperLoginChoice,
   helperLoginOptions,
+  permissionAsk,
   isHelperLogin,
   waitCaption,
   type Question,
   type QuestionAnswer,
 } from '../../lib/questions';
+import { optionWords } from '../../lib/decisionCard';
+import { ACP_PERMISSION_KIND } from '../../lib/acpChat';
 import { SIGN_IN } from '../../lib/glossary';
 import '../../styles/cockpit-questions.css';
 import { CardButton, InboxCard } from './InboxCard';
+
+/** "Write notes.txt" reads as "... wants to write notes.txt"; a name like "MCP tool" keeps its capitals. */
+const lowerFirst = (s: string) => (/^[A-Z][a-z]/.test(s) ? s[0].toLowerCase() + s.slice(1) : s);
 
 export function QuestionCard({
   q,
@@ -31,13 +37,15 @@ export function QuestionCard({
   paneName?: string;
   now: number;
   onAnswer: (answer: QuestionAnswer) => void;
-  onDismiss: () => void;
+  /** Dismiss CANCELS the question (an agent start then starts nothing). Absent: no Dismiss button (the jump-out card). */
+  onDismiss?: () => void;
   onOpenPane?: () => void;
 }) {
   const t = useT();
   const [text, setText] = useState('');
   const [always, setAlways] = useState(false);
   const helper = isHelperLogin(q);
+  const perm = permissionAsk(q);
   const send = () => {
     const value = text.trim();
     if (!value) return;
@@ -50,8 +58,9 @@ export function QuestionCard({
       kind="question"
       agent={q.agent}
       glyph="needs"
-      title={q.question}
-      meta={askerName(q, paneName)}
+      permission={perm !== null}
+      title={perm ? t('inboxCards.question.wants', { who: perm.who, action: (/^[!-~]/.test(perm.action) ? t('inboxCards.question.gap') : '') + lowerFirst(perm.action) }) : q.question}
+      meta={perm ? perm.who : askerName(q, paneName)}
       age={now - q.created_at_ms}
       reason={q.context}
       snoozeKeys={helper ? undefined : [`q-${q.id}`]}
@@ -98,7 +107,7 @@ export function QuestionCard({
           <>
             {q.choices.map((c) => (
               <CardButton key={c.id} tone="secondary" role="answer" onClick={() => onAnswer({ choice_id: c.id })}>
-                {c.label}
+                {q.kind === ACP_PERMISSION_KIND ? optionWords(c.id, c.label) : c.label}
               </CardButton>
             ))}
           </>
@@ -111,9 +120,11 @@ export function QuestionCard({
               {SIGN_IN.addAnother}
             </CardButton>
           )}
-          <CardButton tone="plain" role="dismiss" onClick={onDismiss}>
-            {t('inboxCards.dismiss')}
-          </CardButton>
+          {onDismiss && (
+            <CardButton tone="plain" role="dismiss" onClick={onDismiss}>
+              {t('inboxCards.dismiss')}
+            </CardButton>
+          )}
           {onOpenPane && (
             <CardButton tone="plain" role="open" onClick={onOpenPane}>
               {t('inboxCards.open')}

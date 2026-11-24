@@ -12,6 +12,7 @@ import {
   pairFromInviteCode,
   pairFromQrJson,
 } from '../../lib/mobile-pairing';
+import { t } from '../../i18n';
 
 interface DevInfo {
   tunnelUrl?: string | null;
@@ -124,7 +125,7 @@ export function SetupScreen({ onConnect }: { onConnect: (url: string) => void })
       </p>
       {devInfo?.tunnelUrl && !shouldUseSameOriginBridgeProxy(window.location) && (
         <div className="w-full max-w-xs rounded border border-pm-border bg-pm-raised/40 p-3 text-xs space-y-2">
-          <div className="text-pm-muted uppercase tracking-wide text-[10px]">Phone / other network</div>
+          <div className="text-pm-muted uppercase tracking-wide text-[10px]">{t('r21.sw.phoneOtherNetwork')}</div>
           <a
             href={devInfo.tunnelUrl}
             className="block text-pm-accent break-all hover:underline"
@@ -204,13 +205,13 @@ export function SetupScreen({ onConnect }: { onConnect: (url: string) => void })
           <details className="text-xs">
             <summary className="text-pm-muted cursor-pointer select-none">Advanced: paste code or legacy JSON</summary>
             <div className="mt-2 space-y-2">
-              <label className="block text-[10px] text-pm-muted uppercase tracking-wide">Device name</label>
+              <label className="block text-[10px] text-pm-muted uppercase tracking-wide">{t('r21.sw.deviceName')}</label>
               <input
                 value={deviceName}
                 onChange={(e) => setDeviceName(e.target.value)}
                 className="w-full bg-pm-bg border border-pm-border rounded px-3 py-2 text-xs"
               />
-              <label className="block text-[10px] text-pm-muted uppercase tracking-wide">Pairing code</label>
+              <label className="block text-[10px] text-pm-muted uppercase tracking-wide">{t('r21.sw.pairingCode')}</label>
               <input
                 value={manualCode}
                 onChange={(e) => setManualCode(e.target.value.toUpperCase())}

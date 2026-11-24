@@ -4,7 +4,7 @@ import { createRoot, type Root } from 'react-dom/client';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { FileTab } from './FileTab';
 import { fakeApi } from './fakes';
-import type { FileContent } from '../../lib/files-api';
+import { OnOtherPc, type FileContent } from '../../lib/files-api';
 import { resetComposerInserts, takeComposerInserts } from '../../lib/composer-insert';
 import { useEnglish } from '../../i18n/test-utils';
 
@@ -92,6 +92,18 @@ describe('File tab', () => {
   it('says so for a file that is not text', async () => {
     await show('a.bin', content({ path: 'a.bin', kind: 'binary', text: null }));
     expect(host.querySelector('.ck-file-body')?.textContent).toBe('This file is not text, so it cannot be shown here.');
+  });
+
+  it('a file on another PC: Show in folder says it is there, and Copy path puts its path on the clipboard', async () => {
+    const write = vi.fn(async () => undefined);
+    Object.defineProperty(navigator, 'clipboard', { value: { writeText: write }, configurable: true });
+    const api = fakeApi({ reveal: vi.fn(async () => Promise.reject(new OnOtherPc('This file is on Mac mini, not on this PC, so it cannot be shown in a folder here.', 'docs/a.bin'))) }, { 'docs/a.bin': content({ path: 'docs/a.bin', kind: 'too_large', text: null, size: 3 * 1024 * 1024 }) });
+    await show('docs/a.bin', content({ path: 'docs/a.bin', kind: 'too_large', text: null, size: 3 * 1024 * 1024 }), api);
+    await click(button('Show in folder'));
+    expect(host.querySelector('.ck-file-notice')?.textContent).toContain('This file is on Mac mini, not on this PC');
+    await click(host.querySelector('[data-testid="copy-far-path"]'));
+    expect(write).toHaveBeenCalledWith('docs/a.bin');
+    expect(host.querySelector('.ck-file-notice')?.textContent).toBe('Path copied.');
   });
 
   it('says why when the file cannot be read', async () => {

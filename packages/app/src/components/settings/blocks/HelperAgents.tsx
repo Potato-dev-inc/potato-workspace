@@ -3,16 +3,8 @@
 import { errorSentence } from '../../../lib/sayError';
 import { useEffect, useState } from 'react';
 import {
-  CLOSE_WITH_AGENT_HINT,
-  CLOSE_WITH_AGENT_LABEL,
-  HELPER_AGENTS_HINT,
-  HELPER_AGENTS_LABEL,
   HELPER_CHOICES,
-  KEEP_OPEN_HINT,
-  KEEP_OPEN_LABEL,
   MOST_HELPERS_CHOICES,
-  MOST_HELPERS_HINT,
-  MOST_HELPERS_LABEL,
   tauriHelperAgentsApi,
   type HelperAgentsApi,
   type HelperVisibility,
@@ -39,6 +31,8 @@ function useSaved<T>(load: () => Promise<T>, api: HelperAgentsApi) {
   return { value, setValue, error, setError };
 }
 
+const CHOICE_KEY = { always_show: 'r14ui.helperShow', agent_chooses: 'r14ui.helperChoose', always_background: 'r14ui.helperBg' } as const;
+
 export function HelperAgentsChoice({
   api = tauriHelperAgentsApi,
   onSaved,
@@ -46,6 +40,7 @@ export function HelperAgentsChoice({
   api?: HelperAgentsApi;
   onSaved?: () => void;
 }) {
+  const t = useT();
   const { value, setValue, error, setError } = useSaved<HelperVisibility>(async () => (await api.get()).mode, api);
   if (value === null) return null;
   const save = async (next: HelperVisibility) => {
@@ -59,11 +54,11 @@ export function HelperAgentsChoice({
   };
   return (
     <>
-      <SettingRow label={HELPER_AGENTS_LABEL} description={HELPER_AGENTS_HINT}>
-        <Popup aria-label={HELPER_AGENTS_LABEL} value={value} onChange={(event) => void save(event.target.value as HelperVisibility)}>
+      <SettingRow label={t('settings.row.helper-agents.label')} description={t('settings.row.helper-agents.hint')}>
+        <Popup aria-label={t('settings.row.helper-agents.label')} value={value} onChange={(event) => void save(event.target.value as HelperVisibility)}>
           {HELPER_CHOICES.map((choice) => (
             <option key={choice.value} value={choice.value}>
-              {choice.label}
+              {t(CHOICE_KEY[choice.value])}
             </option>
           ))}
         </Popup>
@@ -84,6 +79,7 @@ export function KeepHelpersOpenToggle({
   api?: HelperAgentsApi;
   onSaved?: () => void;
 }) {
+  const t = useT();
   const { value, setValue, error, setError } = useSaved<boolean>(async () => (await api.getKeepOpen()).on, api);
   if (value === null) return null;
   const save = async (next: boolean) => {
@@ -97,7 +93,7 @@ export function KeepHelpersOpenToggle({
   };
   return (
     <>
-      <SettingToggle label={KEEP_OPEN_LABEL} description={KEEP_OPEN_HINT} checked={value} onChange={(v) => void save(v)} />
+      <SettingToggle label={t('settings.row.keep-helpers-open.label')} description={t('settings.row.keep-helpers-open.hint')} checked={value} onChange={(v) => void save(v)} />
       {error && (
         <div role="alert" className="text-xs">
           {error}
@@ -114,6 +110,7 @@ export function CloseHelpersWithAgentToggle({
   api?: HelperAgentsApi;
   onSaved?: () => void;
 }) {
+  const t = useT();
   const { value, setValue, error, setError } = useSaved<boolean>(async () => (await api.getCloseWithAgent()).on, api);
   if (value === null) return null;
   const save = async (next: boolean) => {
@@ -127,7 +124,7 @@ export function CloseHelpersWithAgentToggle({
   };
   return (
     <>
-      <SettingToggle label={CLOSE_WITH_AGENT_LABEL} description={CLOSE_WITH_AGENT_HINT} checked={value} onChange={(v) => void save(v)} />
+      <SettingToggle label={t('settings.row.close-helpers-with-agent.label')} description={t('settings.row.close-helpers-with-agent.hint')} checked={value} onChange={(v) => void save(v)} />
       {error && (
         <div role="alert" className="text-xs">
           {error}
@@ -144,6 +141,7 @@ export function MostHelpersAtOnce({
   api?: HelperAgentsApi;
   onSaved?: () => void;
 }) {
+  const t = useT();
   const { value, setValue, error, setError } = useSaved<number>(async () => (await api.getMostAtOnce()).value, api);
   if (value === null) return null;
   const save = async (next: number) => {
@@ -159,8 +157,8 @@ export function MostHelpersAtOnce({
   const choices = MOST_HELPERS_CHOICES.includes(value) ? MOST_HELPERS_CHOICES : [...MOST_HELPERS_CHOICES, value].sort((a, b) => a - b);
   return (
     <>
-      <SettingRow label={MOST_HELPERS_LABEL} description={MOST_HELPERS_HINT}>
-        <Popup aria-label={MOST_HELPERS_LABEL} value={String(value)} onChange={(event) => void save(Number(event.target.value))}>
+      <SettingRow label={t('settings.row.most-helpers-at-once.label')} description={t('settings.row.most-helpers-at-once.hint')}>
+        <Popup aria-label={t('settings.row.most-helpers-at-once.label')} value={String(value)} onChange={(event) => void save(Number(event.target.value))}>
           {choices.map((n) => (
             <option key={n} value={String(n)}>
               {n}

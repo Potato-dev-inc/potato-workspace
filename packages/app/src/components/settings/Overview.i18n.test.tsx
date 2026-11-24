@@ -45,10 +45,10 @@ const agent = (over: Partial<AgentHealth>): AgentHealth => ({
   id: 'codex', label: 'Codex', state: 'ready', installed: true, version: '1.0', reason: 'ok', install_hint: null, login_hint: null, can_test: true, ...over,
 });
 
-async function mountWith(agents: AgentHealth[]) {
+async function mountWith(agents: AgentHealth[], signedIn: string[] = []) {
   const sources = fakeOverviewSources({
     checks: (deps, ctx) => runAllChecks(deps, ctx),
-    setupDeps: { agentHealth: async () => agents, addons: async () => ({ addons: [] }) as never },
+    setupDeps: { agentHealth: async () => agents, logins: async () => signedIn.map((agent_id) => ({ agent_id, state: 'signed_in' as const, why: null })), addons: async () => ({ addons: [] }) as never },
   });
   await act(async () => {
     root.render(<SettingsPanel open initialTab="overview" api={api()} overviewSources={sources} onClose={() => undefined} />);
@@ -61,7 +61,7 @@ const ALLOW = ['Claude', 'Codex', 'Win', 'English'];
 
 describe('Settings Overview in Traditional Chinese', () => {
   it('everything works: setup list, version and what is new have no visible English', async () => {
-    const main = await mountWith([agent({ id: 'claude', label: 'Claude' }), agent({})]);
+    const main = await mountWith([agent({ id: 'claude', label: 'Claude' }), agent({})], ['claude', 'codex']);
     expect(main.textContent).toContain(t('overview.check.agent.ready', { label: 'Claude' }));
     expect(main.textContent).toContain(t('overview.version.check'));
     expect(main.textContent).toContain(t('overview.whatsNew.label'));

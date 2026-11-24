@@ -56,6 +56,25 @@ function render(q: Question, onOpenPane?: () => void) {
 
 const buttonTexts = () => Array.from(host.querySelectorAll('button')).map((b) => b.textContent);
 
+describe('a tool permission in the Inbox (a far chat) uses the dock translated words', () => {
+  it('shows the translated Yes / Yes for this session / No', () => {
+    render({
+      ...base,
+      kind: 'acp_permission',
+      choices: [
+        { id: 'allow_once', label: 'Yes' },
+        { id: 'allow_always', label: 'Yes, allow all edits during this session' },
+        { id: 'reject_once', label: 'No' },
+      ],
+    });
+    const texts = buttonTexts();
+    expect(texts).toContain(t('risk.choice.allowOnce'));
+    expect(texts).toContain(t('risk.choice.allowSession'));
+    expect(texts).toContain(t('risk.choice.deny'));
+    expect(texts).not.toContain('Yes');
+  });
+});
+
 describe('QuestionCard in Traditional Chinese', () => {
   it('shows the answer field, Send, Dismiss and Open in Chinese, with no English left', () => {
     render(base, () => undefined);
@@ -71,5 +90,30 @@ describe('QuestionCard in Traditional Chinese', () => {
     render({ ...base, choices: [] });
     expect(visibleEnglish(host, AGENT_WORDS)).toEqual([]);
     expect(host.querySelector('input')?.getAttribute('placeholder')).toBe(t('inboxCards.question.typeAnswer'));
+  });
+});
+
+describe('a tool permission card in Chinese', () => {
+  const perm = (what: string): Question => ({ ...base, agent: undefined, kind: 'acp_permission', question: `Claude asks permission: ${what}`, choices: [] });
+  const title = () => host.querySelector('.ib-title')!.textContent;
+  it('translates every verb and spaces it from the file name', () => {
+    for (const [what, zh] of [['Write perm11.txt', '寫入 perm11.txt'], ['Edit a.ts', '編輯 a.ts'], ['Run npm test', '執行指令 npm test'], ['Read b.md', '讀取 b.md'], ['Delete c', '刪除 c'], ['Move d', '移動 d'], ['Fetch https://x.y', '擷取 https://x.y'], ['Search foo', '搜尋 foo']]) {
+      render(perm(what));
+      expect(title()).toBe(`Claude 想要${zh}`);
+    }
+  });
+  it('names an MCP tool by its tool, not the raw mcp__ id', () => {
+    render(perm('mcp__potato-workspace__ask_user'));
+    expect(title()).toBe('Claude 想要使用 ask_user 工具');
+    expect(title()).not.toContain('mcp__');
+  });
+  it('an agent sentence with no known verb keeps its words, spaced from the Chinese', () => {
+    render(perm('Show hostname and OS info'));
+    expect(title()).toBe('Claude 想要 show hostname and OS info');
+  });
+  it('says who wants to do what, and the badge says Permission', () => {
+    render({ ...base, agent: undefined, kind: 'acp_permission', question: 'Claude asks permission: Write perm3.txt', choices: [] });
+    expect(host.querySelector('.ib-title')!.textContent).toBe('Claude 想要寫入 perm3.txt');
+    expect(host.querySelector('.ib-chip')!.textContent).toBe(t('inbox.chipPermission'));
   });
 });

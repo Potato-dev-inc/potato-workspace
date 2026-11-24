@@ -71,7 +71,7 @@ export function ThenSheet({ paneId, cwd, onClose, onAdded }: { paneId: string; c
       <div className="ck-caption">{t('routines.then.title')}</div>
       <div className="ck-seg" role="radiogroup" aria-label={t('routines.then.title')}>
         {(['send', 'start', 'tell'] as const).map((m) => (
-          <button key={m} type="button" role="radio" aria-checked={mode === m} className={`ck-seg-opt${mode === m ? ' is-on' : ''}`} onClick={() => setMode(m)}>
+          <button key={m} type="button" role="radio" aria-checked={mode === m} title={t(m === 'send' ? 'routines.then.send' : m === 'start' ? 'routines.then.start' : 'routines.then.tell')} className={`ck-seg-opt${mode === m ? ' is-on' : ''}`} onClick={() => setMode(m)}>
             {t(m === 'send' ? 'routines.then.send' : m === 'start' ? 'routines.then.start' : 'routines.then.tell')}
           </button>
         ))}

@@ -6,8 +6,8 @@ use std::time::Instant;
 
 /// Real Claude capture: the trust dialog was declined, Claude quit, its host PowerShell prints a
 /// prompt under the dialog's text.
-const DECLINED_HOST_SHELL: &str = include_str!("../../../tui/claude/fixtures/trust_declined_host_shell.txt");
-const TRUST: &str = include_str!("../../../tui/claude/fixtures/trust_dialog_2_1_299.txt");
+const DECLINED_HOST_SHELL: &str = include_str!("../../../../crates/pm-core/src/tui/claude/fixtures/trust_declined_host_shell.txt");
+const TRUST: &str = include_str!("../../../../crates/pm-core/src/tui/claude/fixtures/trust_dialog_2_1_299.txt");
 
 fn run_with_timeout(timeout_ms: u64) -> OperationSnapshot {
     let project = std::env::temp_dir().join(format!("pm-sup-{}", uuid::Uuid::new_v4()));

@@ -3,9 +3,25 @@
 // refresh (every few minutes, once the strip asked) finds different numbers. Numbers, times and plan names only.
 import { useCallback, useEffect, useState } from 'react';
 import { invoke } from '@tauri-apps/api/core';
-import { listen, type UnlistenFn } from '@tauri-apps/api/event';
+import { type UnlistenFn } from '@tauri-apps/api/event';
+import { listen } from './events';
 import { getLanguage, t } from '../i18n';
 import { loadSettings } from './settings';
+
+/** A limit window's name (the PC names it in English: "5-hour", "Weekly", "Monthly"...) in the app's language. An unknown name is shown as it came. */
+/** A reason the desktop sends in English (a profile's usage.toml): shown in the app language when it is a known one. */
+export function reasonText(reason: string): string {
+  if (reason === 'No OpenCode usage found yet.') return t('state.usage.reason.opencode');
+  if (reason.startsWith("Cursor's agent CLI has no usage command.")) return t('state.usage.reason.cursor');
+  return reason;
+}
+
+export function windowName(name: string): string {
+  const fixed: Record<string, 'state.usage.win.daily' | 'state.usage.win.weekly' | 'state.usage.win.monthly'> = { Daily: 'state.usage.win.daily', Weekly: 'state.usage.win.weekly', Monthly: 'state.usage.win.monthly' };
+  if (fixed[name]) return t(fixed[name]);
+  const m = /^(\d+)-(hour|day|minute)$/.exec(name);
+  return m ? t(`state.usage.win.${m[2]}s` as 'state.usage.win.hours', { n: m[1] }) : name;
+}
 
 /** The event the desktop sends (`usage::EVENT`). */
 export const USAGE_EVENT = 'usage://changed';
@@ -303,7 +319,7 @@ export function tooltip(row: UsageRow, now: number): string {
       : w.resets_at_ms
         ? t('state.usage.resetsAt', { time: formatLeftLong(w.resets_at_ms - now), at: clock(w.resets_at_ms) })
         : t('state.usage.resetUnknown');
-    lines.push(t('state.usage.windowLine', { name: w.name, pct: Math.round(w.used_percent), reset }));
+    lines.push(t('state.usage.windowLine', { name: windowName(w.name), pct: Math.round(w.used_percent), reset }));
   }
   if (row.totals) {
     lines.push(t('state.usage.todayLine', { cost: formatCost(row.totals.today.cost), tokens: formatTokens(row.totals.today.tokens) }));
@@ -312,7 +328,7 @@ export function tooltip(row: UsageRow, now: number): string {
   if (row.state === 'limited') {
     lines.push(row.limited_until_ms && row.limited_until_ms > now ? t('state.usage.limitUntil', { at: clock(row.limited_until_ms) }) : t('state.usage.limitReached'));
   }
-  if (row.reason) lines.push(row.reason);
+  if (row.reason) lines.push(reasonText(row.reason));
   if (row.observed_at_ms) lines.push(t('state.usage.reported', { time: formatLeftLong(now - row.observed_at_ms) }));
   if (row.page) lines.push(t('state.usage.openPage'));
   return lines.join('\n');
@@ -377,6 +393,15 @@ export function useUsage(api: UsageApi = usageApi, enabled = true, loginReads = 
         () => {},
       );
     window.addEventListener('focus', onFocus);
+    // A lend that began or ended changes the borrowed chips; the cache is stale on the desktop, so look again (also once a minute).
+    let unLend: UnlistenFn | null = null;
+    if (typeof window !== 'undefined' && '__TAURI_INTERNALS__' in window) {
+      void listen('lend://changed', onFocus).then(
+        (fn) => (live ? (unLend = fn) : fn()),
+        () => {},
+      );
+    }
+    const poll = window.setInterval(() => document.visibilityState !== 'hidden' && onFocus(), 60_000);
     const onAsk = () =>
       void api.snapshot(true, loginReads).then(
         (s) => live && setSnap(s),
@@ -386,6 +411,8 @@ export function useUsage(api: UsageApi = usageApi, enabled = true, loginReads = 
     return () => {
       live = false;
       un?.();
+      unLend?.();
+      window.clearInterval(poll);
       window.removeEventListener('focus', onFocus);
       window.removeEventListener(USAGE_REFRESH_EVENT, onAsk);
     };

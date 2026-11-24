@@ -137,6 +137,54 @@
    segmented switch are in chat-input-card.css. */
 .cockpit .ck-acp-chips {
   min-width: 0;
+  container-type: inline-size;
+}
+
+/* A narrow column (side panel plus a second pane, or a split): the chips fold into one settings button that opens a list
+   with every setting, so none is hidden and none is squashed to "M.. F..". */
+.cockpit .ck-acp-chips .ck-acp-more {
+  display: none;
+}
+@container (max-width: 340px) {
+  .cockpit .ck-acp-chips .ck-acp-chips-row {
+    display: none;
+  }
+  .cockpit .ck-acp-chips .ck-acp-more {
+    display: inline-flex;
+    font-size: 16px;
+    line-height: 1;
+  }
+}
+.cockpit .ck-acp-chips {
+  position: relative;
+}
+.cockpit .ck-acp-more-pop {
+  min-width: 200px;
+  max-height: min(360px, 60vh);
+  overflow-y: auto;
+  padding: 4px;
+  border: 1px solid var(--sep);
+  border-radius: 12px;
+  background: var(--bg-float);
+  backdrop-filter: blur(24px) saturate(1.4);
+  -webkit-backdrop-filter: blur(24px) saturate(1.4);
+  box-shadow: var(--float-shadow);
+  animation: ck-pop-in 0.18s var(--ease);
+}
+.cockpit .ck-acp-more-title {
+  margin: 6px 8px 2px;
+  font-size: 11px;
+  color: var(--label-3);
+}
+.cockpit .ck-acp-more-opt {
+  display: flex;
+  width: 100%;
+  border: none;
+  background: transparent;
+  text-align: left;
+  font: 12px var(--font-ui);
+  color: var(--label);
+  cursor: pointer;
 }
 
 .cockpit .ck-acp-chips-row {
@@ -432,6 +480,8 @@
   gap: 8px;
 }
 .cockpit .fy-error {
+  white-space: normal;
+  max-width: 280px;
   font-size: 11px;
   color: var(--danger);
 }

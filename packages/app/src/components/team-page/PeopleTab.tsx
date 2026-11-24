@@ -9,6 +9,9 @@ import { busyLine, presenceWords, shareLine, workingLine, type Person } from './
 
 const ROLE = { admin: 'teamHub.role.admin', approve: 'teamHub.role.approve', watch: 'teamHub.role.watch' } as const;
 
+/** This PC listed as someone else (after a removal the team cannot name me): never shown with buttons for itself. */
+const isThisPcAsOther = (m: Person['member']): boolean => !m.me && (m.deviceList ?? []).some((d) => d.current);
+
 /**
  * One card per person: me first, then here, away, not here. A teammate's words (name, project, chat title) are plain text,
  * cut by the Rust side; the project and title lines appear only when that person turned them on.
@@ -91,8 +94,10 @@ export function PeopleTab({
         />
       )}
       <ul className="tpg-cards" aria-label={t('teamHub.people.list')}>
-        {people.map((p) => {
+        {people.filter((p) => !isThisPcAsOther(p.member)).map((p) => {
           const m = p.member;
+          // Not here at all: a task or a borrow has nobody to reach right now.
+          const away = !m.me && p.kind === 'gone';
           const working = m.me ? null : workingLine(p.presence);
           const busyWords = m.me ? null : busyLine(p.presence);
           return (
@@ -125,14 +130,15 @@ export function PeopleTab({
                 )}
                 {!m.me && (
                   <div className="tpg-actions">
-                    <button type="button" className="ck-btn ck-btn--secondary" data-testid={`pass-task-${m.id}`} onClick={() => onPassTask(m.id)}>
+                    <button type="button" className="ck-btn ck-btn--secondary" data-testid={`pass-task-${m.id}`} disabled={away} onClick={() => onPassTask(m.id)}>
                       {t('teamHub.pass.button')}
                     </button>
                     {lendOn && (
-                      <button type="button" className="ck-btn ck-btn--secondary" onClick={onAskUsage}>
+                      <button type="button" className="ck-btn ck-btn--secondary" disabled={away} onClick={onAskUsage}>
                         {t('teamHub.askUsage')}
                       </button>
                     )}
+                    {away && <small className="tpg-sub">{t('teamHub.notReachable')}</small>}
                   </div>
                 )}
               </div>

@@ -7,11 +7,12 @@
 //  - nothing but text: attachments never travel.
 import { useEffect, useRef } from 'react';
 import type { RemoteDraft } from '../lib/chatMore';
+import { wasJustSent } from '../lib/composerDraft';
 
 /** How long after the last key the draft is sent to the PC. */
 export const REMOTE_DRAFT_MS = 800;
 
-export function useRemoteDraft(remote: RemoteDraft | null | undefined, text: string, setText: (text: string) => void): void {
+export function useRemoteDraft(remote: RemoteDraft | null | undefined, text: string, setText: (text: string) => void, paneKey?: string): void {
   const textRef = useRef(text);
   textRef.current = text;
   const remoteRef = useRef(remote);
@@ -23,6 +24,10 @@ export function useRemoteDraft(remote: RemoteDraft | null | undefined, text: str
   const first = useRef(true);
   const pending = useRef<string | null>(null);
   const key = remote ? 'on' : 'off';
+  const paneRef = useRef(paneKey);
+  paneRef.current = paneKey;
+  /** The sent message (or one being sent) is not a draft: neither the PC's copy nor the closing write may revive it. */
+  const sentWords = (words: string) => !!paneRef.current && wasJustSent(paneRef.current, words);
 
   // Take the PC's draft into an empty box.
   useEffect(() => {
@@ -32,7 +37,7 @@ export function useRemoteDraft(remote: RemoteDraft | null | undefined, text: str
       if (document.visibilityState === 'hidden' || textRef.current.trim() !== '') return;
       remote.read().then(
         (found) => {
-          if (!live || !found || found.trim() === '' || found === sent.current) return;
+          if (!live || !found || found.trim() === '' || found === sent.current || sentWords(found)) return;
           // Typed while the answer was on its way: the box is theirs.
           if (textRef.current.trim() !== '') return;
           sent.current = found;
@@ -80,7 +85,7 @@ export function useRemoteDraft(remote: RemoteDraft | null | undefined, text: str
   useEffect(
     () => () => {
       const words = pending.current;
-      if (words !== null) remoteRef.current?.write(words);
+      if (words !== null && !sentWords(words)) remoteRef.current?.write(words);
     },
     [],
   );

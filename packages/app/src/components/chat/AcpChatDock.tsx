@@ -13,6 +13,10 @@ import { AgentAnsweringSwitch } from './AgentAnsweringSwitch';
 import { ErrorCard } from '../common/ErrorCard';
 import { useT } from '../../i18n';
 import { SignInFixCard } from '../acp/SignInFixCard';
+import { lentPaneOf, lentSignedOutText } from '../lend/LentChip';
+import { activeLendTo } from '../../lib/lend';
+import { startOnLend } from '../../lib/startOnLend';
+import { useLend } from '../lend/useLend';
 import { pushComposerInsert } from '../../lib/composer-insert';
 import '../../styles/cockpit-acp.css';
 
@@ -66,6 +70,24 @@ export function AcpChatDock({ c, paneId, paneName, api = tauriAcpChatApi, stoppe
       .finally(() => setContinuing(false));
   };
 
+  // A chat that runs on a sign-in lent by my other PC ("Use my own agents"): when that PC does not answer, the chat is paused, not broken.
+  // Seen from the PC that runs the agent (the lend is its borrowed one); Continue is the same ordinary message as after a closed app.
+  const lendHandle = useLend();
+  const lent = lentPaneOf(lendHandle, paneId);
+  const paused = lent?.active && !lent.mine && lent.grant.problem_kind === 'unreachable' ? lent.grant : null;
+  const pausedText = paused ? (paused.peer_device_name ? t('myAgents.paused', { name: paused.peer_device_name }) : t('myAgents.pausedBack')) : null;
+  const [pausedBusy, setPausedBusy] = useState(false);
+  const [pausedError, setPausedError] = useState<string | null>(null);
+  const continuePaused = () => {
+    if (!api.continueTurn || pausedBusy) return;
+    setPausedBusy(true);
+    setPausedError(null);
+    api
+      .continueTurn(paneId)
+      .catch((e) => setPausedError(errorSentence(e)))
+      .finally(() => setPausedBusy(false));
+  };
+
   // Another device (a phone, another PC) sends or types here: say so, with "Take back" (this PC drives again).
   const stateAt = useMemo(() => Date.now(), [state]);
   const [now, setNow] = useState(() => Date.now());
@@ -88,7 +110,7 @@ export function AcpChatDock({ c, paneId, paneName, api = tauriAcpChatApi, stoppe
       .finally(() => setTakingBack(false));
   };
 
-  const cards = permissionCards(c.asked.questions, paneId);
+  const cards = permissionCards(c.asked.questions, paneId, state && !state.closed ? (state.permissions ?? []).map((p) => p.questionId) : []);
   const autoAllow = state && !state.closed ? (state.autoAllow ?? []) : [];
   // "Don't ask again" first tells the chat to remember the kind, then answers; a refusal still lets the answer go.
   const answerCard = (id: string, { choiceId, remember }: DecisionAnswer, kind: string | null) => {
@@ -116,11 +138,16 @@ export function AcpChatDock({ c, paneId, paneName, api = tauriAcpChatApi, stoppe
   }, [waitingNoCard, paneId]);
   const quiet = quietStrip(state, asked);
   const strip = quiet ? null : runStrip(state, asked);
-  const signIn = state && !state.closed && state.signIn?.needed ? state : null;
+  // On a lent sign-in the far PC has no sign-in of its own to fix: its card would sign in THAT PC's agent. The strip below says whose sign-in ended.
+  const signIn = state && !state.closed && state.signIn?.needed && !lent ? state : null;
+  // A far chat that runs on that PC's own login, signed out, while this PC has an active lend of the agent to that PC: offer the lend.
+  const farNode = /^dev:([^:]+):/.exec(paneId)?.[1];
+  const farLend = signIn && farNode && !lent ? activeLendTo(lendHandle.state?.grants ?? [], lendHandle.now, farNode, signIn.agent) : undefined;
+  const lentSignedOut = lent && state && !state.closed && state.signIn?.needed ? lentSignedOutText(lent, t) : null;
   // The first other agent that can open a visible chat or terminal; none: the card offers only "Sign in again".
   const otherAgent = signIn ? (c.launchEntries ?? []).find((e) => e.type !== signIn.agent && !e.disabled && !e.shell) : undefined;
   const waking = !quiet && strip?.waking ? strip : null;
-  if (cards.length === 0 && !waking && !quiet && !signIn && !stopped && !interrupted && autoAllow.length === 0 && !orphan && !drive) return null;
+  if (cards.length === 0 && !waking && !quiet && !signIn && !lentSignedOut && !stopped && !interrupted && autoAllow.length === 0 && !orphan && !drive && !paused) return null;
   const keepWaiting = () => {
     api.keepWaiting?.(paneId).catch(() => undefined);
   };
@@ -164,6 +191,16 @@ export function AcpChatDock({ c, paneId, paneName, api = tauriAcpChatApi, stoppe
           onOpen={() => c.newAgent(signIn.agent, undefined, false, c.registry.panes.get(paneId)?.info.cwd, undefined, 'terminal')}
           // Without a terminal: the same sign-in in a hidden pane, folded under Details (the older route above stays for an api with none).
           signIn={signInDriver}
+          onUseLend={
+            farLend
+              ? async () => {
+                  // A new chat in the same project: that PC runs it on the lend while its own login is out. The kept words wait in its message box.
+                  const id = await startOnLend({ start: api.start, agent: signIn.agent, info: c.registry.panes.get(paneId)?.info, pcName: farLend.peer_device_name });
+                  c.select(id);
+                  if (signIn.signIn?.text) pushComposerInsert(id, signIn.signIn.text);
+                }
+              : undefined
+          }
           onRetry={() => api.retrySignIn?.(paneId)}
           onUseOther={async (id, kept) => {
             const opened = await c.newAgent(id, undefined, false, c.registry.panes.get(paneId)?.info.cwd);
@@ -171,6 +208,25 @@ export function AcpChatDock({ c, paneId, paneName, api = tauriAcpChatApi, stoppe
             if (opened && kept) pushComposerInsert(opened, kept);
           }}
         />
+      )}
+      {lentSignedOut && (
+        <div className="ck-acp-strip" data-testid="acp-lent-signin">
+          <span className="ck-acp-strip-text" role="status">
+            {lentSignedOut}
+          </span>
+        </div>
+      )}
+      {paused && (
+        <div className="ck-acp-strip" data-testid="acp-paused">
+          <span className="ck-acp-strip-text" role="status">
+            {pausedError ? `${pausedText} ${pausedError}` : pausedText}
+          </span>
+          {api.continueTurn && !running && (
+            <button type="button" className="ck-btn ck-btn--secondary ck-acp-stop" onClick={continuePaused} disabled={pausedBusy}>
+              {pausedBusy ? t('myAgents.continuing') : t('myAgents.continue')}
+            </button>
+          )}
+        </div>
       )}
       {waking && (
         <div className="ck-acp-strip" data-testid="acp-waking">
@@ -205,10 +261,10 @@ export function AcpChatDock({ c, paneId, paneName, api = tauriAcpChatApi, stoppe
       {orphan && waitingNoCard && (
         <div className="ck-acp-strip" data-testid="acp-orphan-wait">
           <span className="ck-acp-strip-text" role="status">
-            The agent is waiting but didn't say what for.
+            {t('r9.orphan.waiting')}
           </span>
           <button type="button" className="ck-btn ck-btn--secondary ck-acp-stop" onClick={stop}>
-            Deny and stop
+            {t('r9.orphan.deny')}
           </button>
         </div>
       )}

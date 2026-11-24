@@ -3,7 +3,7 @@
 use super::*;
 
 /// `{agents, dispatchable_ids}` for every registered agent, in registry order (SPEC 7.5).
-#[tauri::command]
+#[tauri::command(async)]
 pub fn agents_list() -> Value {
     crate::agent_run_mode::decorate_listing(crate::tui::agent_types_listing())
 }
@@ -13,7 +13,7 @@ fn command_error(error: crate::tui::declarative::service::ServiceError) -> Strin
 }
 
 /// `GET /agents/definitions`: every definition with state and errors.
-#[tauri::command]
+#[tauri::command(async)]
 pub fn agents_definitions_list() -> Value {
     crate::tui::declarative::service::listing_global()
 }
@@ -137,7 +137,7 @@ mod tests {
     fn check_file_refuses_non_toml_and_reports_fixtures() {
         assert!(agents_check_file("C:/x/notes.txt".into(), None).unwrap_err().starts_with("AGENT_DEF_NOT_FOUND"));
         let kilo = concat!(env!("CARGO_MANIFEST_DIR"), "/tests/agent-definitions/kilo.toml");
-        let fixtures = concat!(env!("CARGO_MANIFEST_DIR"), "/src/tui/declarative/fixtures/kilo");
+        let fixtures = concat!(env!("CARGO_MANIFEST_DIR"), "/crates/pm-core/src/tui/declarative/fixtures/kilo");
         let body = agents_check_file(kilo.into(), Some(fixtures.into())).unwrap();
         assert_eq!(body["status"], "ran", "{body}");
         assert!(body["results"].as_array().unwrap().iter().all(|r| r["passed"] == true), "{body}");
@@ -236,14 +236,14 @@ pub fn agents_import_definition(source: String) -> Result<Value, String> {
 
 /// Current plain-language activity phrase per pane id (`pane_activity`); changes arrive as the
 /// `pty://activity` event `{pane_id, activity}`.
-#[tauri::command]
+#[tauri::command(async)]
 pub fn pane_activities() -> Value {
     serde_json::to_value(crate::pane_activity::snapshot()).unwrap_or(Value::Null)
 }
 
 /// Dev-server URLs per pane id (`pane_preview`), newest first; changes arrive as the
 /// `pty://preview` event `{pane_id, urls}` (empty list = cleared).
-#[tauri::command]
+#[tauri::command(async)]
 pub fn pane_previews() -> Value {
     serde_json::to_value(crate::pane_preview::snapshot()).unwrap_or(Value::Null)
 }

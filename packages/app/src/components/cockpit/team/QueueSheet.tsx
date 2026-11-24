@@ -1,6 +1,6 @@
 import { errorSentence } from '../../../lib/sayError';
 import { useState } from 'react';
-import { useT } from '../../../i18n';
+import { t, useT } from '../../../i18n';
 import { friendlyBranch, whoDid, type TeamCard } from '../../../lib/team';
 import { Sheet } from '../Sheet';
 
@@ -81,9 +81,9 @@ export function QueueSheet({
         </>
       )}
       {card.local?.dirty && (
-        <p className="ck-team-meta">Your uncommitted changes aren't included. Commit or stash them first to include them.</p>
+        <p className="ck-team-meta">{t('r21.sw.yourUncommittedChangesAren')}</p>
       )}
-      <p className="ck-team-meta">If nothing conflicts, no agent is needed. Nothing is ever pushed.</p>
+      <p className="ck-team-meta">{t('r21.sw.ifNothingConflictsNo')}</p>
       {error && (
         <p className="ck-team-error" role="alert">
           {error}

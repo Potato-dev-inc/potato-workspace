@@ -139,12 +139,12 @@ describe('a chat on another PC is the normal pane screen', () => {
     // Share / Save as page is the chat menu of the local screen; its far row does not exist yet.
     const menu = q('[data-testid="chat-export-menu"], [data-testid="chat-export"]');
     if (menu) expect(menu.hasAttribute('disabled') || menu.getAttribute('aria-disabled') === 'true').toBe(true);
-    expect(fake.requests.filter((r) => r.path.startsWith('/pclink/call/')).every((r) => /acp_chat_|agent_model_options|session_chat_|pane_message|chat_earlier|chat_picture|agents_list|agent_lane_get|agent_default_models|agent_rules_effective|project_recent|workflows_/.test(r.path))).toBe(true);
+    expect(fake.requests.filter((r) => r.path.startsWith('/pclink/call/')).every((r) => /acp_chat_|agent_model_options|session_chat_|pane_message|chat_earlier|chat_picture|agents_list|agent_lane_get|agent_default_models|agent_rules_effective|project_recent|workflows_|pane_git_branch|pane_open_bundle|artifacts_sync|checkpoint_turn_review|files_|pane_previews|pane_worktree|worktree_|attachment_preview/.test(r.path))).toBe(true);
   });
 
   // Reads that still ask THIS PC about the far key (they answer "no such pane", nothing is read or written here: a far key names no local
   // pane). Each is a lib that calls Tauri directly; moving it behind the host removes it from this list. The list only shrinks.
-  const STILL_ASKED_HERE = ['artifacts_sync', 'branch_lineage', 'budget_for_pane', 'chat_draft_get', 'chat_move_status', 'keep_going_lineage', 'pane_git_branch', 'pane_run_info', 'pane_transcript', 'pane_worktree', 'point_take_draft', 'project_budget_status', 'right_size_pending', 'turn_summaries'];
+  const STILL_ASKED_HERE = ['branch_lineage', 'budget_for_pane', 'chat_draft_get', 'chat_move_status', 'get_pane_remote', 'keep_going_lineage', 'pane_run_info', 'pane_transcript', 'point_take_draft', 'project_budget_status', 'right_size_pending', 'turn_summaries'];
   it('only the pinned local reads still carry the far key (no write, no command that acts), and the list only shrinks', async () => {
     await mount('full');
     const carrying = [...new Set(localInvokes.filter((i) => JSON.stringify(i.args ?? {}).includes('dev:')).map((i) => i.cmd))].sort();
@@ -156,10 +156,15 @@ describe('a chat on another PC is the normal pane screen', () => {
     const row = rowOf(NODE_MAC, { id: 'p1', agent: 'claude', title: 'x', status: 'idle', project: 'p', folder: 'app', chat: true });
     const c = fakeCockpit();
     const far = farCockpit(c, makeRemoteClient(NODE_MAC, fake), 'Mac mini', [row], 'Not on Mac mini yet.', () => {});
+    // Rename goes to the far PC's `pane_set_title` row, by its own pane id; a refusal says what the far PC said.
+    await far.rename(row.key, 'new');
+    expect(fake.farCalls.at(-1)).toEqual({ cmd: 'pane_set_title', args: { paneId: 'p1', title: 'new' } });
+    expect(c.notify).not.toHaveBeenCalled();
+    const old = new DevicesFake({ enabled: true, devices: [{ ...MAC_MINI, level: 'watch' }], panes: { [NODE_MAC]: [PANE] } });
+    await farCockpit(c, makeRemoteClient(NODE_MAC, old), 'Mac mini', [row], 'Not on Mac mini yet.', () => {}).rename(row.key, 'new');
+    expect(c.notify).toHaveBeenCalledWith('That PC does not let this PC do this. Change it on that PC: Connect > My PCs.');
     await far.closePane(row.key);
     expect(fake.requests.find((r) => r.method === 'DELETE')).toMatchObject({ path: '/pclink/sessions/p1' });
     expect(c.select).toHaveBeenCalledWith(null);
-    await far.rename(row.key, 'new');
-    expect(c.notify).toHaveBeenCalledWith('Not on Mac mini yet.');
   });
 });

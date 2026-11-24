@@ -5,22 +5,10 @@ use super::AppState;
 use std::path::Path;
 use tauri::State;
 
-/// The branch checked out in `dir`: its name, `detached at <short commit>` on a detached HEAD, or `None`
-/// when `dir` is not inside a git work tree (or git cannot run).
-pub(crate) fn branch_of(dir: &Path) -> Option<String> {
-    if !dir.is_dir() {
-        return None;
-    }
-    let inside = crate::team::git::run(dir, &["rev-parse", "--is-inside-work-tree"]).ok()?;
-    if inside != "true" {
-        return None;
-    }
-    if let Some(branch) = crate::team::git::current_branch(dir) {
-        return Some(branch);
-    }
-    let short = crate::team::git::run(dir, &["rev-parse", "--short", "HEAD"]).ok().filter(|s| !s.is_empty())?;
-    Some(format!("detached at {short}"))
-}
+pub(crate) use pm_core::files::git::branch_of;
+
+static BRANCHES: std::sync::LazyLock<super::brief_cache::BriefCache<Option<String>>> =
+    std::sync::LazyLock::new(|| super::brief_cache::BriefCache::new(std::time::Duration::from_millis(1500)));
 
 /// The git branch of the folder this pane works in, or null for a folder that is not a git work tree.
 #[tauri::command]
@@ -31,7 +19,7 @@ pub async fn pane_git_branch(state: State<'_, AppState>, pane_id: String) -> Res
     let Some(cwd) = state.registry.lock().list().into_iter().find(|p| p.id == pane_id).map(|p| p.cwd) else {
         return Ok(None);
     };
-    tauri::async_runtime::spawn_blocking(move || branch_of(Path::new(&cwd)))
+    tauri::async_runtime::spawn_blocking(move || BRANCHES.get_or(&cwd, || branch_of(Path::new(&cwd))))
         .await
         .map_err(|e| format!("INTERNAL: {e}"))
 }

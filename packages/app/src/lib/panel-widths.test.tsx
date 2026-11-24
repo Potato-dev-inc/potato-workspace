@@ -12,7 +12,9 @@ import {
   SIDE_KEY,
   SIDE_MAX,
   SIDE_MIN,
+  NARROW_WINDOW,
   SIDE_STRIP,
+  sideIsStrip,
   railFits,
   railFromPx,
   railShown,
@@ -157,5 +159,23 @@ describe('the dock sizes', () => {
     m.setDockWidth(m.DOCK_DEFAULT); // reads current
     m.resetDockWidth();
     expect(window.localStorage.getItem(m.DOCK_WIDTH_KEY)).toBe(String(m.DOCK_DEFAULT));
+  });
+});
+
+describe('dockShown', () => {
+  it('squeezes the dock so the chat keeps its floor, never below the squeeze minimum', async () => {
+    const { dockShown, CHAT_FLOOR, DOCK_SQUEEZE_MIN } = await import('./panel-widths');
+    expect(dockShown(460, 1280, 376, 300)).toBe(1280 - 376 - 300 - CHAT_FLOOR);
+    expect(dockShown(460, 1920, 240, 300)).toBe(460);
+    expect(dockShown(460, 900, 376, 300)).toBe(DOCK_SQUEEZE_MIN);
+  });
+});
+
+describe('narrow window', () => {
+  it('forces the strip below 800 px and leaves a wide window alone', () => {
+    const wide = { width: 240, strip: false };
+    expect(sideIsStrip(wide, NARROW_WINDOW - 1)).toBe(true);
+    expect(sideIsStrip(wide, NARROW_WINDOW)).toBe(false);
+    expect(sideIsStrip({ width: 240, strip: true }, 1400)).toBe(true);
   });
 });

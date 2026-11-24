@@ -213,6 +213,41 @@ pub async fn devices_request(webview: tauri::Webview, node: String, method: Stri
     Ok(serde_json::json!({ "status": status, "body": body }))
 }
 
+/// Opens a far dev server (`port` of far chat `pane_id` on `node`) in a preview window of its own (`device_link/far_preview.rs`). The far PC
+/// must list that port for that chat, and the page is shown through the app's own protocol: no port opens on this PC.
+#[tauri::command(rename_all = "snake_case")]
+pub async fn far_preview_open(app: tauri::AppHandle, webview: tauri::Webview, node: String, pane_id: String, port: u16) -> Result<(), String> {
+    guard(&webview)?;
+    crate::device_link::far_preview::open(&app, &node, &pane_id, port)
+}
+
+/// "Share" on a chat of another PC: that PC makes the page or the Markdown (`pclink::calls_p4a`) and this PC keeps it under a one-time
+/// token, so the Save dialog here writes it (`chat_export_save`) and the window never sends text of its own. The answer has the shape of
+/// `chat_export_html` / `chat_export_markdown`. What came from afar is data: a page that carries a script is refused, and the size is capped.
+#[tauri::command(rename_all = "snake_case")]
+pub async fn devices_chat_export(webview: tauri::Webview, chat: tauri::State<'_, super::SessionChatState>, node: String, pane_id: String, markdown: bool) -> Result<Value, String> {
+    use crate::device_link::pclink::calls_p4a::EXPORT_MAX;
+    guard(&webview)?;
+    let (cmd, key) = if markdown { ("chat_export_markdown", "markdown") } else { ("chat_export_html", "html") };
+    let (status, body) = dl::app_service()?.request(&node, "POST", &format!("/pclink/call/{cmd}"), Some(serde_json::json!({ "paneId": pane_id }))).await?;
+    if status != 200 {
+        return Err(body["error"].as_str().unwrap_or("The other PC could not make the file.").to_string());
+    }
+    let text = body[key].as_str().ok_or("The other PC sent no file.")?.to_string();
+    if text.len() > EXPORT_MAX {
+        return Err("This chat is too big to save as one file. Pick fewer turns.".into());
+    }
+    if !markdown && text.to_ascii_lowercase().contains("<script") {
+        return Err("The other PC sent a page that holds a script, so it was not saved.".into());
+    }
+    let kind = if markdown { crate::session_chat::export_save::PageKind::Markdown } else { crate::session_chat::export_save::PageKind::Html };
+    let token = chat.pages().keep(&format!("dev:{node}:{pane_id}"), kind, &text)?;
+    let mut out = serde_json::Map::new();
+    out.insert(key.into(), Value::String(text));
+    out.insert("token".into(), Value::String(token));
+    Ok(Value::Object(out))
+}
+
 #[tauri::command(rename_all = "snake_case")]
 pub async fn devices_subscribe(webview: tauri::Webview, node: String) -> Result<(), String> {
     guard(&webview)?;

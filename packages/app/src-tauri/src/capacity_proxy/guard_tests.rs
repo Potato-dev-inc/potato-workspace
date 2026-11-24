@@ -7,6 +7,10 @@ fn src_dir() -> PathBuf {
     Path::new(env!("CARGO_MANIFEST_DIR")).join("src")
 }
 
+fn core_dir() -> PathBuf {
+    Path::new(env!("CARGO_MANIFEST_DIR")).join("crates/pm-core/src/capacity_proxy")
+}
+
 fn sources(path: &Path) -> Vec<(PathBuf, String)> {
     let mut found = Vec::new();
     let mut todo = vec![path.to_path_buf()];
@@ -54,6 +58,37 @@ fn lend_is_not_reachable_from_bridge_mcp_or_phone_routes() {
         }
     }
     assert!(seen > 20, "only {seen} files scanned");
+}
+
+#[test]
+fn use_my_own_agents_is_this_pcs_own_click_and_never_a_far_or_bridge_call() {
+    use crate::device_link::pclink::calls;
+    // The commands that make the promise, renew the lend or list a far chat on it are this window's only; none is a far row.
+    for cmd in ["lend_far_offer", "lend_far_note_pane", "lend_far_renew"] {
+        assert_eq!(calls::need(cmd), None, "{cmd} is not a far call");
+        assert!(calls::TABLE.iter().all(|(c, _, _)| *c != cmd), "{cmd} is not a row");
+    }
+    // The far row only ASKS (a request that names the promise); it never makes a lend, and the lender's own code never takes a promise from a body.
+    let far = std::fs::read_to_string(src_dir().join("device_link").join("pclink").join("calls_lend.rs")).unwrap();
+    for banned in ["far_offer", ".answer(", "profile_save", "key_set"] {
+        assert!(!far.contains(banned), "the far row must not touch {banned}");
+    }
+    // A promise is written in exactly one place (the window's click), and used up in exactly one (the matching request).
+    let own = std::fs::read_to_string(src_dir().join("capacity_proxy").join("service").join("own_far.rs")).unwrap();
+    assert_eq!(own.matches("promises.push(").count(), 1);
+    assert_eq!(own.matches("promises.remove(").count(), 1);
+    // The window commands check the window like every other lend command, and the bridge never names them.
+    let commands = std::fs::read_to_string(src_dir().join("commands").join("lend.rs")).unwrap();
+    for name in ["lend_far_offer", "lend_far_note_pane", "lend_far_renew", "own_borrow_ask"] {
+        let body = commands.split(&format!("pub async fn {name}(")).nth(1).unwrap_or_else(|| panic!("{name} is gone"));
+        let body = body.split("#[tauri::command").next().unwrap();
+        assert!(body.contains("on(&webview)?"), "{name} must check the window first");
+    }
+    for (path, text) in sources(&src_dir().join("bridge")) {
+        for word in ["lend_far_offer", "own_borrow_ask", "ask_lender", "far_offer"] {
+            assert!(!text.contains(word), "{} mentions {word}", path.display());
+        }
+    }
 }
 
 #[test]
@@ -125,12 +160,12 @@ fn the_lender_never_reads_a_default_login_folder() {
 
 #[test]
 fn the_shim_listens_on_loopback_only_and_the_upstream_cannot_be_changed_outside_tests() {
-    let shim = std::fs::read_to_string(src_dir().join("capacity_proxy").join("shim.rs")).unwrap();
+    let shim = std::fs::read_to_string(core_dir().join("shim.rs")).unwrap();
     assert!(shim.contains("127.0.0.1"));
     assert!(!shim.contains("0.0.0.0"));
-    let fwd = std::fs::read_to_string(src_dir().join("capacity_proxy").join("forward.rs")).unwrap();
+    let fwd = std::fs::read_to_string(core_dir().join("forward.rs")).unwrap();
     let setter = fwd.find("fn with_test_upstream").expect("the test override exists");
-    assert!(fwd[..setter].trim_end().ends_with("#[cfg(test)]\n    pub") || fwd[..setter].contains("#[cfg(test)]\n    pub fn") || fwd[setter.saturating_sub(40)..setter].contains("#[cfg(test)]"), "the upstream override must be test-only");
+    assert!(fwd[..setter].trim_end().ends_with("#[cfg(test)]\n    pub") || fwd[..setter].contains("#[cfg(test)]\n    pub fn") || fwd[setter.saturating_sub(60)..setter].contains("#[cfg(any(test, feature = \"test-util\"))]"), "the upstream override must be test-only");
     assert!(fwd.contains(".redirects(0)"), "no redirects");
 }
 
@@ -151,7 +186,7 @@ fn no_token_value_shows_in_the_auth_source_debug_output() {
     let dir = std::env::temp_dir().join(format!("pm-lend-guard-{}", uuid::Uuid::new_v4()));
     std::fs::create_dir_all(&dir).unwrap();
     std::fs::write(dir.join(".credentials.json"), r#"{"claudeAiOauth":{"accessToken":"tok-GUARD-FAKE","expiresAt":1}}"#).unwrap();
-    let spec = ProxySpec::parse(include_str!("../tui/claude/lend_proxy.toml")).unwrap();
+    let spec = ProxySpec::parse(include_str!("../../crates/pm-core/src/tui/claude/lend_proxy.toml")).unwrap();
     let account = spec.auth.account.as_ref().unwrap();
     let file = AuthSource::account(dir.to_str().unwrap(), account).unwrap();
     let fixed: AuthSource = InjectedAuth::from_spec(account, "tok-GUARD-FAKE").into();

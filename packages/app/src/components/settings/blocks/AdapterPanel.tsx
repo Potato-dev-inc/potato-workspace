@@ -6,6 +6,7 @@ import { useEffect, useRef, useState } from 'react';
 import { errorSentence, type AcpChatApi, type AdapterKeyRow, type AdapterKeyStatus, type AdapterSettingRow } from '../../../lib/acpChat';
 import { missingKeysLine, preferredValue, settingDefaults } from '../../../lib/acpAdapter';
 import { BTN } from './AgentWizardCapture';
+import { t } from '../../../i18n';
 
 export type AdapterPanelApi = Pick<AcpChatApi, 'adapterKeyStatus' | 'adapterKeySet'>;
 
@@ -45,7 +46,7 @@ export function AdapterPanel({
 
   const load = async () => {
     if (!api.adapterKeyStatus) {
-      setError('This version of the app cannot save adapter keys.');
+      setError(t('r21.sw.thisVersionOfThe'));
       return;
     }
     try {
@@ -81,7 +82,7 @@ export function AdapterPanel({
     const box = boxes.current[env];
     const value = (box?.value ?? '').trim();
     if (!value || !api.adapterKeySet) {
-      setError('Type the key first.');
+      setError(t('r21.sw.typeTheKeyFirst'));
       return;
     }
     setSaving(env);
@@ -115,7 +116,7 @@ export function AdapterPanel({
                     {st ? (st.set ? 'Saved' : 'Not saved') : 'Checking...'}
                   </span>
                 </div>
-                {st && !st.set && st.shared && <p className="mt-1 text-xs text-pm-muted">Add it in Keys settings, then come back here.</p>}
+                {st && !st.set && st.shared && <p className="mt-1 text-xs text-pm-muted">{t('r21.sw.addItInKeys')}</p>}
                 {st && !st.set && !st.shared && (
                   <div className="mt-1 flex gap-2">
                     <input

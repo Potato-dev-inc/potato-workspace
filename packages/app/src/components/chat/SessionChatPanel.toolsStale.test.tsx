@@ -11,7 +11,7 @@ const listen = vi.fn(async () => () => {});
 vi.mock('@tauri-apps/api/event', () => ({ listen: (...a: unknown[]) => (listen as (...x: unknown[]) => unknown)(...a) }));
 vi.mock('@tauri-apps/api/core', () => ({ invoke: (...a: unknown[]) => invoke(...a) }));
 
-import type { ToolsDrift } from '../../lib/mcp-drift';
+import { resetDriftShare, type ToolsDrift } from '../../lib/mcp-drift';
 import type { ChatItem } from '../../lib/sessionChat';
 import { SessionChatPanel } from './SessionChatPanel';
 
@@ -44,6 +44,7 @@ beforeEach(() => {
   (window as unknown as { __TAURI_INTERNALS__: object }).__TAURI_INTERNALS__ = {};
   invoke.mockReset();
   drift = [];
+  resetDriftShare();
   reconnectError = null;
   invoke.mockImplementation(async (cmd: string) => {
     if (cmd === 'session_chat_open') return { available: true, reason: null, items: ITEMS, source: 'file' };

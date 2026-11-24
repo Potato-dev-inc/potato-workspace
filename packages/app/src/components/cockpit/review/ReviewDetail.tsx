@@ -13,10 +13,12 @@ import {
   type ReviewItem,
   type ReviewLevel,
 } from '../../../lib/review-desk';
-import { lineKind, plural, splitPatch, statusMark } from '../diff';
+import { lineKind, splitPatch, statusMark } from '../diff';
 import { KeepSheet, type ReviewKeepApi } from './KeepSheet';
 import { FixSheet, type ReviewFixSheetApi } from './FixSheet';
-import { useT } from '../../../i18n';
+import { t as tr, useT } from '../../../i18n';
+import { reasonText } from '../../../lib/review-reasons';
+import { turnTitle } from '../../../lib/turn-sentence';
 import '../../../styles/review-detail.css';
 
 /** The calls this view makes: the detail, Keep (also "Looks good") and Ask to fix. */
@@ -55,7 +57,8 @@ const STATUS_WORD: Record<ReviewFileStatus, 'added' | 'modified' | 'deleted'> = 
 const MINUS = '−';
 export const LOOKED_TEXT = 'Marked as looked at · Undo (Z)';
 export const NO_PANE_TEXT = "The agent's pane is closed.";
-const CHANGED_TEXT = 'This changed since you looked. Look again.';
+/** The backend's line when it could not read a patch (act.rs); shown translated, and the per-file counts become dashes. */
+const UNREADABLE = 'Potato Workspace could not read the changes.';
 
 /** `+1,204 −88`, with a real minus sign, like the Copies tab. */
 export function countsText(added: number, deleted: number): string {
@@ -76,8 +79,8 @@ function offReasons(item: ReviewItem): string[] {
   };
   if (item.keep.kind === 'no') add(item.keep.why);
   if (item.throw.kind === 'no') add(item.throw.why);
-  if (!item.fixPaneId) add(item.fixWhyNot ?? NO_PANE_TEXT);
-  if (!item.paneId) add(NO_PANE_TEXT);
+  if (!item.fixPaneId) add(item.fixWhyNot ?? tr('r11.rd.paneClosed'));
+  if (!item.paneId) add(tr('r11.rd.paneClosed'));
   return out;
 }
 
@@ -127,6 +130,9 @@ export function ReviewDetail({ item, api = reviewDeskApi, onOpenPane, onKeep, on
   const fixOff = !item.fixPaneId;
   const openOff = !item.paneId;
   const whys = offReasons(item);
+  const noPane = t('r11.rd.paneClosed');
+  const unreadable = extra.includes(UNREADABLE);
+  const shownExtra = extra.map((line) => (line === UNREADABLE ? t('r11.rd.unreadable') : line));
 
   const markLooked = async () => {
     if (markingRef.current) return;
@@ -157,15 +163,15 @@ export function ReviewDetail({ item, api = reviewDeskApi, onOpenPane, onKeep, on
   };
 
   return (
-    <section className="ck-rd-detail" aria-label="Review item">
+    <section className="ck-rd-detail" aria-label={t('r11.rd.itemLabel')}>
       <header className="ck-rd-detail-head">
-        <h2 className="ck-rd-detail-title">{item.title}</h2>
+        <h2 className="ck-rd-detail-title">{turnTitle(t, item.title)}</h2>
         <p className="ck-rd-detail-meta">
           {[
             item.agentLabel,
             item.whereLabel,
-            `finished ${finishedText(item.finishedAtMs)}`,
-            item.turns > 0 ? plural(item.turns, 'turn') : null,
+            t('r11.rd.finished', { time: finishedText(item.finishedAtMs) }),
+            item.turns > 0 ? t('r11.rd.turns', { count: item.turns }) : null,
           ]
             .filter(Boolean)
             .join(' · ')}
@@ -174,45 +180,45 @@ export function ReviewDetail({ item, api = reviewDeskApi, onOpenPane, onKeep, on
           <span className="ck-rd-detail-glyph" aria-hidden="true">
             {levelGlyph(item.level)}
           </span>
-          {item.levelWord}
+          {t(`risk.level.${item.level === 'check' ? 'medium' : item.level}`)}
         </p>
         {item.group && <p className="ck-rd-detail-group">{item.group.label}</p>}
       </header>
 
-      <section className="ck-rd-detail-block" aria-label="Why it is first">
-        <h3 className="ck-rd-detail-h">Why it is first</h3>
+      <section className="ck-rd-detail-block" aria-label={t('r11.rd.why')}>
+        <h3 className="ck-rd-detail-h">{t('r11.rd.why')}</h3>
         <ul className="ck-rd-detail-reasons">
-          {item.reasons.length === 0 && <li>No flags</li>}
+          {item.reasons.length === 0 && <li>{t('r11.rd.noFlags')}</li>}
           {item.reasons.map((reason, i) => (
             <li key={`${reason.flag}-${i}`}>
               <span className="ck-rd-detail-glyph" aria-hidden="true">
                 {levelGlyph(FLAG_LEVEL[reason.flag])}
               </span>
-              {reason.sentence}
+              {reasonText(reason)}
             </li>
           ))}
         </ul>
       </section>
 
       <dl className="ck-rd-detail-facts">
-        <dt>Where</dt>
+        <dt>{t('r11.rd.where')}</dt>
         <dd>{item.whereLabel}</dd>
-        <dt>Files</dt>
+        <dt>{t('r11.rd.filesH')}</dt>
         <dd>
-          {plural(item.files.total, 'file')} {countsText(item.files.added, item.files.deleted)}
+          {t('r11.rd.files', { count: item.files.total })} {countsText(item.files.added, item.files.deleted)}
         </dd>
       </dl>
 
-      {extra.map((line, i) => (
+      {shownExtra.map((line, i) => (
         <p key={i} className="ck-rd-detail-extra">
           {line}
         </p>
       ))}
-      {stale && <p className="ck-rd-sheet-error">{CHANGED_TEXT}</p>}
-      {loadError && <p className="ck-rd-detail-why">{`The diff could not be loaded. ${loadError}`}</p>}
+      {stale && <p className="ck-rd-sheet-error">{t('r11.rd.changed')}</p>}
+      {loadError && <p className="ck-rd-detail-why">{t('r11.rd.diffFail', { reason: loadError })}</p>}
 
-      <section className="ck-rd-detail-block" aria-label="Changed files">
-        <h3 className="ck-rd-detail-h">Files</h3>
+      <section className="ck-rd-detail-block" aria-label={t('r11.rd.filesH')}>
+        <h3 className="ck-rd-detail-h">{t('r11.rd.filesH')}</h3>
         <ul className="ck-rd-detail-files">
           {rows.map((row) => {
             const word = STATUS_WORD[row.status];
@@ -224,31 +230,31 @@ export function ReviewDetail({ item, api = reviewDeskApi, onOpenPane, onKeep, on
                   aria-pressed={row.path === current}
                   onClick={() => setPicked(row.path)}
                 >
-                  <span className="ck-rd-detail-mark" aria-label={word}>
+                  <span className="ck-rd-detail-mark" aria-label={t(`review.status${row.status}`)}>
                     {statusMark(word)}
                   </span>
                   <span className="ck-rd-detail-path">{row.path}</span>
-                  <span className="ck-rd-detail-counts">{row.binary ? 'binary' : countsText(row.added, row.deleted)}</span>
+                  <span className="ck-rd-detail-counts">{row.binary ? t('review.binary') : unreadable ? t('r11.rd.unknownCount') : countsText(row.added, row.deleted)}</span>
                 </button>
               </li>
             );
           })}
         </ul>
         {item.files.total > rows.length && (
-          <p className="ck-rd-detail-why">{`${item.files.total - rows.length} more files are not listed.`}</p>
+          <p className="ck-rd-detail-why">{t('r11.rd.moreFiles', { n: item.files.total - rows.length })}</p>
         )}
       </section>
 
-      <section className="ck-rd-detail-block" aria-label="Diff">
-        <h3 className="ck-rd-detail-h">{current ? `Diff · ${current}` : 'Diff'}</h3>
-        {!detail && !loadError && <p className="ck-rd-detail-why">Loading the diff.</p>}
+      <section className="ck-rd-detail-block" aria-label={t('r11.rd.diffH')}>
+        <h3 className="ck-rd-detail-h">{current ? t('r11.rd.diffOf', { path: current }) : t('r11.rd.diffH')}</h3>
+        {!detail && !loadError && <p className="ck-rd-detail-why">{t('r11.rd.diffLoading')}</p>}
         {detail && lines === null && (
           <p className="ck-rd-detail-why">
-            {currentRow?.binary ? 'A binary file. No text diff.' : 'No text diff for this file.'}
+            {currentRow?.binary ? t('r11.rd.diffBinary') : t('r11.rd.diffNone')}
           </p>
         )}
         {lines && (
-          <pre className="ck-rd-detail-diff" aria-label="Diff, plain text, secrets masked">
+          <pre className="ck-rd-detail-diff" aria-label={t('r11.rd.diffAria')}>
             {lines.map((line, i) => (
               <span key={i} className={`ck-rd-detail-line ck-rd-detail-${lineKind(line)}`}>
                 {line || ' '}
@@ -256,7 +262,7 @@ export function ReviewDetail({ item, api = reviewDeskApi, onOpenPane, onKeep, on
             ))}
           </pre>
         )}
-        {detail?.patchTruncated && <p className="ck-rd-detail-why">The diff is cut. Open the pane to see all of it.</p>}
+        {detail?.patchTruncated && <p className="ck-rd-detail-why">{t('r11.rd.diffCut')}</p>}
       </section>
 
       <div className="ck-rd-detail-actions">
@@ -274,10 +280,10 @@ export function ReviewDetail({ item, api = reviewDeskApi, onOpenPane, onKeep, on
           type="button"
           className="ck-btn ck-btn--secondary ck-btn--sm"
           disabled={fixOff}
-          title={fixOff ? item.fixWhyNot ?? NO_PANE_TEXT : undefined}
+          title={fixOff ? item.fixWhyNot ?? noPane : undefined}
           onClick={() => setSheet('fix')}
         >
-          Ask to fix
+          {t('r11.rd.fix')}
           <kbd className="ck-rd-detail-key">F</kbd>
         </button>
         <button
@@ -287,21 +293,21 @@ export function ReviewDetail({ item, api = reviewDeskApi, onOpenPane, onKeep, on
           title={throwOff ? item.throw.why ?? undefined : undefined}
           onClick={() => onThrow?.(item)}
         >
-          Throw away
+          {t('r11.rd.throw')}
           <kbd className="ck-rd-detail-key">X</kbd>
         </button>
         <button
           type="button"
           className="ck-btn ck-btn--plain ck-btn--sm"
           disabled={openOff}
-          title={openOff ? NO_PANE_TEXT : undefined}
+          title={openOff ? noPane : undefined}
           onClick={() => item.paneId && onOpenPane?.(item.paneId)}
         >
           {t('review.openAgent')}
           <kbd className="ck-rd-detail-key">P</kbd>
         </button>
       </div>
-      {looked && <p className="ck-rd-detail-why">{LOOKED_TEXT}</p>}
+      {looked && <p className="ck-rd-detail-why">{t('r11.rd.looked')}{t('r11.rd.undoZ')}</p>}
       {actError && <p className="ck-rd-sheet-error" role="alert">{actError}</p>}
       {whys.map((text) => (
         <p key={text} className="ck-rd-detail-why">

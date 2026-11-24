@@ -3,7 +3,8 @@
 // where there is no Tauri backend (tests, the harness), so callers fall back to the local derivation.
 import { useEffect, useState } from 'react';
 import { invoke } from '@tauri-apps/api/core';
-import { listen, type UnlistenFn } from '@tauri-apps/api/event';
+import { type UnlistenFn } from '@tauri-apps/api/event';
+import { listen } from '../lib/events';
 import { isTauri } from '../lib/cockpit-api';
 import { newerSnapshot, type AttentionSnapshot } from '../lib/attention';
 

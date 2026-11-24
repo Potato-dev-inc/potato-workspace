@@ -19,6 +19,8 @@ use std::time::Duration;
 use serde_json::{json, Value};
 use tokio::io::AsyncReadExt;
 
+use super::activity::Kind;
+use super::redial::{self, Why};
 use super::route::RoutePref;
 use super::web::{self, WebCall, WebStore};
 use super::wire::{self, Head, ReplyHead};
@@ -119,6 +121,10 @@ impl Default for Timeouts {
 
 type Changed = Arc<dyn Fn() + Send + Sync>;
 type EventSink = Arc<dyn Fn(&str, &str) + Send + Sync>;
+/// Looks a paired PC up on the account again: the relay the account names for it, if any. Blocking.
+pub type Refresher = Arc<dyn Fn(&NodeId) -> Option<String> + Send + Sync>;
+/// Says in the device activity log why a try failed (`Kind` is a closed list; the page has a sentence for each).
+pub type DialLog = Arc<dyn Fn(&NodeId, Kind) + Send + Sync>;
 
 #[derive(Default)]
 struct Slot {
@@ -127,6 +133,8 @@ struct Slot {
     /// The link for files (`pm/files/1`), kept apart from the agents link.
     files: tokio::sync::Mutex<Option<Arc<dyn Link>>>,
     status: Mutex<Status>,
+    /// Dials that failed in a row; any working dial resets it.
+    fails: Mutex<u32>,
     health: Mutex<Health>,
     /// The device's room left from its last `hello`, and when (unix seconds) it was told.
     room: Mutex<(Vec<crate::usage::room::Room>, Option<u64>)>,
@@ -151,6 +159,8 @@ pub struct Client {
     web_call: Arc<dyn WebCall>,
     /// When the web address was last asked for, per device (asked at most once a minute).
     web_asked: Mutex<HashMap<NodeId, u64>>,
+    refresher: Mutex<Option<Refresher>>,
+    dial_log: Mutex<Option<DialLog>>,
 }
 
 fn node_hex(node: &NodeId) -> String {
@@ -171,7 +181,23 @@ impl Client {
             web_store,
             web_call,
             web_asked: Mutex::new(HashMap::new()),
+            refresher: Mutex::new(None),
+            dial_log: Mutex::new(None),
         })
+    }
+
+    pub fn set_refresher(&self, f: Refresher) {
+        *self.refresher.lock().unwrap_or_else(|p| p.into_inner()) = Some(f);
+    }
+
+    pub fn set_dial_log(&self, f: DialLog) {
+        *self.dial_log.lock().unwrap_or_else(|p| p.into_inner()) = Some(f);
+    }
+
+    fn log_dial(&self, node: &NodeId, kind: Kind) {
+        if let Some(f) = self.dial_log.lock().unwrap_or_else(|p| p.into_inner()).clone() {
+            f(node, kind);
+        }
     }
 
     pub fn set_changed(&self, f: Changed) {
@@ -377,23 +403,62 @@ impl Client {
             }
             *guard = None;
         }
-        let mut peer = self.p2p.addrs().peer(*node);
-        if self.route_for(node) == RoutePref::Own {
-            // "My own route only": no outside relay is ever used.
-            peer.relay = None;
-        }
-        let dialed = tokio::time::timeout(self.timeouts.dial, self.p2p.dial(&peer, capability::AGENTS_REMOTE)).await;
-        match dialed {
-            Err(_) | Ok(Err(_)) => {
-                self.mark_gone(node);
-                Err(AskError::Offline)
+        // After a failure that asked for a fresh look at the account, one more try at once with what it found.
+        for _ in 0..2 {
+            let mut peer = self.p2p.addrs().peer(*node);
+            if self.route_for(node) == RoutePref::Own {
+                // "My own route only": no outside relay is ever used.
+                peer.relay = None;
             }
-            Ok(Ok(link)) => {
-                *guard = Some(link.clone());
-                self.watch_closed(*node, slot.clone(), link.clone());
-                Ok(link)
+            match tokio::time::timeout(self.timeouts.dial, self.p2p.dial(&peer, capability::AGENTS_REMOTE)).await {
+                Ok(Ok(link)) => {
+                    *slot.fails.lock().unwrap_or_else(|p| p.into_inner()) = 0;
+                    *guard = Some(link.clone());
+                    self.watch_closed(*node, slot.clone(), link.clone());
+                    return Ok(link);
+                }
+                failed => {
+                    self.mark_gone(node);
+                    let error = match failed {
+                        Ok(Err(e)) => Some(e.to_string()),
+                        _ => None,
+                    };
+                    if !self.dial_failed(node, &slot, error.as_deref()).await {
+                        break;
+                    }
+                }
             }
         }
+        Err(AskError::Offline)
+    }
+
+    /// A dial failed: count it, say why, and on every few failures look the PC up on the account again (its saved addresses may be
+    /// stale for good). True when something new was found and another try is worth making now.
+    async fn dial_failed(&self, node: &NodeId, slot: &Slot, error: Option<&str>) -> bool {
+        let fails = {
+            let mut f = slot.fails.lock().unwrap_or_else(|p| p.into_inner());
+            *f = f.saturating_add(1);
+            *f
+        };
+        self.log_dial(node, if redial::why(error) == Why::NoAnswer { Kind::NoAnswer } else { Kind::CouldNotConnect });
+        if !redial::refresh_due(fails) {
+            return false;
+        }
+        let Some(refresher) = self.refresher.lock().unwrap_or_else(|p| p.into_inner()).clone() else { return false };
+        let id = *node;
+        let relay = tokio::task::spawn_blocking(move || refresher(&id)).await.ok().flatten();
+        let saved = self.p2p.addrs().peer(*node);
+        let was = redial::Hints { direct: saved.direct, relay: saved.relay };
+        let now = redial::refreshed(&was, relay.as_deref());
+        if now == was {
+            return false;
+        }
+        self.p2p.addrs().forget_direct(node);
+        if let Some(r) = &now.relay {
+            self.p2p.addrs().remember_relay(*node, r);
+        }
+        self.log_dial(node, Kind::Refreshed);
+        true
     }
 
     /// The open link for files to a device, dialing when there is none. It does not change the device's state words:
@@ -612,7 +677,7 @@ impl Client {
         if !wire::method_ok(method) || !wire::target_ok(target) {
             return Err(AskError::Other("That is not a request a device can send.".into()));
         }
-        if body.len() > wire::BODY_MAX {
+        if body.len() > wire::body_max(method, target) {
             return Err(AskError::Other("That request is too large.".into()));
         }
         match self.exchange(node, Head::request(method, target, body.len()), body).await {
@@ -643,12 +708,13 @@ impl Client {
     }
 
     async fn event_loop(self: Arc<Self>, node: NodeId) {
-        let mut pause = Duration::from_millis(500);
+        let mut misses = 0u32;
         let mut cursor: Option<u64> = None;
         loop {
             let ended_after_data = self.read_events_once(&node, &mut cursor).await;
-            pause = if ended_after_data { Duration::from_millis(500) } else { (pause * 2).min(Duration::from_secs(15)) };
-            tokio::time::sleep(pause).await;
+            misses = if ended_after_data { 0 } else { misses.saturating_add(1) };
+            // A PC that stays away is tried again every 30 seconds at most, for as long as it stays away.
+            tokio::time::sleep(redial::pause(misses)).await;
         }
     }
 

@@ -11,6 +11,7 @@ import type { BridgeClient, TeamCardsReply } from '../../lib/bridge-types';
 import { ago } from '../../lib/mobile-agent-tabs';
 import { cardActions, cardMeta, cardTitle, friendlyBranch, jobSub, jobTitle, type TeamCard, type TeamJob } from '../../lib/team';
 import { ConfirmSheet } from './MobileSheet';
+import { t } from '../../i18n';
 
 /** The bridge is polled; there is no team event on the phone's stream yet. */
 const POLL_MS = 15_000;
@@ -101,11 +102,11 @@ export function TeamGroup({ bridge, bridgeReady }: { bridge: BridgeClient; bridg
       <li key={`job-${job.id}`} className="ph-team" data-job-id={job.id}>
         <div className="ph-team-title">{jobTitle(job)}</div>
         {sub && <div className="ph-team-meta">{sub}</div>}
-        {job.state === 'needs_start' && <div className="ph-team-meta">Start it on your computer, where you can watch it.</div>}
+        {job.state === 'needs_start' && <div className="ph-team-meta">{t('r21.sw.startItOnYour')}</div>}
         {job.state === 'ready' && can.act && bridge.teamApply && bridge.teamDiscard && (
           <div className="ph-team-btns">
             <button type="button" className="ph-btn ph-btn--primary" disabled={busy} onClick={() => setConfirm({ kind: 'apply', job })}>
-              Apply to my branch
+              {t('r21.sw.applyToMyBranch')}
             </button>
             <button type="button" className="ph-btn" disabled={busy} onClick={() => void run(() => bridge.teamDiscard!(job.id))}>
               Discard
@@ -158,7 +159,7 @@ export function TeamGroup({ bridge, bridgeReady }: { bridge: BridgeClient; bridg
                 disabled={busy}
                 onClick={() => setConfirm({ kind: 'queue', card, paneId: pane.paneId, agent: pane.label })}
               >
-                Queue my agent
+                {t('r21.sw.queueMyAgent')}
               </button>
             )}
             {showDismiss && (
@@ -194,13 +195,13 @@ export function TeamGroup({ bridge, bridgeReady }: { bridge: BridgeClient; bridg
         </p>
       )}
       {error && <p className="ph-foot ph-foot--err">{error}</p>}
-      {reply.missing > 0 && <p className="ph-foot">Some team updates may be missing.</p>}
+      {reply.missing > 0 && <p className="ph-foot">{t('r21.sw.someTeamUpdatesMay')}</p>}
       {!can.act && !can.dismiss && (
         <p className="ph-foot">This phone can see team updates but not act on them. Change it on your PC: Connect › Phone.</p>
       )}
       {confirm?.kind === 'queue' && (
         <ConfirmSheet
-          title="Queue my agent"
+          title={t('r21.sw.queueMyAgent')}
           message={`Queue ${confirm.agent} to merge ${friendlyBranch(confirm.card.event.subject.branch ?? 'their')} work into ${friendlyBranch(confirm.card.local?.currentBranch ?? 'your branch')}? It works in a separate copy and asks you before anything lands.`}
           confirmLabel="Queue it"
           onConfirm={doConfirm}
@@ -209,7 +210,7 @@ export function TeamGroup({ bridge, bridgeReady }: { bridge: BridgeClient; bridg
       )}
       {confirm?.kind === 'apply' && (
         <ConfirmSheet
-          title="Apply to my branch"
+          title={t('r21.sw.applyToMyBranch')}
           message={`Fast-forward ${confirm.job.into}? Nothing is pushed.`}
           confirmLabel="Apply"
           onConfirm={doConfirm}

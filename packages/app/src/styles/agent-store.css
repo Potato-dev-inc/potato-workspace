@@ -168,3 +168,16 @@
 .cockpit .ck-store-empty {
   margin-top: 24px;
 }
+
+/* Loading: grey card shapes in the grid's own slots, so the page does not look empty or stuck. */
+.cockpit .ck-store-skel {
+  height: 110px;
+  border-radius: 12px;
+  background: var(--label-4);
+  animation: ck-chat-pulse 1.6s ease-in-out infinite;
+}
+@media (prefers-reduced-motion: reduce) {
+  .cockpit .ck-store-skel {
+    animation: none;
+  }
+}

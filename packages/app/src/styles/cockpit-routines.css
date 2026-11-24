@@ -184,3 +184,33 @@
 .cockpit .ck-acp-result-then {
   margin-left: auto;
 }
+
+/* The three choices in a narrow column (and in longer words): each may take two lines instead of being cut off. */
+.cockpit .ck-routines-then .ck-seg-opt {
+  height: auto;
+  min-height: 24px;
+  min-width: 0;
+  padding-block: 3px;
+  white-space: normal;
+  line-height: 1.25;
+  /* Chinese has no spaces: keep each word whole (no cut in the middle of a word); a word wider than the column ends in … and the title says all of it. */
+  word-break: keep-all;
+  overflow-wrap: normal;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* Then…: the three choices stack (the grid's fixed 28 px height cut their words), and a tall form scrolls instead of running past the window. */
+.cockpit .ck-routines-then {
+  max-height: min(70vh, 520px);
+  overflow-y: auto;
+}
+.cockpit .ck-routines-then .ck-seg {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  height: auto;
+}
+.cockpit .ck-routines-then .ck-seg-opt {
+  text-align: start;
+  text-overflow: clip;
+}

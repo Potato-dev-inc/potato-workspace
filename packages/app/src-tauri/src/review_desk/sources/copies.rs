@@ -142,7 +142,7 @@ fn facts_of(input: &CopyInput, is_mission: bool, clean: &Clean) -> Facts {
             .files
             .iter()
             .map(|file| FileRow {
-                path: tidy(&file.path, clean),
+                path: tidy_path(&file.path, clean),
                 status: status_of(&file.status),
                 added: file.additions,
                 deleted: file.deletions,
@@ -173,8 +173,8 @@ fn facts_of(input: &CopyInput, is_mission: bool, clean: &Clean) -> Facts {
         weakened,
         checks,
         // Found on the raw paths (a cleaned name could hide the pattern), then shown cleaned.
-        secret_files: secret_paths(&raw_paths).iter().map(|path| tidy(path, clean)).collect(),
-        ci_files: ci_paths(&raw_paths).iter().map(|path| tidy(path, clean)).collect(),
+        secret_files: secret_paths(&raw_paths).iter().map(|path| tidy_path(path, clean)).collect(),
+        ci_files: ci_paths(&raw_paths).iter().map(|path| tidy_path(path, clean)).collect(),
         secret_lines,
         home_lines,
         lines_scanned,
@@ -223,7 +223,7 @@ fn checks_of(results: &[(String, bool)], clean: &Clean) -> Option<CheckFacts> {
 }
 
 fn cleaned_lines(lines: &[(String, u32)], clean: &Clean) -> Vec<(String, u32)> {
-    lines.iter().map(|(path, line)| (tidy(path, clean), *line)).collect()
+    lines.iter().map(|(path, line)| (tidy_path(path, clean), *line)).collect()
 }
 
 /// `added` -> `A`, `deleted` -> `D`, anything else (`modified`) -> `M`.
@@ -238,6 +238,11 @@ pub(crate) fn status_of(raw: &str) -> char {
 /// Cleans a string for display and strips control and bidi characters.
 pub(crate) fn tidy(raw: &str, clean: &Clean) -> String {
     strip_controls(&clean.apply(raw))
+}
+
+/// Like [`tidy`], for a file path.
+pub(crate) fn tidy_path(raw: &str, clean: &Clean) -> String {
+    strip_controls(&clean.apply_path(raw))
 }
 
 fn count(n: usize) -> u32 {
@@ -255,12 +260,12 @@ mod tests {
 
     /// Cleaning that changes nothing.
     fn plain() -> Clean {
-        Clean { text: Box::new(|s: &str| s.to_string()) }
+        Clean { text: Box::new(|s: &str| s.to_string()), path: None }
     }
 
     /// Marker cleaning: wraps every cleaned string in brackets so tests can see it ran.
     fn marker() -> Clean {
-        Clean { text: Box::new(|s: &str| format!("[{s}]")) }
+        Clean { text: Box::new(|s: &str| format!("[{s}]")), path: None }
     }
 
     fn list_item(handle: &str, state: &str) -> ListItem {
@@ -442,7 +447,7 @@ mod tests {
 
     #[test]
     fn secret_in_the_task_is_masked_before_it_becomes_the_title() {
-        let mask = Clean { text: Box::new(|s: &str| s.replace("sk-TEST", "[masked]")) };
+        let mask = Clean { text: Box::new(|s: &str| s.replace("sk-TEST", "[masked]")), path: None };
         let mut input = copy_input("h-secret");
         input.op = Some(op("Use key sk-TEST for the upload", Vec::new()));
         let items = from_copies(&[input], &HashSet::new(), &mask);

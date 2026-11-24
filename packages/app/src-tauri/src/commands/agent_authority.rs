@@ -9,7 +9,7 @@ const LABEL_ASK: &str = "Ask me before an agent controls a pane it didn't start"
 const LABEL_HELPERS: &str = "Ask me before other tools start agents";
 const LABEL_MERGE: &str = "Let agents merge separate copies";
 
-#[tauri::command]
+#[tauri::command(async)]
 pub fn agent_authority_get() -> Config {
     config::current()
 }
@@ -35,7 +35,7 @@ pub fn agent_authority_set(
 }
 
 /// The newest lines of the audit log, newest first.
-#[tauri::command]
+#[tauri::command(async)]
 pub fn audit_recent(limit: Option<usize>) -> Vec<Entry> {
     audit::global().recent(limit.unwrap_or(50).clamp(1, 500))
 }

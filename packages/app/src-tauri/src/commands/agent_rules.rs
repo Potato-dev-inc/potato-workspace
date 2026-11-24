@@ -103,7 +103,7 @@ pub fn pane_set_force_yes(pane_id: String, on: bool) -> bool {
 }
 
 /// Whether Force yes is on for a terminal pane now (the pane's own switch, else what its agent and folder start with).
-#[tauri::command]
+#[tauri::command(async)]
 pub fn pane_force_yes(pane_id: String, agent: String, cwd: String) -> bool {
     agent_rules::terminal::enabled(&pane_id, &agent, &cwd)
 }

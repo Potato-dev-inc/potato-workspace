@@ -1,7 +1,7 @@
 // Decides when the first-run welcome is on screen and keeps its few settings: shown once on a fresh
 // profile, shown again when asked (palette, Settings, from any window), closed for good by Finish or Skip.
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { listen } from '@tauri-apps/api/event';
+import { listen } from '../../lib/events';
 import { hasEverSpawned } from '../../lib/agent-health';
 import { loadSettings, patchSettings } from '../../lib/settings';
 import { firstRunApi, type FirstRunApi } from './first-run-api';

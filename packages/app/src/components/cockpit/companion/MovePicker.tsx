@@ -4,6 +4,7 @@
 import { useMemo, useState } from 'react';
 import type { CompanionAgentOption } from '../../../lib/companion';
 import { clockValue, nextClockMs, parseClock } from './model';
+import { t } from '../../../i18n';
 
 export interface MovePickerProps {
   /** The agent it is on now (a move to it is no move). */
@@ -44,7 +45,7 @@ export function MovePicker({ currentAgent, agents, initialAgent, defaultUntilMs,
         <div className="ck-companion-move-row">
           <label className="ck-companion-move-until">
             <span className="ck-caption">Until</span>
-            <input className="ck-companion-input" type="time" aria-label="Until (optional)" value={until} onChange={(e) => setUntil(e.target.value)} />
+            <input className="ck-companion-input" type="time" aria-label={t('r21.sw.untilOptional')} value={until} onChange={(e) => setUntil(e.target.value)} />
           </label>
           <button type="button" className="ck-btn ck-btn--sm ck-btn--primary" disabled={!canMove} onClick={() => onMove(agent, at ? nextClockMs(at, now()) : null)}>
             {submitLabel}

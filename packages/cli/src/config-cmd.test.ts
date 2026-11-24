@@ -52,6 +52,7 @@ const SETTINGS: Record<string, [string, unknown]> = {
   desktop_pet_size: ['string', 'medium'],
   desktop_pet_quiet: ['boolean', false],
   keep_awake_while_working: ['boolean', true],
+  jump_out_cards_enabled: ['boolean', true],
   helper_answers_enabled: ['boolean', true],
   early_versions_enabled: ['boolean', false],
 };

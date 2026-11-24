@@ -16,6 +16,7 @@ import {
 } from '../../../lib/uninstall';
 import type { RowDef, SettingsEnv } from '../model';
 import { Btn, Note, SettingRow } from '../settings-ui';
+import { t } from '../../../i18n';
 
 export const RESET_HINT = 'Put every setting back. Your agents and chats stay.';
 export const UNINSTALL_HINT = 'Remove Potato Workspace and all it added, as if never installed.';
@@ -43,8 +44,8 @@ export function ResetRow({ env, api = realUninstallApi }: { env?: Pick<SettingsE
       setDone(true);
       env?.markSaved();
     } catch (e) {
-      setError(`Not reset: ${errorText(e)}`);
-      env?.setError(`Not reset: ${errorText(e)}`);
+      setError(t('r12ui.dz.notReset', { why: errorText(e) }));
+      env?.setError(t('r12ui.dz.notReset', { why: errorText(e) }));
     } finally {
       setBusy(false);
     }
@@ -52,7 +53,7 @@ export function ResetRow({ env, api = realUninstallApi }: { env?: Pick<SettingsE
 
   return (
     <>
-      <SettingRow label="Reset settings" description={RESET_HINT}>
+      <SettingRow label={t('settings.row.reset-settings.label')} description={t('settings.row.reset-settings.hint')}>
         <Btn
           disabled={asking || busy}
           onClick={() => {
@@ -60,26 +61,26 @@ export function ResetRow({ env, api = realUninstallApi }: { env?: Pick<SettingsE
             setAsking(true);
           }}
         >
-          Reset…
+          {t('r12ui.dz.resetBtn')}
         </Btn>
       </SettingRow>
       {asking && (
-        <div className="st-row" role="group" aria-label="Confirm reset">
+        <div className="st-row" role="group" aria-label={t('r12ui.dz.confirmReset')}>
           <div className="st-label">
-            <span>Are you sure?</span>
-            <small>Reset all settings now?</small>
+            <span>{t('r12ui.dz.sure')}</span>
+            <small>{t('r12ui.dz.resetAsk')}</small>
           </div>
           <div className="st-control">
             <Btn onClick={() => setAsking(false)} disabled={busy}>
-              Cancel
+              {t('r12ui.dz.cancel')}
             </Btn>
             <Btn primary onClick={() => void reset()} disabled={busy}>
-              {busy ? 'Resetting…' : 'Reset settings'}
+              {busy ? t('r12ui.dz.resetting') : t('settings.row.reset-settings.label')}
             </Btn>
           </div>
         </div>
       )}
-      {done && <Note role="status">Settings reset. Agents and chats kept.</Note>}
+      {done && <Note role="status">{t('r12ui.dz.resetDone')}</Note>}
       {error && <Note role="alert">{error}</Note>}
     </>
   );
@@ -104,12 +105,12 @@ function GroupCard({ group, ticked, onToggle }: { group: UninstallGroup; ticked:
       </label>
       {group.items.length > 0 && (
         <details className="st-un-items">
-          <summary>Show what</summary>
+          <summary>{t('r12ui.dz.showWhat')}</summary>
           <ul>
             {shown.map((item, i) => (
               <li key={`${item.label}-${i}`}>{item.label}</li>
             ))}
-            {more > 0 && <li className="st-un-more">{`+ ${more} more`}</li>}
+            {more > 0 && <li className="st-un-more">{t('r12ui.dz.plusMore', { n: more })}</li>}
           </ul>
         </details>
       )}
@@ -148,7 +149,7 @@ function Flow({ api, allowed, plan, onClose }: { api: UninstallApi; allowed: { a
   const ticked = (id: string) => selection.groups.includes(id);
   const program = plan.groups.some((g) => g.id === 'program' && ticked('program'));
   const chatsGroup = plan.groups.some((g) => g.id === 'chats');
-  const chatsNote = selection.keepChats ? 'Your chats are saved to Documents first.' : chatsGroup && ticked('chats') ? 'Your chats will be deleted.' : 'Your chats stay where they are.';
+  const chatsNote = selection.keepChats ? t('r12ui.dz.chatsSaved') : chatsGroup && ticked('chats') ? t('r12ui.dz.chatsDeleted') : t('r12ui.dz.chatsStay');
   const canGo = typed.trim().toUpperCase() === CONFIRM_WORD && allowed.allowed;
 
   const total = events[0]?.total ?? 0;
@@ -158,8 +159,8 @@ function Flow({ api, allowed, plan, onClose }: { api: UninstallApi; allowed: { a
 
   return (
     <div className="st-un-flow">
-      <ol className="st-un-steps" aria-label="Uninstall steps">
-        {(['Check the list', 'Confirm', 'Remove'] as const).map((name, i) => {
+      <ol className="st-un-steps" aria-label={t('r12ui.dz.stepsLabel')}>
+        {([t('r12ui.dz.step1'), t('r12ui.dz.step2'), t('r12ui.dz.step3')] as const).map((name, i) => {
           const at = step === 'list' ? 1 : step === 'confirm' ? 2 : 3;
           return (
             <li key={name} className={i + 1 <= at ? 'is-on' : ''} aria-current={i + 1 === at ? 'step' : undefined}>
@@ -172,14 +173,14 @@ function Flow({ api, allowed, plan, onClose }: { api: UninstallApi; allowed: { a
 
       {step === 'list' && (
         <section>
-          <h3>Uninstall everything</h3>
-          <p className="st-un-lead">Here is everything we found. Untick what you want to keep.</p>
+          <h3>{t('settings.row.uninstall-everything.label')}</h3>
+          <p className="st-un-lead">{t('r12ui.dz.lead')}</p>
           <div className="st-un-group st-un-keepchats">
             <label className="st-un-grouphead">
-              <input type="checkbox" checked={selection.keepChats} onChange={(e) => setSelection((s) => ({ ...s, keepChats: e.target.checked }))} aria-label="Keep my chats" />
+              <input type="checkbox" checked={selection.keepChats} onChange={(e) => setSelection((s) => ({ ...s, keepChats: e.target.checked }))} aria-label={t('r12ui.dz.keepChats')} />
               <span className="st-un-grouptext">
-                <span className="st-un-title">Keep my chats</span>
-                <small>Saves your chats as one zip in Documents first.</small>
+                <span className="st-un-title">{t('r12ui.dz.keepChats')}</span>
+                <small>{t('r12ui.dz.keepChatsHint')}</small>
               </span>
             </label>
           </div>
@@ -190,8 +191,8 @@ function Flow({ api, allowed, plan, onClose }: { api: UninstallApi; allowed: { a
             <div className="st-un-group is-cant" data-testid="cant">
               <div className="st-un-grouphead">
                 <span className="st-un-grouptext">
-                  <span className="st-un-title">We can't remove these for you</span>
-                  <small>We'll show you how at the end.</small>
+                  <span className="st-un-title">{t('r12ui.dz.cantTitle')}</span>
+                  <small>{t('r12ui.dz.cantHint')}</small>
                 </span>
               </div>
               <ul className="st-un-cant">
@@ -202,9 +203,9 @@ function Flow({ api, allowed, plan, onClose }: { api: UninstallApi; allowed: { a
             </div>
           </div>
           <div className="st-un-foot">
-            <Btn onClick={onClose}>Cancel</Btn>
+            <Btn onClick={onClose}>{t('r12ui.dz.cancel')}</Btn>
             <Btn primary onClick={() => setStep('confirm')}>
-              Next
+              {t('r12ui.dz.next')}
             </Btn>
           </div>
         </section>
@@ -212,17 +213,17 @@ function Flow({ api, allowed, plan, onClose }: { api: UninstallApi; allowed: { a
 
       {step === 'confirm' && (
         <section>
-          <h3>Are you sure?</h3>
+          <h3>{t('r12ui.dz.sure')}</h3>
           <p className="st-un-lead" id="st-un-summary">
             {summaryLine(plan, selection)}
           </p>
           <ul className="st-un-notes">
-            <li>Your agents keep their own settings. We back them up first.</li>
-            {program && <li>Windows will ask you once to allow removing the program.</li>}
+            <li>{t('r12ui.dz.agentsKept')}</li>
+            {program && <li>{t('r12ui.dz.windowsAsks')}</li>}
             <li>{chatsNote}</li>
           </ul>
           <label htmlFor="st-un-type" className="st-un-typelabel">
-            Type <b>{CONFIRM_WORD}</b> to continue
+            {t('r12ui.dz.typeA')}<b>{CONFIRM_WORD}</b>{t('r12ui.dz.typeB')}
           </label>
           <div className="st-un-confirmbox">
             <input
@@ -238,25 +239,25 @@ function Flow({ api, allowed, plan, onClose }: { api: UninstallApi; allowed: { a
               }}
             />
             <Btn primary disabled={!canGo} onClick={() => void start()}>
-              {allowed.allowed ? 'Uninstall everything' : (allowed.reason ?? NOT_IN_DEV_TEXT)}
+              {allowed.allowed ? t('settings.row.uninstall-everything.label') : (allowed.reason ?? NOT_IN_DEV_TEXT)}
             </Btn>
           </div>
           {!allowed.allowed && <Note role="status">{allowed.reason ?? NOT_IN_DEV_TEXT}</Note>}
           <div className="st-un-foot">
-            <Btn onClick={() => setStep('list')}>Back</Btn>
+            <Btn onClick={() => setStep('list')}>{t('r12ui.dz.back')}</Btn>
           </div>
         </section>
       )}
 
       {step === 'run' && (
         <section>
-          <h3>{finished || everyStepDone ? 'Potato Workspace is gone' : failure ? 'Stopped' : 'Removing Potato Workspace…'}</h3>
+          <h3>{finished || everyStepDone ? t('r12ui.dz.gone') : failure ? t('r12ui.dz.stopped') : t('r12ui.dz.removing')}</h3>
           <p className="st-un-lead">
             {failure
               ? failure
               : finished || everyStepDone
-                ? 'Everything we added is removed. Thanks for trying it.'
-                : 'Please keep your PC on. This takes about a minute.'}
+                ? t('r12ui.dz.goneLead')
+                : t('r12ui.dz.keepOn')}
           </p>
           <div className="st-un-bar" role="progressbar" aria-valuemin={0} aria-valuemax={100} aria-valuenow={percent}>
             <i style={{ width: `${percent}%` }} />
@@ -274,7 +275,7 @@ function Flow({ api, allowed, plan, onClose }: { api: UninstallApi; allowed: { a
           </ul>
           {(finished || everyStepDone || failure) && (
             <div className="st-un-left">
-              <div className="st-un-title">A few things we can't remove for you</div>
+              <div className="st-un-title">{t('r12ui.dz.fewCant')}</div>
               <ul>
                 {plan.cant.map((c) => (
                   <li key={c.title}>
@@ -282,12 +283,12 @@ function Flow({ api, allowed, plan, onClose }: { api: UninstallApi; allowed: { a
                   </li>
                 ))}
               </ul>
-              <small>The full list is saved in a text file.</small>
+              <small>{t('r12ui.dz.listSaved')}</small>
             </div>
           )}
           {failure && (
             <div className="st-un-foot">
-              <Btn onClick={onClose}>Close</Btn>
+              <Btn onClick={onClose}>{t('r12ui.dz.close')}</Btn>
             </div>
           )}
         </section>
@@ -321,7 +322,7 @@ export function UninstallRow({ api = realUninstallApi }: { api?: UninstallApi })
       setPlan(await api.plan());
       setOpen(true);
     } catch (e) {
-      setError(`Could not make the list: ${errorText(e)}`);
+      setError(t('r12ui.dz.noList', { why: errorText(e) }));
     } finally {
       setBusy(false);
     }
@@ -329,9 +330,9 @@ export function UninstallRow({ api = realUninstallApi }: { api?: UninstallApi })
 
   return (
     <>
-      <SettingRow label="Uninstall everything" description={UNINSTALL_HINT}>
+      <SettingRow label={t('settings.row.uninstall-everything.label')} description={t('settings.row.uninstall-everything.hint')}>
         <Btn primary={allowed?.allowed === true} disabled={busy || open} onClick={() => void openList()}>
-          {busy ? 'Looking…' : 'Uninstall…'}
+          {busy ? t('r12ui.dz.looking') : t('r12ui.dz.uninstallBtn')}
         </Btn>
       </SettingRow>
       {allowed && !allowed.allowed && !open && <Note role="status">{allowed.reason ?? NOT_IN_DEV_TEXT}</Note>}

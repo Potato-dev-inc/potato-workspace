@@ -135,11 +135,14 @@ impl World {
                 }
             }
         });
+        // The engine says "tell the windows" through the host seam: this harness is the host, and its listeners are the windows.
+        crate::tauri_host::install(app.clone());
+        crate::engine_hooks::install();
         crate::pane_activity::init(registry.clone(), app.clone());
         crate::loop_guard::init(app.clone());
         // The Agent Wizard's panes (guided capture, visible test) go through this app's pane registry.
         crate::tui::declarative::wizard::visible::host::install(Arc::new(
-            crate::tui::declarative::wizard::visible::registry_host::RegistryHost::new(registry.clone(), app.clone()),
+            crate::wizard_registry_host::RegistryHost::new(registry.clone(), app.clone()),
         ));
 
         World { registry, app, exe, script: Arc::new(Mutex::new(None)), serial: Mutex::new(()) }
@@ -363,7 +366,6 @@ impl Session {
     pub fn spawn_pane_in(&self, agent_type: &str, cwd: &Path) -> Result<String, String> {
         crate::pty::registry_spawn_pane(
             &self.world.registry,
-            &self.world.app,
             crate::pty::SpawnPaneArgs {
                 agent_type: agent_type.to_string(),
                 cwd: Some(cwd.to_string_lossy().into_owned()),
@@ -382,7 +384,6 @@ impl Session {
     pub fn type_as_user(&self, pane_id: &str, text: &str, enter: bool) -> Result<(), String> {
         crate::pty::registry_write_input(
             &self.world.registry,
-            &self.world.app,
             pane_id,
             text,
             enter,
@@ -568,7 +569,6 @@ impl Session {
         crate::pty::hidden::hide(&pane_id);
         let spawned = crate::pty::registry_spawn_pane(
             &self.world.registry,
-            &self.world.app,
             crate::pty::SpawnPaneArgs {
                 agent_type: agent_type.to_string(),
                 cwd: Some(self.project.to_string_lossy().into_owned()),
@@ -611,7 +611,7 @@ impl Session {
     /// What a lead's `press_key` does (the `/panes/{id}/key` route): the named key's bytes, written as the API.
     pub fn press_key(&self, pane_id: &str, key: &str) -> Result<(), String> {
         let seq = crate::pty::keys::sequence(key)?;
-        crate::pty::registry_write_input(&self.world.registry, &self.world.app, pane_id, &seq, false, false, None, crate::pty::WriteOrigin::Api)
+        crate::pty::registry_write_input(&self.world.registry, pane_id, &seq, false, false, None, crate::pty::WriteOrigin::Api)
     }
 
     /// Waits for the process tree: a test ends (and its folder goes) right after, with no orphans left.
@@ -621,7 +621,7 @@ impl Session {
 
     /// A pane outbox over this world's registry and app: the message box under the Chat tab.
     pub fn outbox(&self) -> crate::pane_outbox::Outbox {
-        let host = crate::pane_outbox::LiveHost::new(self.world.registry.clone(), self.world.app.clone());
+        let host = crate::pane_outbox::LiveHost::new(self.world.registry.clone());
         crate::pane_outbox::Outbox::new(Arc::new(host))
     }
 

@@ -12,10 +12,7 @@
 
 use super::*;
 
-/// The id a link device has in the rights mirror and as an event viewer.
-pub fn link_device_id(node_hex: &str) -> String {
-    format!("link:{node_hex}")
-}
+pub use pm_core::device_link::pclink::calls_files::link_device_id;
 
 /// Sets what the device may do now (`Some`), or withdraws everything (`None`): its open streams end on the next payload.
 pub fn set_link_caps(node_hex: &str, caps: Option<Caps>) {

@@ -37,6 +37,12 @@ export interface Host {
   notYet?: string;
   /** Why `cap` is off here, in one plain line, or null when it is on (always null on this PC). The control is drawn disabled with this as its reason. */
   denied?(cap: keyof Caps): string | null;
+  /** Who a shared reader of a chat is keyed by, when the host object is made again for a change that is not the link (a far PC's level): the same `link`, the same reader. Absent: the host itself. */
+  readonly link?: object;
+  /** A far chat that ended while its PC was off: it shows what this PC last held and asks nothing of the far PC (no feed to open, nothing to send). */
+  readonly ended?: boolean;
+  /** Why this PC may not turn Force yes ON here (that PC does not count this one as its person's own), in one plain line; null when it may or the PC does not say. Absent on this PC. */
+  forceYesDenied?(): Promise<string | null>;
 }
 
 // ---- The wire shape of one far call (the far side is `pclink/calls.rs`; keep both in step) ----

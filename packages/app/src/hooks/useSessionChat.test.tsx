@@ -14,6 +14,7 @@ const listen = vi.fn(async (event: string, cb: (e: { payload: unknown }) => void
 vi.mock('@tauri-apps/api/event', () => ({ listen: (...a: unknown[]) => listen(...(a as Parameters<typeof listen>)) }));
 vi.mock('@tauri-apps/api/core', () => ({ invoke: (...a: unknown[]) => invoke(...a) }));
 
+import { chatTuning } from './chatTuning';
 import { CHAT_OPEN_STAGES } from '../lib/chatTiming';
 import { useSessionChat, type SessionChatHook } from './useSessionChat';
 
@@ -113,42 +114,70 @@ describe('useSessionChat under StrictMode', () => {
   });
 });
 
-describe('useSessionChat surfaces', () => {
-  it('two views of one pane name themselves apart, and each closes only its own hold', async () => {
-    const calls: Array<{ cmd: string; surface: unknown }> = [];
-    invoke.mockImplementation(async (cmd: string, args?: { surface?: unknown }) => {
-      calls.push({ cmd, surface: args?.surface });
+describe('useSessionChat shared reader', () => {
+  const track = () => {
+    const calls: Array<{ cmd: string; surface: unknown; paneId?: unknown }> = [];
+    invoke.mockImplementation(async (cmd: string, args?: { surface?: unknown; paneId?: unknown }) => {
+      calls.push({ cmd, surface: args?.surface, paneId: args?.paneId });
       return cmd === 'session_chat_open' ? { available: true, reason: null, items: [] } : undefined;
     });
-    function Two({ second }: { second: boolean }) {
-      useSessionChat('p1', true);
-      return second ? <Second /> : null;
-    }
-    function Second() {
-      useSessionChat('p1', true);
-      return null;
-    }
+    return calls;
+  };
+  function Two({ second }: { second: boolean }) {
+    useSessionChat('p1', true);
+    return second ? <Second /> : null;
+  }
+  function Second() {
+    useSessionChat('p1', true);
+    return null;
+  }
+
+  it('two views of one pane share one open, one set of listens, and one close when the last leaves', async () => {
+    const calls = track();
     act(() => root.render(<Two second />));
     await flush();
-    const opens = calls.filter((c) => c.cmd === 'session_chat_open');
-    expect(opens).toHaveLength(2);
-    expect(typeof opens[0]!.surface).toBe('string');
-    expect(opens[0]!.surface).not.toBe(opens[1]!.surface);
-
-    // One view goes away: it closes under its own name, the other keeps its hold.
+    expect(calls.filter((c) => c.cmd === 'session_chat_open')).toHaveLength(1);
+    expect(listen.mock.calls.filter((c) => c[0] === 'session-chat-items')).toHaveLength(1);
     act(() => root.render(<Two second={false} />));
     await flush();
-    const closes = calls.filter((c) => c.cmd === 'session_chat_close');
-    expect(closes).toHaveLength(1);
-    const surfaces = opens.map((c) => c.surface);
-    expect(surfaces).toContain(closes[0]!.surface);
-
-    // The other view closes under its own name when it goes.
+    expect(calls.filter((c) => c.cmd === 'session_chat_close')).toHaveLength(0);
     act(() => root.render(<div />));
     await flush();
-    const all = calls.filter((c) => c.cmd === 'session_chat_close').map((c) => c.surface);
-    expect(all).toHaveLength(2);
-    expect(new Set(all)).toEqual(new Set(surfaces));
+    const open = calls.find((c) => c.cmd === 'session_chat_open')!;
+    expect(calls.filter((c) => c.cmd === 'session_chat_close')).toEqual([expect.objectContaining({ cmd: 'session_chat_close', surface: open.surface })]);
+  });
+
+  it('a view that comes back inside the grace reuses the open reader and asks nothing again', async () => {
+    chatTuning.graceMs = 60_000;
+    try {
+      const calls = track();
+      act(() => root.render(<Probe paneId="p1" />));
+      await flush();
+      act(() => root.render(<div />));
+      act(() => root.render(<Probe paneId="p1" />));
+      await flush();
+      expect(calls.map((c) => c.cmd)).toEqual(['session_chat_open']);
+    } finally {
+      chatTuning.graceMs = 0;
+    }
+  });
+
+  it('a chat passed over inside the settle time never opens', async () => {
+    chatTuning.settleMs = 50;
+    try {
+      const calls = track();
+      act(() => root.render(<Probe paneId="p1" />));
+      act(() => root.render(<Probe paneId="p2" />));
+      act(() => root.render(<Probe paneId="p3" />));
+      await act(async () => {
+        await new Promise((r) => setTimeout(r, 120));
+      });
+      const opened = calls.filter((c) => c.cmd === 'session_chat_open').map((c) => c.paneId);
+      expect(opened).toContain('p3');
+      expect(opened).not.toContain('p2');
+    } finally {
+      chatTuning.settleMs = 0;
+    }
   });
 });
 

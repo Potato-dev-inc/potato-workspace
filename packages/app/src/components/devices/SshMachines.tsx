@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useState } from 'react';
 import { useT } from '../../i18n';
 import { errorSentence } from '../../lib/sayError';
-import { checkLines, sshApi, sshStateSentence, type SshApi, type SshCheck, type SshHost } from '../../lib/ssh';
+import { checkLines, setupSentence, sshApi, sshStateSentence, type SshApi, type SshCheck, type SshHost } from '../../lib/ssh';
 import '../../styles/devices.css';
 
 export function SshMachines({ api = sshApi, refreshKey = 0 }: { api?: SshApi; refreshKey?: number }) {
@@ -23,6 +23,17 @@ export function SshMachines({ api = sshApi, refreshKey = 0 }: { api?: SshApi; re
     api
       .checkSaved(id)
       .then((c) => setChecks((m) => ({ ...m, [id]: c })))
+      .catch((e: unknown) => setChecks((m) => ({ ...m, [id]: errorSentence(e) })))
+      .finally(() => {
+        setBusy(null);
+        load();
+      });
+  };
+  const update = (id: string) => {
+    setBusy(id);
+    api
+      .update(id)
+      .then((r) => setChecks((m) => ({ ...m, [id]: r.ok ? (r.alreadyCurrent ? t('devices.ssh.upToDate') : t('devices.ssh.updated')) : setupSentence(r.failure!) })))
       .catch((e: unknown) => setChecks((m) => ({ ...m, [id]: errorSentence(e) })))
       .finally(() => {
         setBusy(null);
@@ -59,6 +70,11 @@ export function SshMachines({ api = sshApi, refreshKey = 0 }: { api?: SshApi; re
                   <button type="button" className="dev-btn" disabled={busy !== null} onClick={() => again(h.id)} data-testid={`ssh-again-${h.id}`}>
                     {busy === h.id ? t('devices.ssh.checking') : t('devices.ssh.checkAgain')}
                   </button>
+                  {h.setUp && (
+                    <button type="button" className="dev-btn" disabled={busy !== null} onClick={() => update(h.id)} data-testid={`ssh-update-${h.id}`}>
+                      {busy === h.id ? t('devices.ssh.updating') : t('devices.ssh.update')}
+                    </button>
+                  )}
                   <button type="button" className="dev-btn" onClick={() => remove(h.id)} data-testid={`ssh-remove-${h.id}`}>
                     {t('devices.ssh.remove')}
                   </button>

@@ -1,7 +1,7 @@
 // The small controls on the footer line of the message box: a pop-up menu (one pick from a list) and a compact
 // segmented switch (a few short choices side by side). Both are keyboard friendly: arrows move, Enter picks, Esc
 // closes and gives the focus back. Generic: they know nothing about which setting they show.
-import { useEffect, useId, useRef, useState, type KeyboardEvent } from 'react';
+import { useEffect, useId, useLayoutEffect, useRef, useState, type KeyboardEvent } from 'react';
 import '../../styles/chat-input-card.css';
 import { useDismissable } from '../../hooks/useDismissable';
 import { useT } from '../../i18n';
@@ -90,6 +90,22 @@ export function ChipMenu({ chipId, label, value, choices: allChoices, disabled =
     setActive(Math.max(0, allChoices.findIndex((c) => c.value === value)));
     setOpen(true);
   };
+  // Keep the list inside the window: slide it left when it runs past the right edge, drop it below the pill when there is no room above.
+  useLayoutEffect(() => {
+    const el = list.current;
+    if (!open || !el) return;
+    el.style.left = '';
+    el.style.bottom = '';
+    el.style.top = '';
+    const r = el.getBoundingClientRect();
+    const view = document.documentElement.clientWidth;
+    if (r.right > view - 8) el.style.left = `${Math.min(0, view - 8 - r.right)}px`;
+    if (r.left < 8 && r.right <= view - 8) el.style.left = `${8 - r.left}px`;
+    if (r.top < 8) {
+      el.style.bottom = 'auto';
+      el.style.top = 'calc(100% + 8px)';
+    }
+  }, [open, choices.length]);
   // The list takes the focus while it is open, so the arrows work at once.
   useEffect(() => {
     if (open) (searchable ? box.current : list.current)?.focus();

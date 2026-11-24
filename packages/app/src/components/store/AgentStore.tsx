@@ -2,8 +2,10 @@
 // The grid only reads the list (agentStoreApi.list) and hands a card's button to onOpenAgent.
 import { errorSentence } from '../../lib/sayError';
 import { useCallback, useEffect, useMemo, useState } from 'react';
+import { t } from '../../i18n';
 import { agentStoreApi, type AgentStoreApi, type StoreCard } from '../../lib/agent-store';
 import { matchesFilter, searchCards, sortCards, STORE_FILTERS, type StoreFilter } from '../../lib/agent-store-model';
+import { useAgentReadiness } from '../../lib/useAgentReadiness';
 import { AgentStoreCard } from './AgentStoreCard';
 import '../../styles/agent-store.css';
 
@@ -16,13 +18,30 @@ export interface AgentStoreProps {
   revision?: number;
 }
 
+/** The list is slow on a PC with many folders on PATH: say so after this long, and stop waiting after the second. */
+export const SLOW_LOAD_MS = 6000;
+export const GIVE_UP_LOAD_MS = 30000;
+
 const errText = (e: unknown) => (errorSentence(e)).replace(/^[A-Z_]+: /, '');
 
 export function AgentStore({ api = agentStoreApi, onOpenAgent, onBack, revision = 0 }: AgentStoreProps) {
+  const readiness = useAgentReadiness();
   const [cards, setCards] = useState<StoreCard[] | null>(null);
   const [loadError, setLoadError] = useState<string | null>(null);
   const [text, setText] = useState('');
   const [filter, setFilter] = useState<StoreFilter>('all');
+  const [waited, setWaited] = useState<'' | 'slow' | 'gaveUp'>('');
+
+  useEffect(() => {
+    if (cards || loadError) return undefined;
+    setWaited('');
+    const slow = setTimeout(() => setWaited('slow'), SLOW_LOAD_MS);
+    const give = setTimeout(() => setWaited('gaveUp'), GIVE_UP_LOAD_MS);
+    return () => {
+      clearTimeout(slow);
+      clearTimeout(give);
+    };
+  }, [cards, loadError, revision]);
 
   const load = useCallback(() => {
     setLoadError(null);
@@ -45,8 +64,8 @@ export function AgentStore({ api = agentStoreApi, onOpenAgent, onBack, revision 
     <div className="ck-store">
       <header className="ck-store-head">
         <div>
-          <h1 className="ck-title">Agent Store</h1>
-          <p className="ck-sub">Agents you can add to Potato Workspace. Each card says how well we have tested it.</p>
+          <h1 className="ck-title">{t('r21.sw.agentStore')}</h1>
+          <p className="ck-sub">{t('r21.sw.agentsYouCanAdd')}</p>
         </div>
         <button type="button" className="ck-btn ck-btn--plain ck-btn--sm" onClick={onBack}>
           Back
@@ -57,8 +76,8 @@ export function AgentStore({ api = agentStoreApi, onOpenAgent, onBack, revision 
         <input
           type="search"
           className="ck-store-search"
-          aria-label="Search agents"
-          placeholder="Search agents"
+          aria-label={t('r21.sw.searchAgents')}
+          placeholder={t('r21.sw.searchAgents')}
           value={text}
           onChange={(e) => setText(e.target.value)}
         />
@@ -85,13 +104,27 @@ export function AgentStore({ api = agentStoreApi, onOpenAgent, onBack, revision 
           </button>
         </div>
       )}
-      {!cards && !loadError && <p className="ck-sub">Loading agents</p>}
+      {!cards && !loadError && (
+        <div aria-busy="true" role="status">
+          <p className="ck-sub">{waited === 'gaveUp' ? t('store.loadTimeout') : waited === 'slow' ? t('store.loadSlow') : t('store.loading')}</p>
+          {waited === 'gaveUp' && (
+            <button type="button" className="ck-btn ck-btn--secondary ck-btn--sm" onClick={load}>
+              Try again
+            </button>
+          )}
+          <ul className="ck-store-grid" aria-hidden="true">
+            {[0, 1, 2, 3, 4, 5].map((n) => (
+              <li key={n} className="ck-store-skel" />
+            ))}
+          </ul>
+        </div>
+      )}
 
       {cards && shown.length > 0 && (
         <ul className="ck-store-grid" aria-label="Agents">
           {shown.map((card) => (
             <li key={card.id}>
-              <AgentStoreCard card={card} onOpen={onOpenAgent} />
+              <AgentStoreCard card={card} onOpen={onOpenAgent} standing={card.state === 'ready' ? readiness.of(card.id) : undefined} />
             </li>
           ))}
         </ul>

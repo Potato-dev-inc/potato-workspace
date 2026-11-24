@@ -8,6 +8,7 @@ import { nudgeDesktop, onDesktopNudge } from '../lib/desktop-nudge';
 import { NUDGE_MIN_GAP_MS } from '../lib/nudge-scheduler';
 import type { PaneData, PaneRegistryApi } from '../hooks/usePaneRegistry';
 import { useTerminalDrop } from './dnd/useTerminalDrop';
+import { t } from '../i18n';
 
 /** Same name as `JUMP_TO_LATEST_EVENT` in terminal-session.ts (kept here so this file needs only the session class). */
 const JUMP_TO_LATEST_EVENT = 'pm-terminal-jump-latest';
@@ -164,7 +165,7 @@ export function TerminalViewport({
       ref={stageRef}
       data-file-over={fileOver ? 'true' : undefined}
       className={chrome ? 'pm-terminal-stage' : 'pm-terminal-stage pm-terminal-stage--bare'}
-      aria-label="Command terminal"
+      aria-label={t('r21.sw.commandTerminal')}
       onPointerDownCapture={held ? reclaimIfHeld : undefined}
     >
       {chrome && (
@@ -189,8 +190,8 @@ export function TerminalViewport({
         // The PTY is sized to a phone that is viewing this pane: this window's grid does not match,
         // so say so instead of drawing a broken (often black) screen. Ends when the phone leaves.
         <div className="pm-terminal-viewer-held" role="status" onPointerDown={reclaimIfHeld}>
-          <strong>Sized for your phone</strong>
-          <span>Click here or switch to this window to use it on this PC.</span>
+          <strong>{t('r21.sw.sizedForYourPhone')}</strong>
+          <span>{t('r21.sw.clickHereOrSwitch')}</span>
         </div>
       )}
       {!chrome && (onReattach || workerHost || onToggleWorkerTray) && (
@@ -199,8 +200,8 @@ export function TerminalViewport({
             <button
               type="button"
               className="pm-terminal-control-button"
-              title="Move pane back to app"
-              aria-label="Move pane back to app"
+              title={t('r21.sw.movePaneBackTo')}
+              aria-label={t('r21.sw.movePaneBackTo')}
               onClick={onReattach}
             >
               ↙
@@ -221,8 +222,8 @@ export function TerminalViewport({
           <button
             type="button"
             className="pm-terminal-control-button"
-            title="Redraw from the PC screen"
-            aria-label="Redraw from the PC screen"
+            title={t('r21.sw.redrawFromThePc')}
+            aria-label={t('r21.sw.redrawFromThePc')}
             onClick={remount}
           >
             ↻

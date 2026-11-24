@@ -15,7 +15,7 @@ pub(super) fn handle(cx: &Ctx) -> Option<RouteResult> {
 
 fn exec(cx: &Ctx) -> RouteResult {
     let registry = cx.registry;
-    let app = cx.app;
+    let _app = cx.app;
     let session = cx.session;
     let request_body = &cx.request_body;
     let command = request_body
@@ -46,7 +46,6 @@ fn exec(cx: &Ctx) -> RouteResult {
         let agent_type = if cfg!(windows) { "powershell" } else { "bash" };
         let pane_id = registry_spawn_pane(
             registry,
-            app,
             SpawnPaneArgs {
                 agent_type: agent_type.to_string(),
                 cwd: Some(cwd.clone()),

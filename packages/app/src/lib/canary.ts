@@ -5,7 +5,7 @@
 import { useCallback, useEffect, useState } from 'react';
 import { t } from '../i18n';
 import { invoke } from '@tauri-apps/api/core';
-import { listen } from '@tauri-apps/api/event';
+import { listen } from './events';
 
 export type CanaryStanding = 'tested' | 'untested' | 'unpinned' | 'unknown';
 export type CanaryOutcome =

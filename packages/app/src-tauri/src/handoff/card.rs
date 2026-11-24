@@ -217,8 +217,8 @@ pub fn raise(store: &QuestionStore, card: NewQuestion, now: u64) -> Option<Quest
     // Not in unit tests: reaching the app handle's event code links Tauri's window layer into the
     // test binary (see docs/REPO_MAP.md, "Tests that touch Tauri window APIs").
     #[cfg(not(test))]
-    if let Some(app) = crate::bridge::live_app() {
-        crate::questions::routes::publish_changed(&app);
+    if crate::bridge::live_app().is_some() {
+        crate::questions::routes::publish_changed();
     }
     Some(created)
 }

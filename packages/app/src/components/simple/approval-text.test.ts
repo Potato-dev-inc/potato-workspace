@@ -39,7 +39,7 @@ describe('approvals in plain words', () => {
   });
 
   it('every headline it knows still exists in the Rust rules (a rename cannot slip through)', () => {
-    const dir = join(__dirname, '../../../src-tauri/src/prompt_risk');
+    const dir = join(__dirname, '../../../src-tauri/crates/pm-core/src/prompt_risk');
     const rules = ['rules.rs', 'mod.rs', 'command.rs'].map((f) => readFileSync(join(dir, f), 'utf8')).join('\n');
     const missing = KNOWN_HEADLINES.filter((h) => !rules.includes(`"${h}"`));
     expect(missing).toEqual([]);

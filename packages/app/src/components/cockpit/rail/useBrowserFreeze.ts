@@ -5,8 +5,10 @@
 import { useEffect, useRef, useState } from 'react';
 import { dockFreeze, dockSnapshot, type PageRect } from '../../../lib/dock-browser';
 
-/** What counts as drawn over the page: the shared floating layer, menus, dialogs, sheets and toasts. */
-const OVERLAYS = '.fl-layer, [role="menu"], [role="dialog"], [role="alertdialog"], [aria-modal="true"], [role="status"], [role="alert"]';
+/** What counts as drawn over the page: the shared floating layer, menus, dialogs and sheets. */
+const OVERLAYS = '.fl-layer, [role="menu"], [role="dialog"], [role="alertdialog"], [aria-modal="true"], .ck-pop';
+/** Toasts and update notices are not blocking: they sit in a corner and the page may cover them. Freezing for them left a grey pane. */
+const PASSIVE = '[role="status"], [role="alert"], .app-update-notice, .ck-toasts';
 /** A drag of a splitter or an edge happens in the app; the page would take the mouse, so it is frozen for the drag. */
 const DRAGGABLE = '.tk-split, .ck-resize, [data-testid="dock-splitter"]';
 
@@ -19,7 +21,7 @@ const meets = (a: DOMRect, b: PageRect): boolean => a.width > 0 && a.height > 0 
 export function overlayOverPage(page: PageRect, root: ParentNode = document): boolean {
   for (const el of Array.from(root.querySelectorAll<HTMLElement>(OVERLAYS))) {
     if (el.closest('[data-testid="dock-browser"]')) continue;
-    if (el.matches('[role="status"], [role="alert"]') && !el.textContent?.trim()) continue;
+    if (el.closest(PASSIVE)) continue;
     const r = el.getBoundingClientRect();
     // getBoundingClientRect of a box with no size says nothing; a zero-size layer holds its content in children.
     if (meets(r, page)) return true;

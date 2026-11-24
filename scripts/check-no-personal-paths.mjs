@@ -33,7 +33,7 @@ const ALLOWED_MAIL_LOCALS = new Set(['you', 'me', 'user', 'example', 'test', 'no
 
 // Sources the check does not read: this script, lockfiles/vendored output, and the upstream ACP registry snapshot
 // (public maintainers' contact emails, and URL paths like `/users/overview` that look like a user folder).
-const SKIP = [/^packages\/app\/src-tauri\/src\/acp\/fixtures\/registry_snapshot\.json$/, /(^|\/)package-lock\.json$/, /(^|\/)Cargo\.lock$/, /(^|\/)node_modules\//, /^scripts\/check-no-personal-paths\.mjs$/];
+const SKIP = [/^packages\/app\/src-tauri\/(crates\/pm-core\/)?src\/acp\/fixtures\/registry_snapshot\.json$/, /(^|\/)package-lock\.json$/, /(^|\/)Cargo\.lock$/, /(^|\/)node_modules\//, /^scripts\/check-no-personal-paths\.mjs$/];
 
 // A `Users` path segment (either slash direction, doubled when escaped in a
 // string literal) followed by the folder name. The name stops at a separator,

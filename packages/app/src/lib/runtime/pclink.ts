@@ -39,6 +39,9 @@ export interface PcSession {
   started_as?: 'minion' | 'spin_off' | string;
   /** A standby's own chat: its PC's sidebar draws it as the standby's row, never as an agent. */
   standby?: boolean;
+  /** Its place among its agent's chats on its own PC, and how many there are (a newer far PC): the number in "Claude 5" comes from there. */
+  agent_n?: number;
+  agent_of?: number;
   /** `acp` for a chat session (a newer far PC; `chat` says the same to an older one). */
   lane?: string | null;
   /** The chat works on a separate copy of its project (its `project` and `folder` are the real project's). */
@@ -71,6 +74,10 @@ export interface PcMe {
   level: PcLevel;
   name: string;
   asked: boolean;
+  /** The id the far PC names THIS PC by (a chat's driver is that id when this PC drives). Absent on an older far PC. */
+  you?: string;
+  /** Whether the far PC counts this PC as its person's own (no press and hold needed). Absent on an older far PC. */
+  own?: boolean;
 }
 
 /** A live transcript read: the newest items, or what changed since `rev`. */
@@ -154,7 +161,8 @@ export interface PcLinkClient {
   answerQuestion(id: string, answer: { choice_id?: string; text?: string }): Promise<void>;
   // Full
   modelOptions(agent: string): Promise<unknown>;
-  startAgent(args: { agent: string; project: string; lane: 'chat' | 'terminal' }): Promise<{ pane_id: string }>;
+  /** `account` is only ever `lend:<grant>` (Use my own agents): the far PC checks it is the caller's own lend. */
+  startAgent(args: { agent: string; project: string; lane: 'chat' | 'terminal'; account?: string }): Promise<{ pane_id: string }>;
   warm(args: { agent: string; project: string }): Promise<void>;
   /** The places the far PC lets this PC browse from (no `root`), or the folders inside one place. */
   browse(root?: string, sub?: string): Promise<{ roots: PcBrowseRoot[] } | PcBrowseList>;

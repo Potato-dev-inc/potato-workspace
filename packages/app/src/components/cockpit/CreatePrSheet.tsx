@@ -8,6 +8,7 @@ import { shipApi, type PrPrepared, type PrRef, type ShipApi } from '../../lib/sh
 import { cannotCreate, copyCommands } from '../../lib/ship-model';
 import { Sheet } from './Sheet';
 import '../../styles/cockpit-ship.css';
+import { t } from '../../i18n';
 
 const errText = (err: unknown): string => (errorSentence(err));
 
@@ -80,7 +81,7 @@ export function CreatePrSheet({
         {updating ? `Update pull request #${prepared?.existing?.number}` : 'Create a draft pull request'}
       </h2>
 
-      {!prepared && !error && <p className="ck-sub">Looking at your GitHub setup…</p>}
+      {!prepared && !error && <p className="ck-sub">{t('r21.sw.lookingAtYourGithub')}</p>}
 
       {blocked && (
         <>

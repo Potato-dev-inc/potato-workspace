@@ -1,6 +1,7 @@
 // Typed wrapper over Tauri invoke/events with safe no-op fallbacks when running in a plain browser (PWA / dev server).
 import { invoke } from '@tauri-apps/api/core';
-import { emit, listen, type UnlistenFn } from '@tauri-apps/api/event';
+import { emit, type UnlistenFn } from '@tauri-apps/api/event';
+import { listen } from './events';
 import { getCurrentWebviewWindow } from '@tauri-apps/api/webviewWindow';
 import { getCurrentWindow, LogicalSize } from '@tauri-apps/api/window';
 import type { ControlAsk, PaneRemote, PaneRemoteLevel } from './pane-remote';
@@ -47,6 +48,7 @@ import type {
 } from './tauri-types';
 
 export type * from './tauri-types';
+export { pendingInvokes, pendingByCommand } from './ipc-guard';
 
 const isTauriRuntime = (): boolean => typeof window !== 'undefined' && '__TAURI_INTERNALS__' in window;
 const noopUnlisten: UnlistenFn = () => {};

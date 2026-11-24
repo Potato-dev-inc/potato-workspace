@@ -106,7 +106,12 @@ pub fn detect(entry: &CatalogEntry) -> Inputs {
 /// `detect` with the Store record read from `record_path` (tests point it at a scratch file).
 pub(super) fn detect_at(entry: &CatalogEntry, record_path: &Path) -> Inputs {
     let id = entry.entry.store.id.as_str();
-    detect_with(entry, record_path, loader::last_entry_for(id))
+    let mut inputs = detect_with(entry, record_path, loader::last_entry_for(id));
+    // One source with Settings > Agents > Add: a program that scan finds on PATH counts here too.
+    if inputs.found_path.is_none() {
+        inputs.found_path = super::detect::located(id);
+    }
+    inputs
 }
 
 /// `detect_at` with the loader's row for this id passed in (`detect_at` passes the last reload's row).

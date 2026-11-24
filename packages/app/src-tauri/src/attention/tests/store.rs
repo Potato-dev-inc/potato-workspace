@@ -177,6 +177,16 @@ fn a_question_about_a_pane_is_its_own_item_next_to_the_pane_state() {
 }
 
 #[test]
+fn a_local_chat_permission_counts_once_as_its_question_card() {
+    let mut store = Store::default();
+    let mut f = facts(vec![pane("a", "waiting_input")]);
+    f.questions = vec![QuestionFact { id: "q".into(), pane_id: Some("a".into()), kind: Some("acp_permission".into()), ..QuestionFact::default() }];
+    store.recompute(&f, 1_000);
+    assert_eq!(open_keys(&store), ["question:q"]);
+    assert_eq!(store.counts().blocking, 1);
+}
+
+#[test]
 fn a_folder_trust_screen_is_a_trust_gate_with_its_own_words_and_leads_the_list() {
     let mut store = Store::default();
     store.on_prompt(

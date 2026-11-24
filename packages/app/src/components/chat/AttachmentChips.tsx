@@ -3,8 +3,10 @@
 // read-only above the person's message. Clicking an image opens the large view (ImageLightbox) over the whole window.
 import { useEffect, useState } from 'react';
 import { previewAttachment, type ChatAttachment } from '../../lib/attachFiles';
+import { useHost } from '../../lib/host/context';
 import { ImageLightbox, type LightboxImage } from '../common/ImageLightbox';
 import '../../styles/cockpit-chat-attachments.css';
+import { t } from '../../i18n';
 
 export interface AttachmentChipsProps {
   attachments: readonly ChatAttachment[];
@@ -14,6 +16,8 @@ export interface AttachmentChipsProps {
   onRemove?: (attachment: ChatAttachment) => void;
   /** Extra classes for the row (layout belongs to the parent). */
   className?: string;
+  /** The chat the files belong to (its key on this screen): a chat on another PC reads its thumbnails there, inside that chat's project. */
+  paneId?: string | null;
 }
 
 /** A size in plain words: 512 B, 3.4 KB, 12 MB. */
@@ -65,28 +69,30 @@ function CloseIcon() {
 }
 
 /** The data URL of an image attachment, or null while it loads (or when there is none). */
-function usePreview(attachment: ChatAttachment): string | null {
+function usePreview(attachment: ChatAttachment, paneId?: string | null): string | null {
   const [src, setSrc] = useState<string | null>(null);
   const isImage = attachment.kind === 'image';
+  // A path in a chat of another PC is that PC's: it is asked there, never read on this disk.
+  const host = useHost();
   useEffect(() => {
     setSrc(null);
     if (!isImage) return;
     let live = true;
-    void previewAttachment(attachment.path).then((url) => {
+    void previewAttachment(attachment.path, host, paneId ?? undefined).then((url) => {
       if (live) setSrc(url);
     });
     return () => {
       live = false;
     };
-  }, [attachment.path, isImage]);
+  }, [attachment.path, isImage, host, paneId]);
   return src;
 }
 
 /** One chip. Images show a thumbnail; the x appears on hover and on keyboard focus. */
-function Chip({ attachment, onRemove, onOpen }: { attachment: ChatAttachment; onRemove?: (a: ChatAttachment) => void; onOpen: (a: ChatAttachment) => void }) {
-  const src = usePreview(attachment);
+function Chip({ attachment, onRemove, onOpen, paneId }: { attachment: ChatAttachment; onRemove?: (a: ChatAttachment) => void; onOpen: (a: ChatAttachment) => void; paneId?: string | null }) {
+  const src = usePreview(attachment, paneId);
   const remove = onRemove ? (
-    <button type="button" className="ck-att-remove" aria-label={`Remove ${attachment.name}`} title="Remove" onClick={() => onRemove(attachment)}>
+    <button type="button" className="ck-att-remove" aria-label={t('attach.remove', { name: attachment.name })} title={t('attach.removeShort')} onClick={() => onRemove(attachment)}>
       <CloseIcon />
     </button>
   ) : null;
@@ -121,15 +127,15 @@ function Chip({ attachment, onRemove, onOpen }: { attachment: ChatAttachment; on
 }
 
 /** The larger view of an image chip, with Previous / Next when the message has several images. */
-function ImagePreview({ images, start, onClose }: { images: readonly ChatAttachment[]; start: number; onClose: () => void }) {
+function ImagePreview({ images, start, onClose, paneId }: { images: readonly ChatAttachment[]; start: number; onClose: () => void; paneId?: string | null }) {
   const [index, setIndex] = useState(start);
   const current = images[Math.min(index, images.length - 1)];
-  const src = usePreview(current);
+  const src = usePreview(current, paneId);
   const list: LightboxImage[] = images.map((a) => ({ key: a.path, name: a.name, src: a === current ? src : null }));
   return <ImageLightbox images={list} index={index} onIndex={setIndex} onClose={onClose} testId="attachment-preview" />;
 }
 
-export function AttachmentChips({ attachments, preparing = 0, onRemove, className }: AttachmentChipsProps) {
+export function AttachmentChips({ attachments, preparing = 0, onRemove, className, paneId }: AttachmentChipsProps) {
   const [open, setOpen] = useState<string | null>(null);
   const images = attachments.filter((a) => a.kind === 'image');
   const start = open === null ? -1 : images.findIndex((a) => a.path === open);
@@ -139,16 +145,16 @@ export function AttachmentChips({ attachments, preparing = 0, onRemove, classNam
     <>
       <div className={rowClass} data-testid="attachment-chips">
         {attachments.map((attachment) => (
-          <Chip key={attachment.path} attachment={attachment} onRemove={onRemove} onOpen={(a) => setOpen(a.path)} />
+          <Chip key={attachment.path} attachment={attachment} onRemove={onRemove} onOpen={(a) => setOpen(a.path)} paneId={paneId} />
         ))}
         {preparing > 0 && (
-          <div className="ck-att-chip ck-att-chip--loading" role="status" aria-label="Preparing files" data-testid="attachment-preparing">
+          <div className="ck-att-chip ck-att-chip--loading" role="status" aria-label={t('r21.sw.preparingFiles')} data-testid="attachment-preparing">
             <span className="ck-att-spinner" aria-hidden="true" />
             <span className="ck-att-meta">Preparing</span>
           </div>
         )}
       </div>
-      {start >= 0 && <ImagePreview images={images} start={start} onClose={() => setOpen(null)} />}
+      {start >= 0 && <ImagePreview images={images} start={start} onClose={() => setOpen(null)} paneId={paneId} />}
     </>
   );
 }

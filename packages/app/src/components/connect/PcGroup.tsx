@@ -9,16 +9,19 @@ import QRCode from 'qrcode';
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import type { Settings } from '@potato-workspace/shared';
 import { useT } from '../../i18n';
-import type { AccountPc, AccountPcsReply } from '../../lib/account';
+import { pcReach, type AccountPc, type AccountPcsReply } from '../../lib/account';
 import { deviceLabel, type Device, type DevicesApi } from '../../lib/devices';
 import { DEVICE_NAMES_CHANGED } from '../../lib/deviceNames';
 import { errorSentence } from '../../lib/sayError';
 import type { SettingsPatch } from '../../lib/settings';
 import { AccountPanel } from '../account/AccountPanel';
+import { DeviceActivity } from '../devices/DeviceActivity';
 import { PairConfirm } from '../devices/PairConfirm';
 import { useDevices } from '../devices/useDevices';
 import { lockedUntilOf, lockTime } from './accountLock';
 import type { ConnectApi } from './ConnectPage';
+import { LentToPc } from '../lend/LentToPc';
+import type { LendHandle } from '../lend/useLend';
 import '../../styles/account.css';
 import '../../styles/devices.css';
 
@@ -60,6 +63,7 @@ export function PcGroup({
   waiting,
   needsUpdate = false,
   onUpdate,
+  lend,
   now = () => Math.floor(Date.now() / 1000),
 }: {
   api: ConnectApi;
@@ -72,6 +76,8 @@ export function PcGroup({
   /** This PC's link cannot add PCs on other networks yet: the same sentence and one Update button show here as on the This PC row. */
   needsUpdate?: boolean;
   onUpdate?: () => void;
+  /** The lend state: a PC that uses my sign-ins shows "Uses your sign-ins from this PC · Stop" on its row. */
+  lend?: LendHandle;
   now?: () => number;
 }) {
   const t = useT();
@@ -83,6 +89,7 @@ export function PcGroup({
   const [pausedUntil, setPausedUntil] = useState<number | null>(null);
   const [adding, setAdding] = useState(false);
   const [sheetNode, setSheetNode] = useState<string | null>(null);
+  const [activityOpen, setActivityOpen] = useState(false);
   const [notNow, setNotNow] = useState(false);
   const [showOld, setShowOld] = useState(false);
   // The account row asked "Sign it out?" and the one being signed out.
@@ -126,12 +133,21 @@ export function PcGroup({
     const out: PcRow[] = [];
     const byNode = new Map((view?.devices ?? []).map((d) => [d.node, d]));
     const covered = new Set<string>();
+    const known = new Set((view?.devices ?? []).map((d) => deviceLabel(d)));
     for (const pc of listed?.pcs ?? []) {
       const device = pc.node ? (byNode.get(pc.node) ?? null) : null;
+      // A grey "Press Allow on it first" row of a PC that is already paired here (same node, or the same name, e.g. after it restarted under a new id)
+      // is a stale pending row: the paired PC's own row says it all, so it is not listed twice.
+      if (pc.status === 'allow_there' && (device || known.has(pc.name) || (listed?.pcs ?? []).some((o) => o !== pc && o.status !== 'allow_there' && o.name === pc.name))) continue;
       if (pc.node && pc.status !== 'new' && pc.status !== 'allow_there' && pc.status !== 'conflict' && pc.status !== 'lookalike') covered.add(pc.node);
+      // One answer to "is it on": the account's word (seen in the last two minutes, or its status) or the live link to it. The dot, the words
+      // and the Open button all read this, so "Offline" never sits beside a green dot.
+      const asking = pc.status === 'allow_there';
+      const reach = pcReach(pc, device?.state);
+      const online = reach === 'online';
       const line = waiting
         ? t('connect.pc.waiting')
-        : pc.status === 'allow_there'
+        : asking
           ? pc.online
             ? t('connect.pc.allowThere', { name: pc.name })
             : seen(t, pc.last_seen_at, nowSecs)
@@ -142,22 +158,25 @@ export function PcGroup({
               : pc.status === 'not_allowed'
                 ? t('connect.pc.notAllowed')
                 : pc.status === 'new'
-                  ? pc.online
+                  ? online
                     ? t('connect.pc.first')
                     : seen(t, pc.last_seen_at, nowSecs)
-                  : pc.status === 'online'
+                  : online
                     ? t('connect.pc.online')
-                    : seen(t, pc.last_seen_at, nowSecs);
+                    : reach === 'cant_reach'
+                      ? t('connect.pc.cantReach')
+                      : seen(t, pc.last_seen_at, nowSecs);
       out.push({
         key: `a-${pc.id}`,
-        name: pc.name,
+        // A paired PC shows the name its sheet holds, so a rename there sticks here (the account's name is only where it started).
+        name: device && pc.status !== 'new' ? deviceLabel(device) : pc.name,
         device,
         account: pc,
-        online: pc.status === 'online' || (pc.online && pc.status !== 'allow_there'),
+        online,
         line,
-        canOpen: !waiting && pc.status !== 'allow_there' && pc.status !== 'conflict' && pc.status !== 'lookalike' && (pc.status !== 'new' || pc.online) && (pc.online || pc.status === 'online') && pc.node !== null,
+        canOpen: !waiting && !asking && pc.status !== 'conflict' && pc.status !== 'lookalike' && (pc.status !== 'new' || online) && online && pc.node !== null,
         recent: pc.recent,
-        stale: !pc.online && pc.status !== 'online' && nowSecs - pc.last_seen_at > STALE_PC_SECS,
+        stale: !online && nowSecs - pc.last_seen_at > STALE_PC_SECS,
       });
     }
     for (const d of view?.devices ?? []) {
@@ -181,20 +200,28 @@ export function PcGroup({
   const open = (row: PcRow) => {
     if (row.account) {
       const pc = row.account;
-      if (!account.openPc) return;
+      if (!account.openPc) {
+        // Nothing to ask the account: the PC's own sheet is still something to show.
+        if (row.device) setSheetNode(row.device.node);
+        else setError(t('connect.pc.openFailed'));
+        return;
+      }
       setOpening(pc.id);
       setError(null);
       setPausedUntil(null);
       account
         .openPc(pc.id)
         .then((r) => {
-          if (alive.current && r.node && onOpenPc(r.node) === false) setSheetNode(r.node);
+          if (!alive.current) return;
+          // Never silent: no node to open is an error line; no section in the sidebar opens the PC's own sheet.
+          if (!r.node) setError(t('connect.pc.openFailed'));
+          else if (onOpenPc(r.node) === false) setSheetNode(r.node);
         })
         .catch((e: unknown) => {
           if (!alive.current) return;
           const until = lockedUntilOf(e);
           if (until !== null) setPausedUntil(until);
-          else setError(typeof e === 'string' && e ? e : e instanceof Error && e.message ? e.message : t('connect.pc.openFailed'));
+          else setError(errorSentence(e, t('connect.pc.openFailed')));
         })
         .finally(() => {
           if (!alive.current) return;
@@ -314,6 +341,7 @@ export function PcGroup({
                     <span data-testid={`connect-pc-account-${r.device.node}`}> · {r.device.lets_run && r.device.level === 'full' ? t('connect.pc.accountFull') : t('connect.pc.accountLowered')}</span>
                   )}
                 </div>
+                {lend && r.device && <LentToPc node={r.device.node} name={r.name} lend={lend} api={api.lend} />}
               </div>
               <div className="cx-act">
                 {r.account && !r.online && !r.canOpen && removing === r.account.id ? (
@@ -389,6 +417,18 @@ export function PcGroup({
       )}
       {adding && view && <AddPcSheet view={view} api={api.devices} hasAccount={listed !== null} needsUpdate={needsUpdate} onUpdate={() => (setAdding(false), onUpdate?.())} onClose={() => setAdding(false)} onJoined={() => (setAdding(false), refresh())} />}
       {sheetDevice && <PcDetails device={sheetDevice} api={api.devices} onChanged={refresh} onClose={() => setSheetNode(null)} />}
+      {view && view.devices.length > 0 && (
+        <button type="button" className="cx-link" data-testid="connect-activity-link" onClick={() => setActivityOpen(true)}>
+          {t('devices.activity')}
+        </button>
+      )}
+      {activityOpen && view && (
+        <PcSheet title={t('devices.activity')} onClose={() => setActivityOpen(false)} testId="connect-activity-sheet">
+          {view.devices.map((d) => (
+            <DeviceActivity key={d.node} device={d} api={api.devices} title={deviceLabel(d)} />
+          ))}
+        </PcSheet>
+      )}
     </section>
   );
 }
@@ -540,6 +580,7 @@ function PcDetails({ device, api, onChanged, onClose }: { device: Device; api: D
   const t = useT();
   const [name, setName] = useState(device.name);
   const [asking, setAsking] = useState<'work' | 'remove' | null>(null);
+  const [showActivity, setShowActivity] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const work = device.lets_run && device.level === 'full';
   const run = (p: Promise<unknown>) =>
@@ -556,8 +597,20 @@ function PcDetails({ device, api, onChanged, onClose }: { device: Device; api: D
     if (next === '' || next === device.name) return;
     void run(api.rename(device.node, next).then(() => window.dispatchEvent(new Event(DEVICE_NAMES_CHANGED))));
   };
+  if (showActivity) {
+    return (
+      <PcSheet title={deviceLabel(device)} onClose={onClose} testId="connect-pc-sheet">
+        <DeviceActivity device={device} api={api} />
+        <div className="cx-row-actions">
+          <button type="button" className="cx-btn cx-quiet" data-testid="connect-pc-activity-back" onClick={() => setShowActivity(false)}>
+            {t('connect.pc.back')}
+          </button>
+        </div>
+      </PcSheet>
+    );
+  }
   return (
-    <PcSheet title={t('connect.pc.sheetTitle')} onClose={onClose} testId="connect-pc-sheet">
+    <PcSheet title={deviceLabel(device)} onClose={onClose} testId="connect-pc-sheet">
       <input
         className="cx-input"
         type="text"
@@ -569,7 +622,7 @@ function PcDetails({ device, api, onChanged, onClose }: { device: Device; api: D
         onBlur={save}
         onKeyDown={(e) => e.key === 'Enter' && save()}
       />
-      <p className="cx-note">{t('connect.pc.canWatch')}</p>
+      <p className="cx-note">{work ? t('connect.pc.canWork') : t('connect.pc.canWatch')}</p>
       <div className="cx-switchrow">
         <div>
           <b>{t('connect.pc.workLabel')}</b>
@@ -588,6 +641,19 @@ function PcDetails({ device, api, onChanged, onClose }: { device: Device; api: D
           <span aria-hidden="true" />
         </label>
       </div>
+      {/* Shown while it is granted (so it can be turned off) and while the PC may work here (so it can be turned back on). */}
+      {(device.lets_lend || work) && (
+      <div className="cx-switchrow">
+        <div>
+          <b>{t('connect.pc.lendLabel')}</b>
+          <div className="cx-note">{t('connect.pc.lendHint')}</div>
+        </div>
+        <label className="cx-switch">
+          <input type="checkbox" role="switch" checked={device.lets_lend} aria-label={t('connect.pc.lendLabel')} data-testid="connect-pc-lend" onChange={(e) => void run(api.setLend(device.node, e.target.checked))} />
+          <span aria-hidden="true" />
+        </label>
+      </div>
+      )}
       {asking === 'work' && (
         <div className="cx-confirm" role="alertdialog" data-testid="connect-pc-work-confirm">
           <p>{t('connect.pc.workAsk')}</p>
@@ -615,6 +681,9 @@ function PcDetails({ device, api, onChanged, onClose }: { device: Device; api: D
         </div>
       ) : (
         <div className="cx-row-actions">
+          <button type="button" className="cx-btn" data-testid="connect-pc-activity" onClick={() => setShowActivity(true)}>
+            {t('connect.pc.activity')}
+          </button>
           <button type="button" className="cx-btn" data-testid="connect-pc-remove" onClick={() => setAsking('remove')}>
             {t('connect.pc.remove')}
           </button>

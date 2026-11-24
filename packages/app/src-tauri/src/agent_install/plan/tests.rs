@@ -18,6 +18,7 @@ fn tools(winget: bool, present: &[&str]) -> Tools {
     Tools {
         winget: winget.then(|| "winget".to_string()),
         present: present.iter().map(|s| s.to_string()).collect(),
+        home: None,
     }
 }
 
@@ -117,6 +118,7 @@ fn a_winget_found_only_as_an_app_alias_runs_by_full_path_but_shows_its_name() {
     let t = Tools {
         winget: Some(r"C:\Users\a\AppData\Local\Microsoft\WindowsApps\winget.exe".into()),
         present: BTreeSet::new(),
+        home: None,
     };
     let plan = plan_install("t", "Tool", Some(&spec(FULL)), &t);
     match &plan.steps[0].action {
@@ -355,5 +357,85 @@ fn the_bundled_tool_definitions_parse_with_winget_ids() {
         let spec = def.install.windows.as_ref().unwrap_or_else(|| panic!("{id}"));
         assert!(spec.validate().is_ok(), "{id}");
         assert!(spec.winget.is_some(), "{id} installs through winget");
+    }
+}
+
+// ---- P6.2: a Linux PC (no root) -------------------------------------------------------------------------------------------------
+
+/// The shipped spec of `file` for a Linux PC. The OS is data, so these run on any machine.
+fn linux_spec(text: &str) -> InstallSpec {
+    crate::tui::install::parse_install_toml_for(text, true).unwrap().expect("an [install.linux] table")
+}
+
+fn linux_tools(present: &[&str]) -> Tools {
+    Tools { winget: None, present: present.iter().map(|s| s.to_string()).collect(), home: Some("/home/pm".into()) }
+}
+
+const CODEX: &str = include_str!("../../../crates/pm-core/src/tui/codex/install.toml");
+const CLAUDE: &str = include_str!("../../../crates/pm-core/src/tui/claude/install.toml");
+const OPENCODE: &str = include_str!("../../../crates/pm-core/src/tui/opencode/install.toml");
+const CURSOR: &str = include_str!("../../../crates/pm-core/src/tui/cursor/install.toml");
+
+#[test]
+fn on_linux_npm_installs_into_the_home_prefix_so_nothing_needs_root() {
+    let plan = plan_install("codex", "Codex", Some(&linux_spec(CODEX)), &linux_tools(&["node"]));
+    assert_eq!(commands(&plan), ["npm install -g --prefix /home/pm/.local @openai/codex"]);
+    assert_eq!(plan.steps[0].method, Method::Npm);
+    assert!(!plan.steps[0].high_risk);
+    let plan = plan_install("claude", "Claude Code", Some(&linux_spec(CLAUDE)), &linux_tools(&["node"]));
+    assert_eq!(commands(&plan), ["npm install -g --prefix /home/pm/.local @anthropic-ai/claude-code"]);
+    let plan = plan_install("opencode", "OpenCode", Some(&linux_spec(OPENCODE)), &linux_tools(&["node"]));
+    assert_eq!(commands(&plan), ["npm install -g --prefix /home/pm/.local opencode-ai"]);
+}
+
+#[test]
+fn on_linux_without_node_the_vendor_shell_script_is_the_way_and_needs_the_second_yes() {
+    let plan = plan_install("claude", "Claude Code", Some(&linux_spec(CLAUDE)), &linux_tools(&[]));
+    assert_eq!(commands(&plan), ["curl -fsSL 'https://claude.ai/install.sh' | bash"]);
+    assert!(plan.steps[0].high_risk);
+    assert_eq!(plan.steps[0].method, Method::Script);
+    let plan = plan_install("codex", "Codex", Some(&linux_spec(CODEX)), &linux_tools(&[]));
+    assert_eq!(commands(&plan), ["curl -fsSL 'https://chatgpt.com/codex/install.sh' | bash"]);
+    // No winget, no Node.js step to offer (no root): never a Windows command on a Linux PC.
+    for text in [CODEX, CLAUDE, OPENCODE, CURSOR] {
+        let plan = plan_install("t", "T", Some(&linux_spec(text)), &linux_tools(&[]));
+        assert!(plan.steps.iter().all(|s| !s.command.contains("winget") && !s.command.contains("iex")), "{:?}", commands(&plan));
+    }
+    let plan = plan_install("cursor_agent", "Cursor Agent", Some(&linux_spec(CURSOR)), &linux_tools(&["node"]));
+    assert_eq!(commands(&plan), ["curl -fsSL 'https://cursor.com/install' | bash"]);
+}
+
+#[test]
+fn on_linux_an_agent_with_no_script_and_no_node_is_blocked_with_a_reason_for_the_hand_over() {
+    let npm_only = linux_spec("[install.linux]\nsource=\"https://example.com/s\"\nnpm=\"@vendor/tool\"\n");
+    let plan = plan_install("t", "Tool", Some(&npm_only), &linux_tools(&[]));
+    assert!(plan.steps.is_empty());
+    assert!(plan.blocked.as_deref().is_some_and(|r| r.contains("Node.js") && !r.contains("winget")), "{:?}", plan.blocked);
+}
+
+#[test]
+fn a_changed_command_is_still_refused_on_linux_and_a_script_still_needs_its_second_yes() {
+    let plan = plan_install("codex", "Codex", Some(&linux_spec(CODEX)), &linux_tools(&["node"]));
+    // Without the prefix, with a different package, with extra text: none is the command that was shown.
+    for changed in ["npm install -g @openai/codex", "npm install -g --prefix /home/pm/.local @evil/codex", "npm install -g --prefix /home/pm/.local @openai/codex; id", "sudo npm install -g @openai/codex"] {
+        let err = crate::agent_install::check_request(&plan, 0, changed, false).unwrap_err();
+        assert!(err.starts_with("INSTALL_COMMAND_CHANGED"), "{changed}: {err}");
+    }
+    assert!(crate::agent_install::check_request(&plan, 0, "npm install -g --prefix /home/pm/.local @openai/codex", false).is_ok());
+    let script = plan_install("claude", "Claude Code", Some(&linux_spec(CLAUDE)), &linux_tools(&[]));
+    let shown = "curl -fsSL 'https://claude.ai/install.sh' | bash";
+    assert!(crate::agent_install::check_request(&script, 0, shown, false).unwrap_err().starts_with("INSTALL_NEEDS_CONFIRMATION"));
+    assert!(crate::agent_install::check_request(&script, 0, shown, true).is_ok());
+    assert!(crate::agent_install::check_request(&script, 0, "curl -fsSL 'https://example.com/x.sh' | bash", true).unwrap_err().starts_with("INSTALL_COMMAND_CHANGED"));
+}
+
+#[test]
+fn the_shipped_files_keep_their_windows_plan_and_a_pc_never_gets_the_other_ones() {
+    for text in [CODEX, CLAUDE, OPENCODE, CURSOR] {
+        let windows = crate::tui::install::parse_install_toml_for(text, false).unwrap().unwrap();
+        let linux = linux_spec(text);
+        assert!(linux.winget.is_none() && linux.validate().is_ok() && windows.validate().is_ok());
+        assert!(linux.script_url.as_deref().is_none_or(|u| u.ends_with("install.sh") || u.ends_with("/install")), "{:?}", linux.script_url);
+        assert!(windows.script_url.as_deref().is_none_or(|u| !u.ends_with("install.sh")));
     }
 }

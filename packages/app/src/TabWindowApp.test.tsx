@@ -7,6 +7,8 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import TabWindowApp, { tabOfWindow } from './TabWindowApp';
 import type { TabWindowsApi } from './lib/tab-windows';
 import { useEnglish } from './i18n/test-utils';
+import { COMFORT_DEFAULTS } from './lib/comfort/model';
+import { setComfort } from './lib/comfort/store';
 
 let registry: { panes: Map<string, { status: string; info: { agent_type: string } }>; initialReady: boolean };
 const paneView = vi.fn((_: unknown) => <div data-testid="pane-view" />);
@@ -103,5 +105,17 @@ describe('the tab window', () => {
     await show(api());
     expect(host.querySelector('[data-testid="pane-view"]')).toBeNull();
     expect(host.querySelector('[data-testid="file-tab"]')).toBeNull();
+  });
+});
+
+describe('text size in the pop-out', () => {
+  it('applies the saved text size at open and follows a change', async () => {
+    setComfort({ textScale: 130 });
+    at('?tabwin=1&pane=p1&tab=chat');
+    await show(api());
+    expect(document.documentElement.style.getPropertyValue('--ui-scale')).toBe('1.3');
+    await act(async () => void setComfort({ textScale: 110 }));
+    expect(document.documentElement.style.getPropertyValue('--ui-scale')).toBe('1.1');
+    setComfort(COMFORT_DEFAULTS);
   });
 });

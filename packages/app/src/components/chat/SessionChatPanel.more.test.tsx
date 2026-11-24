@@ -33,7 +33,10 @@ const end = (id: string): ChatItem => ({ kind: 'turnEnd', id, at: null, outcome:
 /** What the fake backend answers; each test sets what it needs. */
 let backend: Record<string, (args: Record<string, unknown>) => unknown>;
 
+import { earlierTuning, forgetKnownMore } from '../../hooks/useEarlier';
 beforeEach(() => {
+  earlierTuning.probeMs = 0;
+  forgetKnownMore();
   localStorage.clear();
   clearPictureCache();
   (window as unknown as { __TAURI_INTERNALS__: object }).__TAURI_INTERNALS__ = {};

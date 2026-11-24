@@ -5,6 +5,7 @@
 import { invoke } from '@tauri-apps/api/core';
 import type { BridgeClient } from './bridge-types';
 import { bridgeRefusalText } from './paneOutbox-bridge';
+import { t } from '../i18n';
 
 export interface PlanFiles {
   /** Turns whose summary told how many files changed. */
@@ -93,42 +94,42 @@ const HOUR = 60 * MIN;
 
 /** "42 min", "3 h 12 min", "3 h". Under a minute: "under 1 min". Nothing at all: "0 min". */
 export function formatBusy(ms: number): string {
-  if (ms <= 0) return '0 min';
-  if (ms < MIN) return 'under 1 min';
+  if (ms <= 0) return t('r21.min', { n: 0 });
+  if (ms < MIN) return t('r21.minUnder');
   const minutes = Math.round(ms / MIN);
-  if (minutes < 60) return `${minutes} min`;
+  if (minutes < 60) return t('r21.min', { n: minutes });
   const h = Math.floor(minutes / 60);
   const m = minutes % 60;
-  return m === 0 ? `${h} h` : `${h} h ${m} min`;
+  return m === 0 ? t('r21.hour', { n: h }) : t('r21.hourMin', { h, m });
 }
 
 /** Waiting time in the words of the limits column: "45 min", "2.5 h", "7 h". */
 export function formatWaiting(ms: number): string {
-  if (ms < HOUR) return `${Math.max(1, Math.round(ms / MIN))} min`;
+  if (ms < HOUR) return t('r21.min', { n: Math.max(1, Math.round(ms / MIN)) });
   const hours = ms / HOUR;
   const text = hours >= 10 ? String(Math.round(hours)) : String(Math.round(hours * 10) / 10);
-  return `${text} h`;
+  return t('r21.hour', { n: text });
 }
 
 function times(n: number): string {
-  return n === 1 ? '1 time' : `${n} times`;
+  return t('r21.n.time', { count: n });
 }
 
 /** "Hit its limit 3 times · 7 h waiting". Nothing hit: "No limits hit". Hit with no recorded end: no waiting part. */
 export function limitsText(limits: { hits: number; limitedMs: number }): string {
-  if (limits.hits === 0 && limits.limitedMs === 0) return 'No limits hit';
+  if (limits.hits === 0 && limits.limitedMs === 0) return t('r21.plans.noLimits');
   // A limit that began last month and ran into this one: no new hit, but this month's wait is real.
-  if (limits.hits === 0) return `Waiting since last month · ${formatWaiting(limits.limitedMs)}`;
-  const waiting = limits.limitedMs > 0 ? ` · ${formatWaiting(limits.limitedMs)} waiting` : '';
-  return `Hit its limit ${times(limits.hits)}${waiting}`;
+  if (limits.hits === 0) return t('r21.plans.waitingSince', { time: formatWaiting(limits.limitedMs) });
+  return limits.limitedMs > 0
+    ? t('r21.plans.hitWaiting', { times: times(limits.hits), time: formatWaiting(limits.limitedMs) })
+    : t('r21.plans.hit', { times: times(limits.hits) });
 }
 
 /** "12 files +340 −45", "No files changed", or a dash when no turn told. */
 export function filesText(files: { knownTurns: number; changed: number; added: number; deleted: number }): string {
   if (files.knownTurns === 0) return '—';
-  if (files.changed === 0) return 'No files changed';
-  const noun = files.changed === 1 ? 'file' : 'files';
-  return `${files.changed} ${noun} +${files.added} −${files.deleted}`;
+  if (files.changed === 0) return t('r21.plans.noFiles');
+  return `${t('r21.n.file', { count: files.changed })} +${files.added} −${files.deleted}`;
 }
 
 export function turnsText(n: number): string {

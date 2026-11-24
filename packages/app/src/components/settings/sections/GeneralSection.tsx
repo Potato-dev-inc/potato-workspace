@@ -184,9 +184,10 @@ function UninstallRow({ env }: { env: SettingsEnv }) {
       setBusy(false);
     }
   };
+  const uninstallHow = (platform: string, fallback: string): string => (platform === 'windows' ? t('r13ui.uninstallWindows') : platform === 'macos' ? t('r13ui.uninstallMac') : fallback);
   const description = info
     ? info.uninstallAvailable
-      ? `${info.uninstallInstructions}${info.dataDir ? ` ${t('general.appData', { dir: info.dataDir })}` : ''}`
+      ? `${uninstallHow(info.platform, info.uninstallInstructions)}${info.dataDir ? ` ${t('general.appData', { dir: info.dataDir })}` : ''}`
       : t('general.uninstallDev')
     : t('teamPage.loading');
   return (
@@ -423,7 +424,7 @@ export const generalRows: RowDef[] = [
   {
     id: 'keep-awake',
     label: 'Keep this PC awake while agents work',
-    hint: 'Your agents keep going when you lock the PC (Win+L). The screen can still turn off.',
+    hint: 'Your agents keep going when you lock the PC. The screen can still turn off.',
     keywords: 'awake sleep lock locked win+l windows power standby suspend screen display idle keep working',
     group: 'While agents work',
     render: (env) => (
@@ -432,6 +433,21 @@ export const generalRows: RowDef[] = [
         description={t('lookFeel.keepAwake.hint')}
         checked={env.settings.keep_awake_while_working ?? true}
         onChange={(value) => void env.patch({ keep_awake_while_working: value })}
+      />
+    ),
+  },
+  {
+    id: 'jump-out',
+    label: 'Show questions that block an agent',
+    hint: 'When a question is only in the Inbox, a small card shows it. It never takes the keyboard.',
+    keywords: 'jump out popup pop up card question blocks blocking agent waiting login sign-in inbox floating later',
+    group: 'While agents work',
+    render: (env) => (
+      <SettingToggle
+        label={t('lookFeel.jumpOut.label')}
+        description={t('lookFeel.jumpOut.hint')}
+        checked={env.settings.jump_out_cards_enabled ?? true}
+        onChange={(value) => void env.patch({ jump_out_cards_enabled: value })}
       />
     ),
   },

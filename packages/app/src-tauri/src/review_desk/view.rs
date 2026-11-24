@@ -413,7 +413,7 @@ mod tests {
         one.title = format!("{} and a very long tail", "T".repeat(70));
         let mut desk = desk_view(&vec![one.clone(); 25], Vec::new());
         desk.items[0].agent_label = "Fixture agent".into();
-        let marker = Clean { text: Box::new(|raw| raw.replace("Fixture", "[clean]")) };
+        let marker = Clean { text: Box::new(|raw| raw.replace("Fixture", "[clean]")), path: None };
         let phone = phone_view(&desk, &marker);
         assert_eq!(phone.count, 25);
         assert_eq!(phone.items.len(), 20);

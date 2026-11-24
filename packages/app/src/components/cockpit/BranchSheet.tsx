@@ -3,6 +3,7 @@
 // until Start: then Potato Workspace makes a separate copy from the save point and starts the agent in it
 // (src/lib/branch-from.ts). Only the agents the server marks ok can be picked; the others say why not.
 import { errorSentence } from '../../lib/sayError';
+import { t, useT, type MessageKey } from '../../i18n';
 import { useCallback, useEffect, useId, useRef, useState } from 'react';
 import {
   branchPreview,
@@ -25,16 +26,28 @@ export const COUNTER_FROM_CHARS = 3_500;
 /** The brief preview asks again this long after the last key press. */
 const BRIEF_DEBOUNCE_MS = 400;
 
-const GENERIC_ERROR = 'Something went wrong. Try again.';
-const NOT_HERE = "Branching isn't available for this pane.";
-const TOO_LONG = 'Make your message shorter (4,000 characters at most).';
+/** The server's fixed sentences (branch_from/model.rs) in the app's language; any other text stays as it came. */
+const SERVER_TEXT: Record<string, MessageKey> = {
+  "Branching isn't available for this pane.": 'r10.branch.notHere',
+  'There is no save point for this turn. Save points are made while Undo is on.': 'r10.branch.noSavePoint',
+  "This message has no time, so its save point can't be found. Pick one in History.": 'r10.branch.noTimes',
+  'This turn is still running. Branch after it ends, or pick "Before this turn".': 'r10.branch.stillRunning',
+  'Branching needs Git in this folder. Use "Set up Git here" first.': 'r10.branch.needsGit',
+  'Branching needs one commit in this folder first.': 'r10.branch.noCommits',
+  'This chat has 5 open branches. Keep or throw away one in Changes first.': 'r10.branch.tooMany',
+  'A branch is already being made from this chat. Wait a moment.': 'r10.branch.busy',
+  "That agent can't be picked.": 'r10.branch.badTarget',
+  'Tell the agent what to do.': 'r10.branch.emptyMessage',
+  'Make your message shorter (4,000 characters at most).': 'r10.branch.tooLong',
+};
+const said = (text: string): string => (SERVER_TEXT[text] ? t(SERVER_TEXT[text]) : text);
 
 /** Backend errors read `CODE: message`. The person sees only the message, in plain words. */
 function friendlyError(err: unknown): string {
   const raw = errorSentence(err);
   const text = raw.replace(/^[A-Z][A-Z0-9_]{2,}:\s*/, '').trim();
-  if (!text || /^[A-Z][A-Z0-9_]+$/.test(text)) return GENERIC_ERROR;
-  return text;
+  if (!text || /^[A-Z][A-Z0-9_]+$/.test(text)) return t('r10.branch.generic');
+  return said(text);
 }
 
 /** The clock time of a moment, as "14:02". */
@@ -45,8 +58,8 @@ function clockText(ms: number): string {
 
 /** "Save point: After turn 5 · 14:02 · 3 files changed in that turn". The file part is left out when it is 0. */
 function savePointLine(point: BranchPointView): string {
-  const files = point.files > 0 ? ` · ${point.files} ${point.files === 1 ? 'file' : 'files'} changed in that turn` : '';
-  return `Save point: ${point.label} · ${clockText(point.atMs)}${files}`;
+  const files = point.files > 0 ? ` · ${t('r10.branch.filesChanged', { count: point.files })}` : '';
+  return `${t('r10.branch.savePoint')}: ${point.label} · ${clockText(point.atMs)}${files}`;
 }
 
 /** `agent` or `agent@account`: the text the server takes as the target. */
@@ -78,6 +91,7 @@ export function BranchSheet({
   /** Called with the new branch once Start has made it (its pane is starting). */
   onStarted?: (view: BranchView) => void;
 }) {
+  const t = useT();
   const uid = useId();
   const titleId = `${uid}-title`;
   const fieldId = `${uid}-field`;
@@ -159,16 +173,16 @@ export function BranchSheet({
   };
 
   if (blocked) {
-    const reason = preview?.whyNot ?? (preview === null ? loadError : null) ?? NOT_HERE;
+    const reason = said(preview?.whyNot ?? '') || (preview === null ? loadError : null) || t('r10.branch.notHere');
     return (
       <Sheet onClose={onClose} role="dialog" labelledBy={titleId} className="ck-branch-sheet">
         <div id={titleId} className="ck-title">
-          Branch from here
+          {t('r10.branch.title')}
         </div>
         <p className="ck-sub">{reason}</p>
         <div className="ck-sheet-actions">
           <button type="button" className="ck-btn ck-btn--sm ck-btn--primary" onClick={onClose}>
-            Close
+            {t('r10.close')}
           </button>
         </div>
       </Sheet>
@@ -182,24 +196,24 @@ export function BranchSheet({
   return (
     <Sheet onClose={busy ? undefined : onClose} role="dialog" labelledBy={titleId} className="ck-branch-sheet">
       <div id={titleId} className="ck-title">
-        Branch from here
+        {t('r10.branch.title')}
       </div>
       {preview?.point && <p className="ck-sub ck-branch-point">{savePointLine(preview.point)}</p>}
-      {preview === null && loadError === null && <p className="ck-sub">Looking at the save point…</p>}
+      {preview === null && loadError === null && <p className="ck-sub">{t('r10.branch.looking')}</p>}
       {from.kind === 'message' && (
-        <div className="ck-branch-seg" role="group" aria-label="Save point">
+        <div className="ck-branch-seg" role="group" aria-label={t('r10.branch.savePoint')}>
           <button type="button" className="ck-branch-seg-btn" aria-pressed={when === 'after'} disabled={busy} onClick={() => choose('after')}>
-            After this turn
+            {t('r10.branch.after')}
           </button>
           <button type="button" className="ck-branch-seg-btn" aria-pressed={when === 'before'} disabled={busy} onClick={() => choose('before')}>
-            Before this turn
+            {t('r10.branch.before')}
           </button>
         </div>
       )}
       <div className="ck-branch-label" id={`${uid}-agent`}>
-        Agent
+        {t('r10.branch.agent')}
       </div>
-      {preview !== null && preview.offers.length === 0 && <p className="ck-sub">No agent can run in this folder yet.</p>}
+      {preview !== null && preview.offers.length === 0 && <p className="ck-sub">{t('r10.branch.noAgent')}</p>}
       {preview !== null && preview.offers.length > 0 && (
         <div className="ck-branch-list" role="radiogroup" aria-labelledby={`${uid}-agent`}>
           {preview.offers.map((o) => {
@@ -215,7 +229,7 @@ export function BranchSheet({
                   onChange={() => setPicked(key)}
                 />
                 <span className="ck-branch-name">{o.label}</span>
-                <span className="ck-branch-state">{o.ok ? 'Ready' : (o.whyNot ?? 'Not available right now')}</span>
+                <span className="ck-branch-state">{o.ok ? t('r10.branch.ready') : (o.whyNot ?? t('r10.branch.unavailable'))}</span>
               </label>
             );
           })}
@@ -223,14 +237,14 @@ export function BranchSheet({
       )}
       <div className="ck-branch-field">
         <label htmlFor={fieldId} className="ck-branch-label">
-          What should it do?
+          {t('r10.branch.what')}
         </label>
         <textarea
           id={fieldId}
           className="ck-branch-input"
           rows={4}
           maxLength={MESSAGE_MAX_CHARS}
-          placeholder="Tell the agent what to try"
+          placeholder={t('r10.branch.placeholder')}
           value={message}
           disabled={busy}
           onChange={(e) => setMessage(e.target.value)}
@@ -240,28 +254,27 @@ export function BranchSheet({
             {`${message.length.toLocaleString('en-US')} / ${MESSAGE_MAX_CHARS.toLocaleString('en-US')}`}
           </span>
         )}
-        {tooLong && <p className="ck-sub">{TOO_LONG}</p>}
+        {tooLong && <p className="ck-sub">{t('r10.branch.tooLong')}</p>}
       </div>
       <button type="button" className="ck-branch-disclosure" aria-expanded={briefOpen} onClick={() => setBriefOpen((open) => !open)}>
-        Show what the agent gets
+        {t('r10.branch.show')}
       </button>
       {briefOpen && (
         <div className="ck-branch-brief-box">
           {shown ? (
             <>
-              <pre className="ck-branch-brief" tabIndex={0} aria-label="What the agent gets">
+              <pre className="ck-branch-brief" tabIndex={0} aria-label={t('r10.branch.gets')}>
                 {shown.text}
               </pre>
-              <div className="ck-sub">{`${briefSize(shown.text)} · trimmed: ${shown.trimmed.length > 0 ? shown.trimmed.join(', ') : 'none'}`}</div>
+              <div className="ck-sub">{`${briefSize(shown.text)} · ${t('r10.branch.trimmed')}: ${shown.trimmed.length > 0 ? shown.trimmed.join(', ') : t('r10.branch.none')}`}</div>
             </>
           ) : (
-            <p className="ck-sub">{message.trim() === '' ? 'Type what it should do to see the brief.' : 'Loading the brief…'}</p>
+            <p className="ck-sub">{message.trim() === '' ? t('r10.branch.typeFirst') : t('r10.branch.loadingBrief')}</p>
           )}
         </div>
       )}
       <p className="ck-sub ck-branch-copy">
-        Potato Workspace makes a separate copy of your files from this save point. Your folder and this chat stay as they are. Not in the copy:
-        files Git ignores (like node_modules) and files over 20 MB.
+        {t('r10.branch.copy')}
       </p>
       {loadError && (
         <p className="ck-memory-msg ck-memory-err" role="alert">
@@ -275,10 +288,10 @@ export function BranchSheet({
       )}
       <div className="ck-sheet-actions">
         <button type="button" className="ck-btn ck-btn--plain" onClick={onClose} disabled={busy}>
-          Cancel
+          {t('r10.cancel')}
         </button>
         <button type="button" className="ck-btn ck-btn--sm ck-btn--primary" disabled={!canStart} onClick={() => void go()}>
-          {busy ? 'Starting…' : chosen ? `Start ${chosen.label}` : 'Start'}
+          {busy ? t('r10.branch.starting') : chosen ? t('r10.branch.startNamed', { name: chosen.label }) : t('r10.branch.start')}
         </button>
       </div>
     </Sheet>

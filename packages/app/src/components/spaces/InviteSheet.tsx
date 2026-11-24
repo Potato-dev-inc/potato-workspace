@@ -4,6 +4,7 @@ import { Sheet } from '../cockpit/Sheet';
 import { timeLeftText } from '../../lib/questions';
 import type { SpaceInvite } from '../../lib/spaces';
 import '../../styles/cockpit-spaces.css';
+import { t } from '../../i18n';
 
 export interface InviteSheetProps {
   spaceName: string;
@@ -56,7 +57,7 @@ export function InviteSheet({ spaceName, invite, nowMs, onCancelInvite, onClose 
             different app.
           </p>
           <label className="ck-spaces-field">
-            <span>Invite link</span>
+            <span>{t('r21.sw.inviteLink')}</span>
             <input readOnly value={invite.link} onFocus={(e) => e.currentTarget.select()} />
           </label>
           <div className="ck-spaces-actions">
@@ -67,15 +68,15 @@ export function InviteSheet({ spaceName, invite, nowMs, onCancelInvite, onClose 
               {showQr ? 'Hide QR code' : 'Show QR code'}
             </button>
           </div>
-          <p className="ck-spaces-note">Invite words</p>
-          <ol className="ck-spaces-words" aria-label="Invite words">
+          <p className="ck-spaces-note">{t('r21.sw.inviteWords')}</p>
+          <ol className="ck-spaces-words" aria-label={t('r21.sw.inviteWords')}>
             {invite.words.map((w, i) => (
               <li key={i} className="ck-spaces-word">{w}</li>
             ))}
           </ol>
           {showQr && (
             <div className="ck-spaces-qr">
-              {qrSrc && <img src={qrSrc} alt="Invite QR code" />}
+              {qrSrc && <img src={qrSrc} alt={t('r21.sw.inviteQrCode')} />}
               <p className="ck-spaces-hint">
                 Scan this with the other computer's camera. The code holds the link and the words.
               </p>
@@ -85,7 +86,7 @@ export function InviteSheet({ spaceName, invite, nowMs, onCancelInvite, onClose 
             Works once. Expires in {timeLeftText(left)}. After 5 wrong tries it stops working.
           </p>
           <div className="ck-spaces-actions">
-            <button type="button" className="ck-spaces-btn is-danger" onClick={onCancelInvite}>Cancel invite</button>
+            <button type="button" className="ck-spaces-btn is-danger" onClick={onCancelInvite}>{t('r21.sw.cancelInvite')}</button>
             <button type="button" className="ck-spaces-btn is-primary" onClick={onClose}>Done</button>
           </div>
         </>

@@ -1,6 +1,9 @@
 // Typed wrappers for the project-folder commands (`commands/files_view.rs`). Every path is relative to the pane's
 // project folder, with `/`. The Rust side refuses anything that leaves the folder; this file only names the calls.
 import { convertFileSrc, invoke } from '@tauri-apps/api/core';
+import { t } from '../i18n';
+import type { Host } from './host/host';
+import { forHost } from './host/hostApi';
 
 export interface FileEntry {
   name: string;
@@ -94,6 +97,16 @@ export interface ContentSearch {
   filesScanned: number;
 }
 
+/** "Show in folder" and "Open in its own app" act on the disk of a PC: for a file on another PC they cannot, and this says so. `path` is the file's place in its project, for Copy path. */
+export class OnOtherPc extends Error {
+  constructor(
+    message: string,
+    readonly path: string,
+  ) {
+    super(message);
+  }
+}
+
 /** The calls the Files card and the file tab need (a test double can stand in). */
 export interface FilesApi {
   list(paneId: string, path: string, showHeavy?: boolean): Promise<FolderListing>;
@@ -135,6 +148,36 @@ export const filesApi: FilesApi = {
   diff: (paneId, path) => invoke<string>('files_diff', { paneId, path }),
   write: (paneId, path, text, baseVersion, overwrite) => invoke<FileSaved>('files_write', { paneId, path, text, baseVersion, overwrite: overwrite ?? false }),
 };
+
+/** The biggest file another PC's Word, Excel and PDF viewers get (its `files_read_bytes` cap); the same limit the far PC holds. */
+const FAR_BYTES_LIMIT = 15 * 1024 * 1024;
+
+/** The same api over another PC's host: every call is one far call (`pclink/calls_files.rs`). A file opens as its bytes (it cannot stream from a disk that is not here), and a call the far PC does not have (show in Explorer, open in the default program) says so in the host's one sentence. */
+function farFilesApi(host: Host): FilesApi {
+  const call = <T,>(cmd: string, args: Record<string, unknown>) => host.invoke<T>(cmd, args);
+  const name = host.place.kind === 'pc' ? host.place.name : '';
+  return {
+    list: (paneId, path, showHeavy) => call<FolderListing>('files_list', { paneId, path, showHeavy }),
+    read: (paneId, path) => call<FileContent>('files_read', { paneId, path }),
+    readBytes: (paneId, path) => call<FileBytes>('files_read_bytes', { paneId, path }),
+    openBytes: async (paneId, path) => {
+      const file = await call<FileBytes>('files_read_bytes', { paneId, path });
+      if (file.kind === 'too_large') return { path: file.path, name: file.name, size: file.size, kind: 'too_large', limit: FAR_BYTES_LIMIT };
+      return { path: file.path, name: file.name, size: file.size, kind: 'stream', limit: FAR_BYTES_LIMIT, source: { bytes: bytesOf(file.base64 ?? '') } };
+    },
+    // A window on the other PC's screen cannot be opened from here, so neither is asked: the file is there, and this says so.
+    openDefault: (_paneId, path) => Promise.reject(new OnOtherPc(t('files.openOnOtherPc', { name }), path)),
+    marks: (paneId) => call<FileMark[]>('files_marks', { paneId }),
+    searchContents: (paneId, query, searchId) => call<ContentSearch>('files_search_contents', { paneId, query, searchId }),
+    cancelSearch: (searchId) => call<void>('files_search_cancel', { searchId }),
+    reveal: (_paneId, path) => Promise.reject(new OnOtherPc(t('files.revealOnOtherPc', { name }), path)),
+    diff: (paneId, path) => call<string>('files_diff', { paneId, path }),
+    write: (paneId, path, text, baseVersion, overwrite) => call<FileSaved>('files_write', { paneId, path, text, baseVersion, overwrite: overwrite ?? false }),
+  };
+}
+
+/** The files api of a place: this PC's own, or the same calls on another PC. */
+export const filesApiFor = (host: Host): FilesApi => forHost(host, filesApi, farFilesApi);
 
 /** Size in plain words: "412 KB", "1.8 MB". */
 export function fileSize(bytes: number): string {

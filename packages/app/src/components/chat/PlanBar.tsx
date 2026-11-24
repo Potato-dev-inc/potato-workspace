@@ -7,6 +7,7 @@ import type { PlanItem } from '../../lib/sessionChatModel';
 import '../../styles/plan-bar.css';
 import { Chevron } from './chatCardIcons';
 import { PlanMark } from './PlanCard';
+import { t } from '../../i18n';
 
 /** How long "Done" stays before the bar folds. */
 export const PLAN_DONE_MS = 4000;
@@ -26,9 +27,9 @@ export function PlanBar({ items }: { items: readonly PlanItem[] }) {
     return () => clearTimeout(timer);
   }, [allDone]);
   if (!progress || folded) return null;
-  const label = allDone ? `Done · ${progress.done} of ${progress.total}` : `${progress.done} of ${progress.total}`;
+  const label = allDone ? t('plan.doneOf', { done: progress.done, total: progress.total }) : t('plan.of', { done: progress.done, total: progress.total });
   return (
-    <section aria-label="Plan progress" className="shrink-0 ck-planbar" data-testid="plan-bar" data-done={allDone ? 'true' : 'false'}>
+    <section aria-label={t('r10.plan.progress')} className="shrink-0 ck-planbar" data-testid="plan-bar" data-done={allDone ? 'true' : 'false'}>
       <button type="button" className="ck-planbar-head" aria-expanded={open} onClick={() => setOpen(!open)}>
         <b className="ck-planbar-count" data-testid="plan-bar-count">
           {label}
@@ -43,7 +44,7 @@ export function PlanBar({ items }: { items: readonly PlanItem[] }) {
       <div
         className="ck-planbar-line"
         role="progressbar"
-        aria-label="Plan progress"
+        aria-label={t('r21.sw.planProgress')}
         aria-valuemin={0}
         aria-valuemax={progress.total}
         aria-valuenow={progress.done}

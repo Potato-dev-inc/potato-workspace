@@ -9,7 +9,7 @@ use serde_json::{json, Value};
 
 use super::lanes::LaneNote;
 use super::surface::{self, intercept, intercept_noted_with, LaneLookup};
-use super::workspace_tests::{agents, conversations_in, deps_for};
+use pm_core::test_support::chat_rig::{agents, conversations_in, deps_for};
 use super::{get, StartDeps};
 use crate::acp::config::{AgentConfig, HostEnv};
 use crate::acp::conversations::Conversations;

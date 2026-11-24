@@ -19,20 +19,18 @@
 //! A borrowed grant is one more sign-in of its agent: account id `lend:<grant id>` (`accounts::Store::launch_env`
 //! resolves it here for both the terminal and the chat lane).
 
-pub mod env;
-pub mod forward;
-pub mod frame;
-pub mod gate;
-pub mod key_merge;
-pub mod link;
-pub mod meter;
+pub use pm_core::capacity_proxy::env;
+pub use pm_core::capacity_proxy::forward;
+pub use pm_core::capacity_proxy::frame;
+pub use pm_core::capacity_proxy::gate;
+pub use pm_core::capacity_proxy::link;
 pub mod ping;
 pub mod refresh;
 pub mod service;
-pub mod shim;
-pub mod signin;
+pub use pm_core::capacity_proxy::shim;
+pub use pm_core::capacity_proxy::signin;
 pub mod signin_pane;
-pub mod spec;
+pub use pm_core::capacity_proxy::spec;
 pub mod wire;
 
 #[cfg(test)]
@@ -41,6 +39,8 @@ mod agents_e2e_tests;
 mod e2e_tests;
 #[cfg(test)]
 mod own_tests;
+#[cfg(test)]
+mod own_far_tests;
 #[cfg(test)]
 mod link_tests;
 #[cfg(test)]
@@ -68,18 +68,12 @@ pub const LABS_KEY: &str = "lend_enabled";
 pub const OFF: &str = "Share an agent is off. Turn it on in Settings > General > Labs.";
 
 static ENABLED: AtomicBool = AtomicBool::new(false);
-static APP: OnceLock<tauri::AppHandle> = OnceLock::new();
 static SERVICE: OnceLock<Arc<Lend>> = OnceLock::new();
 static PINGER: OnceLock<Arc<ping::Pinger>> = OnceLock::new();
 static LAST_SETTINGS: std::sync::Mutex<Option<Value>> = std::sync::Mutex::new(None);
 
 pub fn enabled() -> bool {
     ENABLED.load(Ordering::SeqCst)
-}
-
-/// One line in `lib.rs` setup: keeps the handle for `lend://changed`. Builds nothing.
-pub fn init(app: tauri::AppHandle) {
-    let _ = APP.set(app);
 }
 
 /// Settings changed (effective settings, development override included).
@@ -91,12 +85,12 @@ pub fn apply_settings(public: &Value) {
     }
     if let Some(svc) = SERVICE.get() {
         svc.apply_settings(public);
-    } else if on && APP.get().is_some() {
+    } else if let (true, Some(host)) = (on, pm_core::host::get()) {
         // Build the service now (not at the first click): a lender that restarted tells its borrowers at once, and a
         // borrower's shim comes back before its panes need it.
-        tauri::async_runtime::spawn_blocking(|| {
+        host.spawn_blocking(Box::new(|| {
             let _ = app_service();
-        });
+        }));
     }
 }
 
@@ -146,9 +140,7 @@ impl SecretBackend for AppSecrets {
     }
 }
 
-pub(crate) fn now_ms() -> u64 {
-    std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).map(|d| d.as_millis() as u64).unwrap_or(0)
-}
+pub(crate) use pm_core::capacity_proxy::now_ms;
 
 /// The app's service, built the first time it is needed while the switch is on. Never while it is off.
 pub fn app_service() -> Result<Arc<Lend>, String> {
@@ -169,15 +161,8 @@ pub fn app_service() -> Result<Arc<Lend>, String> {
         now: Arc::new(now_ms),
         awake: Arc::new(service::app_awake()),
         pinger: pinger(),
-        changed: Arc::new(|| {
-            if let Some(app) = APP.get() {
-                use tauri::Emitter;
-                let _ = app.emit("lend://changed", ());
-            }
-        }),
-        spawn: Arc::new(|f| {
-            tauri::async_runtime::spawn(f);
-        }),
+        changed: Arc::new(|| pm_core::host::emit("lend://changed", Value::Null)),
+        spawn: Arc::new(pm_core::host::spawn),
         refresh: refresh::app_refresh(),
         env_names: Arc::new(env::inherited_names),
         own: Arc::new(crate::device_link::app::AppOwn),
@@ -200,25 +185,37 @@ pub fn app_service() -> Result<Arc<Lend>, String> {
     Ok(svc)
 }
 
-/// Every two minutes: old past lends go from the saved state, and a lender whose profile shows usage sends the
+/// A borrow whose lender restarted is looked at every 15 seconds (a probe only when a lend is borrowed; the screen must not say "borrowing" for minutes). Every two minutes: old past lends go from the saved state, and a lender whose profile shows usage sends the
 /// numbers to the borrower. Nothing is read or sent while no profile asks for it.
 fn start_usage_sharing(svc: &Arc<Lend>) {
     let me = Arc::downgrade(svc);
-    tauri::async_runtime::spawn(async move {
-        tokio::time::sleep(std::time::Duration::from_secs(30)).await;
+    pm_core::host::spawn(Box::pin(async move {
+        tokio::time::sleep(std::time::Duration::from_secs(15)).await;
+        let mut pass = 0u32;
         loop {
             let Some(svc) = me.upgrade() else { return };
-            let _ = tauri::async_runtime::spawn_blocking(move || {
+            // Inside the host's runtime (Tokio), so Tokio's own blocking pool.
+            svc.recheck_borrows().await;
+            pass += 1;
+            if pass % 8 != 1 {
+                drop(svc);
+                tokio::time::sleep(std::time::Duration::from_secs(15)).await;
+                continue;
+            }
+            let svc2 = svc.clone();
+            let _ = tokio::task::spawn_blocking(move || {
+                let svc = svc2;
                 svc.prune_past();
+                svc.recheck_lent();
                 if svc.usage_view().profiles.iter().any(|p| p.show_usage) {
                     let _ = crate::usage::snapshot(crate::usage::Refresh::IfStale, false);
                     svc.share_usage(&crate::usage::lend_numbers);
                 }
             })
             .await;
-            tokio::time::sleep(std::time::Duration::from_secs(120)).await;
+            tokio::time::sleep(std::time::Duration::from_secs(15)).await;
         }
-    });
+    }));
 }
 
 impl Lend {
@@ -261,6 +258,48 @@ pub fn note_pane(grant_id: &str, pane_id: &str) {
     if let Some(svc) = SERVICE.get() {
         svc.note_pane(grant_id, pane_id);
     }
+}
+
+/// "Use my own agents" (P6.1), on the PC that runs the agent: ask the lender `node` (a PC of mine, the caller of the far row) for the
+/// lend its click promised, and wait until it is up. The lender answers yes only to a request that names that promise.
+pub fn ask_lender(node: &str, agent_id: &str, offer_ref: &str, profile_id: Option<&str>, secs: u64) -> Result<String, String> {
+    app_service()?.ask_lender(node, agent_id, offer_ref, profile_id, secs)
+}
+
+/// Whether `grant_id` is an active lend of `agent_id` made to this PC by the paired PC `node` (the far start's check).
+pub fn grant_lent_by(grant_id: &str, agent_id: &str, node: &str) -> bool {
+    SERVICE.get().is_some_and(|s| s.grant_lent_by(grant_id, agent_id, node))
+}
+
+/// The sign-in a start with none named runs on: when this PC's own login for `agent_id` is signed out, the active lend of it.
+/// A far caller (`lender`) only ever gets a lend that caller made; this PC's own click (`None`) gets the newest from anyone.
+/// `None`: the own login is used (it works, or there is nothing lent).
+pub fn default_account(agent_id: &str, lender: Option<&str>) -> Option<String> {
+    let svc = SERVICE.get()?;
+    if !own_signed_out(agent_id) {
+        return None;
+    }
+    match lender {
+        Some(node) => svc.grant_from(agent_id, node),
+        None => svc.newest_borrow(agent_id),
+    }
+    .map(|g| format!("{ACCOUNT_PREFIX}{g}"))
+}
+
+fn own_signed_out(agent_id: &str) -> bool {
+    crate::commands::usage::login_states(false).iter().any(|s| s.agent_id.eq_ignore_ascii_case(agent_id) && s.state == "signed_out")
+}
+
+/// What a far start with no sign-in named will run on, for the calling PC `lender`: whether this PC's own login for `agent_id` is signed
+/// out, and the lend (grant id and its name) that start would take (`lender` None: the newest from anyone, as this PC's own start takes).
+/// The far New agent panel says it before the person starts.
+pub fn far_plan(agent_id: &str, lender: Option<&str>) -> (bool, Option<(String, String)>) {
+    let Some(svc) = SERVICE.get() else { return (own_signed_out(agent_id), None) };
+    let lend = lender.map_or_else(|| svc.newest_borrow(agent_id), |node| svc.grant_from(agent_id, node)).map(|g| {
+        let name = svc.borrowed_label(&g).unwrap_or_default();
+        (g, name)
+    });
+    (own_signed_out(agent_id), lend)
 }
 
 /// The label of a borrowed sign-in ("Leo's PC (lent)").

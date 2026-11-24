@@ -4,7 +4,8 @@
 // the copy. A teammate's event is untrusted data: the cockpit renders it as plain text only (never
 // as HTML or Markdown), the note is always shown in quotes, and nothing here runs on arrival.
 import { invoke } from '@tauri-apps/api/core';
-import { listen, type UnlistenFn } from '@tauri-apps/api/event';
+import { type UnlistenFn } from '@tauri-apps/api/event';
+import { listen } from './events';
 import type { WorktreeDiff } from './cockpit-api';
 import { t } from '../i18n';
 import { oneRelay } from './relay';
@@ -192,6 +193,8 @@ export interface TeamState {
   /** Absent from an older backend. */
   linkDetail?: TeamLinkDetail | null;
   error: string | null;
+  /** The "no longer on this team" line is showing; Dismiss (team leave) forgets the team here for good. Absent from an older backend. */
+  removed?: boolean;
   /** How many teammate updates are known to be missing. */
   missing: number;
   drafts: TeamDraft[];
@@ -243,6 +246,8 @@ export interface TeamConfigView {
   /** team.json exists but couldn't be read. */
   readError: string | null;
   error: string | null;
+  /** Facts for "Why am I seeing this?". Absent from an older backend. */
+  why?: { teamSaved: boolean; onRoster: boolean; removed: boolean; lastCheck: string | null };
   /** The team's name while waiting for the admin's yes. */
   joining: string | null;
   admin: boolean;

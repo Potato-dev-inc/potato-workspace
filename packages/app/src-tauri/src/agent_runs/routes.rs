@@ -342,7 +342,7 @@ fn prepare_run(
             &mut request,
             session_id,
             &crate::accounts::Store::default_location(),
-            &|| crate::questions::routes::publish_changed(app),
+            &|| crate::questions::routes::publish_changed(),
         )
         .map(|()| request),
     )

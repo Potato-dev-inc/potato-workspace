@@ -102,3 +102,10 @@ describe('missions in the one list', () => {
     expect(attentionMismatch(items, snapshot, isBlockingKind)).toEqual([]);
   });
 });
+
+describe('a local permission is one item', () => {
+  it('the acp_permission question replaces the pane approval row', () => {
+    const items = deriveNeedsYou({ panes: [{ id: 'p1', status: 'waiting_input' }], questions: [{ id: 'q1', pane_id: 'p1', kind: 'acp_permission' }] });
+    expect(blockingItems(items).map((i) => i.id)).toEqual(['question:q1']);
+  });
+});

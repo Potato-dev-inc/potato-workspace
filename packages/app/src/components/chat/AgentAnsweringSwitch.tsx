@@ -1,6 +1,7 @@
 // "Let agents answer these questions": off by default. Off, only the person can answer the agent's permission questions;
 // on, an agent that started this chat through Potato Workspace (or any agent tool) may answer them too.
 import { useEffect, useState } from 'react';
+import { t } from '../../i18n';
 import { errorSentence, tauriAcpChatApi, type AcpChatApi, type AcpChatState } from '../../lib/acpChat';
 import '../../styles/cockpit-acp.css';
 
@@ -29,12 +30,12 @@ export function AgentAnsweringSwitch({ paneId, state, api = tauriAcpChatApi }: {
   return (
     <div className="ck-acp-answering" data-testid="agent-answering">
       <div className="ck-menu-toggle">
-        <span id={`ck-answering-${paneId}`}>{AGENT_ANSWERING_LABEL}</span>
+        <span id={`ck-answering-${paneId}`}>{t('chat.agentAnswering.label')}</span>
         <button type="button" role="switch" aria-checked={on} aria-labelledby={`ck-answering-${paneId}`} className="ck-switch" onClick={toggle}>
           <span className="ck-switch-knob" />
         </button>
       </div>
-      <p className="ck-acp-answering-note">{on ? AGENT_ANSWERING_ON : AGENT_ANSWERING_OFF}</p>
+      <p className="ck-acp-answering-note">{on ? t('chat.agentAnswering.on') : t('chat.agentAnswering.off')}</p>
       {error && (
         <p className="ck-acp-answering-note" role="alert">
           {error}

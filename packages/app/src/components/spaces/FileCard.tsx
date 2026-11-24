@@ -1,4 +1,5 @@
 import { formatSize, type SpaceFile } from '../../lib/spaces';
+import { t } from '../../i18n';
 
 export { formatSize };
 
@@ -18,13 +19,13 @@ export function FileCard({ file, error, savedAs, onGet, onSave }: FileCardProps)
       {file.state === 'getting' ? (
         <p className="ck-spaces-hint" role="status">Getting file… {file.percent}%</p>
       ) : file.have ? (
-        <button type="button" className="ck-spaces-btn" onClick={onSave}>Save to Downloads</button>
+        <button type="button" className="ck-spaces-btn" onClick={onSave}>{t('r21.sw.saveToDownloads')}</button>
       ) : (
-        <button type="button" className="ck-spaces-btn" onClick={onGet}>Get file</button>
+        <button type="button" className="ck-spaces-btn" onClick={onGet}>{t('r21.sw.getFile')}</button>
       )}
       {savedAs && <p className="ck-spaces-hint" role="status">Saved to Downloads as {savedAs}.</p>}
       {error && <p className="ck-spaces-hint is-error" role="alert">{error}</p>}
-      <p className="ck-spaces-hint">Files from other people can be harmful. Only open files you expect.</p>
+      <p className="ck-spaces-hint">{t('r21.sw.filesFromOtherPeople')}</p>
     </div>
   );
 }

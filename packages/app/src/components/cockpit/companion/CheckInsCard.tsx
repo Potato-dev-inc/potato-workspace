@@ -6,6 +6,7 @@ import type { CheckIn, CompanionTransport, CompanionView, NextCheckIn } from '..
 import { formatWhen } from '../../../lib/companion';
 import { Sheet } from '../Sheet';
 import { DAY_NAMES, WHEN_OPTIONS, buildWhen, checkInLabel, newCheckInId, parseClock, type WhenKind } from './model';
+import { t } from '../../../i18n';
 
 const MAX_CHECKINS = 8;
 const MAX_TEXT = 2000;
@@ -62,14 +63,14 @@ export function CheckInsCard({
       </h2>
       <div className="ck-companion-push">
         <span className="ck-companion-push-text">
-          <span>Tell me on my phone</span>
-          <span className="ck-sub">A push when it replies.</span>
+          <span>{t('r21.sw.tellMeOnMy')}</span>
+          <span className="ck-sub">{t('r21.sw.aPushWhenIt')}</span>
         </span>
         <button
           type="button"
           role="switch"
           aria-checked={pushOn}
-          aria-label="Tell me on my phone"
+          aria-label={t('r21.sw.tellMeOnMy')}
           className="ck-switch"
           disabled={busy}
           onClick={() => void togglePush()}
@@ -81,7 +82,7 @@ export function CheckInsCard({
         nextCheckin ? (
           <p className="ck-sub">Next: {nextCheckin.label}</p>
         ) : (
-          <p className="ck-sub">No check-ins yet.</p>
+          <p className="ck-sub">{t('r21.sw.noCheckInsYet')}</p>
         )
       ) : (
         <ul className="ck-companion-list">
@@ -91,7 +92,7 @@ export function CheckInsCard({
               <span className="ck-sub">{formatWhen(c.when)}</span>
             </li>
           ))}
-          {checkins.length === 0 && <li className="ck-sub">No check-ins yet.</li>}
+          {checkins.length === 0 && <li className="ck-sub">{t('r21.sw.noCheckInsYet')}</li>}
         </ul>
       )}
       {checkins !== undefined && checkins.length < MAX_CHECKINS && (
@@ -175,12 +176,12 @@ function CheckInSheet({ onCancel, onSave }: { onCancel: () => void; onSave: (nex
       )}
       {kind === 'once' && (
         <label className="ck-companion-field">
-          <span className="ck-caption">Date and time</span>
+          <span className="ck-caption">{t('r21.sw.dateAndTime')}</span>
           <input className="ck-companion-input" type="datetime-local" value={onceAt} onChange={(e) => setOnceAt(e.target.value)} />
         </label>
       )}
       <label className="ck-companion-field">
-        <span className="ck-caption">What to ask</span>
+        <span className="ck-caption">{t('r21.sw.whatToAsk')}</span>
         <textarea className="ck-companion-input ck-companion-input--area" value={text} maxLength={MAX_TEXT} onChange={(e) => setText(e.target.value)} />
       </label>
       <div className="ck-sheet-actions">

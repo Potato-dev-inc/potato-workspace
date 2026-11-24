@@ -61,9 +61,9 @@ describe('SessionChatView states', () => {
     expect(text()).not.toContain('New session line');
   });
 
-  it('shows the waiting note while the session file is not read yet', () => {
+  it('shows Loading while the chat is not read yet, never a blank pane', () => {
     render({ state: 'loading' });
-    expect(text()).toContain(WAITING);
+    expect(text()).toContain('Loading…');
   });
 
   it('shows the waiting note for a ready chat with no items yet', () => {

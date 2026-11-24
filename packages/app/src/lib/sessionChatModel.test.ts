@@ -42,6 +42,7 @@ describe('sessionChatModel without Tauri', () => {
 
 const call = (id: string, callId: string, name: string, extra: Record<string, unknown> = {}): ChatItem =>
   ({ kind: 'toolCall', id, at: null, callId, name, summary: '', ...extra }) as ChatItem;
+const done = (id: string, callId: string, ok = true): ChatItem => ({ kind: 'toolResult', id, at: null, callId, ok, output: '' }) as ChatItem;
 const plan = (id: string, replace: boolean, items: PlanChatItem['items']): PlanChatItem => ({ kind: 'plan', id, at: null, items, replace });
 const notice = (id: string, noticeKind: string, text: string, url?: string): ChatItem => ({ kind: 'notice', id, at: null, noticeKind, text, url });
 const end = (id: string, durationMs: number | null, outcome: 'completed' | 'interrupted' = 'completed'): ChatItem => ({ kind: 'turnEnd', id, at: null, outcome, durationMs });
@@ -188,16 +189,30 @@ describe('groupTurns outputs', () => {
       call('4', 'c3', 'Edit', { paths: ['a.rs'], writes: true }),
       call('5', 'c4', 'Read', { paths: ['b.rs'] }),
       call('6', 'c5', 'Bash'),
+      done('7', 'c2'),
+      done('8', 'c3'),
     ]);
     expect(grouped.outputs).toEqual([
-      { path: 'a.rs', tool: 'Edit', wrote: true },
-      { path: 'b.rs', tool: 'Read', wrote: true },
+      { path: 'a.rs', tool: 'Edit', wrote: true, at: null },
+      { path: 'b.rs', tool: 'Read', wrote: true, at: null },
     ]);
   });
 
   it('a path only read is not marked as written, and a call seen twice counts once', () => {
     const grouped = groupTurns([call('1', 'c1', 'Read', { paths: ['a.rs'] }), call('2', 'c1', 'Read', { paths: ['a.rs'] })]);
-    expect(grouped.outputs).toEqual([{ path: 'a.rs', tool: 'Read', wrote: false }]);
+    expect(grouped.outputs).toEqual([{ path: 'a.rs', tool: 'Read', wrote: false, at: null }]);
+  });
+
+  it('a write that waits for a permission, or failed, has not happened: the file is not counted as written', () => {
+    const grouped = groupTurns([
+      user('1', 'write'),
+      call('2', 'c1', 'Write', { paths: ['wait.txt'], writes: true }),
+      call('3', 'c2', 'Write', { paths: ['bad.txt'], writes: true }),
+      done('4', 'c2', false),
+      call('5', 'c3', 'Write', { paths: ['ok.txt'], writes: true }),
+      done('6', 'c3'),
+    ]);
+    expect(Object.fromEntries(grouped.outputs.map((o) => [o.path, o.wrote]))).toEqual({ 'wait.txt': false, 'bad.txt': false, 'ok.txt': true });
   });
 
   it('a call from an older backend has no paths', () => {
@@ -242,5 +257,18 @@ describe('groupTurns with the last result', () => {
     const second = groupTurns(mergeItems(early, [base[2]!], false), first);
     expect(second.turns[0]).not.toBe(first.turns[0]);
     expect(second.turns).toEqual(groupTurns(base).turns);
+  });
+});
+
+describe('a missing sign-in variable said as a reply', () => {
+  it('is the turn ending (Sign in), not an answer', () => {
+    const items = [
+      { id: 'u', kind: 'user', text: 'hi' },
+      { id: 'a', kind: 'assistant', text: 'Missing environment variable: SABLE_API_KEY.' },
+      { id: 'e', kind: 'turnEnd', outcome: 'completed', durationMs: 1000 },
+    ] as unknown as ChatItem[];
+    const turn = groupTurns(items).turns[0]!;
+    expect(turn.steps).toHaveLength(0);
+    expect(turn.ending).toMatchObject({ reason: 'signed_out', text: "Codex isn't set up on this PC yet" });
   });
 });

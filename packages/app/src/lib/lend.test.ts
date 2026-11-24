@@ -9,6 +9,7 @@ import {
   chipText,
   comingSoonAgents,
   customSecs,
+  peerLabel,
   durationProblem,
   durationWords,
   grantLine,
@@ -26,6 +27,14 @@ import {
 } from './lend';
 
 const MIN = 60_000;
+
+describe('peerLabel', () => {
+  it('falls back to the PC, then to plain words, when the person has no name (my own other PC)', () => {
+    expect(peerLabel({ peer_name: 'Sam', peer_device_name: 'Desk' })).toBe('Sam');
+    expect(peerLabel({ peer_name: '', peer_device_name: 'Office-PC' })).toBe('Office-PC');
+    expect(peerLabel({ peer_name: '', peer_device_name: '' })).toBe('your other PC');
+  });
+});
 
 describe('lend rules', () => {
   it('names a length in plain words', () => {
@@ -174,5 +183,17 @@ describe('the borrowed name (one helper, used everywhere)', () => {
   it('the lines name the profile when there is one', () => {
     expect(grantLine({ ...GRANT_OUT, profile_name: 'Work account' }, 'Claude', GRANT_OUT.ends_ms - 8 * 3600_000)).toBe('Lending Work account to Maya · 8h 0m left');
     expect(grantLine({ ...GRANT_IN, profile_name: 'Work account' }, 'Claude', GRANT_IN.ends_ms - 40 * MIN)).toBe("Claude · Sam's Work account (borrowed) · 40m left");
+  });
+});
+
+describe('activeLendTo', () => {
+  const base = { ...GRANT_OUT, peer_node: 'n1', agent_id: 'claude', state: 'active' as const, ends_ms: 10_000 };
+  it('finds the active lend of that agent to that PC, and nothing else', async () => {
+    const { activeLendTo } = await import('./lend');
+    expect(activeLendTo([base], 5_000, 'n1', 'Claude')).toBe(base);
+    expect(activeLendTo([base], 5_000, 'n2', 'claude')).toBeUndefined();
+    expect(activeLendTo([base], 5_000, 'n1', 'codex')).toBeUndefined();
+    expect(activeLendTo([base], 20_000, 'n1', 'claude')).toBeUndefined();
+    expect(activeLendTo([{ ...base, state: 'ended' as never }], 5_000, 'n1', 'claude')).toBeUndefined();
   });
 });

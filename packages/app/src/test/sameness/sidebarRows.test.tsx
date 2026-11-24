@@ -8,7 +8,7 @@ import { createRoot, type Root } from 'react-dom/client';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { DevicesFake, MAC_MINI, NODE_MAC, PM_NIGHT_PANES as FAR } from '../../dev/devices-fixtures';
 import type { CockpitApi } from '../../hooks/useCockpit';
-import { paneNames } from '../../components/cockpit/model';
+import { paneNames, resetPaneOrdinals } from '../../components/cockpit/model';
 import { Sidebar } from '../../components/cockpit/Sidebar';
 import { useDeviceGroups } from '../../components/devices/useDeviceGroups';
 import { rememberCrewStart } from '../../lib/crew-members';
@@ -18,6 +18,12 @@ vi.mock('../../lib/settings', async (importOriginal) => {
   const real = await importOriginal<typeof import('../../lib/settings')>();
   return { ...real, loadSettings: async () => ({ ...(await real.loadSettings()), workflows_enabled: true }) };
 });
+// This PC reads each chat's branch and copy from git; a far PC says it in the row. Give this PC's side the same fact for the chat on a copy,
+// so both sides group it the same way (a chat on a copy sits in its own branch group).
+vi.mock('../../components/cockpit/useProjectCard', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('../../components/cockpit/useProjectCard')>()),
+  usePaneCards: () => new Map([['copy', { branch: null, copy: { handle: 'copy', branch: '' } }]]),
+}));
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 (globalThis as { ResizeObserver?: unknown }).ResizeObserver ??= class {
   observe() {}
@@ -57,6 +63,7 @@ function FarScreen({ fake }: { fake: DevicesFake }) {
 let host: HTMLDivElement;
 let root: Root;
 beforeEach(() => {
+  resetPaneOrdinals();
   localStorage.clear();
   host = document.createElement('div');
   host.className = 'cockpit';

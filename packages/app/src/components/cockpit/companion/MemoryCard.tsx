@@ -5,6 +5,7 @@ import type { CompanionTransport, MemoryFile, MemoryView } from '../../../lib/co
 import { SegTabs } from '../SegTabs';
 import { MEMORY_TABS, KNOWS_TABS, countChars, fileNameOf, formatCount, type MemoryTab } from './model';
 import { SkillsPanel } from './SkillsPanel';
+import { t } from '../../../i18n';
 
 export function MemoryCard({
   companionId,
@@ -94,7 +95,7 @@ export function MemoryCard({
         </div>
       ))}
 
-      <SegTabs label="Memory file" value={tab} onChange={switchTab} options={KNOWS_TABS} small />
+      <SegTabs label={t('r21.sw.memoryFile')} value={tab} onChange={switchTab} options={KNOWS_TABS} small />
 
       {file === null ? (
         <SkillsPanel companionId={companionId} name={name} skills={memory.skills ?? []} transport={transport} onChanged={onChanged} />

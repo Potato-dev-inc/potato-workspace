@@ -128,7 +128,7 @@ export function CompanionPage(props: CompanionPageProps) {
             {renaming ? (
               <input
                 className="ck-title-input ck-companion-name-input"
-                aria-label="Companion name"
+                aria-label={t('r9.cp.name')}
                 autoFocus
                 maxLength={24}
                 value={draftName}
@@ -143,7 +143,7 @@ export function CompanionPage(props: CompanionPageProps) {
                 }}
               />
             ) : (
-              <button type="button" className="ck-companion-name" onClick={startRename} title="Rename">
+              <button type="button" className="ck-companion-name" onClick={startRename} title={t('r9.cp.rename')}>
                 {name}
               </button>
             )}
@@ -200,11 +200,11 @@ export function CompanionPage(props: CompanionPageProps) {
               </button>
             )}
             <div className="ck-menu-wrap">
-              <button ref={moreBtn} type="button" className="ck-icon-btn" aria-label="More" aria-haspopup="menu" aria-expanded={menuOpen} onClick={() => setMenuOpen((v) => !v)}>
+              <button ref={moreBtn} type="button" className="ck-icon-btn" aria-label={t('r9.cp.more')} aria-haspopup="menu" aria-expanded={menuOpen} onClick={() => setMenuOpen((v) => !v)}>
                 <IconMore />
               </button>
               {menuOpen && (
-                <Menu anchorRef={moreBtn} align="end" className="ck-menu--wide" label="More" onClose={() => setMenuOpen(false)}>
+                <Menu anchorRef={moreBtn} align="end" className="ck-menu--wide" label={t('r9.cp.more')} onClose={() => setMenuOpen(false)}>
                   {several && !companion.isDefault && (
                     <button type="button" className="ck-menu-item" role="menuitem" onClick={() => { setMenuOpen(false); void makeDefault(); }}>
                       {t('companions.makeDefault')}
@@ -246,9 +246,9 @@ export function CompanionPage(props: CompanionPageProps) {
 
         {sleeping ? (
           <div className="ck-companion-asleep">
-            <p className="ck-sub">Sleeping. Wake me when you need me.</p>
+            <p className="ck-sub">{t('r9.cp.sleeping')}</p>
             <button type="button" className="ck-btn ck-btn--primary" onClick={() => void toggleSleep()} disabled={busy}>
-              Wake up {name}
+              {t('r9.cp.wake', { name })}
             </button>
           </div>
         ) : companion.paneId ? (
@@ -261,7 +261,7 @@ export function CompanionPage(props: CompanionPageProps) {
                 sleptBefore ? (
                   <div className="ck-companion-divider" role="note">
                     <span className="ck-companion-divider-rule" aria-hidden="true" />
-                    <span>New session after a nap or wake-up</span>
+                    <span>{t('r9.cp.nap')}</span>
                     <span className="ck-companion-divider-rule" aria-hidden="true" />
                   </div>
                 ) : undefined
@@ -269,12 +269,12 @@ export function CompanionPage(props: CompanionPageProps) {
             />
           </div>
         ) : (
-          <p className="ck-sub ck-companion-wait">Waking up…</p>
+          <p className="ck-sub ck-companion-wait">{t('r9.cp.waking')}</p>
         )}
       </div>
 
       {railOpen && (
-        <aside className="ck-companion-rail" aria-label="Companion details">
+        <aside className="ck-companion-rail" aria-label={t('r9.cp.details')}>
           {memory && (
             <MemoryCard
               key={companion.id}
@@ -320,7 +320,7 @@ export function CompanionPage(props: CompanionPageProps) {
             </h2>
             <dl className="ck-kv">
               <AgentRow companion={companion} transport={transport} onChanged={onChanged} onNotify={onNotify} />
-              <dt>Folder</dt>
+              <dt>{t('r9.cp.folder')}</dt>
               <dd className="ck-mono">{companion.folderName}</dd>
             </dl>
             <div className="ck-companion-meta">
@@ -344,9 +344,9 @@ export function CompanionPage(props: CompanionPageProps) {
       {archiveOpen && (
         <Sheet onClose={() => setArchiveOpen(false)} labelledBy="ck-companion-archive-title" className="ck-companion-sheet">
           <h3 className="ck-section" id="ck-companion-archive-title">
-            Archive {name}?
+            {t('r9.cp.archive', { name })}
           </h3>
-          <p className="ck-sub">It stops and leaves the list. Its files stay in its folder.</p>
+          <p className="ck-sub">{t('r9.cp.archiveNote')}</p>
           <div className="ck-sheet-actions">
             <button type="button" className="ck-btn ck-btn--plain" onClick={() => setArchiveOpen(false)}>
               Cancel

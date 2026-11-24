@@ -1,6 +1,7 @@
 // @vitest-environment jsdom
 import { invoke } from '@tauri-apps/api/core';
 import { listen } from '@tauri-apps/api/event';
+import { resetEventHub } from './events';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { pointApi, type PointState } from './point-api';
 
@@ -35,6 +36,7 @@ describe('pointApi outside the desktop shell', () => {
 
 describe('pointApi in the desktop shell', () => {
   beforeEach(() => {
+    resetEventHub();
     tauriWindow().__TAURI_INTERNALS__ = {};
     vi.mocked(invoke).mockReset();
     vi.mocked(listen).mockReset();

@@ -5,7 +5,7 @@ import { t, useT } from '../../../i18n';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { save as saveDialog } from '@tauri-apps/plugin-dialog';
 import { tauri, type DiagnosticPreview } from '../../../lib/tauri';
-import { Btn, Note, SettingBlock, SettingRow } from '../settings-ui';
+import { Btn, Note, SettingRow } from '../settings-ui';
 import { SpeedReadout } from './SpeedReadout';
 
 function size(bytes: number): string {
@@ -75,6 +75,10 @@ export function DiagnosticFile({ onSaved }: { onSaved?: () => void }) {
   }, []);
 
   const open = preview !== null;
+  const sheetRef = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    if (open) sheetRef.current?.focus();
+  }, [open]);
   useEffect(() => {
     if (!open) return;
     const timer = window.setInterval(() => void reread(), DIAGNOSTIC_REFRESH_MS);
@@ -148,10 +152,22 @@ export function DiagnosticFile({ onSaved }: { onSaved?: () => void }) {
         </Btn>
       </SettingRow>
       {preview && (
-        <SettingBlock
-          label={t('diag.contains')}
-          description={t('diag.containsHelp')}
+        <div
+          className="st-scrim st-diag-scrim"
+          onMouseDown={(e) => {
+            if (e.target === e.currentTarget) setPreview(null);
+          }}
+          onKeyDown={(e) => {
+            if (e.key === 'Escape') {
+              e.stopPropagation();
+              setPreview(null);
+            }
+          }}
         >
+        <div className="st-sheet st-diag-sheet" role="dialog" aria-modal="true" aria-labelledby="st-diag-title" tabIndex={-1} ref={sheetRef}>
+          <h2 id="st-diag-title">{t('diag.contains')}</h2>
+          <p>{t('diag.containsHelp')}</p>
+          <div className="st-diag-body">
           <ul className="st-diag-list" aria-label={t('diag.filesAria')}>
             {preview.files.map((file) => (
               <li key={file.path} className="st-diag-item">
@@ -167,13 +183,15 @@ export function DiagnosticFile({ onSaved }: { onSaved?: () => void }) {
               </li>
             ))}
           </ul>
+          </div>
           <div className="st-diag-actions">
             <Btn primary disabled={busy || left.size >= preview.files.length} onClick={() => void save()}>
               {t('diag.saveDots')}
             </Btn>
             <Btn onClick={() => setPreview(null)}>{t('lend.cancel')}</Btn>
           </div>
-        </SettingBlock>
+        </div>
+        </div>
       )}
       <SpeedReadout />
       {message && <Note role={message.error ? 'alert' : 'status'}>{message.text}</Note>}

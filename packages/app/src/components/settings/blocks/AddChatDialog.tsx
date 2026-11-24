@@ -27,6 +27,7 @@ import { plainMessage } from '../../../lib/acpAddon';
 import { AcpStep, type AcpDraft } from './AcpStep';
 import { AdapterPanel, type AdapterReport } from './AdapterPanel';
 import { BTN } from './AgentWizardCapture';
+import { t } from '../../../i18n';
 
 export type AddChatApi = Pick<AcpChatApi, 'overlayDetect' | 'overlaySet'> &
   Partial<Pick<AcpChatApi, 'overlayResolve' | 'overlayInstall' | 'overlayProgress' | 'adapterKeyStatus' | 'adapterKeySet'>>;
@@ -191,7 +192,7 @@ export function AddChatDialog({
     if (option?.kind === 'adapter') return void addAdapter();
     if (!shownValue) return;
     if (!api.overlaySet) {
-      setError('This version of the app cannot add a chat.');
+      setError(t('r21.sw.thisVersionOfThe2'));
       return;
     }
     setBusy(true);
@@ -207,7 +208,7 @@ export function AddChatDialog({
 
   const addBridge = async () => {
     if (!api.overlayInstall) {
-      setError('This version of the app cannot add a chat.');
+      setError(t('r21.sw.thisVersionOfThe2'));
       return;
     }
     setBusy(true);
@@ -224,7 +225,7 @@ export function AddChatDialog({
   // Chat (terminal): nothing to download; the click on "Add chat" is the confirm. Writes the lane only.
   const addTerminal = async () => {
     if (!api.overlayInstall) {
-      setError('This version of the app cannot add a chat.');
+      setError(t('r21.sw.thisVersionOfThe2'));
       return;
     }
     setBusy(true);
@@ -242,7 +243,7 @@ export function AddChatDialog({
   // stays disabled until every key group has a saved key, and the backend checks the same again.
   const addAdapter = async () => {
     if (!api.overlayInstall || !adapter) {
-      setError('This version of the app cannot add a chat.');
+      setError(t('r21.sw.thisVersionOfThe2'));
       return;
     }
     if (!adapter.ready) return;
@@ -259,7 +260,7 @@ export function AddChatDialog({
 
   const install = async (picked: OverlayOption) => {
     if (!api.overlayInstall) {
-      setError('This version of the app cannot download a chat add-on.');
+      setError(t('r21.sw.thisVersionOfThe3'));
       return;
     }
     const info = picked.registry;
@@ -304,7 +305,7 @@ export function AddChatDialog({
   };
 
   const radios = !manual && available.length > 1 && (
-    <div role="radiogroup" aria-label="How to add chat" data-testid="add-chat-options" className="mt-3 flex flex-col gap-2">
+    <div role="radiogroup" aria-label={t('r21.sw.howToAddChat')} data-testid="add-chat-options" className="mt-3 flex flex-col gap-2">
       {available.map(({ o, i }) => (
         <label key={`${o.kind}-${i}`} className="flex cursor-pointer items-start gap-2 text-sm" data-testid={`add-chat-option-${o.kind}`}>
           <input type="radio" name="add-chat-option" checked={sel === i} disabled={busy} onChange={() => setSel(i)} className="mt-1" />
@@ -315,7 +316,7 @@ export function AddChatDialog({
             {o.kind === 'terminal_chat' ? (
               <span className="block text-xs text-pm-muted">
                 {o.summary}
-                <span className="block">Nothing to download.</span>
+                <span className="block">{t('r21.sw.nothingToDownload')}</span>
               </span>
             ) : (
               <span className="block text-xs text-pm-muted">{o.kind === 'native' ? (o.command_line ?? o.summary) : o.label}</span>
@@ -349,7 +350,7 @@ export function AddChatDialog({
           <p className="text-sm" data-testid="add-chat-summary">
             {option.summary}
           </p>
-          <p className="mt-2 text-xs text-pm-muted">Nothing to download.</p>
+          <p className="mt-2 text-xs text-pm-muted">{t('r21.sw.nothingToDownload')}</p>
         </div>
       ) : option?.kind === 'bridge' ? (
         <div className={radios ? 'mt-3' : ''}>

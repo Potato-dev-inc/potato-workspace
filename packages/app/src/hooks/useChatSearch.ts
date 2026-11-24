@@ -1,7 +1,8 @@
 // The hits for what is typed in the palette's "Search all chats" mode: asks the backend a moment after the last
 // key (or chip), and drops an answer that arrives after a newer question.
 import { useEffect, useState } from 'react';
-import { searchChats, type ChatHit } from '../lib/chatSearch';
+import { searchChats, searchChatsEverywhere, type ChatHit } from '../lib/chatSearch';
+import type { Host } from '../lib/host/host';
 import { hasChatFilters, searchFilters, type ChatFilters } from '../lib/chatFilters';
 
 /** `off`: the person turned the search index off (Settings > General). */
@@ -13,10 +14,11 @@ export interface ChatSearch {
 }
 
 const DEBOUNCE_MS = 120;
+const NO_HOSTS: readonly Host[] = [];
 
 /** `query`: the words typed (shortcuts already taken out); `filters`: the chips and shortcuts together. Words or a
  * filter are enough to search; with a filter and no words the newest items that pass it are listed. */
-export function useChatSearch(query: string, filters: ChatFilters, enabled: boolean): ChatSearch {
+export function useChatSearch(query: string, filters: ChatFilters, enabled: boolean, far: readonly Host[] = NO_HOSTS): ChatSearch {
   const [result, setResult] = useState<ChatSearch>({ hits: [], state: 'idle' });
   // The effect follows the filters' content, not their object: a new object with the same filters is not a new question.
   const filterKey = JSON.stringify(filters);
@@ -31,7 +33,7 @@ export function useChatSearch(query: string, filters: ChatFilters, enabled: bool
     let live = true;
     setResult((prev) => ({ hits: prev.hits, state: 'searching' }));
     const timer = setTimeout(() => {
-      searchChats(typed, undefined, searchFilters(chosen, Date.now()))
+      (far.length > 0 ? searchChatsEverywhere(far, typed, undefined, searchFilters(chosen, Date.now())) : searchChats(typed, undefined, searchFilters(chosen, Date.now())))
         .then((answer) => live && setResult(answer.enabled ? { hits: answer.hits, state: 'done' } : { hits: [], state: 'off' }))
         .catch(() => live && setResult({ hits: [], state: 'failed' }));
     }, DEBOUNCE_MS);
@@ -39,7 +41,7 @@ export function useChatSearch(query: string, filters: ChatFilters, enabled: bool
       live = false;
       clearTimeout(timer);
     };
-  }, [query, filterKey, enabled]);
+  }, [query, filterKey, enabled, far]);
 
   return result;
 }

@@ -109,6 +109,11 @@ impl Side {
     /// Waits (the folder is rescanned every few seconds) until at least one item for this device was handled, then
     /// takes whatever else is already there.
     pub(super) fn pump(&self) {
+        self.pump_into(&self.lend);
+    }
+
+    /// Like `pump`, but into another service of this PC (one started again over the same saved state).
+    pub(super) fn pump_into(&self, lend: &Lend) {
         let rx = self.rx.lock().unwrap();
         let me = self.device();
         let deadline = std::time::Instant::now() + Duration::from_secs(8);
@@ -130,7 +135,7 @@ impl Side {
                     mine += 1;
                 }
                 if !self.pinger.handle(&cin) {
-                    let _ = self.lend.on_item(&cin);
+                    let _ = lend.on_item(&cin);
                 }
             }
         }
@@ -175,8 +180,9 @@ fn side_on(name: &str, session: Session, transport: &Arc<dyn TeamTransport>, net
         net,
         accounts: crate::accounts::Store::at(&dir),
         specs: vec![
-            ProxySpec::parse(include_str!("../tui/claude/lend_proxy.toml")).unwrap(),
-            ProxySpec::parse(include_str!("../tui/codex/lend_proxy.toml")).unwrap(),
+            ProxySpec::parse(include_str!("../../crates/pm-core/src/tui/claude/lend_proxy.toml")).unwrap(),
+            ProxySpec::parse(include_str!("../../crates/pm-core/src/tui/codex/lend_proxy.toml")).unwrap(),
+            ProxySpec::parse(include_str!("../../crates/pm-core/src/tui/opencode/lend_proxy.toml")).unwrap(),
             crate::tui::declarative::lend_overlay::spec_for("gemini").unwrap().unwrap(),
         ],
         now: Arc::new(now),
@@ -276,7 +282,7 @@ async fn lend_one_with(w: &World2, secs: u64, profile_id: &str) -> (String, Stri
     for _ in 0..100 {
         if let Ok(env) = w.leo.lend.borrowed_launch_env("claude", &grant.id) {
             let base = env.set.iter().find(|(k, _)| k == "ANTHROPIC_BASE_URL").unwrap().1.clone();
-            assert!(env.set.contains(&("ANTHROPIC_AUTH_TOKEN".into(), "pm-lend".into())));
+            assert!(env.set.contains(&("ANTHROPIC_AUTH_TOKEN".into(), super::shim::test_token_for_url(&base))));
             assert!(env.remove.iter().any(|r| r == "ANTHROPIC_API_KEY"));
             return (grant.id, base);
         }
@@ -803,7 +809,7 @@ async fn a_chat_on_a_borrowed_sign_in_gets_the_proxy_env_and_is_listed_on_the_gr
     with_account_env(&mut cfg, &launch);
     let env = build_env(&cfg, &Host, None);
     assert_eq!(lookup(&env, "ANTHROPIC_BASE_URL"), Some(base.clone()), "the adapter talks to the local shim");
-    assert_eq!(lookup(&env, "ANTHROPIC_AUTH_TOKEN").as_deref(), Some("pm-lend"), "a placeholder, never a real token");
+    assert_eq!(lookup(&env, "ANTHROPIC_AUTH_TOKEN"), Some(super::shim::test_token_for_url(&base)), "the grant's own secret, never a real token");
     assert_eq!(lookup(&env, "ANTHROPIC_API_KEY"), None, "the borrower's own key does not reach the adapter");
     assert_eq!(lookup(&env, "CLAUDE_CONFIG_DIR"), None, "nor the borrower's own login folder");
 
@@ -851,7 +857,7 @@ async fn a_chat_on_a_borrowed_claude_subscription_starts_and_sends_a_turn_throug
     with_borrowed_chat(&mut cfg, &chat);
     let env = build_env(&cfg, &Host, None);
     assert_eq!(lookup(&env, "ANTHROPIC_BASE_URL"), Some(base.clone()));
-    assert_eq!(lookup(&env, "ANTHROPIC_AUTH_TOKEN").as_deref(), Some("pm-lend"));
+    assert_eq!(lookup(&env, "ANTHROPIC_AUTH_TOKEN"), Some(super::shim::test_token_for_url(&base)));
     assert_eq!(lookup(&env, "ANTHROPIC_API_KEY"), None);
     assert_eq!(lookup(&env, "CLAUDE_CODE_EXECUTABLE").as_deref(), Some("claude-bin"), "the program the adapter starts is still found");
     let config_dir = lookup(&env, "CLAUDE_CONFIG_DIR").expect("a config folder of this lend");
@@ -870,7 +876,7 @@ async fn a_chat_on_a_borrowed_claude_subscription_starts_and_sends_a_turn_throug
     assert_eq!(seen[0].header("authorization"), Some("Bearer tok-one-FAKE"), "the lender's subscription token, not a key");
     assert!(seen[0].header("anthropic-beta").is_some_and(|b| b.contains("oauth-2025-04-20")));
     assert_eq!(seen[0].header("x-api-key"), None);
-    assert!(!seen.iter().any(|r| r.header("authorization").is_some_and(|a| a.contains("pm-lend"))), "the placeholder never reaches the provider");
+    assert!(!seen.iter().any(|r| r.header("authorization").is_some_and(|a| a.contains(&super::shim::test_token_for_url(&base)))), "the grant secret never reaches the provider");
     w.leo.lend.note_pane(&grant_id, "chat-pane-claude");
     let mine = w.leo.lend.state(true).grants.into_iter().find(|g| g.id == grant_id).unwrap();
     assert_eq!(mine.pane_ids, vec!["chat-pane-claude".to_string()]);

@@ -5,7 +5,7 @@
 // and asks once more. Keep and Throw away are on the computer, never here (the card no longer says so).
 // The summary is one quiet row; the task rows open behind "Details".
 import { useCallback, useEffect, useState } from 'react';
-import { useT } from '../../i18n';
+import { t, useT } from '../../i18n';
 import '../../styles/phone-shell.css';
 import type { NightTaskView, NightView } from '../../lib/night';
 import { ngrokRequestHeaders } from '../../lib/bridge-ngrok';
@@ -165,7 +165,7 @@ export function NightSummary({
         )}
       </section>
       {open && view.tasks.length > 0 && (
-        <section aria-label="Night Shift tasks">
+        <section aria-label={t('r21.sw.nightShiftTasks')}>
           <ul className="ph-group">
             {shown.map((task) => (
               <li key={task.id} data-task-state={task.state}>

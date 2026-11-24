@@ -173,7 +173,7 @@ export function ConnectPage({ tab, onTab, team, lend, paneNames, displayName, on
       {CONNECT_TABS.map((id) =>
         visited.has(id) ? (
           <div key={id} className="cx-panel" role="tabpanel" id={`connect-panel-${id}`} aria-labelledby={`connect-tab-${id}`} data-testid={`connect-panel-${id}`} hidden={tab !== id}>
-            {id === 'devices' && <DevicesTab api={api} settings={settings} patch={patch} pc={pc} active={tab === id} onOpenPc={onOpenPc} onOpenPane={onOpenPane} />}
+            {id === 'devices' && <DevicesTab api={api} settings={settings} patch={patch} pc={pc} active={tab === id} onOpenPc={onOpenPc} onOpenPane={onOpenPane} lend={lendHandle} />}
             {id === 'team' && (
               <div className="cx-page">
                 <ReachLine pc={pc} />
@@ -221,7 +221,23 @@ function useAttention(teamClient: TeamApi, lend: LendHandle, pc: ThisPcHandle): 
 
 function LendingTab({ api, lend, settings, patch, pc }: { api: ConnectApi; lend: LendHandle; settings: Settings | null; patch: (p: SettingsPatch) => Promise<void>; pc: ThisPcHandle }) {
   const t = useT();
-  const on = settings?.lend_enabled === true || lend.enabled;
+  // The switch shows what the person chose at once, and the saved setting after that. (It used to also wait for the lend
+  // state, which only catches up on its 15 s poll: turning off looked stuck on, and a second click turned it back on.)
+  const [choice, setChoice] = useState<boolean | null>(null);
+  const [failed, setFailed] = useState(false);
+  const on = choice ?? (settings ? settings.lend_enabled === true : lend.enabled);
+  const flip = async (next: boolean) => {
+    setChoice(next);
+    setFailed(false);
+    try {
+      await patch({ lend_enabled: next });
+      lend.refresh();
+    } catch {
+      setFailed(true);
+    } finally {
+      setChoice(null);
+    }
+  };
   const state = lend.state;
   const out = state ? state.grants.filter((g) => isActiveOut(g, lend.now)).length : 0;
   const incoming = state ? state.grants.filter((g) => isActiveIn(g, lend.now)).length : 0;
@@ -232,12 +248,17 @@ function LendingTab({ api, lend, settings, patch, pc }: { api: ConnectApi; lend:
         <div className="cx-switchrow cx-switchrow--top">
           <div>
             <b>{t('connect.lending.switch')}</b>
+            {failed && (
+              <div className="cx-note" role="alert" data-testid="connect-lending-switch-error">
+                {t('connect.lending.switchFailed')}
+              </div>
+            )}
             <div className="cx-note" data-testid="connect-status-lending">
               {!on ? t('connect.lending.offLine') : out + incoming > 0 ? t('connect.lending.status', { out, in: incoming }) : t('connect.lending.none')}
             </div>
           </div>
           <label className="cx-switch">
-            <input type="checkbox" role="switch" checked={on} disabled={settings === null} aria-label={t('connect.lending.switch')} data-testid="connect-lending-switch" onChange={(e) => void patch({ lend_enabled: e.target.checked })} />
+            <input type="checkbox" role="switch" checked={on} disabled={settings === null || choice !== null} aria-label={t('connect.lending.switch')} data-testid="connect-lending-switch" onChange={(e) => void flip(e.target.checked)} />
             <span aria-hidden="true" />
           </label>
         </div>

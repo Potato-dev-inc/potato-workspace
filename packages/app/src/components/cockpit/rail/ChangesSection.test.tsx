@@ -6,10 +6,12 @@ import { join } from 'node:path';
 import { act } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { resetReviewMarks, stateOf } from '../../../lib/turn-review';
+import { clearDecision, putBackMark, resetReviewMarks, stateOf } from '../../../lib/turn-review';
 import { useEnglish } from '../../../i18n/test-utils';
 import { resetRailFoldForTests } from './railFold';
+import { SETTLE_WAITS } from '../../../lib/turn-review';
 import { changeRows, changeTotals, ChangesSection, topChanges } from './ChangesSection';
+import { OutputsSection } from './OutputsSection';
 
 const REVIEW = {
   turn: 2,
@@ -53,6 +55,7 @@ const show = async (props: { open?: () => void; pr?: boolean; outs?: typeof outp
     await new Promise((r) => setImmediate(r));
   });
 };
+const reviewReads = () => invoke.mock.calls.filter(([cmd]) => cmd === 'checkpoint_turn_review').length;
 const total = () => host.querySelector('[data-testid="rail-changes-total"]')!.textContent;
 
 describe('Changes section numbers', () => {
@@ -108,6 +111,47 @@ describe('Changes section on screen', () => {
   });
 });
 
+describe('a second turn', () => {
+  const render = (turnKey: string) => act(async () => root.render(<ChangesSection paneId="p1" status="idle" turnKey={turnKey} cwd="C:/proj" outputs={outputs} canCreatePr={false} showDone={false} />));
+  it('reads the review again when the turns change even though the status did not (a far chat samples its status)', async () => {
+    review = { ...REVIEW, files: REVIEW.files.slice(0, 1) };
+    await render('1:t1:11:1');
+    await act(async () => void (await new Promise((r) => setImmediate(r))));
+    expect(host.querySelector('[data-testid="rail-changes-total"]')!.textContent).toContain('1 file');
+    const reads = reviewReads();
+    review = { ...REVIEW, files: REVIEW.files.slice(0, 2) };
+    await render('2:t2:11:2');
+    await act(async () => void (await new Promise((r) => setImmediate(r))));
+    expect(reviewReads()).toBe(reads + 1);
+    expect(host.querySelector('[data-testid="rail-changes-total"]')!.textContent).toContain('2 files');
+  });
+  it('reads again until the turn that just closed has its review (a far host writes the end save point late)', async () => {
+    const waits = SETTLE_WAITS.splice(0, SETTLE_WAITS.length, 5, 5, 5);
+    try {
+      review = { ...REVIEW, afterId: '4', files: REVIEW.files.slice(0, 1) };
+      await render('1:t1:11:1');
+      await act(async () => void (await new Promise((r) => setImmediate(r))));
+      // The turn closes, but the host still answers with the old review.
+      await render('2:t2:11:2');
+      await act(async () => void (await new Promise((r) => setTimeout(r, 2))));
+      expect(host.querySelector('[data-testid="rail-changes-total"]')!.textContent).toContain('1 file');
+      // The host writes the new save point later; nothing in the chat changes, the retry finds it.
+      review = { ...REVIEW, afterId: '6', files: REVIEW.files.slice(0, 2) };
+      await act(async () => void (await new Promise((r) => setTimeout(r, 40))));
+      expect(host.querySelector('[data-testid="rail-changes-total"]')!.textContent).toContain('2 files');
+    } finally {
+      SETTLE_WAITS.splice(0, SETTLE_WAITS.length, ...waits);
+    }
+  });
+  it('does not read again when nothing changed', async () => {
+    await render('1:t1:11:1');
+    await act(async () => void (await new Promise((r) => setImmediate(r))));
+    const reads = reviewReads();
+    await render('1:t1:11:1');
+    expect(reviewReads()).toBe(reads);
+  });
+});
+
 describe('the pieces are mounted by their parent screens', () => {
   const src = (file: string) => readFileSync(join(__dirname, '..', '..', '..', file), 'utf8');
   it('the pane shows the review, no result strip, and opens the right tab from the rail', () => {
@@ -126,5 +170,24 @@ describe('the pieces are mounted by their parent screens', () => {
     expect(src('components/files/FileTab.tsx')).toContain('useOpenInEditor');
     expect(src('components/settings/sections/GeneralSection.tsx')).toContain('<MyEditorRow');
     expect(src('components/chat/SessionChatPanel.tsx')).toContain('ChatPaneContext.Provider');
+  });
+});
+
+describe('a file the person put back', () => {
+
+  it('leaves Changes and the totals, and comes back with its Undo', async () => {
+    await show();
+    expect(total()).toBe('4 files+496 −571');
+    await act(async () => putBackMark('p1', REVIEW.files[2]!, 'safe-1'));
+    expect(total()).toBe('3 files+400 −571');
+    expect(host.textContent).not.toContain('c.tsx');
+    await act(async () => clearDecision('p1', 'src/c.tsx'));
+    expect(total()).toBe('4 files+496 −571');
+  });
+  it('leaves Outputs, which the chat events alone would still list', async () => {
+    await act(async () => root.render(<OutputsSection paneId="p1" cwd="C:/proj" outputs={[{ path: 'C:/proj/notes.md', tool: 'Write', wrote: true }]} />));
+    expect(host.textContent).toContain('notes.md');
+    await act(async () => putBackMark('p1', { path: 'notes.md', status: 'A', added: 1, deleted: 0, binary: false, blob: 'x' }, 's'));
+    expect(host.textContent).not.toContain('notes.md');
   });
 });

@@ -148,13 +148,33 @@ describe('New agent project picker grouped by device', () => {
     expect(q('[data-testid="na-folder"]')!.textContent).toContain('billing-service');
     // The Run in pill stays, now on the PC the project is on.
     expect(q('[data-testid="where-pill"]')!.textContent).toContain('Run in: Mac mini');
-    // Another PC's start is a chat: no Chat/Terminal switch (its terminal is only a plain screen).
-    expect(q('.ck-na-seg')).toBeNull();
+    // Another PC's start has the Chat/Terminal switch (both PCs show terminals), and Chat is the default.
+    expect(q('.ck-na-seg [aria-checked="true"]')!.textContent).toBe('Chat');
     await typeInto(q<HTMLTextAreaElement>('textarea.ck-na-input')!, 'Fix the invoice total');
     await click(q('button.ck-na-send'));
     await settle(8);
     expect(fake.requests.find((r) => r.path === '/pclink/agents/start')).toMatchObject({ node: NODE_MAC, method: 'POST', body: { agent: 'claude', project: 'p-bill', lane: 'chat' } });
     expect(onStarted).toHaveBeenCalledTimes(1);
+  });
+
+  it('Work on a copy is offered for a project of another PC (Add files is not), and turned on it starts a far chat on a copy by the acp_chat_start row', async () => {
+    const fake = laptop();
+    await open(whereOf(fake));
+    await openPicker();
+    await click(q(`[data-testid="na-group-${NODE_MAC}"] .ck-na-item`));
+    await settle(8);
+    await click(q('button[aria-label="Add to your message"]'));
+    await settle(2);
+    expect(q('#na-copy-label')!.textContent).toBe('Work on a copy');
+    // A path on this PC means nothing on the other PC, so the menu has no Add files there.
+    expect(document.body.textContent).not.toContain('Add files');
+    await click(q('[role="switch"][aria-labelledby="na-copy-label"]'));
+    await typeInto(q<HTMLTextAreaElement>('textarea.ck-na-input')!, 'Try the refactor');
+    await click(q('button.ck-na-send'));
+    await settle(8);
+    expect(fake.requests.find((r) => r.path === '/pclink/call/acp_chat_start')).toMatchObject({ node: NODE_MAC, method: 'POST', body: { agentId: 'claude', folder: 'p-bill', explicit: true, separateCopy: true } });
+    expect(fake.requests.some((r) => r.path === '/pclink/agents/start')).toBe(false);
+    expect(fake.panes[NODE_MAC]!.some((p) => p.copy === true)).toBe(true);
   });
 
   it('from another PC the picker still lists This PC first, and a project of This PC takes the page back here', async () => {

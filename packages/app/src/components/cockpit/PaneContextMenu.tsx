@@ -2,6 +2,7 @@ import { useState } from 'react';
 import type { PaneAction } from '../../lib/pane-actions';
 import { IconClose, IconInfo, IconPin, IconReflow, IconRename, IconStop } from './Icons';
 import { useT } from '../../i18n';
+import { useShowTerminals } from '../../lib/showTerminals';
 import { Menu } from '../common/Floating';
 
 /**
@@ -68,6 +69,7 @@ export function PaneContextMenu({
   onClose: (refocus: boolean) => void;
 }) {
   const t = useT();
+  const terminals = useShowTerminals();
   // "Make helper of…" swaps the menu for the list of agents to pick from. The menu remounts on the swap, so the first item gets the focus.
   const [picking, setPicking] = useState(false);
 
@@ -129,7 +131,7 @@ export function PaneContextMenu({
       {helperOf && helperOf.length > 0 && item(t('adopt.menu'), null, () => setPicking(true), undefined, true)}
       {onMainAgain && item(t('adopt.mainAgain'), null, onMainAgain)}
       {item(t('sidebar.rename'), <IconRename />, () => onAction('rename'))}
-      {item(t('sidebar.reflow'), <IconReflow />, () => onAction('reflow'))}
+      {terminals && item(t('sidebar.reflow'), <IconReflow />, () => onAction('reflow'))}
       {item(t('sidebar.interrupt'), <IconStop />, onInterrupt, '⌃C')}
       {onHandoff && item(t('sidebar.handoffFromHere'), null, onHandoff)}
       {onAddHelper && item(t('standby.addTitle'), null, onAddHelper)}

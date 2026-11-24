@@ -39,6 +39,7 @@ use super::engine::{Change, Cmd, Engine, Out};
 use super::model::{
     AlertView, FileHunks, PaneFact, PaneRun, RepoFact, Sample, Settings, REPO_CACHE_MS,
 };
+use super::paths;
 use super::probe::{GitProbe, Probe, ProbeError};
 use super::settings::{self, Store};
 use super::view;
@@ -454,6 +455,11 @@ impl Watch {
         }
     }
 
+    /// What the chats say about shared files. Applies from the next step.
+    pub fn set_path_findings(&mut self, findings: Vec<super::alerts::Finding>) {
+        self.engine.set_path_findings(findings);
+    }
+
     /// One step: the queued commands, the engine, then the snapshot, the phone items and the event.
     pub fn tick(&mut self, shared: &Shared, sink: &dyn Sink, panes: &[PaneFact], probe: &dyn Probe, now_ms: u64) {
         let cmds = shared.take_cmds();
@@ -494,6 +500,7 @@ pub fn start(registry: Arc<Mutex<PaneRegistry>>, app: tauri::AppHandle) {
         let probe = LiveProbe::new(GitProbe { hooks });
         let sink = LiveSink { app };
         let mut watch = Watch::new();
+        let mut last_paths: Option<Instant> = None;
         loop {
             std::thread::sleep(TICK);
             // No git on this machine: nothing to watch.
@@ -504,6 +511,17 @@ pub fn start(registry: Arc<Mutex<PaneRegistry>>, app: tauri::AppHandle) {
             let infos = registry.lock().list();
             let panes = pane_facts(&infos, &label_of, &|agent| crate::tui::is_agent_backend(agent));
             watch.set_links(if panes.len() >= 2 { branch_links() } else { Vec::new() });
+            // Two chats that wrote one file, in a folder with no git too: read from the chats every few seconds.
+            if last_paths.map_or(true, |at| at.elapsed() >= Duration::from_millis(paths::PATH_LOOK_MS)) {
+                last_paths = Some(Instant::now());
+                let now = crate::attention::now_ms();
+                let writes: Vec<_> = panes
+                    .iter()
+                    .filter_map(|p| crate::acp::chat::get(&p.pane_id).map(|chat| (p.clone(), paths::writes_of(&chat.recent_items(400), &p.cwd))))
+                    .filter(|(_, w)| !w.is_empty())
+                    .collect();
+                watch.set_path_findings(paths::findings(&writes, now));
+            }
             watch.tick(&SHARED, &sink, &panes, &probe, crate::attention::now_ms());
         }
     });

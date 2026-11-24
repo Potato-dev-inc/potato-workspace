@@ -73,7 +73,7 @@ fn commands_check_the_window_and_never_return_a_key() {
 
 #[test]
 fn the_key_goes_to_a_pane_through_its_environment_not_its_arguments() {
-    let text = std::fs::read_to_string(src_dir().join("pty").join("registry").join("spawn.rs")).unwrap();
+    let text = std::fs::read_to_string(Path::new(env!("CARGO_MANIFEST_DIR")).join("crates/pm-core/src/pty/registry/spawn.rs")).unwrap();
     let line = text.lines().find(|l| l.contains("model_bridge::launch_env")).expect("the spawn path adds the key");
     assert!(line.contains("own_env.extend"), "the key must go to the environment: {line}");
     assert!(!line.contains("extra_args") && !line.contains("args"), "never argv: {line}");

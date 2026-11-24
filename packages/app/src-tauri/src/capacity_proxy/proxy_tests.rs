@@ -17,7 +17,7 @@ use crate::capacity_proxy::shim::{OpenError, Opener, Shim};
 use crate::capacity_proxy::spec::ProxySpec;
 use crate::p2p::endpoint::BiStream;
 
-const CLAUDE: &str = include_str!("../tui/claude/lend_proxy.toml");
+const CLAUDE: &str = include_str!("../../crates/pm-core/src/tui/claude/lend_proxy.toml");
 pub(super) const LENDER_KEY: &str = "sk-lender-FAKE";
 const LENDER_TOKEN: &str = "tok-lender-FAKE";
 
@@ -292,7 +292,22 @@ impl Reply {
     }
 }
 
+/// A request as an agent makes it: the shim's per-grant key goes where the test wrote the old placeholder `pm-lend`, and as
+/// `Authorization: Bearer` when the test named no key at all. `http_keyless` sends exactly what it is given.
 pub(super) async fn http(port: u16, method: &str, path: &str, headers: &[(&str, &str)], body: &[u8]) -> Reply {
+    let token = crate::capacity_proxy::shim::test_tokens().lock().unwrap().get(&port).cloned().unwrap_or_default();
+    let swap = |s: &str| s.replace("pm-lend", &token);
+    let path = swap(path);
+    let mut all: Vec<(String, String)> = headers.iter().map(|(k, v)| (k.to_string(), swap(v))).collect();
+    let has_key = all.iter().any(|(k, v)| ["authorization", "x-api-key", "x-goog-api-key"].contains(&k.to_ascii_lowercase().as_str()) && v.contains(&token)) || path.contains(&token);
+    if !has_key && !all.iter().any(|(k, _)| k.eq_ignore_ascii_case("authorization")) {
+        all.push(("authorization".into(), format!("Bearer {token}")));
+    }
+    let refs: Vec<(&str, &str)> = all.iter().map(|(k, v)| (k.as_str(), v.as_str())).collect();
+    http_keyless(port, method, &path, &refs, body).await
+}
+
+pub(super) async fn http_keyless(port: u16, method: &str, path: &str, headers: &[(&str, &str)], body: &[u8]) -> Reply {
     let mut socket = TcpStream::connect(("127.0.0.1", port)).await.unwrap();
     let mut req = format!("{method} {path} HTTP/1.1\r\nHost: 127.0.0.1:{port}\r\nContent-Length: {}\r\n", body.len());
     for (k, v) in headers {
@@ -359,6 +374,8 @@ async fn the_lenders_api_key_reaches_upstream_and_the_borrowers_never_does() {
         &[
             ("x-api-key", "BORROWER-KEY"),
             ("authorization", "Bearer BORROWER-TOKEN"),
+            // The grant's own key, in a place that leaves the borrower's own two headers to be dropped by the lender.
+            ("x-goog-api-key", "pm-lend"),
             ("anthropic-beta", "claude-code-20250219"),
             ("anthropic-version", "2023-06-01"),
             ("accept-encoding", "gzip"),
@@ -566,7 +583,8 @@ async fn a_body_over_the_limit_is_413_and_a_wrong_secret_is_404() {
 async fn a_chunked_request_body_is_read() {
     let rig = rig(json_script(200, "{}"), RigOptions::default()).await;
     let mut socket = TcpStream::connect(("127.0.0.1", rig.shim.port())).await.unwrap();
-    let head = format!("POST {} HTTP/1.1\r\nHost: x\r\nTransfer-Encoding: chunked\r\n\r\n", rig.path("/v1/messages?beta=true"));
+    let token = rig.shim.token();
+    let head = format!("POST {} HTTP/1.1\r\nHost: x\r\nauthorization: Bearer {token}\r\nTransfer-Encoding: chunked\r\n\r\n", rig.path("/v1/messages?beta=true"));
     socket.write_all(head.as_bytes()).await.unwrap();
     socket.write_all(b"5\r\nhello\r\n").await.unwrap();
     tokio::time::sleep(Duration::from_millis(20)).await;
@@ -708,4 +726,64 @@ async fn a_missing_or_empty_token_file_is_refused_like_an_expired_one() {
     assert_eq!((reply.status, reply.text()), (401, frame::SIGNIN_EXPIRED.to_string()));
     assert!(rig.up.requests().is_empty());
     let _ = std::fs::remove_dir_all(dir);
+}
+
+#[tokio::test]
+async fn a_missing_or_wrong_key_is_401_and_nothing_reaches_the_lender() {
+    let rig = rig(json_script(200, "{}"), RigOptions::default()).await;
+    let token = rig.shim.token();
+    assert_eq!(token.len(), 64, "32 random bytes, hex");
+    let path = rig.path("/v1/messages");
+    let wrong = "0".repeat(64);
+    let almost = format!("{}x", &token[..63]);
+    let cases: Vec<Vec<(&str, String)>> = vec![
+        vec![],
+        vec![("authorization", "Bearer pm-lend".into())],
+        vec![("authorization", format!("Bearer {wrong}"))],
+        vec![("authorization", token.clone())],
+        vec![("x-api-key", almost.clone())],
+        vec![("x-goog-api-key", String::new())],
+        vec![("authorization", format!("Bearer {}", &token[..63]))],
+        vec![("x-api-key", format!("{token}0"))],
+    ];
+    for headers in cases {
+        let refs: Vec<(&str, &str)> = headers.iter().map(|(k, v)| (*k, v.as_str())).collect();
+        let reply = http_keyless(rig.shim.port(), "POST", &path, &refs, b"{}").await;
+        assert_eq!(reply.status, 401, "{headers:?}");
+        assert!(!reply.text().contains(&token));
+    }
+    let wrong_query = http_keyless(rig.shim.port(), "POST", &format!("{path}?key={wrong}"), &[], b"{}").await;
+    assert_eq!(wrong_query.status, 401);
+    assert!(rig.up.requests().is_empty(), "a refused request never reaches the lender");
+    assert_eq!(rig.gate.usage().requests, 0, "and is not counted");
+}
+
+#[tokio::test]
+async fn the_right_key_in_any_of_the_agents_places_is_let_in_and_is_not_passed_on() {
+    let rig = rig(json_script(200, "{}"), RigOptions::default()).await;
+    let token = rig.shim.token();
+    let path = rig.path("/v1/messages");
+    for (name, value) in [("authorization", format!("Bearer {token}")), ("authorization", format!("bearer  {token}")), ("x-api-key", token.clone()), ("x-goog-api-key", token.clone())] {
+        let reply = http_keyless(rig.shim.port(), "POST", &path, &[(name, value.as_str())], b"{}").await;
+        assert_eq!(reply.status, 200, "{name}");
+    }
+    let query = http_keyless(rig.shim.port(), "POST", &format!("{path}?beta=true&key={token}"), &[], b"{}").await;
+    assert_eq!(query.status, 200);
+    let seen = rig.up.requests();
+    assert_eq!(seen.len(), 5);
+    for r in &seen {
+        assert!(!r.path.contains(&token) && r.headers.iter().all(|(_, v)| !v.contains(&token)), "the key stays on this PC: {r:?}");
+    }
+    assert_eq!(seen[4].path, "/v1/messages?beta=true");
+    // The path secret is still checked first: a right key on a wrong path is a plain 404.
+    let wrong_path = http_keyless(rig.shim.port(), "POST", "/00000000000000000000000000000000/v1/messages", &[("authorization", format!("Bearer {token}").as_str())], b"{}").await;
+    assert_eq!(wrong_path.status, 404);
+}
+
+#[tokio::test]
+async fn every_grant_gets_its_own_key() {
+    let (a, b) = (rig(json_script(200, "{}"), RigOptions::default()).await, rig(json_script(200, "{}"), RigOptions::default()).await);
+    assert_ne!(a.shim.token(), b.shim.token());
+    let crossed = http_keyless(a.shim.port(), "POST", &a.path("/v1/messages"), &[("authorization", format!("Bearer {}", b.shim.token()).as_str())], b"{}").await;
+    assert_eq!(crossed.status, 401, "another grant's key does not open this one");
 }

@@ -86,7 +86,7 @@ export function BudgetChip({
               </div>
             ))}
           </dl>
-          <p className="ck-budget-note">Pauses after the current turn. Nothing is stopped mid-way.</p>
+          <p className="ck-budget-note">{t('r21.sw.pausesAfterTheCurrent')}</p>
           {view.state !== 'stopped' && (
             <div className="ck-budget-actions">
               {addTurns && (

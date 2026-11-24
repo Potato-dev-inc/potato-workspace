@@ -902,7 +902,7 @@ pub(super) fn late_startup_gate(
 fn deliver_task(
     active: &OperationSnapshot,
     registry: &Arc<Mutex<PaneRegistry>>,
-    app: &AppHandle,
+    _app: &AppHandle,
     pane_id: &str,
     agent_type: &str,
     prompt: &str,
@@ -920,7 +920,6 @@ fn deliver_task(
         // The agent's own protocol: the prompt is never typed into the screen.
         return registry_write_input(
             registry,
-            app,
             pane_id,
             prompt,
             true,
@@ -945,7 +944,7 @@ fn deliver_task(
             return Err(mark_not_typed(blocked));
         }
     }
-    let mut io = delivery::PaneIo { registry, app, pane_id };
+    let mut io = delivery::PaneIo { registry, pane_id };
     let mut trace = Vec::new();
     // Clear, type, verify the text is in the input box (when the profile can read it), submit, verify a turn started.
     let outcome = delivery::deliver_text(&mut io, profile.as_ref(), profile.clear_input_sequence(), prompt, &mut trace);

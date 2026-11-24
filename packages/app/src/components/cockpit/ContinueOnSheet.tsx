@@ -6,6 +6,7 @@ import { useEffect, useState } from 'react';
 import { keepGoingContinue, keepGoingSettingsGet, keepGoingTargetKey, keepGoingTargets, type KeepGoingOffer, type KeepGoingSettings } from '../../lib/keep-going';
 import '../../styles/cockpit-keep-going.css';
 import { Sheet } from './Sheet';
+import { t } from '../../i18n';
 
 const GENERIC_ERROR = 'Something went wrong. Try again.';
 
@@ -87,7 +88,7 @@ export function ContinueOnSheet({
       <h3 className="ck-section" id="ck-keep-going-title">
         Continue on another agent
       </h3>
-      {offers === null && !loadError && <p className="ck-sub">Looking at your agents…</p>}
+      {offers === null && !loadError && <p className="ck-sub">{t('r21.sw.lookingAtYourAgents')}</p>}
       {offers !== null && offers.length === 0 && (
         <p className="ck-sub">No other agent can run in this folder yet. Pick one in Settings &gt; Agents &gt; Keep going.</p>
       )}

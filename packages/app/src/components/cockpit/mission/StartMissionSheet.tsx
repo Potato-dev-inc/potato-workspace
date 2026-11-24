@@ -18,6 +18,7 @@ import { Sheet } from '../Sheet';
 import { PreviewTag } from './MissionGlyph';
 import '../../../styles/cockpit-changes.css';
 import '../../../styles/missions.css';
+import { t } from '../../../i18n';
 
 export interface SheetProject {
   path: string;
@@ -157,8 +158,8 @@ export function StartMissionSheet({
       />
 
       <div className="ck-mission-group-head">
-        <span className="ck-mission-label">How we&apos;ll know</span>
-        <span className="ck-mission-hint">At least one check is needed.</span>
+        <span className="ck-mission-label">{t('r21.sw.howWeLlKnow')}</span>
+        <span className="ck-mission-hint">{t('r21.sw.atLeastOneCheck')}</span>
       </div>
       <ul className="ck-mission-checks" aria-label="Checks">
         {checks.map((c, i) => (
@@ -176,7 +177,7 @@ export function StartMissionSheet({
         <li className="ck-mission-check ck-mission-check--add">
           <input
             className="ck-mission-input"
-            aria-label="Add a check"
+            aria-label={t('r21.sw.addACheck')}
             placeholder="+ Add a check, like npm run lint"
             value={adding}
             onChange={(e) => setAdding(e.target.value)}
@@ -191,13 +192,13 @@ export function StartMissionSheet({
         <li className="ck-mission-check">
           <Switch
             on={mayChangeTests}
-            label="Agents may change tests"
+            label={t('r21.sw.agentsMayChangeTests')}
             onChange={(on) => {
               setTouchedMayChange(true);
               setMayChange(on);
             }}
           />
-          <span className="ck-mission-check-name">Agents may change tests</span>
+          <span className="ck-mission-check-name">{t('r21.sw.agentsMayChangeTests')}</span>
         </li>
       </ul>
       <p className="ck-mission-note">
@@ -209,8 +210,8 @@ export function StartMissionSheet({
       </p>
 
       <div className="ck-mission-group-head">
-        <span className="ck-mission-label">Who works on it</span>
-        <span className="ck-mission-hint">One at a time, in this order</span>
+        <span className="ck-mission-label">{t('r21.sw.whoWorksOnIt')}</span>
+        <span className="ck-mission-hint">{t('r21.sw.oneAtATime')}</span>
       </div>
       <div className="ck-mission-agents">
         {agents.map((a, i) => (
@@ -227,7 +228,7 @@ export function StartMissionSheet({
         {backups.length > 0 && agents.length < 5 && (
           <select
             className="ck-mission-select"
-            aria-label="Add a backup agent"
+            aria-label={t('r21.sw.addABackupAgent')}
             value=""
             onChange={(e) => e.target.value && setAgents((l) => [...l, e.target.value])}
           >
@@ -243,7 +244,7 @@ export function StartMissionSheet({
 
       <div className="ck-mission-group-head">
         <span className="ck-mission-label">Budget</span>
-        <span className="ck-mission-hint">It pauses when either runs out. Time counts from the start.</span>
+        <span className="ck-mission-hint">{t('r21.sw.itPausesWhenEither')}</span>
       </div>
       <div className="ck-mission-budget">
         <label>
@@ -269,8 +270,8 @@ export function StartMissionSheet({
       {more && (
         <div className="ck-mission-more-body">
           <div className="ck-mission-check">
-            <Switch on={rollback} label="Go back when checks get worse" onChange={setRollback} />
-            <span className="ck-mission-check-name">Go back when checks get worse</span>
+            <Switch on={rollback} label={t('r21.sw.goBackWhenChecks')} onChange={setRollback} />
+            <span className="ck-mission-check-name">{t('r21.sw.goBackWhenChecks')}</span>
           </div>
           <label className="ck-mission-inline">
             Stop a turn after
@@ -299,7 +300,7 @@ export function StartMissionSheet({
         </button>
       </div>
       {blocked && <p className="ck-mission-blocked">{blocked}</p>}
-      <p className="ck-mission-foot">Missions are new. Every agent works in a visible pane so you can watch.</p>
+      <p className="ck-mission-foot">{t('r21.sw.missionsAreNewEvery')}</p>
     </Sheet>
   );
 }

@@ -4,6 +4,7 @@
 // words. The screens give it parts (`user@host`, a port, a key file PATH), never a command line. No password is ever
 // asked for or kept here: the terminal asks for it itself. Text from the far machine is untrusted: render it as text.
 import { invoke } from '@tauri-apps/api/core';
+import { listen } from './events';
 import { t } from '../i18n';
 
 export type SshStateName = 'ok' | 'cannot_reach' | 'wrong_key' | 'host_key_unknown' | 'host_key_changed' | 'other';
@@ -39,6 +40,35 @@ export interface SshHost {
   agents: { id: string; label: string }[];
   /** The agents that can CHAT on a machine over SSH (their chat program is started there; this app installs nothing). */
   chatAgents?: { id: string; label: string }[];
+  /** "Set it up" has put the program on this machine and paired with it. */
+  setUp?: boolean;
+}
+
+export type SshSetupStep = 'look' | 'copy' | 'finish' | 'pair' | 'start';
+
+/** One line of progress while a machine is being set up or updated. */
+export interface SshSetupProgress {
+  id: string;
+  step: SshSetupStep;
+  state: 'doing' | 'retrying' | 'done';
+  /** The attempt that just failed, for `retrying`. */
+  attempt: number;
+}
+
+export interface SshSetupFailure {
+  step: SshSetupStep;
+  /** A code from the backend; `setupSentence` turns it into words. */
+  why: string;
+  /** The far machine's own first line. Untrusted: shown as text only. */
+  line: string;
+  /** The fixed line to paste in a shell on the machine when this step cannot be done from here. */
+  handoff: string | null;
+}
+
+export interface SshSetup {
+  ok: boolean;
+  alreadyCurrent: boolean;
+  failure: SshSetupFailure | null;
 }
 
 export interface SshParts {
@@ -58,6 +88,12 @@ export interface SshApi {
   open: (id: string, agent: string, folder?: string) => Promise<string>;
   /** Starts a CHAT with an agent that runs on a saved machine, in `folder` there. Resolves to the chat's pane id. */
   chat: (id: string, agent: string, folder: string) => Promise<string>;
+  /** "Set it up": puts the program on a saved machine and pairs with it. Every step is tried three times. */
+  setup: (id: string) => Promise<SshSetup>;
+  /** The same steps for a machine that is already set up; no pairing again. */
+  update: (id: string) => Promise<SshSetup>;
+  /** Progress lines of a setup or update. Resolves to the function that stops listening. */
+  watchSetup: (cb: (p: SshSetupProgress) => void) => Promise<() => void>;
 }
 
 const isTauri = (): boolean => typeof window !== 'undefined' && '__TAURI_INTERNALS__' in window;
@@ -83,7 +119,35 @@ export const sshApi: SshApi = {
   remove: (id) => call('ssh_remove', { id }),
   open: (id, agent, folder) => call('ssh_open', { id, agent, folder: folder ?? null }),
   chat: (id, agent, folder) => call('ssh_chat_start', { id, agent, folder }),
+  setup: (id) => call('ssh_setup', { id }),
+  update: (id) => call('ssh_update', { id }),
+  watchSetup: (cb) => (isTauri() ? listen<SshSetupProgress>('ssh-setup-progress', (e) => cb(e.payload)) : Promise.resolve(() => {})),
 };
+
+/** Plain words for a failed setup step. */
+export function setupSentence(f: Pick<SshSetupFailure, 'why' | 'line'>): string {
+  switch (f.why) {
+    case 'cannot_reach':
+      return t('devices.ssh.cannotReach');
+    case 'wrong_key':
+      return t('devices.ssh.wrongKey');
+    case 'host_key_unknown':
+      return t('devices.ssh.hostKeyUnknown');
+    case 'host_key_changed':
+      return t('devices.ssh.hostKeyChanged');
+    case 'not_linux':
+    case 'not_x86_64':
+    case 'glibc_old':
+    case 'disk_full':
+    case 'hash_mismatch':
+      return t(`devices.ssh.fail.${f.why}`);
+    default: {
+      // eslint-disable-next-line no-control-regex
+      const line = typeof f.line === 'string' ? f.line.replace(/[\u0000-\u001f\u007f]+/g, ' ').trim().slice(0, 160) : '';
+      return t(f.why === 'pair_refused' ? 'devices.ssh.fail.pair_refused' : 'devices.ssh.fail.step_failed', { line });
+    }
+  }
+}
 
 /** Plain words for a failed check. Null when it worked. */
 export function sshStateSentence(c: Pick<SshCheck, 'state' | 'line'>, plain = false): string | null {

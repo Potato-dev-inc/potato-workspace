@@ -2,6 +2,7 @@
 import { act, type ReactElement } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { useChinese, useEnglish } from '../../../i18n/test-utils';
 import type { ReviewAct, ReviewDetail as ReviewDetailView, ReviewItem } from '../../../lib/review-desk';
 import { LOOKED_TEXT, NO_PANE_TEXT, ReviewDetail, countsText, type ReviewDetailApi } from './ReviewDetail';
 
@@ -236,5 +237,23 @@ describe('ReviewDetail: actions', () => {
     );
     await act(async () => {});
     expect(host.textContent).toContain('This changed since you looked. Look again.');
+  });
+});
+
+describe('ReviewDetail when the patch cannot be read (zh-TW)', () => {
+  afterEach(() => useEnglish());
+  it('shows dashes, not +0 −0, and no English chrome', async () => {
+    useChinese();
+    const zero = { ...ITEM, files: { ...ITEM.files, rows: ITEM.files.rows.map((r) => ({ ...r, added: 0, deleted: 0 })) } };
+    const api = fakeApi({ detail: async () => ({ ...DETAIL, item: zero, patch: '', extra: ['Potato Workspace could not read the changes.'] }) });
+    await act(async () => root.render(<ReviewDetail item={zero} api={api} />));
+    await act(async () => {
+      await Promise.resolve();
+    });
+    const counts = [...host.querySelectorAll('.ck-rd-detail-counts')].map((n) => n.textContent);
+    expect(counts).toEqual(['—', '—']);
+    expect(host.textContent).toContain('無法讀取這些變更');
+    expect(host.textContent).not.toContain('Why it is first');
+    expect(host.textContent).not.toContain('Ask to fix');
   });
 });

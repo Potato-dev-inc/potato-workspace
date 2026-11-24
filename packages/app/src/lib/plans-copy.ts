@@ -1,6 +1,7 @@
 // "Copy as CSV" and "Copy as text" for "Your plans this month". Pure: rows in, string out.
 // CSV numbers are raw (no units). Text is one plain sentence per plan.
 import { formatBusy, limitsText, type PlanRow } from './plans-report';
+import { t } from '../i18n';
 
 export const PLANS_CSV_HEADER = [
   'Plan',
@@ -57,12 +58,13 @@ export function plansCsv(rows: readonly PlanRow[]): string {
 
 /** "Claude · Work: 22 turns, 9 h 11 min, 47 files, no limits hit." */
 export function planSummaryLine(row: PlanRow): string {
-  const turns = row.turns === 1 ? '1 turn' : `${row.turns} turns`;
+  const lower = (s: string): string => s.charAt(0).toLowerCase() + s.slice(1);
+  const turns = t('r21.n.turn', { count: row.turns });
   const { changed, knownTurns } = row.files;
   const files =
-    knownTurns === 0 ? 'files not reported' : changed === 0 ? 'no files changed' : `${changed} ${changed === 1 ? 'file' : 'files'}`;
+    knownTurns === 0 ? lower(t('r21.plans.filesUnknown')) : changed === 0 ? lower(t('r21.plans.noFiles')) : t('r21.n.file', { count: changed });
   const limits = limitsText(row.limits);
-  const limitsPhrase = limits.charAt(0).toLowerCase() + limits.slice(1);
+  const limitsPhrase = lower(limits);
   return `${row.agentLabel} · ${row.accountLabel}: ${turns}, ${formatBusy(row.busyMs)}, ${files}, ${limitsPhrase}.`;
 }
 

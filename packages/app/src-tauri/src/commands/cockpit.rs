@@ -125,12 +125,16 @@ pub async fn answer_pane_prompt(
                 crate::attention::note_desktop_answer(&pane_id, &choice)
             }
         })
-        .map_err(|e| format!("{}: {}", e.code, e.message))
+        .map_err(|e| {
+            // The card only says "That did not reach the agent": the reason goes to the app log.
+            tracing::warn!(pane = %pane_id, choice = %choice, code = %e.code, "pane prompt answer refused: {}", e.message);
+            format!("{}: {}", e.code, e.message)
+        })
 }
 
 #[tauri::command]
-pub async fn interrupt_pane(app: AppHandle, state: State<'_, AppState>, pane_id: String) -> Result<(), String> {
-    registry_write_input(&state.registry, &app, &pane_id, "\u{3}", false, false, None, crate::pty::WriteOrigin::User)
+pub async fn interrupt_pane(_app: AppHandle, state: State<'_, AppState>, pane_id: String) -> Result<(), String> {
+    registry_write_input(&state.registry, &pane_id, "\u{3}", false, false, None, crate::pty::WriteOrigin::User)
 }
 
 #[tauri::command]

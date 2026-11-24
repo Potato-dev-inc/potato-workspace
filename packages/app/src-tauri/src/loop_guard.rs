@@ -22,6 +22,8 @@
 //! Near-duplicate matching uses the `strsim` crate (MIT).
 
 use crate::pty::status::PaneStatus;
+#[cfg(test)]
+use pm_core::loop_guard::default_error_line;
 use once_cell::sync::Lazy;
 use parking_lot::Mutex;
 use regex::Regex;
@@ -98,18 +100,6 @@ impl Settings {
 // ---------------------------------------------------------------------------------------------
 // Line classification
 
-/// Generic error-likeness; profiles extend it (`TuiProfile::is_error_line`).
-static ERROR_RE: Lazy<Regex> = Lazy::new(|| {
-    Regex::new(
-        r"(?i)\b(error|errors|failed|failure|exception|traceback|panicked|fatal|cannot|can't|could not|couldn't|unable to|not found|undefined|permission denied|access denied|timed out|timeout|enoent|eacces|segmentation fault|unresolved|unexpected)\b|\bTS\d{4}\b|\bE\d{4}\b",
-    )
-    .expect("error regex")
-});
-/// Lines that mention errors without being one ("0 failed", "no errors", "fixed the error").
-static NOT_ERROR_RE: Lazy<Regex> = Lazy::new(|| {
-    Regex::new(r"(?i)\b0 (errors?|failed|failures?)\b|\bno (errors?|failures?|issues)\b|\bwithout (errors?|failures?)\b|\b(fixed|resolved|fixes|fixing)\b")
-        .expect("not error regex")
-});
 static PROGRESS_RE: Lazy<Regex> = Lazy::new(|| {
     Regex::new(
         r"(?i)\b(passed|passing|succe(ss|eded|ssful|ssfully)|compiled|built|created|wrote|written|saved|updated|edited|added|installed|committed|merged|done|completed|all tests)\b|[\u{2713}\u{2714}]",
@@ -123,12 +113,6 @@ static TOOL_RE: Lazy<Regex> = Lazy::new(|| {
     )
     .expect("tool regex")
 });
-
-/// The generic error-like test every profile starts from.
-pub fn default_error_line(line: &str) -> bool {
-    let line = line.trim();
-    !line.is_empty() && line.chars().count() <= 400 && ERROR_RE.is_match(line) && !NOT_ERROR_RE.is_match(line)
-}
 
 fn default_tool_line(line: &str) -> bool {
     TOOL_RE.is_match(line)

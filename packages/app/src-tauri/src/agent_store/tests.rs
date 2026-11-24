@@ -193,6 +193,7 @@ fn everything_here() -> Tools {
     Tools {
         winget: Some("winget".into()),
         present: ["node", "git", "uv"].iter().map(|s| s.to_string()).collect(),
+        home: None,
     }
 }
 
@@ -308,7 +309,7 @@ fn detail_has_the_install_plan_run_preview_and_uninstall_summary() {
     let record = root.record();
     let entries = test_catalog();
     let env = Env { record_path: &record, version: &no_version };
-    let tools = Tools { winget: None, present: ["node".to_string()].into_iter().collect() };
+    let tools = Tools { winget: None, present: ["node".to_string()].into_iter().collect(), home: None };
     let plan = plan_install("qwen", "Qwen Code", catalog::install_spec_of(qwen(&entries)).as_ref(), &tools);
 
     let detail = detail_in(qwen(&entries), &env, &tools, &plan, None).unwrap();
@@ -443,7 +444,7 @@ fn the_recorded_method_and_package_come_from_the_plan_step() {
 
 #[test]
 fn a_prerequisite_step_is_never_recorded_as_the_agent() {
-    let tools = Tools { winget: Some("winget".into()), present: ["git".to_string()].into_iter().collect() };
+    let tools = Tools { winget: Some("winget".into()), present: ["git".to_string()].into_iter().collect(), home: None };
     let plan = plan_install("claude", "Claude", Some(&spec(None, Some("@anthropic-ai/claude-code"), None, None, None)), &tools);
     assert!(plan.steps.first().is_some_and(|step| step.tool.is_some()), "node comes first: {:?}", plan.steps);
     let refused = step_record(&plan, 0).unwrap_err();

@@ -8,6 +8,11 @@ rust-version = "1.91"
 default-run = "puppet_master_app"
 autotests = false
 
+# `pm-core` (crates/pm-core): the window-free core the app re-exports. Both run under `cargo test --lib`.
+[workspace]
+members = ["crates/pm-core", "crates/potato-host"]
+default-members = [".", "crates/pm-core"]
+
 [lib]
 name = "puppet_master_app_lib"
 crate-type = ["rlib"]
@@ -56,6 +61,8 @@ rand = "0.8"
 opentunnel = "=0.6.2"
 sha2 = "0.10"
 base64 = "0.22"
+# Checks the host program download against the updater key (MIT, no dependencies, already in Cargo.lock through tauri-plugin-updater).
+minisign-verify = "0.3"
 tungstenite = { version = "0.24", default-features = false, features = ["handshake", "rustls-tls-webpki-roots"] }
 anyhow = "1"
 ureq = { version = "2", features = ["json"] }
@@ -104,6 +111,7 @@ bytes = "1"
 iroh = { version = "=1.4.1", default-features = false, features = ["tls-ring"] }
 mdns-sd = "=0.13.11"
 async-trait = "0.1"
+pm-core = { path = "crates/pm-core" }
 
 [target.'cfg(windows)'.dependencies]
 keyring = { version = "3.6", features = ["windows-native"] }
@@ -125,6 +133,8 @@ keyring = { version = "3.6", features = ["linux-native"] }
 # (`src/replay/`, `tests/corpus/`).
 [dev-dependencies]
 insta = "1"
+# The app's tests use pm-core's in-memory secret store and identity (see its `test-util`).
+pm-core = { path = "crates/pm-core", features = ["test-util"] }
 # The team relay server, run on a loopback port by the Team end-to-end tests (test-only; its
 # licence is pending, see relay/LICENSE, and it is never linked into the app).
 pm-relay = { path = "../../../relay/server" }
@@ -136,7 +146,7 @@ custom-protocol = ["tauri/custom-protocol"]
 # `fake_codex`) and the in-process harness behind the `pm-fake-tui` end-to-end tests
 # (`src/fake_tui/`, `tests/fake_tui_e2e.rs`, `tools/pm-fake-tui/`). Run them with
 # `cargo test --features dev-fake-tui --test fake_tui_e2e`.
-dev-fake-tui = []
+dev-fake-tui = ["pm-core/dev-fake-tui"]
 
 # One integration-test binary (`tests/e2e.rs`): every file under tests/ is a module of it, so the whole app crate is
 # linked once, not once per file. The name stays `fake_tui_e2e` so `--test fake_tui_e2e` (CI, scripts, docs) keeps
@@ -238,4 +248,6 @@ incremental = true
 debug = false
 # The app crate itself is not optimised in test builds: LLVM time on a 220k-line crate is most of an incremental rebuild.
 [profile.lab.package.puppet_master_app]
+opt-level = 0
+[profile.lab.package.pm-core]
 opt-level = 0

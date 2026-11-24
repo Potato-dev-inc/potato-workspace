@@ -9,7 +9,7 @@ import type { Question } from './questions';
 import type { AcpInitCheck } from './agentWizardAcp';
 import { blockOf } from './acpAddon';
 import { RUN_WAYS } from './glossary';
-import { t } from '../i18n';
+import { t, type MessageKey } from '../i18n';
 import { paneOutboxTransport } from './paneOutbox';
 import { desktopSignIn, type ChatSignIn } from './chatMore';
 
@@ -453,6 +453,9 @@ export interface AcpChatApi {
 
 const noopUnlisten: UnlistenFn = () => {};
 
+/** A chat state from a far PC that is still starting up can miss its lists; give it empty ones so no screen maps over undefined. */
+export const whole = (s: AcpChatState | null | undefined): AcpChatState | null => (s ? { ...s, permissions: s.permissions ?? [] } : null);
+
 /** The chat-session calls of one place. Every call is `host.invoke(<same command>, <same args>)`. */
 export function acpChatApi(host: Host): AcpChatApi {
   const call = <T,>(command: string, args?: Record<string, unknown>): Promise<T> => host.invoke<T>(command, args);
@@ -462,7 +465,7 @@ export function acpChatApi(host: Host): AcpChatApi {
   return {
   state: async (paneId) => {
     if (!isTauri()) return null;
-    return (await invoke<AcpChatState | null>('acp_chat_state', { paneId })) ?? null;
+    return whole(await invoke<AcpChatState | null>('acp_chat_state', { paneId }));
   },
   warm: async (paneId) => {
     if (isTauri()) await invoke<void>('acp_chat_warm', { paneId });
@@ -477,7 +480,7 @@ export function acpChatApi(host: Host): AcpChatApi {
   signIn: (paneId) => desktopSignIn(paneId, host),
   watch: async (cb) => {
     if (!isTauri()) return noopUnlisten;
-    return listen<{ paneId: string; state: AcpChatState }>('acp-chat-state', (p) => cb(p.paneId, p.state));
+    return listen<{ paneId: string; state: AcpChatState }>('acp-chat-state', (p) => cb(p.paneId, whole(p.state) as AcpChatState));
   },
   setConfig: (paneId, optionId, value) => call<AcpChatState>('acp_chat_set_config', { paneId, optionId, value }),
   setAgentAnswering: (paneId, allowed) => call<AcpChatState>('acp_chat_set_agent_answering', { paneId, allowed }),
@@ -526,10 +529,18 @@ export function acpChatApi(host: Host): AcpChatApi {
 
 export const tauriAcpChatApi: AcpChatApi = acpChatApi(localHost);
 
-/** The permission cards that belong to `paneId`, oldest first. */
-export function permissionCards(questions: readonly Question[], paneId: string): Question[] {
-  return questions.filter((q) => q.kind === ACP_PERMISSION_KIND && q.pane_id === paneId && q.state === 'pending');
+/** The permission cards that belong to `paneId`, oldest first. A card the chat's own state names (`permissions[].questionId`) belongs to it too,
+ * whatever pane or kind the list says: a far PC's list may not carry them, its chat state always does. */
+export function permissionCards(questions: readonly Question[], paneId: string, named: readonly (string | null)[] = []): Question[] {
+  return questions.filter((q) => q.state === 'pending' && ((q.kind === ACP_PERMISSION_KIND && q.pane_id === paneId) || named.includes(q.id)));
 }
+
+/** The strip's own words and the message each one is shown as (the view translates; `text` stays English for logic and tests). */
+export const RUN_STRIP_KEYS: Readonly<Record<string, MessageKey>> = {
+  'Working…': 'chat.status.working',
+  'Stopping…': 'chat.status.stopping',
+  'Waiting for your answer': 'chat.status.waitingAnswer',
+};
 
 /**
  * What the strip above the message box says and does. `null`: nothing runs, no strip. `asked`: the person pressed
@@ -662,7 +673,9 @@ export function commandHint(commands: readonly AcpCommand[], text: string): stri
 
 /** A command's error as one plain sentence: the leading `CODE: ` is dropped. */
 export function errorSentence(error: unknown): string {
-  const text = error instanceof Error ? error.message : typeof error === 'string' ? error : String(error);
+  // Any value in, one plain string out, never an object: a far PC's reply may be {} or {code, message}.
+  const o = typeof error === 'object' && error !== null ? (error as { message?: unknown; error?: unknown }) : null;
+  const text = error instanceof Error ? error.message : typeof error === 'string' ? error : typeof o?.message === 'string' ? o.message : typeof o?.error === 'string' ? o.error : o ? '' : String(error ?? '');
   return text.replace(/^[A-Z][A-Z0-9_]*:\s*/, '').trim();
 }
 

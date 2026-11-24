@@ -15,6 +15,7 @@ import {
   type NightStateView,
   type NightView,
 } from '../../../lib/night';
+import { useT } from '../../../i18n';
 import { Sheet } from '../Sheet';
 import { PlansPicker, agentOf } from './PlansPicker';
 import { TestsPopover } from './TestsPopover';
@@ -37,10 +38,6 @@ const MAX_TURNS = 40;
 const MIN_MINUTES = 20;
 const MAX_MINUTES = 240;
 
-/** The words of the keep-awake confirm (SPEC n32 3.9). Shown once; `awakeAsked` is saved after it. */
-const AWAKE_WORDS =
-  'Potato Workspace will stop this computer from sleeping until Night Shift ends, then let it sleep again. Closing the lid or pressing the power button still sleeps it. Keep it plugged in.';
-
 /** One task row as the sheet edits it. `who` is `any` or one plan key. */
 interface Draft {
   id: number;
@@ -56,12 +53,12 @@ interface Draft {
   noTests: boolean;
 }
 
-const plural = (n: number, one: string, many: string): string => (n === 1 ? one : many);
+type Tr = ReturnType<typeof useT>;
 
 /** "A", "A and B", "A, B and C". */
-function joinNames(names: string[]): string {
+function joinNames(names: string[], tr: Tr): string {
   if (names.length <= 1) return names.join('');
-  return `${names.slice(0, -1).join(', ')} and ${names[names.length - 1]}`;
+  return tr('r13ui.night.joinLast', { list: names.slice(0, -1).join(tr('r13ui.night.sep')), last: names[names.length - 1] });
 }
 
 /** The first local `HH:MM` at or after `fromMs`, or null when the text is not a time. Same rule as the desktop. */
@@ -80,12 +77,12 @@ function localAt(fromMs: number, hhmm: string): number | null {
 }
 
 /** "tomorrow" when the stop time falls on a later day than the start, else nothing. */
-function stopDayWord(nowMs: number, startNow: boolean, startHhmm: string, stopHhmm: string): string {
+function stopDayWord(nowMs: number, startNow: boolean, startHhmm: string, stopHhmm: string, tr: Tr): string {
   const start = startNow ? nowMs : localAt(nowMs, startHhmm);
   if (start === null) return '';
   const stop = localAt(start, stopHhmm);
   if (stop === null) return '';
-  return new Date(stop).toDateString() === new Date(start).toDateString() ? '' : 'tomorrow';
+  return new Date(stop).toDateString() === new Date(start).toDateString() ? '' : tr('r13ui.night.tomorrow');
 }
 
 const clampParallel = (n: number): number => Math.min(MAX_PARALLEL, Math.max(1, Math.round(n) || 1));
@@ -125,6 +122,7 @@ export function TonightSheet({
   /** A plain line for the toast, such as "Night Shift started. It stops at 07:00." */
   onNotify?: (text: string) => void;
 }) {
+  const tr: Tr = useT();
   // Git folders first; the rest stay listed (Start says why they cannot be used).
   const ordered = useMemo(() => [...projects.filter((p) => p.git), ...projects.filter((p) => !p.git)], [projects]);
   const gitOf = (path: string): boolean => projects.find((p) => p.path === path)?.git ?? false;
@@ -259,16 +257,18 @@ export function TonightSheet({
   const sameTurns = tasks.every((t) => t.turns === tasks[0]?.turns);
   const worst =
     n > 0
-      ? `Worst case: ${
-          sameTurns
-            ? `${n} ${plural(n, 'task', 'tasks')} x ${tasks[0].turns} ${plural(tasks[0].turns, 'turn', 'turns')} = ${turnTotal} ${plural(turnTotal, 'turn', 'turns')}`
-            : `${n} tasks, ${turnTotal} turns in all`
-        }, at most ${Math.min(parallel, n)} at a time, until ${stopHhmm}.`
+      ? tr('r13ui.night.worst', {
+          part: sameTurns
+            ? tr('r13ui.night.worstSame', { tasks: tr('r13ui.night.taskCount', { count: n }), each: tr('r13ui.night.turnCount', { count: tasks[0].turns }), total: tr('r13ui.night.turnCount', { count: turnTotal }) })
+            : tr('r13ui.night.worstMixed', { tasks: tr('r13ui.night.taskCount', { count: n }), turns: tr('r13ui.night.turnCount', { count: turnTotal }) }),
+          par: Math.min(parallel, n),
+          stop: stopHhmm,
+        })
       : null;
 
   const gitOk = n > 0 && tasks.every((t) => t.project !== '' && gitOf(t.project));
   const untested = tasks.filter((t) => t.project !== '' && viewOf(t.project)?.declared.length === 0).length;
-  const stopWord = stopDayWord(now(), startNow, startHhmm, stopHhmm);
+  const stopWord = stopDayWord(now(), startNow, startHhmm, stopHhmm, tr);
 
   const patch = (id: number, change: Partial<Draft>) =>
     setTasks((cur) => cur.map((t) => (t.id === id ? { ...t, ...change } : t)));
@@ -302,7 +302,7 @@ export function TonightSheet({
     const clash = ticked.filter((k) => k !== key && agentOf(k) === agent);
     setTicked((list) => [...list.filter((k) => agentOf(k) !== agent), key]);
     if (clash.length > 0) {
-      setNotice("Potato Workspace won't switch between two logins of one company.");
+      setNotice(tr('r13ui.night.sameCompany'));
       setTasks((cur) => cur.map((t) => (clash.includes(t.who) ? { ...t, who: 'any' } : t)));
     }
   };
@@ -346,7 +346,7 @@ export function TonightSheet({
       const run = await nightApi.start(input);
       onStarted?.(run);
       void nightApi.settingsSet(settingsNow()).catch(() => {});
-      onNotify?.(`Night Shift started. It stops at ${stopHhmm}.`);
+      onNotify?.(tr('r13ui.night.started', { time: stopHhmm }));
       onClose();
     } catch (err) {
       setError(nightError(err).message);
@@ -358,40 +358,39 @@ export function TonightSheet({
   const testsText = (t: Draft): string => {
     const declared = t.project ? (viewOf(t.project)?.declared ?? []) : [];
     if (declared.length > 0) return declared.map((check) => check.name).join(', ');
-    return t.noTests ? 'No tests' : 'Pick tests…';
+    return t.noTests ? tr('r13ui.night.noTests') : tr('r13ui.night.pickTests');
   };
 
   /** The one line under a task: no tests, first time with the chosen plan, or who has worked here before. */
   const noteOf = (t: Draft): string | null => {
     if (t.project === '') return null;
-    if (viewOf(t.project)?.declared.length === 0) return 'No tests declared. It will run, but nothing will be checked.';
+    if (viewOf(t.project)?.declared.length === 0) return tr('r13ui.night.noTestsNote');
     if (t.who !== 'any') {
       const plan = plans?.find((p) => p.key === t.who);
       if (!plan) return null;
       return plan.triedHere?.[t.project]
-        ? `${plan.label} has worked here before.`
-        : `First time with ${plan.label} here: it may ask you to trust the folder.`;
+        ? tr('r13ui.night.workedOne', { label: plan.label })
+        : tr('r13ui.night.firstTime', { label: plan.label });
     }
     const tried = ticked
       .map((key) => plans?.find((p) => p.key === key))
       .filter((p): p is NightPlanView => !!p && !!p.triedHere?.[t.project])
       .map((p) => p.label);
-    return tried.length > 0 ? `${joinNames(tried)} ${tried.length === 1 ? 'has' : 'have'} worked here before.` : null;
+    return tried.length > 0 ? tr('r13ui.night.workedMany', { names: joinNames(tried, tr), count: tried.length }) : null;
   };
 
   return (
     <Sheet labelledBy="ck-night-tonight-t" role="dialog" className="ck-night-sheet" onClose={busy ? undefined : onClose}>
       <div className="ck-night-head">
         <h2 className="ck-section" id="ck-night-tonight-t">
-          Tonight
+          {tr('r13ui.night.title')}
         </h2>
-        <button type="button" className="ck-btn ck-btn--plain ck-btn--sm" aria-label="Close" disabled={busy} onClick={onClose}>
+        <button type="button" className="ck-btn ck-btn--plain ck-btn--sm" aria-label={tr('r13ui.night.close')} disabled={busy} onClick={onClose}>
           ×
         </button>
       </div>
       <p className="ck-night-intro">
-        Potato Workspace works through these while you sleep. Each task has its own separate copy. Nothing is merged until you
-        press Keep.
+        {tr('r13ui.night.intro')}
       </p>
 
       {loadError && (
@@ -400,7 +399,7 @@ export function TonightSheet({
         </p>
       )}
 
-      <ul className="ck-night-tasks" aria-label="Tasks">
+      <ul className="ck-night-tasks" aria-label={tr('r13ui.night.tasks')}>
         {tasks.map((t, i) => {
           const num = i + 1;
           const note = noteOf(t);
@@ -412,23 +411,23 @@ export function TonightSheet({
                 </span>
                 <select
                   className="ck-night-select"
-                  aria-label={`Project for task ${num}`}
+                  aria-label={tr('r13ui.night.projectFor', { n: num })}
                   value={t.project}
                   onChange={(e) => patch(t.id, { project: e.target.value, noTests: false })}
                 >
-                  {t.project === '' && <option value="">Pick a project…</option>}
+                  {t.project === '' && <option value="">{tr('r13ui.night.pickProject')}</option>}
                   {ordered.map((p) => (
                     <option key={p.path} value={p.path}>
-                      {p.git ? p.name : `${p.name} (not a git project)`}
+                      {p.git ? p.name : tr('r13ui.night.notGit', { name: p.name })}
                     </option>
                   ))}
                 </select>
                 <textarea
                   className="ck-night-text"
-                  aria-label={`Task ${num}`}
+                  aria-label={tr('r13ui.night.taskN', { n: num })}
                   rows={2}
                   maxLength={TASK_TEXT_MAX}
-                  placeholder="What should it do?"
+                  placeholder={tr('r13ui.night.whatDo')}
                   value={t.text}
                   onChange={(e) => patch(t.id, { text: e.target.value })}
                 />
@@ -436,7 +435,7 @@ export function TonightSheet({
                   <button
                     type="button"
                     className="ck-btn ck-btn--plain ck-btn--sm"
-                    aria-label={`Move task ${num} up`}
+                    aria-label={tr('r13ui.night.moveUp', { n: num })}
                     disabled={i === 0}
                     onClick={() => moveTask(i, -1)}
                   >
@@ -445,7 +444,7 @@ export function TonightSheet({
                   <button
                     type="button"
                     className="ck-btn ck-btn--plain ck-btn--sm"
-                    aria-label={`Move task ${num} down`}
+                    aria-label={tr('r13ui.night.moveDown', { n: num })}
                     disabled={i === tasks.length - 1}
                     onClick={() => moveTask(i, 1)}
                   >
@@ -454,7 +453,7 @@ export function TonightSheet({
                   <button
                     type="button"
                     className="ck-btn ck-btn--plain ck-btn--sm"
-                    aria-label={`Remove task ${num}`}
+                    aria-label={tr('r13ui.night.remove', { n: num })}
                     onClick={() => removeTask(t.id)}
                   >
                     ×
@@ -464,14 +463,14 @@ export function TonightSheet({
 
               <div className="ck-night-line">
                 <label className="ck-night-inline">
-                  Agent
+                  {tr('r13ui.night.agent')}
                   <select
                     className="ck-night-select"
-                    aria-label={`Agent for task ${num}`}
+                    aria-label={tr('r13ui.night.agentFor', { n: num })}
                     value={ticked.includes(t.who) ? t.who : 'any'}
                     onChange={(e) => patch(t.id, { who: e.target.value })}
                   >
-                    <option value="any">Any with usage left</option>
+                    <option value="any">{tr('r13ui.night.anyAgent')}</option>
                     {ticked.map((key) => (
                       <option key={key} value={key}>
                         {labelOf(key)}
@@ -480,11 +479,11 @@ export function TonightSheet({
                   </select>
                 </label>
                 <span className="ck-night-inline">
-                  Tests
+                  {tr('r13ui.night.tests')}
                   <button
                     type="button"
                     className="ck-night-chip"
-                    aria-label={`Tests for task ${num}`}
+                    aria-label={tr('r13ui.night.testsFor', { n: num })}
                     aria-haspopup="dialog"
                     aria-expanded={testsFor === t.id}
                     disabled={t.project === ''}
@@ -499,7 +498,7 @@ export function TonightSheet({
                   aria-expanded={t.more}
                   onClick={() => patch(t.id, { more: !t.more })}
                 >
-                  More {t.more ? '▾' : '▸'}
+                  {tr('r13ui.night.more')} {t.more ? '▾' : '▸'}
                 </button>
               </div>
 
@@ -523,13 +522,13 @@ export function TonightSheet({
                   <span className="ck-night-inline">
                     <Switch
                       on={t.mayChangeTests}
-                      label={`Agents may change the tests for task ${num}`}
+                      label={tr('r13ui.night.mayChangeFor', { n: num })}
                       onChange={(on) => patch(t.id, { mayChangeTests: on })}
                     />
-                    Agents may change the tests
+                    {tr('r13ui.night.mayChange')}
                   </span>
                   <label className="ck-night-inline">
-                    Turns
+                    {tr('r13ui.night.turns')}
                     <input
                       type="number"
                       className="ck-night-num"
@@ -540,7 +539,7 @@ export function TonightSheet({
                     />
                   </label>
                   <label className="ck-night-inline">
-                    Minutes
+                    {tr('r13ui.night.minutes')}
                     <input
                       type="number"
                       className="ck-night-num"
@@ -563,47 +562,47 @@ export function TonightSheet({
         disabled={!state || tasks.length >= MAX_TASKS}
         onClick={addTask}
       >
-        {`+ Add a task (${tasks.length} of ${MAX_TASKS})`}
+        {tr('r13ui.night.addTask', { n: tasks.length, max: MAX_TASKS })}
       </button>
 
       <PlansPicker plans={plans ?? []} ticked={ticked} notice={notice} onToggle={togglePlan} />
 
       <div className="ck-night-line ck-night-when">
         <label className="ck-night-inline">
-          Stop at
+          {tr('r13ui.night.stopAt')}
           <input
             type="time"
             className="ck-night-time"
-            aria-label="Stop at"
+            aria-label={tr('r13ui.night.stopAt')}
             value={stopHhmm}
             onChange={(e) => setStopHhmm(e.target.value)}
           />
         </label>
         {stopWord && <span className="ck-night-hint">{stopWord}</span>}
-        <span className="ck-night-inline" role="group" aria-label="Start">
-          Start
+        <span className="ck-night-inline" role="group" aria-label={tr('r13ui.night.start')}>
+          {tr('r13ui.night.start')}
           <label className="ck-night-inline">
             <input type="radio" name="ck-night-start" checked={startNow} onChange={() => setStartNow(true)} />
-            Now
+            {tr('r13ui.night.now')}
           </label>
           <label className="ck-night-inline">
             <input type="radio" name="ck-night-start" checked={!startNow} onChange={() => setStartNow(false)} />
-            At
+            {tr('r13ui.night.at')}
           </label>
           <input
             type="time"
             className="ck-night-time"
-            aria-label="Start at"
+            aria-label={tr('r13ui.night.startAt')}
             value={startHhmm}
             disabled={startNow}
             onChange={(e) => setStartHhmm(e.target.value)}
           />
         </span>
         <label className="ck-night-inline">
-          At once
+          {tr('r13ui.night.atOnce')}
           <select
             className="ck-night-select"
-            aria-label="At once"
+            aria-label={tr('r13ui.night.atOnce')}
             value={parallel}
             onChange={(e) => setParallel(Number(e.target.value))}
           >
@@ -617,48 +616,48 @@ export function TonightSheet({
       </div>
 
       <div className="ck-night-line ck-night-awake">
-        <span className="ck-night-inline">Keep this computer awake until it is done</span>
+        <span className="ck-night-inline">{tr('r13ui.night.keepAwake')}</span>
         <Switch
           on={keepAwake}
-          label="Keep this computer awake until it is done"
+          label={tr('r13ui.night.keepAwake')}
           disabled={!loaded}
           onChange={awakeToggle}
         />
       </div>
       {confirmAwake && (
-        <div className="ck-night-confirm" role="group" aria-label="Keep the computer awake">
-          <p className="ck-night-note">{AWAKE_WORDS}</p>
+        <div className="ck-night-confirm" role="group" aria-label={tr('r13ui.night.awakeGroup')}>
+          <p className="ck-night-note">{tr('r13ui.night.awakeWords')}</p>
           <div className="ck-sheet-actions">
             <button type="button" className="ck-btn ck-btn--secondary" onClick={() => void answerAwake(false)}>
-              Don&apos;t
+              {tr('r13ui.night.dont')}
             </button>
             <button type="button" className="ck-btn ck-btn--primary" onClick={() => void answerAwake(true)}>
-              Keep it awake
+              {tr('r13ui.night.keepIt')}
             </button>
           </div>
         </div>
       )}
 
       <div className="ck-night-group-head">
-        <span className="ck-night-label">Checks before you go</span>
+        <span className="ck-night-label">{tr('r13ui.night.checks')}</span>
       </div>
       <ul className="ck-night-checks-list">
         {undoOn ? (
-          <li className="ck-night-ok">✓ Undo is on</li>
+          <li className="ck-night-ok">{tr('r13ui.night.undoOn')}</li>
         ) : (
-          <li className="ck-night-warn">! Undo is off</li>
+          <li className="ck-night-warn">{tr('r13ui.night.undoOff')}</li>
         )}
         {gitOk ? (
-          <li className="ck-night-ok">✓ Every project is a git project with a commit</li>
+          <li className="ck-night-ok">{tr('r13ui.night.gitOk')}</li>
         ) : (
-          <li className="ck-night-warn">! A project is not a git project with a commit</li>
+          <li className="ck-night-warn">{tr('r13ui.night.gitBad')}</li>
         )}
         {untested > 0 ? (
           <li className="ck-night-warn">
-            {`! ${untested} ${plural(untested, 'task has', 'tasks have')} no tests`}
+            {tr('r13ui.night.untested', { count: untested })}
           </li>
         ) : (
-          n > 0 && <li className="ck-night-ok">✓ Every task has tests</li>
+          n > 0 && <li className="ck-night-ok">{tr('r13ui.night.allTested')}</li>
         )}
       </ul>
       {worst && <p className="ck-night-worst">{worst}</p>}
@@ -671,7 +670,7 @@ export function TonightSheet({
       {shownBlock && <p className="ck-night-blocked">{shownBlock}</p>}
       <div className="ck-sheet-actions">
         <button type="button" className="ck-btn ck-btn--secondary" disabled={busy} onClick={onClose}>
-          Cancel
+          {tr('r13ui.night.cancel')}
         </button>
         <button
           type="button"
@@ -680,7 +679,7 @@ export function TonightSheet({
           title={shownBlock ?? undefined}
           onClick={() => void start()}
         >
-          {busy ? 'Starting…' : 'Start Night Shift'}
+          {busy ? tr('r13ui.night.starting') : tr('r13ui.night.startBtn')}
         </button>
       </div>
     </Sheet>

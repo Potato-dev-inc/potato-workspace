@@ -58,12 +58,29 @@ describe('remote New agent sources', () => {
     const client = fakeClient();
     const onStarted = vi.fn();
     const r = buildRemoteNewAgent(OPTIONS, { client, node: 'n', deviceName: 'Mac mini', canControl: () => true, onStarted });
-    const pane = await r.onStart({ agentId: 'claude', folder: 'remote:p1', isolated: true, runAs: 'chat', prompt: 'hi', model: 'b' });
+    const pane = await r.onStart({ agentId: 'claude', folder: 'remote:p1', isolated: false, runAs: 'chat', prompt: 'hi', model: 'b' });
     expect(pane).toBe('n1');
     expect(client.startAgent).toHaveBeenCalledWith({ agent: 'claude', project: 'p1', lane: 'chat' });
     expect(client.setConfig).toHaveBeenCalledWith('n1', 'mdl', 'b');
     expect(client.sendMessage).toHaveBeenCalledWith('n1', 'hi');
     expect(onStarted).toHaveBeenCalledWith('n1', true);
+  });
+
+  it('Work on a copy starts the far chat through the acp_chat_start row with separateCopy, and never in the project itself; an older far PC (404) starts nothing', async () => {
+    const call = vi.fn(async () => ({ pane_id: 'c1' }));
+    const client = fakeClient({ call: call as never });
+    const onStarted = vi.fn();
+    const r = buildRemoteNewAgent(OPTIONS, { client, node: 'n', deviceName: 'Mac mini', canControl: () => true, onStarted });
+    expect(await r.onStart({ agentId: 'claude', folder: 'remote:p1', isolated: true, runAs: 'chat', prompt: 'hi', accountId: 'mine' })).toBe('c1');
+    // The folder is the far PC's own project id; no account of this PC goes along.
+    expect(call).toHaveBeenCalledWith('acp_chat_start', { agentId: 'claude', folder: 'p1', explicit: true, separateCopy: true });
+    expect(client.startAgent).not.toHaveBeenCalled();
+    expect(client.sendMessage).toHaveBeenCalledWith('c1', 'hi');
+    const old = fakeClient({ call: vi.fn(async () => { throw new PcLinkError(404, { code: 'UNKNOWN_ROUTE' }, 'POST', '/pclink/call/acp_chat_start'); }) as never });
+    const r2 = buildRemoteNewAgent(OPTIONS, { client: old, node: 'n', deviceName: 'Mac mini', canControl: () => true, onStarted });
+    await expect(r2.onStart({ agentId: 'claude', folder: 'remote:p1', isolated: true, runAs: 'chat', prompt: 'hi' })).rejects.toThrow();
+    expect(old.startAgent).not.toHaveBeenCalled();
+    expect(old.sendMessage).not.toHaveBeenCalled();
   });
 
   it('keeps the person in the page when the first message does not go, and sends it to the same chat the next time', async () => {

@@ -93,3 +93,13 @@ describe('a budget card in the Needs-you list', () => {
     ]);
   });
 });
+
+describe('a budget card without onDismiss or Open', () => {
+  it('shows no Dismiss button (Dismiss is opt-in)', () => {
+    act(() => {
+      root.render(<BudgetCard q={card} now={120_000} onAnswer={vi.fn()} />);
+    });
+    expect(button('Dismiss')).toBeUndefined();
+    expect(button('Add 10 turns')).toBeTruthy();
+  });
+});

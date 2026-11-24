@@ -1,7 +1,7 @@
 //! What a finished run proved and did not (`RunReceipt`) and the caveats on it (`RunWarning`),
 //! derived only from recorded facts on the snapshot.
 
-use super::guarantees::{checks_guarantee, read_only_guarantee, Guarantees, IsolationGuarantee, ModelGuarantee};
+use crate::agent_runs::guarantees::{checks_guarantee, read_only_guarantee, Guarantees, IsolationGuarantee, ModelGuarantee};
 use crate::operations::{OperationSnapshot, OperationStatus, ResultCapture};
 use serde::{Deserialize, Serialize};
 
@@ -93,7 +93,7 @@ pub struct RunReceipt {
     /// What this run guarantees, the same on every lane: read-only (asked, enforced by, proof), isolation,
     /// checks (run by the app) and model (asked, confirmed). `verified` on the result is derived from `checks`.
     #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub guarantees: Option<super::guarantees::Guarantees>,
+    pub guarantees: Option<crate::agent_runs::guarantees::Guarantees>,
     /// Where the time went (queue, start, first output, total) and whether a warm worker was used.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub timing: Option<super::timing::RunTiming>,

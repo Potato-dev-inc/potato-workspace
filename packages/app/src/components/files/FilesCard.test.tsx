@@ -7,6 +7,8 @@ import { fakeApi } from './fakes';
 import { resetFileTabs, usePaneFiles } from '../../lib/file-tabs';
 import { resetComposerInserts, takeComposerInserts } from '../../lib/composer-insert';
 import { useEnglish } from '../../i18n/test-utils';
+import { HostProvider } from '../../lib/host/context';
+import { ALL_CAPS, type Host } from '../../lib/host/host';
 
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 (globalThis as { ResizeObserver?: unknown }).ResizeObserver = class {
@@ -55,6 +57,27 @@ async function show(api = fakeApi(), search = vi.fn(async () => [] as never[])) 
 }
 
 describe('Files card', () => {
+  it('re-reads every 15 s when the agent is idle and every 5 s while it works (not 5 s always: a far PC pays a call for each)', async () => {
+    vi.useFakeTimers();
+    try {
+      const api = fakeApi();
+      const mount = async (key: string) => act(async () => root.render(<FilesCard paneId="p1" cwd={'C:\work\shop'} api={api} refreshKey={key} />));
+      await mount('idle|0');
+      const calls = () => vi.mocked(api.marks).mock.calls.length;
+      const base = calls();
+      await act(async () => void vi.advanceTimersByTime(14_000));
+      expect(calls()).toBe(base);
+      await act(async () => void vi.advanceTimersByTime(1_500));
+      expect(calls()).toBe(base + 1);
+      await mount('running|0');
+      const working = calls();
+      await act(async () => void vi.advanceTimersByTime(5_500));
+      expect(calls()).toBe(working + 1);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
   it('lists the top folder with folders first, and reads a folder only when it is opened', async () => {
     const { api } = await show();
     expect(names()).toEqual(['src', 'docs', 'README.md', 'logo.png']);
@@ -134,6 +157,20 @@ describe('Files card', () => {
       expect(menu().map((b) => b.textContent)).toEqual(['Open', 'Copy path', 'Show in Explorer', 'Open in editor', 'Fence this file', 'Mention in chat']);
     });
 
+    it('on a file of another PC it offers only what works there: Open, Copy path, Mention in chat', async () => {
+      const far = { place: { kind: 'pc', node: 'n1', name: 'Mac mini' }, live: true, caps: ALL_CAPS, invoke: async () => null, listen: async () => () => {} } as unknown as Host;
+      await act(async () =>
+        root.render(
+          <HostProvider host={far}>
+            <FilesCard paneId="p1" cwd={'/home/me/shop'} api={fakeApi()} search={vi.fn(async () => [] as never[])} />
+          </HostProvider>,
+        ),
+      );
+      await flush();
+      await rightClick('README.md');
+      expect(menu().map((b) => b.textContent)).toEqual(['Open', 'Copy path', 'Mention in chat']);
+    });
+
     it('offers "Fence this folder" on a folder, and the click fences it inside the pane project', async () => {
       const fenceAdd = vi.fn(async () => ['docs']);
       const { api } = await show();
@@ -191,6 +228,22 @@ describe('Files card', () => {
       });
       expect(menu().length).toBe(6);
     });
+  });
+
+  it('a big folder shows the first 2000, says "Showing first 2000 of N", and Show more adds 2000 each time with the right count', async () => {
+    const entries = Array.from({ length: 5000 }, (_, i) => ({ path: `f${i}.txt`, name: `f${i}.txt`, isDir: false, size: 1 }));
+    await show(fakeApi({ list: vi.fn(async () => ({ truncated: false, entries })) }));
+    const more = () => [...host.querySelectorAll<HTMLButtonElement>('button')].find((b) => b.textContent?.startsWith('Show more'));
+    expect(names()).toHaveLength(2000);
+    expect(host.querySelector('[data-testid="files-showing"]')!.textContent).toBe('Showing first 2000 of 5000');
+    expect(more()!.textContent).toBe('Show more (3000 hidden)');
+    await act(async () => more()!.click());
+    expect(names()).toHaveLength(4000);
+    expect(more()!.textContent).toBe('Show more (1000 hidden)');
+    await act(async () => more()!.click());
+    expect(names()).toHaveLength(5000);
+    expect(more()).toBeUndefined();
+    expect(host.querySelector('[data-testid="files-showing"]')).toBeNull();
   });
 
   it('an empty project folder is one block with a sentence and a button that opens the folder', async () => {

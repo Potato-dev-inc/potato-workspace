@@ -303,13 +303,18 @@ export function AddAgent({ api = addAgentApi, wizardApi, onStartChat, onOpenTerm
   const slow = checking && run && now - (seenRef.current?.at ?? now) >= SLOW_AFTER_MS;
 
   return (
-    <section className="aa" aria-label={t('addAgent.title')} data-state={run?.state ?? 'idle'}>
+    <section className="aa" aria-label={t('addAgent.orType')} data-state={run?.state ?? 'idle'}>
       {!run && (
         <div className="aa-body">
           {/* The agents already on this computer come first: one click each. Typing a name is the second way. */}
           <AddAgentFound api={api} projectDir={projectDir} disabled={busy} onAdd={(id) => void begin(id)} onAddAll={addAll} />
           {/* Typing a name (or pasting an install command) is not the first thing a person sees: it lives under Advanced. */}
           <div className="aa-head">
+            {!advanced && (
+              <Btn primary onClick={() => setAdvanced(true)}>
+                {t('addAgent.title')}
+              </Btn>
+            )}
             <button type="button" className="aa-link" aria-expanded={advanced} onClick={() => setAdvanced((v) => !v)}>
               {advanced ? t('addAgent.hideAdvanced') : t('addAgent.advanced')}
             </button>

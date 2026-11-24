@@ -1,7 +1,8 @@
 // The one-box "Add an agent" flow: the shapes the backend sends (SPEC-ADD-AGENT-1113 sections 1.1, 2.2), the thin
 // invoke/listen wrapper, and the plain words for every step, chip and error. Nothing here names an agent.
 import { invoke } from '@tauri-apps/api/core';
-import { listen, type UnlistenFn } from '@tauri-apps/api/event';
+import { type UnlistenFn } from '@tauri-apps/api/event';
+import { listen } from './events';
 import { t } from '../i18n';
 
 export type Tri = 'yes' | 'no' | 'unknown';

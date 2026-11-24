@@ -1,4 +1,4 @@
-//! Codex and Gemini with an API key, through the whole lend: request, accept, the borrower's shim, the lender's
+//! Codex, Gemini and OpenCode with an API key, through the whole lend: request, accept, the borrower's shim, the lender's
 //! forwarder, a fake upstream on this machine. Fake keys only; no call to OpenAI or Google is made here.
 //!
 //! The same checks per agent (`Case`): the borrower side has only the placeholder, the lender adds the real key,
@@ -9,7 +9,7 @@ use std::ffi::OsString;
 use std::time::Duration;
 
 use super::e2e_tests::{world2, World2};
-use super::proxy_tests::{http, json_script, Script, LENDER_KEY};
+use super::proxy_tests::{http, json_script, Script, LENDER_KEY, SSE_TEXT};
 use super::service::{Approval, LendAccount, LendProfile, LendWho};
 
 const ENDED_BODY: &str = r#"{"error":{"type":"lend_ended","message":"This lend ended"}}"#;
@@ -64,6 +64,19 @@ const CODEX: Case = Case {
     refused: &[("POST", "/v1/chat/completions"), ("GET", "/v1/files"), ("POST", "/v1/responses/x/cancel"), ("GET", "/backend-api/codex/responses"), ("POST", "/v1/images/generations")],
 };
 
+/// OpenCode with an Anthropic key: its own call (a `?beta=true` query, its own headers, the key in `x-api-key`) through the same Messages shape as Claude's.
+const OPENCODE: Case = Case {
+    agent: "opencode",
+    reply: SSE_TEXT,
+    asked: "/v1/messages?beta=true",
+    sent: "/v1/messages?beta=true",
+    borrower: &[("x-api-key", "pm-lend"), ("anthropic-version", "2023-06-01"), ("anthropic-beta", "interleaved-thinking-2025-05-14"), ("authorization", "Bearer BORROWER-TOKEN"), ("x-opencode-session", "ses_1")],
+    auth: ("x-api-key", "sk-lender-FAKE"),
+    gone: &["authorization", "cookie"],
+    usage: (25, 42),
+    refused: &[("POST", "/v1/chat/completions"), ("POST", "/v1/messages/batches"), ("GET", "/v1/files"), ("POST", "/v1/complete")],
+};
+
 const GEMINI: Case = Case {
     agent: "gemini",
     reply: GEMINI_SSE,
@@ -111,7 +124,7 @@ async fn lend(w: &World2, agent: &str, secs: u64) -> (String, String) {
     w.leo.pump();
     for _ in 0..100 {
         if let Ok(env) = w.leo.lend.borrowed_launch_env(agent, &grant.id) {
-            let base = env.set.iter().find(|(k, _)| k == "GOOGLE_GEMINI_BASE_URL").or_else(|| env.set.iter().find(|(k, _)| k == "LEND_KEY"));
+            let base = env.set.iter().find(|(k, _)| k == "GOOGLE_GEMINI_BASE_URL").or_else(|| env.set.iter().find(|(k, _)| k == "LEND_KEY")).or_else(|| env.set.iter().find(|(k, _)| k == "OPENCODE_CONFIG_CONTENT"));
             assert!(base.is_some(), "the pane env points at the proxy: {env:?}");
             let base = shim_base(w, agent, &grant.id);
             return (grant.id, base);
@@ -126,6 +139,11 @@ fn shim_base(w: &World2, agent: &str, grant: &str) -> String {
     let env = w.leo.lend.borrowed_launch_env(agent, grant).unwrap();
     if let Some((_, v)) = env.set.iter().find(|(k, _)| k == "GOOGLE_GEMINI_BASE_URL") {
         return v.clone();
+    }
+    if let Some((_, v)) = env.set.iter().find(|(k, _)| k == "OPENCODE_CONFIG_CONTENT") {
+        let config: serde_json::Value = serde_json::from_str(v).unwrap();
+        let url = config["provider"]["anthropic"]["options"]["baseURL"].as_str().unwrap();
+        return url.strip_suffix("/v1").unwrap().to_string();
     }
     let home = &env.set.iter().find(|(k, _)| k == "CODEX_HOME").expect("a scratch CODEX_HOME").1;
     let text = std::fs::read_to_string(std::path::Path::new(home).join("config.toml")).unwrap();
@@ -146,7 +164,8 @@ async fn the_whole_lend(case: &Case) {
     let w = world2(sse(case.reply)).await;
     let (grant_id, base) = lend(&w, case.agent, 3600).await;
 
-    // The agent's request, as it is made on the borrower's PC: only the placeholder, and headers that would steer the key.
+    let token = super::shim::test_token_for_url(&base);
+    // The agent's request, as it is made on the borrower's PC: only the grant's own key, and headers that would steer the key.
     let reply = ask(case, &base, case.asked, case.borrower).await;
     assert_eq!(reply.status, 200, "{}", reply.text());
     assert!(reply.complete);
@@ -162,9 +181,9 @@ async fn the_whole_lend(case: &Case) {
         assert_eq!(r.header(name), None, "{name} must not reach the provider");
     }
     for (k, v) in &r.headers {
-        assert!(!v.contains("pm-lend") && !v.contains("BORROWER"), "{k}: {v}");
+        assert!(!v.contains(&token) && !v.contains("BORROWER"), "{k}: {v}");
     }
-    assert!(!r.path.contains("pm-lend"), "{}", r.path);
+    assert!(!r.path.contains(&token), "{}", r.path);
 
     // Usage is counted on both PCs.
     let usage = w.maya.lend.usage(&grant_id).unwrap();
@@ -211,6 +230,16 @@ async fn gemini_with_an_api_key_goes_through_the_whole_lend() {
 }
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 4)]
+async fn opencode_with_an_anthropic_key_goes_through_the_whole_lend() {
+    the_whole_lend(&OPENCODE).await;
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 4)]
+async fn an_expired_opencode_lend_answers_a_plain_403() {
+    an_expired_lend(&OPENCODE).await;
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 4)]
 async fn an_expired_codex_lend_answers_a_plain_403() {
     an_expired_lend(&CODEX).await;
 }
@@ -229,7 +258,7 @@ async fn a_borrowed_codex_terminal_gets_its_own_config_with_websockets_off_and_a
     let w = world2(json_script(200, "{}")).await;
     let (grant_id, base) = lend(&w, "codex", 3600).await;
     let env = w.leo.lend.borrowed_launch_env("codex", &grant_id).unwrap();
-    assert_eq!(set(&env, "LEND_KEY"), Some("pm-lend"));
+    assert_eq!(set(&env, "LEND_KEY"), Some(super::shim::test_token_for_url(&base).as_str()));
     let home = set(&env, "CODEX_HOME").expect("a CODEX_HOME for this lend").to_string();
     assert!(home.contains(&grant_id) && home.ends_with("terminal"), "{home}");
     assert!(std::path::Path::new(&home).starts_with(&w.leo.dir), "inside the app's own folder, never the borrower's real Codex home");
@@ -242,7 +271,7 @@ async fn a_borrowed_codex_terminal_gets_its_own_config_with_websockets_off_and_a
     assert!(config.contains(&format!("base_url = \"{base}/v1\"")), "{config}");
     assert!(config.contains("supports_websockets = false") && config.contains("wire_api = \"responses\"") && config.contains("env_key = \"LEND_KEY\""));
     assert!(config.contains("model_provider = \"lend\""));
-    assert!(!config.contains(LENDER_KEY) && !config.contains("pm-lend"), "no key in the file, the placeholder lives in the environment");
+    assert!(!config.contains(LENDER_KEY) && !config.contains(&super::shim::test_token_for_url(&base)), "no key in the file, the grant secret lives in the environment");
     assert!(base.starts_with("http://127.0.0.1:"), "{base}");
 }
 
@@ -270,8 +299,9 @@ async fn a_borrowed_codex_chat_authenticates_with_the_placeholder_key_and_the_ba
     let (grant_id, base) = lend(&w, "codex", 3600).await;
     let chat = w.leo.lend.borrowed_chat("codex", &grant_id).unwrap();
     assert_eq!(chat.authenticate.as_deref(), Some("api-key"));
-    assert_eq!(set(&chat.env, "CODEX_API_KEY"), Some("pm-lend"));
-    assert_eq!(set(&chat.env, "OPENAI_API_KEY"), Some("pm-lend"));
+    let token = super::shim::test_token_for_url(&base);
+    assert_eq!(set(&chat.env, "CODEX_API_KEY"), Some(token.as_str()));
+    assert_eq!(set(&chat.env, "OPENAI_API_KEY"), Some(token.as_str()));
     let home = set(&chat.env, "CODEX_HOME").unwrap().to_string();
     assert!(home.ends_with("chat") && home.contains(&grant_id), "{home}");
     let config = std::fs::read_to_string(std::path::Path::new(&home).join("config.toml")).unwrap();
@@ -284,8 +314,8 @@ async fn a_borrowed_codex_chat_authenticates_with_the_placeholder_key_and_the_ba
     assert_eq!(cfg.authenticate_with.as_deref(), Some("api-key"));
     let env = build_env(&cfg, &Host, None);
     assert_eq!(lookup(&env, "CODEX_HOME").as_deref(), Some(home.as_str()), "the adapter uses the lend's own home");
-    assert_eq!(lookup(&env, "CODEX_API_KEY").as_deref(), Some("pm-lend"));
-    assert_eq!(lookup(&env, "OPENAI_API_KEY").as_deref(), Some("pm-lend"));
+    assert_eq!(lookup(&env, "CODEX_API_KEY").as_deref(), Some(token.as_str()));
+    assert_eq!(lookup(&env, "OPENAI_API_KEY").as_deref(), Some(token.as_str()));
     assert!(env.iter().all(|(_, v)| !v.to_string_lossy().contains("borrower-own")), "none of the borrower's own values reach the adapter: {env:?}");
 }
 
@@ -295,7 +325,7 @@ async fn a_borrowed_gemini_terminal_gets_the_base_url_and_a_settings_file_that_p
     let (grant_id, base) = lend(&w, "gemini", 3600).await;
     let env = w.leo.lend.borrowed_launch_env("gemini", &grant_id).unwrap();
     assert_eq!(set(&env, "GOOGLE_GEMINI_BASE_URL"), Some(base.as_str()));
-    assert_eq!(set(&env, "GEMINI_API_KEY"), Some("pm-lend"));
+    assert_eq!(set(&env, "GEMINI_API_KEY"), Some(super::shim::test_token_for_url(&base).as_str()));
     let home = set(&env, "GEMINI_CLI_HOME").expect("a scratch home").to_string();
     let settings = std::fs::read_to_string(std::path::Path::new(&home).join(".gemini").join("settings.json")).unwrap();
     assert!(settings.contains("gemini-api-key"), "{settings}");
@@ -308,6 +338,37 @@ async fn a_borrowed_gemini_terminal_gets_the_base_url_and_a_settings_file_that_p
 }
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 4)]
+async fn a_borrowed_opencode_gets_its_config_in_its_environment_and_its_own_service_port_and_no_key_in_a_file() {
+    let w = world2(json_script(200, "{}")).await;
+    let (grant_id, base) = lend(&w, "opencode", 3600).await;
+    let token = super::shim::test_token_for_url(&base);
+    let line = |chat: bool| if chat { w.leo.lend.borrowed_chat("opencode", &grant_id).unwrap().env } else { w.leo.lend.borrowed_launch_env("opencode", &grant_id).unwrap() };
+    for chat in [false, true] {
+        let env = line(chat);
+        let config: serde_json::Value = serde_json::from_str(set(&env, "OPENCODE_CONFIG_CONTENT").unwrap()).unwrap();
+        assert_eq!(config["provider"]["anthropic"]["options"]["baseURL"], format!("{base}/v1"));
+        assert_eq!(config["provider"]["anthropic"]["options"]["apiKey"], token, "the grant's own secret, in the environment only");
+        assert_eq!(config["enabled_providers"], serde_json::json!(["anthropic"]), "no other provider");
+        assert_eq!((config["autoupdate"].as_bool(), config["share"].as_str()), (Some(false), Some("disabled")));
+        // The borrower's own provider variables are gone; the config and the scratch folder are not removed.
+        for name in ["ANTHROPIC_API_KEY", "ANTHROPIC_BASE_URL", "ANTHROPIC_AUTH_TOKEN"] {
+            assert!(env.remove.iter().any(|r| r == name), "{name} stays");
+        }
+        assert!(!env.remove.iter().any(|r| r == "OPENCODE_CONFIG_CONTENT" || r == "XDG_CONFIG_HOME"));
+        // A scratch config folder of this lend (never the borrower's real one) that gives OpenCode's service a port of its own.
+        let home = set(&env, "XDG_CONFIG_HOME").expect("a scratch XDG_CONFIG_HOME").to_string();
+        assert!(home.contains(&grant_id) && std::path::Path::new(&home).starts_with(&w.leo.dir), "{home}");
+        let service = std::fs::read_to_string(std::path::Path::new(&home).join("opencode").join("service.json")).unwrap();
+        assert_eq!(serde_json::from_str::<serde_json::Value>(&service).unwrap()["port"], 28895);
+        assert!(!service.contains(&token));
+        for entry in std::fs::read_dir(std::path::Path::new(&home).join("opencode")).unwrap() {
+            let text = std::fs::read_to_string(entry.unwrap().path()).unwrap();
+            assert!(!text.contains(&token) && !text.contains(LENDER_KEY), "no key in a file");
+        }
+    }
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 4)]
 async fn codex_signed_in_with_chatgpt_cannot_be_offered_and_the_screen_data_says_so() {
     let w = world2(json_script(200, "{}")).await;
     let drivers = w.maya.lend.drivers();
@@ -316,6 +377,8 @@ async fn codex_signed_in_with_chatgpt_cannot_be_offered_and_the_screen_data_says
     assert!(codex.account_note.as_deref().unwrap().contains("ChatGPT is not supported yet"));
     let claude = drivers.iter().find(|d| d.agent_id == "claude").unwrap();
     assert!(claude.api_key && claude.account && claude.account_note.is_none(), "Claude is unchanged");
+    let opencode = drivers.iter().find(|d| d.agent_id == "opencode").unwrap();
+    assert!(opencode.api_key && opencode.chat && !opencode.account && opencode.account_note.as_deref().unwrap().contains("not supported yet"));
     let gemini = drivers.iter().find(|d| d.agent_id == "gemini").unwrap();
     assert!(gemini.api_key && !gemini.account && !gemini.chat && gemini.account_note.as_deref().unwrap().contains("not supported yet"));
 

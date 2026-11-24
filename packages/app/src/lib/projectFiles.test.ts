@@ -54,3 +54,13 @@ describe('createProjectFileSearcher', () => {
     await expect(p).resolves.toBeNull();
   });
 });
+
+describe('createProjectFileSearcher errors', () => {
+  it('tells the caller about a failed search instead of answering an empty list', async () => {
+    const seen: unknown[] = [];
+    const s = createProjectFileSearcher(() => Promise.reject(new Error('no')), (e) => seen.push(e));
+    await expect(s.search('p1', 'a')).resolves.toBeNull();
+    expect(seen).toHaveLength(1);
+    await expect(createProjectFileSearcher(() => Promise.reject(new Error('no'))).search('p1', 'a')).resolves.toEqual([]);
+  });
+});

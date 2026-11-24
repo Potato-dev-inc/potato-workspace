@@ -95,6 +95,7 @@ export const teamPage = {
   'teamHub.busy.waiting_one': '{count} agent waits for an answer',
   'teamHub.busy.waiting_other': '{count} agents wait for an answer',
   'teamHub.askUsage': 'Ask to borrow',
+  'teamHub.notReachable': 'Not connected right now.',
   'teamHub.people.list': 'People on the team',
   'teamHub.join.wants': '{name} wants to join from {device}.',
   'teamHub.join.letIn': 'Let in',

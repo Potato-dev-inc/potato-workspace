@@ -1,5 +1,6 @@
 // A small ring in the message box footer: how full the conversation window is. Click it (or press Enter) for the
 // numbers. Drawn only when the agent reported its window size, never guessed. Generic: it takes a reading.
+import { t } from '../../i18n';
 import { useEffect, useId, useRef, useState } from 'react';
 import { formatTokens, type ContextReading } from '../cockpit/rail/railFormat';
 import '../../styles/chat-input-card.css';
@@ -33,8 +34,8 @@ export function ContextMeter({ reading }: { reading: ContextReading | null }) {
         ref={button}
         type="button"
         className="ck-ctx-ring"
-        aria-label={`Context ${percent}% used`}
-        title={`Context ${percent}% used`}
+        aria-label={t('r11.ctx.aria', { percent })}
+        title={t('r11.ctx.aria', { percent })}
         aria-haspopup="dialog"
         aria-expanded={open}
         aria-controls={open ? `${uid}-pop` : undefined}
@@ -52,7 +53,7 @@ export function ContextMeter({ reading }: { reading: ContextReading | null }) {
           className="ck-pop ck-pop--right ck-ctx-pop"
           role="dialog"
           tabIndex={-1}
-          aria-label="Context used"
+          aria-label={t('r9.ctx.label')}
           data-testid="context-meter-pop"
           onKeyDown={(event) => {
             if (event.key === 'Escape') {
@@ -63,14 +64,14 @@ export function ContextMeter({ reading }: { reading: ContextReading | null }) {
           }}
         >
           <div className="ck-ctx-head">
-            <span>Context</span>
-            <span className="ck-ctx-pct">{percent}% used</span>
+            <span>{t('r9.ctx.title')}</span>
+            <span className="ck-ctx-pct">{t('r9.ctx.pct', { n: percent })}</span>
           </div>
-          <div className="ck-ctx-bar" role="progressbar" aria-valuemin={0} aria-valuemax={100} aria-valuenow={percent} aria-label="Context used">
+          <div className="ck-ctx-bar" role="progressbar" aria-valuemin={0} aria-valuemax={100} aria-valuenow={percent} aria-label={t('r9.ctx.label')}>
             <i style={{ width: `${percent}%` }} />
           </div>
           <p className="ck-ctx-line">
-            Used {formatTokens(used)} of {formatTokens(size)} tokens
+            {t('r9.ctx.line', { used: formatTokens(used), size: formatTokens(size) })}
           </p>
         </div>
       )}

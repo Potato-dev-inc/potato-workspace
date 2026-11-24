@@ -141,7 +141,7 @@ async fn accepting_with_their_usage_gets_the_promised_lend_without_a_click() {
         super::own_tests::pause(30).await;
     }
     let env = env.expect("the borrower's shim started");
-    assert!(env.set.contains(&("ANTHROPIC_AUTH_TOKEN".into(), "pm-lend".into())));
+    assert!(env.set.contains(&("ANTHROPIC_AUTH_TOKEN".into(), super::shim::test_token_for_url(&env.set.iter().find(|(k, _)| k == "ANTHROPIC_BASE_URL").unwrap().1))));
     // No credential bytes crossed: the lender's key is nowhere on Leo's PC (files, secrets, the env it got).
     let mut all = String::new();
     for (_, v) in &env.set {

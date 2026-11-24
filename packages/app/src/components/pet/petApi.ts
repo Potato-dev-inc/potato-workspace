@@ -1,6 +1,7 @@
 // Desktop Potato: the few calls to the app. Everything fails quietly: the pet is never worth an error.
 import { invoke } from '@tauri-apps/api/core';
-import { listen, type UnlistenFn } from '@tauri-apps/api/event';
+import { type UnlistenFn } from '@tauri-apps/api/event';
+import { listen } from '../../lib/events';
 import { cockpitApi } from '../../lib/cockpit-api';
 import { patchSettings } from '../../lib/settings';
 import type { PetEnv } from './usePetController';

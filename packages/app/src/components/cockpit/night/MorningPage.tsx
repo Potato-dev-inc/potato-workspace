@@ -2,6 +2,7 @@
 // It reads the night with `useNight()`, calls `night_seen` once when it opens (that holds the morning push),
 // and runs Keep and Throw away one task at a time, or Keep all that pass. Agent text is shown as text only.
 import { useEffect, useRef, useState } from 'react';
+import { t, useT } from '../../../i18n';
 import { save } from '@tauri-apps/plugin-dialog';
 import { type NightTaskView, type NightView, nightApi, nightError, useNight } from '../../../lib/night';
 import { CONFIRM_MS, TaskRow, plural } from './TaskRow';
@@ -96,6 +97,7 @@ export interface MorningPageProps {
 }
 
 export function MorningPage({ onClose, onOpenPane }: MorningPageProps) {
+  useT();
   const { state, error: readError } = useNight();
   // The newest view an action returned. The page shows it until the night's own state is newer.
   const [fresh, setFresh] = useState<NightView | null>(null);
@@ -188,15 +190,15 @@ export function MorningPage({ onClose, onOpenPane }: MorningPageProps) {
     <div className="ck-morning">
       <header className="ck-morning-head">
         <div>
-          <h1 className="ck-title">Morning</h1>
+          <h1 className="ck-title">{t('r11.n.morning')}</h1>
           {run && <p className="ck-sub">{whenText(run)}</p>}
         </div>
         <div className="ck-morning-head-actions">
           <button type="button" className="ck-btn ck-btn--plain" disabled={!run} onClick={() => void savePage()}>
-            Save as page
+            {t('r11.n.savePage')}
           </button>
           <button type="button" className="ck-btn ck-btn--plain" onClick={onClose}>
-            Close
+            {t('r11.n.close')}
           </button>
         </div>
       </header>
@@ -209,12 +211,12 @@ export function MorningPage({ onClose, onOpenPane }: MorningPageProps) {
 
       {history.length > 0 && (
         <select
-          aria-label="Night"
+          aria-label={t('r11.n.night')}
           className="ck-morning-select"
           value={picked}
           onChange={(e) => setPicked(e.target.value)}
         >
-          <option value={LATEST}>{run ? 'Latest night' : 'Latest'}</option>
+          <option value={LATEST}>{run ? t('r11.n.latestNight') : t('r11.n.latest')}</option>
           {history.map((row) => (
             <option key={row.id} value={row.id}>
               {row.line}
@@ -223,12 +225,12 @@ export function MorningPage({ onClose, onOpenPane }: MorningPageProps) {
         </select>
       )}
 
-      {state === null && !readError && <p className="ck-morning-empty">Loading</p>}
+      {state === null && !readError && <p className="ck-morning-empty">{t('r11.n.loading')}</p>}
 
       {older ? (
         <section className="ck-morning-older">
           <p className="ck-morning-summary">{older.line}</p>
-          <p className="ck-morning-empty">Only the summary of an older night is shown here.</p>
+          <p className="ck-morning-empty">{t('r11.n.older')}</p>
         </section>
       ) : run === null ? (
         state !== null && <p className="ck-morning-empty">{EMPTY_TEXT}</p>
@@ -255,7 +257,7 @@ export function MorningPage({ onClose, onOpenPane }: MorningPageProps) {
                   disabled={pending !== null}
                   onClick={() => void keepAll()}
                 >
-                  Keep all
+                  {t('r11.n.keepAll')}
                 </button>
               </div>
             ) : (
@@ -305,7 +307,7 @@ export function MorningPage({ onClose, onOpenPane }: MorningPageProps) {
 
           {run.events.length > 0 && (
             <section className="ck-morning-group">
-              <h2 className="ck-morning-group-title">THE NIGHT</h2>
+              <h2 className="ck-morning-group-title">{t('r11.n.theNight')}</h2>
               <ol className="ck-morning-events">
                 {run.events.map((event, i) => (
                   <li key={`${event.at}-${i}`}>

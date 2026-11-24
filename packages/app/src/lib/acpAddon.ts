@@ -3,7 +3,8 @@
 // a start error is told apart. Nothing here names an agent: labels, sizes and sign-in hints come from the backend.
 import { invoke } from '@tauri-apps/api/core';
 import { t } from '../i18n';
-import { listen, type UnlistenFn } from '@tauri-apps/api/event';
+import { type UnlistenFn } from '@tauri-apps/api/event';
+import { listen } from './events';
 
 export type AddonState = 'not_installed' | 'installing' | 'installed' | 'failed';
 

@@ -5,7 +5,8 @@
 // names exactly: `Target` and `Settings` are snake_case, the views and `Offer` are camelCase. Tauri
 // maps the Rust argument names to camelCase (`pane_id` is `paneId`).
 import { invoke } from '@tauri-apps/api/core';
-import { listen, type UnlistenFn } from '@tauri-apps/api/event';
+import { listen } from './events';
+import type { UnlistenFn } from '@tauri-apps/api/event';
 
 /** `agent` or `agent@account` (Rust `Target`). `account` is missing when there is none. */
 export interface KeepGoingTarget {

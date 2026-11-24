@@ -144,7 +144,7 @@ impl DeskIo for Fake {
     }
 
     fn clean(&self) -> Clean {
-        Clean { text: Box::new(|raw| raw.replace(HOME, "~").replace("rounds", "[r]")) }
+        Clean { text: Box::new(|raw| raw.replace(HOME, "~").replace("rounds", "[r]")), path: None }
     }
 
     fn clean_patch(&self, raw: &str) -> String {

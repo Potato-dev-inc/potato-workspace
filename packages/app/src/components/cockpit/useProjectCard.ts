@@ -18,6 +18,21 @@ export function usePaneCards(panes: readonly { id: string; status: string }[], a
   const [cards, setCards] = useState<ReadonlyMap<string, PaneCard>>(new Map());
   const asked = useRef(new Map<string, string>());
   const sig = panes.map((p) => `${p.id}:${p.status}`).join('|');
+  // A branch can change outside the app (a repo removed, a checkout in a terminal): coming back to the window asks again.
+  const [back, setBack] = useState(0);
+  useEffect(() => {
+    const again = () => {
+      asked.current.clear();
+      setBack((n) => n + 1);
+    };
+    window.addEventListener('focus', again);
+    // A window that never loses focus (a second PC watched on a side screen) still sees a repo come or go.
+    const timer = setInterval(again, 30_000);
+    return () => {
+      window.removeEventListener('focus', again);
+      clearInterval(timer);
+    };
+  }, []);
   useEffect(() => {
     let live = true;
     const gone = new Set(panes.map((p) => p.id));
@@ -37,7 +52,7 @@ export function usePaneCards(panes: readonly { id: string; status: string }[], a
     return () => {
       live = false;
     };
-  }, [sig, api]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [sig, api, back]); // eslint-disable-line react-hooks/exhaustive-deps
   return cards;
 }
 

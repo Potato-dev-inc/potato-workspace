@@ -141,7 +141,7 @@ windows_tested = false
     }
 
     fn tools() -> Tools {
-        Tools { winget: Some("winget".into()), present: Default::default() }
+        Tools { winget: Some("winget".into()), present: Default::default(), home: None }
     }
 
     #[test]

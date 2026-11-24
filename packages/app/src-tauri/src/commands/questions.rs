@@ -10,7 +10,7 @@ pub async fn questions_list() -> Result<Vec<Question>, String> {
 
 #[tauri::command]
 pub async fn question_answer(
-    app: AppHandle,
+    _app: AppHandle,
     id: String,
     choice_id: Option<String>,
     text: Option<String>,
@@ -18,13 +18,13 @@ pub async fn question_answer(
     let result = questions::store()
         .answer_including_remote(&id, choice_id.as_deref(), text.as_deref(), "desktop", now_ms())
         .map_err(|e| format!("{}: {}", e.code, e.message));
-    questions::routes::publish_changed(&app);
+    questions::routes::publish_changed();
     result
 }
 
 #[tauri::command]
-pub async fn question_dismiss(app: AppHandle, id: String) -> Result<Resolution, String> {
+pub async fn question_dismiss(_app: AppHandle, id: String) -> Result<Resolution, String> {
     let result = questions::store().dismiss_including_remote(&id, now_ms()).map_err(|e| format!("{}: {}", e.code, e.message));
-    questions::routes::publish_changed(&app);
+    questions::routes::publish_changed();
     result
 }

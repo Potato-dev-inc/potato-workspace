@@ -44,7 +44,7 @@ export function BringAgentList({
                 </span>
                 {!empty && agent.newestMs !== null && <span className="bc-agent-sub">Newest chat {agoText(agent.newestMs, now)}</span>}
                 {empty && <span className="bc-agent-sub">{reason}</span>}
-                {agent.fromDefinition && <span className="bc-agent-sub">From your agent definition</span>}
+                {agent.fromDefinition && <span className="bc-agent-sub">{t('r21.sw.fromYourAgentDefinition')}</span>}
               </span>
               {!empty && <span aria-hidden="true">›</span>}
             </button>

@@ -3,6 +3,7 @@ import type { CockpitApi } from '../../hooks/useCockpit';
 import { tauriLoopApi, type StopReport } from '../../lib/loop-guard';
 import { Sheet } from './Sheet';
 import '../../styles/loop-guard.css';
+import { t } from '../../i18n';
 
 function count(n: number, one: string, many: string): string {
   return n === 1 ? `1 ${one}` : `${n} ${many}`;
@@ -42,7 +43,7 @@ export function PanicSheet({
       <h2 className="ck-section" id="ck-panic-t">
         Everything is stopped
       </h2>
-      {rows.length === 0 && report.failed.length === 0 && <p className="ck-sub">Nothing was running.</p>}
+      {rows.length === 0 && report.failed.length === 0 && <p className="ck-sub">{t('r21.sw.nothingWasRunning')}</p>}
       {rows.length > 0 && (
         <ul className="ck-panic-list">
           {rows.map((row) => (

@@ -1,7 +1,7 @@
 // Spaces (Labs `spaces_enabled`, off by default): small-group chat between people's own computers.
 // Nothing user-visible may appear while the flag is off; screens call `useSpacesEnabled()` and render nothing.
 import { invoke } from '@tauri-apps/api/core';
-import { listen } from '@tauri-apps/api/event';
+import { listen } from './events';
 import { useCallback, useEffect, useState } from 'react';
 import { loadSettings } from './settings';
 

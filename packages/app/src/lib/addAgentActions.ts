@@ -2,7 +2,8 @@
 // the panes live in the cockpit. Settings asks through this small store; the cockpit's host (AddAgentActionHost)
 // answers it. When Settings is its own window there is no host in that window, so the ask goes out as an app event
 // the cockpit window listens for. Nothing here names an agent.
-import { emit, listen } from '@tauri-apps/api/event';
+import { emit } from '@tauri-apps/api/event';
+import { listen } from './events';
 import { useSyncExternalStore } from 'react';
 
 export type AddAgentActionKind = 'chat' | 'terminal';

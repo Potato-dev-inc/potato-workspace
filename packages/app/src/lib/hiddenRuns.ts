@@ -1,7 +1,7 @@
 // Helpers that ran with no pane (a hidden run). The Inbox lists them so a person can see that they ran.
 // Backed by `hidden_runs_list` / `hidden_runs_dismiss` (the desktop window only).
 import { invoke } from '@tauri-apps/api/core';
-import { listen } from '@tauri-apps/api/event';
+import { listen } from './events';
 import { useCallback, useEffect, useState } from 'react';
 
 export type HiddenRunStatus = 'running' | 'needs_input' | 'done' | 'failed' | 'cancelled';

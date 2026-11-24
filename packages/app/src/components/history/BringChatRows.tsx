@@ -2,6 +2,7 @@
 // message count. A chat that was brought before says so and can be opened.
 import { agoText, messageCount } from '../../lib/bringChats';
 import type { BrowseRow } from '../../lib/chatImport';
+import { t } from '../../i18n';
 
 export function BringChatRows({
   rows,
@@ -17,7 +18,7 @@ export function BringChatRows({
   onOpen: (session: string) => void;
 }) {
   return (
-    <ul className="bc-rows" aria-label="Recent chats">
+    <ul className="bc-rows" aria-label={t('r21.sw.recentChats')}>
       {rows.map((row) => {
         const sub = [row.folder, agoText(row.updatedMs, now), row.error ? null : messageCount(row)].filter(Boolean).join(' · ');
         return (
@@ -33,7 +34,7 @@ export function BringChatRows({
               <span className="bc-row-title">{row.title}</span>
               <span className="bc-row-sub">{sub}</span>
               {row.error && <span className="bc-row-sub">{row.error}</span>}
-              {row.brought && <span className="bc-row-sub">Already brought</span>}
+              {row.brought && <span className="bc-row-sub">{t('r21.sw.alreadyBrought')}</span>}
             </div>
             {row.brought && (
               <button type="button" className="bc-row-open" onClick={() => onOpen(row.session)}>

@@ -173,19 +173,18 @@ describe('Ask to borrow is reachable from Teams', () => {
     await settle(8);
   };
 
-  /** The Inbox draws a borrow request as a Team activity row; "Answer" opens its card in place. */
+  /** The Inbox draws a borrow request's card at the top, with the waiting cards (not under Team activity). */
   const answerRow = async (id: string) => {
-    const row = host.querySelector<HTMLElement>(`[data-team-activity="lend:${id}"]`)!;
-    await click(buttonByText(row, 'Answer'));
+    expect(host.querySelector(`[data-asked-lend="${id}"] [data-lend-request="${id}"]`)).toBeTruthy();
     await settle(2);
   };
 
-  it('Inbox > Team: no Ask to borrow (it lives on the Team page); a request to borrow is an activity row that opens its card with the warning', async () => {
+  it('Inbox: no Ask to borrow (it lives on the Team page); a request to borrow is a card at the top with the warning', async () => {
     lendIs(lendState({ requests_in: [REQUEST_MAYA] }));
     await inbox();
-    const team = host.querySelector('[data-testid="team-activity"]')!;
+    const team = host.querySelector('[data-testid="inbox-asked-lends"]')!;
     expect(buttonByText(host, 'Ask to borrow')).toBeUndefined();
-    expect(team.querySelector('[data-team-activity="lend:req-in-maya"]')?.textContent).toContain('asked to borrow Claude');
+    expect(host.querySelector('[data-testid="team-activity"] [data-team-activity="lend:req-in-maya"]')).toBeNull();
     await answerRow('req-in-maya');
     const card = team.querySelector<HTMLElement>('[data-lend-request="req-in-maya"]')!;
     expect(card.textContent).toContain("Maya's laptop wants Claude for 8 hours");
@@ -198,7 +197,7 @@ describe('Ask to borrow is reachable from Teams', () => {
   it('Inbox > Team: the incoming card lends with the profile after "I understand", and Say no declines', async () => {
     lendIs(lendState({ requests_in: [REQUEST_MAYA, { ...REQUEST_MAYA, id: 'req-in-2', reason: 'Another one.' }] }));
     await inbox();
-    const team = host.querySelector('[data-testid="team-activity"]')!;
+    const team = host.querySelector('[data-testid="inbox-asked-lends"]')!;
     await answerRow('req-in-maya');
     const first = team.querySelector<HTMLElement>('[data-lend-request="req-in-maya"]')!;
     const tick = [...first.querySelectorAll<HTMLInputElement>('input[type="checkbox"]')].find((i) => i.parentElement?.textContent?.includes('I understand'))!;
@@ -207,12 +206,15 @@ describe('Ask to borrow is reachable from Teams', () => {
     await settle(4);
     const lend = shell.invoked.find((i) => i.cmd === 'lend_answer')!;
     expect(lend.args).toMatchObject({ request_id: 'req-in-maya', accept: true, profile_id: 'prof-team' });
+    await settle(12);
     expect(team.querySelector('[data-lend-request="req-in-maya"]')).toBeNull();
     await answerRow('req-in-2');
     await click(buttonByText(team.querySelector<HTMLElement>('[data-lend-request="req-in-2"]')!, 'Say no'));
     await settle(4);
     expect(shell.invoked.filter((i) => i.cmd === 'lend_answer').pop()!.args).toMatchObject({ request_id: 'req-in-2', accept: false });
-    expect(team.querySelector('[data-lend-request]')).toBeNull();
+    await settle(12);
+    // With none left the list is gone, so look in the whole page.
+    expect(host.querySelector('[data-lend-request]')).toBeNull();
   });
 
   it('Inbox > Team: the incoming card names the profile the borrower picked, with no picker, and lends with it', async () => {
@@ -482,7 +484,7 @@ describe('Pane header: time-left chip', () => {
     const chip = host.querySelector<HTMLButtonElement>('[data-testid="lend-chip"]')!;
     expect(chip.textContent).toMatch(/^Work account · 1h \d+m$/);
     await click(chip);
-    await click(buttonByText(host, 'Give back now'));
+    await click(buttonByText(document.body, 'Give back now'));
     await settle(4);
     expect(shell.invoked.some((i) => i.cmd === 'lend_return' && i.args.grant_id === 'grant-in-2')).toBe(true);
   });
@@ -494,8 +496,8 @@ describe('Pane header: time-left chip', () => {
     const chip = host.querySelector<HTMLButtonElement>('[data-testid="lend-chip"]')!;
     expect(chip.dataset.problem).toBe('true');
     await click(chip);
-    expect(host.querySelector('[data-testid="lend-usage"]')!.textContent).toBe('Used so far: 3 requests');
-    expect(host.querySelector('[data-testid="lend-problem"]')!.textContent).toBe("The lender's sign-in expired. Ask them to sign in again.");
+    expect(document.querySelector('[data-testid="lend-usage"]')!.textContent).toBe('Used so far: 3 requests');
+    expect(document.querySelector('[data-testid="lend-problem"]')!.textContent).toBe("The lender's sign-in expired. Ask them to sign in again.");
   });
 
   const chipOf = async (grant: object) => {
@@ -510,14 +512,14 @@ describe('Pane header: time-left chip', () => {
     expect(chip.textContent).toMatch(/^Ren's Work account · 1h \d+m$/);
     expect(chip.title).toBe("Claude · Ren's Work account (borrowed)");
     await click(chip);
-    expect(host.querySelector('.lend-pop-title')!.textContent).toBe("Claude · Ren's Work account (borrowed)");
+    expect(document.querySelector('.lend-pop-title')!.textContent).toBe("Claude · Ren's Work account (borrowed)");
   });
 
   it("an older lender sent no name: it falls back to Ren's Claude and Claude · Ren's PC (borrowed)", async () => {
     const chip = await chipOf(GRANT_IN_REN_OLD);
     expect(chip.textContent).toMatch(/^Ren's Claude · 1h \d+m$/);
     await click(chip);
-    expect(host.querySelector('.lend-pop-title')!.textContent).toBe("Claude · Ren's PC (borrowed)");
+    expect(document.querySelector('.lend-pop-title')!.textContent).toBe("Claude · Ren's PC (borrowed)");
   });
 
   it('words a problem by its kind: not answering on the chip, signed out in the details', async () => {
@@ -525,12 +527,12 @@ describe('Pane header: time-left chip', () => {
     expect(lost.textContent).toBe("Ren's Work account · not answering");
     expect(lost.dataset.problem).toBe('true');
     await click(lost);
-    expect(host.querySelector('[data-testid="lend-problem"]')!.textContent).toBe("Ren's PC is not answering. It may be asleep or offline. The time keeps running.");
+    expect(document.querySelector('[data-testid="lend-problem"]')!.textContent).toBe("Ren's PC is not answering. It may be asleep or offline. The time keeps running.");
     await act(async () => root.unmount());
     root = createRoot(host);
     const out = await chipOf({ ...GRANT_IN_REN, problem: 'x', problem_kind: 'signin' });
     await click(out);
-    expect(host.querySelector('[data-testid="lend-problem"]')!.textContent).toBe("Ren's Work account is signed out on Ren's PC. Ren has been told. It will carry on when Ren signs in again.");
+    expect(document.querySelector('[data-testid="lend-problem"]')!.textContent).toBe("Ren's Work account is signed out on Ren's PC. Ren has been told. It will carry on when Ren signs in again.");
   });
 
   it('shows no chip while Share an agent is off', async () => {

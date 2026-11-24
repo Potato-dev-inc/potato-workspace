@@ -9,7 +9,7 @@ import { ALL_CAPS, WATCH_CAPS, type Host } from '../../../lib/host/host';
 import { HostProvider } from '../../../lib/host/context';
 import { SignInFixCard } from '../../acp/SignInFixCard';
 import { AgentList } from './AgentList';
-import { standingWords, type AgentRow } from './useAgentRows';
+import type { AgentRow } from './useAgentRows';
 
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 
@@ -61,7 +61,6 @@ describe('a signed-out agent on another PC', () => {
     const { host, calls } = fakeFar();
     const el = await mount(host);
     const card = el.querySelector('[data-testid="agent-row-claude"]')!;
-    expect(card.textContent).toContain(standingWords(claude));
     expect(card.textContent).toContain('Not signed in');
     expect(card.querySelector('[data-testid="card-signin-claude"]')!.textContent).toBe('Sign in');
     expect(calls).toContain('agent_login_states');

@@ -7,6 +7,7 @@ import { shipApi, type PrRef, type ShipApi } from '../../lib/ship-api';
 import { checksSentence } from '../../lib/ship-model';
 import { DotSpinner } from './DotSpinner';
 import '../../styles/cockpit-ship.css';
+import { t } from '../../i18n';
 
 const errText = (err: unknown): string => (err instanceof Error ? err.message : String(err));
 
@@ -96,7 +97,7 @@ export function PrBlock({
   const glyph = !pr.checks || pr.checks.state === 'pending' ? 'running' : failing ? 'error' : 'idle';
 
   return (
-    <section className="ck-pr" aria-label="Pull request">
+    <section className="ck-pr" aria-label={t('r21.sw.pullRequest')}>
       <div className="ck-pr-head">
         <span className="ck-pr-title">
           {pr.draft ? 'Draft PR' : 'PR'} #{pr.number}
@@ -112,7 +113,7 @@ export function PrBlock({
         <span>{problem ? 'Could not read the GitHub checks.' : checksSentence(pr.checks)}</span>
       </p>
       {problem && <p className="ck-changes-error" role="alert">{problem}</p>}
-      {gaveUp && !problem && <p className="ck-sub">Still running on GitHub. Check again later.</p>}
+      {gaveUp && !problem && <p className="ck-sub">{t('r21.sw.stillRunningOnGithub')}</p>}
       {notice && <p className="ck-sub">{notice}</p>}
       <div className="ck-pr-actions">
         {failing && (

@@ -11,6 +11,7 @@ import { previousRun } from '../yesterday-memory';
 import { NewAgentWhere, type WhereProps } from '../../devices/NewAgentWhere';
 import { NewAgentPage, type PaneBrief } from './NewAgentPage';
 import { t } from '../../../i18n';
+import { errorSentence } from '../../../lib/sayError';
 import { sendPaneMessage } from '../../../lib/paneOutbox';
 import { realStartDeps, runStart } from './start';
 import type { LinuxPlace } from '../../devices/NewAgentWhere';
@@ -22,7 +23,7 @@ async function startInLinux(place: LinuxPlace, request: StartRequest, notify: (t
   try {
     paneId = await place.start(request.agentId, request.folder);
   } catch (e) {
-    notify(e instanceof Error ? e.message : typeof e === 'string' ? e : t('devices.wsl.errStart'));
+    notify(errorSentence(e, t('devices.wsl.errStart')));
     return null;
   }
   try {
@@ -79,7 +80,7 @@ export function NewAgentHost({
       devices={extras.picker}
       startFolder={extras.startFolder}
       place={extras.place ? { name: extras.place.distro, whyNot: extras.place.whyNot } : null}
-      remote={far ? { deviceName: far.deviceName, terminals: far.terminals, blocked: slot?.blocked ?? null, onWarm: far.warm, agentsOff: slot?.agentsOff } : null}
+      remote={far ? { deviceName: far.deviceName, terminals: far.terminals, blocked: slot?.blocked ?? null, copy: !slot?.blocked && !slot?.agentsOff, onWarm: far.warm, plan: far.plan, agentsOff: slot?.agentsOff, mine: slot?.mine } : null}
       agents={far ? undefined : listing.agents}
       panes={far ? [] : briefs}
       needs={far ? [] : briefs.filter((p) => waiting.has(p.id))}

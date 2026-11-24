@@ -12,9 +12,22 @@ const WORDS: Record<LinkKind, MessageKey> = {
   changed: 'phone.link.changed',
 };
 
-export function PhoneLinkLine({ kind, recovered, onPairAgain, onRetry }: { kind: LinkKind; recovered: boolean; onPairAgain?: () => void; /** "Try now": ask the PC again without waiting. */ onRetry?: () => void }) {
+export function PhoneLinkLine({ kind, recovered, unpaired = false, onPairAgain, onRetry }: { kind: LinkKind; recovered: boolean; /** No pairing is stored on this phone: say so instead of blaming the PC. */ unpaired?: boolean; onPairAgain?: () => void; /** "Try now": ask the PC again without waiting. */ onRetry?: () => void }) {
   const t = useT();
   if (kind === 'connected' && !recovered) return null;
+  if (unpaired && (kind === 'reconnecting' || kind === 'asleep')) {
+    return (
+      <p className="ph-link" data-kind="unpaired" role="status" data-testid="phone-link-line">
+        <span className="ph-link-dot" aria-hidden="true" />
+        <span>{t('r11.phone.unpaired')}</span>
+        {onPairAgain && (
+          <button type="button" className="ph-link-btn" onClick={onPairAgain}>
+            {t('r11.phone.pairNow')}
+          </button>
+        )}
+      </p>
+    );
+  }
   return (
     <p className="ph-link" data-kind={kind} role="status" data-testid="phone-link-line">
       <span className="ph-link-dot" aria-hidden="true" />

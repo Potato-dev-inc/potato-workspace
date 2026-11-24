@@ -1,6 +1,6 @@
 // The Guide tab is a tab of the pane, in the same row as the open files (`file-tabs.ts`). Its tab path is `guide:`.
 import { useEffect, useState } from 'react';
-import { listen } from '@tauri-apps/api/event';
+import { listen } from './events';
 import { closeFileTab, openFileTab } from './file-tabs';
 import { loadSettings } from './settings';
 

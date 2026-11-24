@@ -5,7 +5,7 @@ import { useT } from '../../i18n';
 import { activityLine, devicesApi, sortActivity, type ActivityEntry, type Device, type DevicesApi } from '../../lib/devices';
 import '../../styles/devices.css';
 
-export function DeviceActivity({ device, api = devicesApi }: { device: Device; api?: DevicesApi }) {
+export function DeviceActivity({ device, api = devicesApi, title }: { device: Device; api?: DevicesApi; /** The heading; default "Device activity". */ title?: string }) {
   const t = useT();
   const [list, setList] = useState<ActivityEntry[]>([]);
   useEffect(() => {
@@ -20,7 +20,7 @@ export function DeviceActivity({ device, api = devicesApi }: { device: Device; a
   }, [api, device]);
   return (
     <>
-      <h4>{t('devices.activity')}</h4>
+      <h4>{title ?? t('devices.activity')}</h4>
       {list.length === 0 ? (
         <p className="dev-note" data-testid="activity-none">
           {t('devices.activityNone')}

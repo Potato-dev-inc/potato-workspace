@@ -58,6 +58,8 @@
 .cockpit[data-side-strip] .ck-row-more,
 .cockpit[data-side-strip] .ck-side-new-chev,
 .cockpit[data-side-strip] .ck-proj-head,
+.cockpit[data-side-strip] .ck-proj-newrow,
+.cockpit[data-side-strip] .ck-proj-empty,
 .cockpit[data-side-strip] .ck-proj-meta,
 .cockpit[data-side-strip] .ck-branch-head,
 .cockpit[data-side-strip] .ck-sechead-text,
@@ -65,10 +67,20 @@
 .cockpit[data-side-strip] .ck-caption,
 .cockpit[data-side-strip] .ck-row-sub,
 .cockpit[data-side-strip] .ck-helpers,
+.cockpit[data-side-strip] .ck-side-empty,
+.cockpit[data-side-strip] .ck-side-bring,
+.cockpit[data-side-strip] .ck-side-dropnote,
 .cockpit[data-side-strip] .ck-foot-status,
 .cockpit[data-side-strip] .ck-foot-label,
 .cockpit[data-side-strip] .ck-foot-spacer {
   display: none;
+}
+/* Icon only: a row's own rules (the workflow row's two lines, the New agent button) must not bring its words back into a few pixels (it read "Ne/ag" and "W d o n e"). The row keeps its title tooltip. */
+.cockpit[data-side-strip] .ck-side .ck-rowwrap .ck-row .ck-row-main,
+.cockpit[data-side-strip] .ck-side .ck-side-new .ck-row-main,
+.cockpit[data-side-strip] .ck-side .ck-wf-row .ck-wf-name,
+.cockpit[data-side-strip] .ck-side .ck-wf-row .ck-wf-counts {
+  display: none !important;
 }
 .cockpit[data-side-strip] .ck-foot-icons {
   flex-direction: column;
@@ -154,4 +166,24 @@
 .cockpit .ck-focus-exit:focus-visible {
   opacity: 1;
   color: var(--label);
+}
+
+/* A narrow window: the sidebar shows only marks even before the layout has settled, and one-line banners wrap instead of clipping. */
+@media (max-width: 800px) {
+  .cockpit .ck-side .ck-row-main,
+  .cockpit .ck-side .ck-side-new-chev,
+  .cockpit .ck-side .ck-proj-newrow,
+  .cockpit .ck-side .ck-rowwrap .ck-row.ck-wf-row .ck-row-main {
+    display: none !important;
+  }
+  .cockpit .ck-acp-result,
+  .cockpit .ck-chatcopy {
+    flex-wrap: wrap;
+  }
+  .cockpit .ck-acp-result-text {
+    white-space: normal;
+    overflow: visible;
+    text-overflow: clip;
+    flex-basis: 12em;
+  }
 }

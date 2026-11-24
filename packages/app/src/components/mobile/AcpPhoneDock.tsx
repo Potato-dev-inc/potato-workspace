@@ -4,7 +4,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useT } from '../../i18n';
 import { useAcpPhoneState } from '../../hooks/useAcpPhoneState';
-import { driveStrip, permissionCards, runStrip } from '../../lib/acpChat';
+import { driveStrip, permissionCards, RUN_STRIP_KEYS, runStrip } from '../../lib/acpChat';
 import type { BridgeClient } from '../../lib/bridge';
 import { COPY } from '../../lib/attention-copy';
 import { QuestionsView, useQuestionPolling } from './QuestionsList';
@@ -74,7 +74,7 @@ export function AcpPhoneDock({
       {cards.length > 0 && <QuestionsView bridge={bridge} questions={cards} refresh={refresh} labels={labels} bare readOnly={canAnswer ? undefined : COPY.watchOnly} />}
       {strip && (
         <div className="ph-acp-strip" data-testid="acp-phone-strip">
-          <span role="status">{strip.waking ? t('chat.waking') : strip.text}</span>
+          <span role="status">{strip.waking ? t('chat.waking') : RUN_STRIP_KEYS[strip.text] ? t(RUN_STRIP_KEYS[strip.text]) : strip.text}</span>
         </div>
       )}
       {tookBack && (

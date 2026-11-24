@@ -1,6 +1,5 @@
 use crate::operations::{self, OperationError, OperationSnapshot, OperationStatus, StateSource};
 use parking_lot::Mutex;
-use std::hash::{Hash, Hasher};
 use std::sync::Arc;
 
 pub(super) fn infer_tui_prompt(
@@ -11,12 +10,7 @@ pub(super) fn infer_tui_prompt(
     crate::pane_prompt::required_action(registry, pane_id)
 }
 
-pub(crate) fn stable_prompt_id(prompt: &serde_json::Value) -> Option<String> {
-    let id_text = serde_json::to_string(prompt).ok()?;
-    let mut hasher = std::collections::hash_map::DefaultHasher::new();
-    id_text.hash(&mut hasher);
-    Some(format!("prompt-{:016x}", hasher.finish()))
-}
+pub(crate) use pm_core::agent_runs::stable_prompt_id;
 
 /// Steers being delivered right now, per operation. A live steer is accepted while the turn is
 /// still running, but its user message reaches the session a moment later; completing the turn in

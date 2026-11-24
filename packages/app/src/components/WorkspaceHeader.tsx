@@ -4,6 +4,7 @@ import { useCallback, useState } from 'react';
 import type { AgentType } from '@potato-workspace/shared';
 import { launchMenuEntries, useAgentRegistry } from '../lib/agentRegistry';
 import logoUrl from '../assets/branding/logo.svg';
+import { t } from '../i18n';
 
 interface Props {
   projectPath: string | null;
@@ -50,7 +51,7 @@ export function WorkspaceHeader({
         <button
           onClick={onGoHome}
           className="px-2 py-1 text-xs rounded border border-pm-border bg-pm-bg hover:bg-pm-border/40"
-          title="Back to overview"
+          title={t('r21.sw.backToOverview')}
         >
           Overview
         </button>
@@ -68,9 +69,9 @@ export function WorkspaceHeader({
           <button
             onClick={() => setShowNewSession((s) => !s)}
             className="px-2 py-1 text-xs rounded border border-pm-accent/50 bg-pm-accent/10 hover:bg-pm-accent/20 text-pm-accent"
-            title="Spawn a new agent session"
+            title={t('r21.sw.spawnANewAgent')}
           >
-            New session
+            {t('r21.sw.newSession')}
           </button>
           {showNewSession && (
             <div className="absolute top-full right-0 mt-1 z-20 w-64 rounded-md border border-pm-border bg-pm-panel shadow-lg">

@@ -1,6 +1,7 @@
 // The Ask to fix sheet: shows the fixed lines and an optional note, then puts them in the agent's chat box.
 // Nothing is sent. The backend builds the real draft; this preview only shows what it will hold.
 import { useRef, useState, type KeyboardEvent } from 'react';
+import { useT } from '../../../i18n';
 import { Sheet } from '../Sheet';
 import { reviewDeskApi, reviewDeskErrorText, type ReviewItem } from '../../../lib/review-desk';
 
@@ -37,6 +38,7 @@ export interface FixSheetProps {
 const TITLE_ID = 'ck-rd-fix-title';
 
 export function FixSheet({ item, api = reviewDeskApi, onDone, onCancel }: FixSheetProps) {
+  const t = useT();
   const [note, setNote] = useState('');
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -68,14 +70,14 @@ export function FixSheet({ item, api = reviewDeskApi, onDone, onCancel }: FixShe
   return (
     <Sheet labelledBy={TITLE_ID} onClose={busy ? undefined : onCancel} className="ck-rd-sheet">
       <h2 className="ck-section" id={TITLE_ID}>
-        Ask to fix
+        {t('r11.rd.fixTitle')}
       </h2>
-      <p className="ck-sub">Potato Workspace writes these lines in the agent&apos;s chat box.</p>
-      <pre className="ck-rd-fix-preview" aria-label="What goes in the chat box">
+      <p className="ck-sub">{t('r11.rd.fixLead')}</p>
+      <pre className="ck-rd-fix-preview" aria-label={t('r11.rd.fixPreview')}>
         {fixPreviewLines(item, note).join('\n')}
       </pre>
       <label className="ck-rd-fix-note">
-        <span className="ck-sub">Add a note (optional)</span>
+        <span className="ck-sub">{t('r11.rd.fixNote')}</span>
         <textarea
           value={note}
           maxLength={FIX_NOTE_MAX}
@@ -91,13 +93,13 @@ export function FixSheet({ item, api = reviewDeskApi, onDone, onCancel }: FixShe
           {error}
         </p>
       )}
-      <p className="ck-rd-sheet-foot">It is not sent. You can edit it in the chat box.</p>
+      <p className="ck-rd-sheet-foot">{t('r11.rd.fixFoot')}</p>
       <div className="ck-sheet-actions">
         <button type="button" className="ck-btn ck-btn--secondary" disabled={busy} onClick={onCancel}>
-          Cancel
+          {t('r11.rd.cancel')}
         </button>
         <button type="button" className="ck-btn ck-btn--primary" disabled={busy} onClick={() => void send()}>
-          Put in chat
+          {t('r11.rd.putInChat')}
         </button>
       </div>
     </Sheet>

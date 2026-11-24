@@ -3,13 +3,14 @@
 //   phones added   one row per phone ("Can watch, answer and send messages") and an "Add a phone" button that opens a sheet with the code
 // A phone's own sheet: its name (click to rename), one switch for starting agents and changing things (off), and Remove.
 import { DEVICE_CAPS, type DeviceCap, type PairedDeviceInfo } from '@potato-workspace/shared';
-import { useEffect, useState, type ReactNode } from 'react';
+import { useEffect, useRef, useState, type KeyboardEvent, type ReactNode } from 'react';
 import { useT } from '../../i18n';
 import { DEVICE_NAMES_CHANGED } from '../../lib/deviceNames';
 import { errorSentence } from '../../lib/sayError';
 import { tauri } from '../../lib/tauri';
 import { DEVICES_CHANGED_EVENT } from '../MobilePairingPanel';
 import type { TunnelApi } from '../settings/TunnelSection';
+import { tabStops } from '../firstrun/useModalLayer';
 import { SimplePhone } from './SimplePhone';
 
 /** What a phone's own sheet changes. Tests pass fakes; the app uses the real commands. */
@@ -78,6 +79,7 @@ export function PhoneGroup({
   useEffect(() => {
     if (count === 0) setOpenId(null);
   }, [count]);
+  const addButton = useRef<HTMLButtonElement>(null);
   const open = phones?.find((p) => p.id === openId) ?? null;
   const code = (giant: boolean, on: boolean) => (
     <SimplePhone tunnel={tunnel} phones={phones === null ? null : count} publicPwaUrl={publicPwaUrl} devServerPort={devServerPort} ready={ready} paused={!on} giant={giant} />
@@ -87,7 +89,7 @@ export function PhoneGroup({
       <div className="cx-ghead">
         <h2>{t('connect.phone.title')}</h2>
         {count > 0 && (
-          <button type="button" className="cx-btn" data-testid="connect-add-phone" onClick={() => setAdding(true)}>
+          <button type="button" className="cx-btn" data-testid="connect-add-phone" ref={addButton} onClick={() => setAdding(true)}>
             {t('connect.phone.add')}
           </button>
         )}
@@ -114,7 +116,12 @@ export function PhoneGroup({
         </ul>
       )}
       {adding && (
-        <PhoneSheet title={t('connect.phone.add')} onClose={() => setAdding(false)} testId="connect-add-phone-sheet">
+        <PhoneSheet title={t('connect.phone.add')} onClose={() => {
+            setAdding(false);
+            // Back to the opener even when the browser never focused it on click (Esc must not drop focus on the page).
+            window.requestAnimationFrame(() => addButton.current?.focus());
+          }}
+          testId="connect-add-phone-sheet">
           {code(true, active)}
         </PhoneSheet>
       )}
@@ -126,9 +133,30 @@ export function PhoneGroup({
 /** The side sheet of the phone group. */
 function PhoneSheet({ title, onClose, testId, children }: { title: string; onClose: () => void; testId: string; children: ReactNode }) {
   const t = useT();
+  const sheet = useRef<HTMLDivElement>(null);
+  // A real dialog: focus goes to its first control, Esc closes it, Tab stays inside, and focus goes back to the opener.
+  useEffect(() => {
+    const opener = document.activeElement as HTMLElement | null;
+    (sheet.current && tabStops(sheet.current)[0])?.focus();
+    const onEsc = (e: globalThis.KeyboardEvent) => e.key === 'Escape' && onClose();
+    document.addEventListener('keydown', onEsc);
+    return () => {
+      document.removeEventListener('keydown', onEsc);
+      opener?.focus?.();
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+  const trap = (e: KeyboardEvent) => {
+    if (e.key !== 'Tab' || !sheet.current) return;
+    const stops = tabStops(sheet.current);
+    if (stops.length === 0) return;
+    const [first, last] = [stops[0], stops[stops.length - 1]];
+    if (e.shiftKey && document.activeElement === first) (e.preventDefault(), last.focus());
+    else if (!e.shiftKey && document.activeElement === last) (e.preventDefault(), first.focus());
+  };
   return (
     <div className="cx-scrim" data-testid={testId}>
-      <div className="cx-sheet" role="dialog" aria-label={title}>
+      <div className="cx-sheet" role="dialog" aria-modal="true" aria-label={title} ref={sheet} onKeyDown={trap}>
         <div className="cx-sheet-head">
           <h3>{title}</h3>
           <button type="button" className="cx-btn cx-quiet" aria-label={t('connect.close')} onClick={onClose}>

@@ -1,5 +1,6 @@
 import { useId, useState } from 'react';
 import { Sheet } from '../cockpit/Sheet';
+import { t } from '../../i18n';
 
 export interface NewChannelSheetProps {
   /** Returns an error text to show, or null when the channel was made. */
@@ -30,7 +31,7 @@ export function NewChannelSheet({ onCreate, onClose }: NewChannelSheetProps) {
       <label className="ck-spaces-field">
         <span>Name</span>
         <input value={name} placeholder="books" onChange={(e) => setName(e.target.value)} />
-        <small className="ck-spaces-hint">Lowercase letters, numbers and dashes.</small>
+        <small className="ck-spaces-hint">{t('r21.sw.lowercaseLettersNumbersAnd')}</small>
       </label>
       {preview !== '' && <p className="ck-spaces-note"># {preview}</p>}
       {error && (

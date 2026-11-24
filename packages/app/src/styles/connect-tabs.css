@@ -68,7 +68,7 @@
   width: 8px;
   height: 8px;
   border-radius: 50%;
-  background: #e9b23c;
+  background: var(--risk);
 }
 .cx-panel[hidden] {
   display: none;
@@ -222,11 +222,11 @@
   opacity: 0.6;
 }
 .cx-dot.ok {
-  background: #4cc38a;
+  background: var(--live);
   opacity: 1;
 }
 .cx-dot.warn {
-  background: #e9b23c;
+  background: var(--risk);
   opacity: 1;
   box-shadow: 0 0 0 3px rgb(233 178 60 / 0.25);
 }
@@ -245,17 +245,17 @@
   width: 18px;
   height: 18px;
   border-radius: 50%;
-  color: #fff;
+  color: var(--accent-fg);
 }
 .cx-ico.ok {
-  background: #4cc38a;
+  background: var(--live);
 }
 .cx-ico.warn {
-  background: #e9b23c;
-  color: #3a2a00;
+  background: var(--risk);
+  color: var(--accent-fg);
 }
 .cx-ico.bad {
-  background: #e5484d;
+  background: var(--danger);
 }
 @keyframes cx-spin {
   to {
@@ -290,7 +290,7 @@
 .cockpit .cx-btn.cx-primary {
   padding: 8px 16px;
   font-weight: 600;
-  color: var(--accent-fg, #1b0f06);
+  color: var(--accent-fg);
   background: var(--accent);
   border-color: var(--accent);
 }
@@ -402,11 +402,11 @@
   transition: transform 0.12s;
 }
 .cx-switch input:checked + span {
-  background: #4cc38a;
-  border-color: #4cc38a;
+  background: var(--live);
+  border-color: var(--live);
 }
 .cx-switch input:checked + span::after {
-  background: #fff;
+  background: var(--paper);
   transform: translateX(18px);
 }
 .cx-switch input:focus-visible + span {
@@ -488,7 +488,7 @@
   flex-wrap: wrap;
 }
 .cx-qr {
-  background: #fff; /* a camera reads dark on white best */
+  background: var(--paper); /* a camera reads dark on white best */
   padding: 6px;
   border-radius: 8px;
 }

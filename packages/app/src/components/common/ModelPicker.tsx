@@ -2,7 +2,7 @@
 // first (it names the default model when that is known). A long list gets a search box; with no list (loading failed,
 // or the agent lists none) the same box takes a typed model id.
 import { useEffect, useId, useMemo, useRef, useState } from 'react';
-import { useT } from '../../i18n';
+import { getLanguage, t, useT } from '../../i18n';
 import type { ModelListState } from '../../lib/modelOptions';
 import '../../styles/model-picker.css';
 import { Popover } from './Floating';
@@ -120,6 +120,9 @@ export interface ModelPickerProps {
   testId?: string;
 }
 
+/** An agent's own option names are English; the one phrase every agent shares is said in the app's language. */
+export const liveModelLabel = (name: string): string => (getLanguage() === 'en' ? name : name.replace(/^Default \(recommended\)/, t('r14ui.defaultRecommended')));
+
 export function ModelPicker({ state, value, onChange, defaultWord: defaultWordProp, label, className, testId }: ModelPickerProps) {
   const t = useT();
   const defaultWord = defaultWordProp ?? t('state.model.default');
@@ -153,7 +156,8 @@ export function ModelPicker({ state, value, onChange, defaultWord: defaultWordPr
   };
 
   const liveName = live ? (value ? live.find((m) => m.value === value)?.name : liveDefault?.name) : undefined;
-  const text = liveName ?? pickerText(value, defaultWord, defaultModel);
+  const liveText = liveName === undefined ? undefined : liveModelLabel(liveName);
+  const text = liveText ?? pickerText(value, defaultWord, defaultModel);
   return (
     <div className={`mp${className ? ` ${className}` : ''}`} ref={root}>
       <button ref={chipEl} type="button" className="mp-chip" data-testid={testId} aria-label={`${label}: ${text}`} aria-haspopup="listbox" aria-expanded={open} aria-controls={open ? id : undefined} onClick={() => setOpen(!open)}>
@@ -186,7 +190,7 @@ export function ModelPicker({ state, value, onChange, defaultWord: defaultWordPr
             />
           )}
           <button type="button" role="option" aria-selected={value === '' || (liveDefault !== null && value === 'default')} className={`mp-item${liveDefault ? ' mp-item-live' : ''}`} onClick={() => choose('')}>
-            <span>{liveDefault ? liveDefault.name : defaultWord}</span>
+            <span>{liveDefault ? liveModelLabel(liveDefault.name) : defaultWord}</span>
             {liveDefault ? liveDefault.description && <span className="mp-item-hint">{liveDefault.description}</span> : defaultModel && <span className="mp-item-hint">{modelName(defaultModel)}</span>}
             {(value === '' || (liveDefault !== null && value === 'default')) && <Tick />}
           </button>
@@ -199,7 +203,7 @@ export function ModelPicker({ state, value, onChange, defaultWord: defaultWordPr
               )}
               {g.items.map((m) => (
                 <button key={m.value} type="button" role="option" aria-selected={value === m.value} className="mp-item mp-item-live" onClick={() => choose(m.value)}>
-                  <span className="mp-item-id">{m.name}</span>
+                  <span className="mp-item-id">{liveModelLabel(m.name)}</span>
                   {m.description && <span className="mp-item-hint">{m.description}</span>}
                   {value === m.value && <Tick />}
                 </button>

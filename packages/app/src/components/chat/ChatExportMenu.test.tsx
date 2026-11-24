@@ -54,9 +54,9 @@ function tab(label: string): HTMLButtonElement {
   return found;
 }
 
-function render(api: ChatExportApi) {
+function render(api: ChatExportApi, title?: string) {
   act(() => {
-    root.render(<ChatExportMenu paneId="pane-1" api={api} />);
+    root.render(<ChatExportMenu paneId="pane-1" title={title} api={api} />);
   });
 }
 
@@ -99,6 +99,13 @@ describe('ChatExportMenu', () => {
     expect(document.querySelector('[role="menu"]')).toBeNull();
   });
 
+  it('asks for the page with the name of the chat', async () => {
+    const api = fakeApi();
+    render(api, 'Claude 8');
+    await openPreview();
+    expect(api.html).toHaveBeenCalledWith('pane-1', 'Claude 8');
+  });
+
   it('Escape closes the menu', () => {
     render(fakeApi());
     act(() => clickable('Chat menu').click());
@@ -117,7 +124,7 @@ describe('ChatExportMenu', () => {
     expect(frame).not.toBeNull();
     expect(frame?.getAttribute('sandbox')).toBe('');
     expect(frame?.getAttribute('srcdoc')).toBe(PAGE);
-    expect(api.html).toHaveBeenCalledWith('pane-1');
+    expect(api.html).toHaveBeenCalledWith('pane-1', undefined);
     expect(api.markdown).not.toHaveBeenCalled();
   });
 
@@ -198,7 +205,7 @@ describe('ChatExportMenu format switch', () => {
     await openPreview('Save as Markdown');
     expect(tab('Markdown').getAttribute('aria-selected')).toBe('true');
     expect(tab('Page').getAttribute('aria-selected')).toBe('false');
-    expect(api.markdown).toHaveBeenCalledWith('pane-1');
+    expect(api.markdown).toHaveBeenCalledWith('pane-1', undefined);
     expect(api.html).not.toHaveBeenCalled();
   });
 

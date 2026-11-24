@@ -12,6 +12,18 @@
   background: rgba(0, 0, 0, 0.42);
   /* A host layer may have pointer-events: none (the join popup layer does): the sheet always takes the mouse. */
   pointer-events: auto;
+  /* Interactive at once: a short fade only (never pointer-events: none while it opens). */
+  animation: lend-fade-in 120ms ease-out both;
+}
+@keyframes lend-fade-in {
+  from {
+    opacity: 0;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .lend-scrim {
+    animation: none;
+  }
 }
 .lend-sheet {
   display: flex;
@@ -24,8 +36,6 @@
   padding: 20px;
   border-radius: 14px;
   background: var(--bg-float, var(--float-bg, #2a2826));
-  backdrop-filter: blur(24px) saturate(1.4);
-  -webkit-backdrop-filter: blur(24px) saturate(1.4);
   border: 1px solid var(--sep, rgba(255, 255, 255, 0.1));
   box-shadow: var(--float-shadow, 0 12px 32px rgba(0, 0, 0, 0.45));
   color: var(--label-2, #bbb);
@@ -307,6 +317,7 @@
 }
 .lend-list > li {
   display: flex;
+  flex-wrap: wrap;
   align-items: center;
   gap: 10px;
   min-height: 36px;
@@ -316,7 +327,7 @@
 }
 .lend-list > li > .lend-who {
   display: flex;
-  flex: 1;
+  flex: 1 1 160px;
   flex-direction: column;
   min-width: 0;
 }
@@ -403,6 +414,8 @@
 .lend-chip-wrap {
   position: relative;
   display: inline-flex;
+  min-width: 0;
+  max-width: 100%;
 }
 
 :is(.cockpit, .settings, body) .lend-chip {
@@ -418,6 +431,10 @@
   font: inherit;
   font-size: 11px;
   white-space: nowrap;
+  min-width: 0;
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
   cursor: pointer;
 }
 
@@ -451,11 +468,8 @@
   font-size: 12px;
   color: var(--label);
 }
+/* A card in the shared top layer (Popover): placed by script, so no position / blur here (WebKitGTK clips a blurred fixed card to a sliver). */
 .lend-pop {
-  position: absolute;
-  top: calc(100% + 6px);
-  left: 0;
-  z-index: 30;
   display: flex;
   flex-direction: column;
   gap: 8px;
@@ -463,8 +477,6 @@
   padding: 12px 14px;
   border-radius: 12px;
   background: var(--bg-float, var(--float-bg, #2a2826));
-  backdrop-filter: blur(24px) saturate(1.4);
-  -webkit-backdrop-filter: blur(24px) saturate(1.4);
   border: 1px solid var(--sep, rgba(255, 255, 255, 0.1));
   box-shadow: var(--float-shadow, 0 12px 32px rgba(0, 0, 0, 0.45));
   font-size: 12px;
@@ -755,4 +767,10 @@
   display: flex;
   align-items: center;
   gap: 8px;
+}
+
+/* The "Take back" question opens on its own line under the lend's words, so the title column keeps its width (long words, Chinese). */
+.lend-list > li > .lend-confirm {
+  flex: 1 1 100%;
+  justify-content: flex-end;
 }

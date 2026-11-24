@@ -59,124 +59,50 @@
 // The chat (A2) is `chat/`; the callers that resume sessions, switch to the terminal and show config chips land in A3 to A5.
 #![allow(dead_code)]
 
-pub mod account;
-mod ask_facts;
-mod auto_approve;
-pub mod adapter_catalog;
-pub mod adapter_health;
-pub mod adapter_keys;
-pub mod adapter_overlay;
-pub mod agent_python;
+pub use pm_core::acp::account;
+pub use pm_core::acp::adapter_catalog;
+pub use pm_core::acp::adapter_health;
+pub use pm_core::acp::adapter_keys;
+pub use pm_core::acp::adapter_overlay;
+pub use pm_core::acp::agent_python;
 pub mod bridge;
 pub mod chat;
-pub mod closed;
 pub mod config;
-pub mod conn;
-pub mod conversations;
-pub mod error;
-pub mod handover;
-pub mod handshake;
-pub mod install;
-pub mod install_archive;
-pub mod install_registry;
-pub mod job;
-pub mod leak;
-pub mod journal;
-pub mod lane;
-pub mod overlay;
+pub use pm_core::acp::conn;
+pub use pm_core::acp::conversations;
+pub use pm_core::acp::error;
+pub use pm_core::acp::handover;
+pub use pm_core::acp::install;
+pub use pm_core::acp::install_registry;
+#[cfg(test)]
+pub use pm_core::acp::handshake;
+pub use pm_core::acp::job;
+pub use pm_core::acp::leak;
+pub use pm_core::acp::journal;
+pub use pm_core::acp::lane;
+pub use pm_core::acp::overlay;
 pub mod model_probe;
-pub mod pin;
-pub mod record;
-pub mod registry;
-pub mod ring;
-pub mod session;
+pub use pm_core::acp::pin;
+pub use pm_core::acp::record;
+pub use pm_core::acp::registry;
+pub use pm_core::acp::session;
 pub mod signin_ask;
-pub mod state;
-pub mod supervisor;
-pub mod timers;
-pub mod types;
-pub mod memory;
-pub mod warm;
-pub mod wire;
-pub mod write_queue;
-pub mod writers;
+pub use pm_core::acp::state;
+pub use pm_core::acp::supervisor;
+pub use pm_core::acp::types;
+pub use pm_core::acp::memory;
+pub use pm_core::acp::warm;
+#[cfg(test)]
+pub use pm_core::acp::write_queue;
+pub use pm_core::acp::writers;
 
 #[cfg(test)]
-mod adapter_health_tests;
+pub mod fake_agent;
 #[cfg(test)]
-mod adapter_key_tests;
-#[cfg(test)]
-mod conversation_tests;
-#[cfg(test)]
-pub(crate) mod fake_agent;
-#[cfg(test)]
-mod guard_tests;
-#[cfg(test)]
-mod hardening_tests;
-#[cfg(test)]
-mod tests;
-#[cfg(test)]
-mod speedup_tests;
+mod overlay_bridge_tests;
 #[cfg(test)]
 mod model_probe_tests;
-#[cfg(test)]
-mod warm_tests;
-#[cfg(test)]
-mod warm_helper_tests;
 
-use serde_json::Value;
-
-/// The old Labs switch in the public settings. The Labs switch was removed: chat is always on, so this key is
-/// kept only so old settings files still load. Its saved value is never read.
-pub const LABS_KEY: &str = "acp_chat_enabled";
-
-/// Chat is always on. Whatever the saved `acp_chat_enabled` says (an old profile may hold `false`), the answer is
-/// `true`. The value is ignored, so a stale off cannot block chat.
-pub fn labs_on(_public: &Value) -> bool {
-    true
-}
-
-/// Called with the public settings whenever they change (and once at startup from the saved file).
-pub fn apply_settings(public: &Value) {
-    chat::default_model::note_settings(public);
-    chat::helper_answers::apply_settings(public);
-    sweep_leftovers_once();
-}
-
-/// At the first settings load of a run: tool servers an earlier run left behind in an agent's shared server are ended
-/// (`leak::sweep_stale`; only ours, proven by the marker). In the background: it reads the process list.
-fn sweep_leftovers_once() {
-    static ONCE: std::sync::Once = std::sync::Once::new();
-    ONCE.call_once(|| {
-        if cfg!(test) {
-            return;
-        }
-        std::thread::spawn(|| {
-            let images = leak::all_shared_images();
-            if !images.is_empty() {
-                leak::sweep_stale(&images);
-            }
-        });
-    });
-}
-
-/// Whether chat is on. Always true: the Labs switch was removed.
-pub fn chat_enabled() -> bool {
-    true
-}
-
-#[cfg(test)]
-mod labs_tests {
-    use super::*;
-    use serde_json::json;
-
-    #[test]
-    fn chat_stays_on_even_when_a_saved_profile_says_off() {
-        assert!(labs_on(&json!({})), "on by default");
-        assert!(labs_on(&json!({"acp_chat_enabled": true})));
-        assert!(labs_on(&json!({"acp_chat_enabled": false})), "a stale saved off does not block chat");
-        assert!(labs_on(&json!({"acp_chat_enabled": "yes"})));
-        assert!(labs_on(&json!({"acp_chat_enabled": null})));
-        assert!(chat_enabled());
-    }
-}
+pub use pm_core::acp::{apply_settings, chat_enabled};
+#[allow(unused_imports)]
+pub use pm_core::acp::{labs_on, LABS_KEY};

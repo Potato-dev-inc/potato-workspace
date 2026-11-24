@@ -694,7 +694,6 @@ mod runtime {
         };
         let pane_id = crate::pty::registry_spawn_pane(
             &state.registry,
-            app,
             crate::pty::SpawnPaneArgs {
                 agent_type: agent.to_string(),
                 cwd: Some(spawn_dir),

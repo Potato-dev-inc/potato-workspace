@@ -97,6 +97,23 @@ export function askerName(q: Question, paneName?: string): string {
   return q.agent?.trim() || paneName || t('risk.ask.anAgent');
 }
 
+/** A tool permission an agent asked for (kind acp_permission): the app writes it as "<Agent> asks permission: <Write notes.txt>"; this reads it back as who and what, or null for any other question. */
+export function permissionAsk(q: Question): { who: string; action: string } | null {
+  if (q.kind !== 'acp_permission') return null;
+  const m = /^(.*?) asks permission: ([\s\S]+)$/.exec(q.question);
+  return m ? { who: m[1].trim() || t('risk.ask.anAgent'), action: permissionWords(m[2].trim()) } : null;
+}
+
+const VERBS = ['Write', 'Edit', 'Run', 'Read', 'Delete', 'Move', 'Fetch', 'Search'] as const;
+/** The agent's tool title in the person's language: "Write a.txt" starts with a translated verb (spaced from the file name), "mcp__server__ask_user" reads "use the ask_user tool". Anything else stays as the agent wrote it. */
+export function permissionWords(title: string): string {
+  const mcp = /^mcp__.+?__(\S+)$/.exec(title);
+  if (mcp) return t('inboxCards.verb.mcp', { tool: mcp[1] });
+  const verb = VERBS.find((v) => title === v || title.startsWith(`${v} `));
+  if (!verb) return title;
+  return `${t(`inboxCards.verb.${verb}`)} ${title.slice(verb.length).trim()}`.trim();
+}
+
 /** Pending and not past its deadline (the app expires them too; this hides a stale card sooner). */
 export function isLive(q: Question, now: number): boolean {
   return q.state === 'pending' && q.expires_at_ms > now;
@@ -114,8 +131,10 @@ export function timeLeftText(ms: number): string {
 export function waitCaption(q: Question, now: number, paneName?: string): string {
   const who = q.agent?.trim() || paneName || t('risk.ask.theAgent');
   const left = q.expires_at_ms - now;
-  if (left <= 0) return t('risk.ask.stoppedWaiting', { who });
-  return t('risk.ask.stopsWaiting', { who, time: timeLeftText(left) });
+  // Chinese text keeps no space after a Chinese name but one after a Latin one ("Claude 會在 8 分鐘後"): the strings have none, this adds it.
+  const spaced = (s: string) => s.replace(/([A-Za-z0-9])([㐀-鿿])/g, '$1 $2');
+  if (left <= 0) return spaced(t('risk.ask.stoppedWaiting', { who }));
+  return spaced(t('risk.ask.stopsWaiting', { who, time: timeLeftText(left) }));
 }
 
 /** "Which login should this Claude helper use?": raised when an agent starts a helper and the person's choice is "Ask me". */

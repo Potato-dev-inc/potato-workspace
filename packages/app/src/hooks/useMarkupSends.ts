@@ -1,7 +1,7 @@
 // The two ends of the "Marked up" card: the cockpit listens for the app's own `markup://sent` event and records the
 // message (before it is sent), and a chat reads the records of its pane and redraws when a new one is stored.
 import { useEffect, useState } from 'react';
-import { listen } from '@tauri-apps/api/event';
+import { listen } from '../lib/events';
 import { onMarkupSendsChanged, readMarkupSends, recordFromEvent, type MarkupSend } from '../lib/markupCard';
 
 /** Mount once in the cockpit. A failed listen (a browser preview, a test) just means no cards. */

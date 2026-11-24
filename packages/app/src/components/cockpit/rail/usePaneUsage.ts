@@ -1,17 +1,19 @@
 // The helpers' usage for the Helpers card. Read again whenever `stamp` changes: the rail builds it from the
 // pane's and its helpers' statuses, which change when a turn ends, so the numbers follow the turns.
 import { useEffect, useState } from 'react';
-import { paneUsage, type PaneUsage } from '../../../lib/pane-usage';
+import { useHost } from '../../../lib/host/context';
+import { paneUsageFor, type PaneUsage } from '../../../lib/pane-usage';
 
 export function usePaneUsage(paneId: string, enabled: boolean, stamp: string): PaneUsage | null {
   const [usage, setUsage] = useState<PaneUsage | null>(null);
+  const host = useHost();
   useEffect(() => {
     if (!enabled) {
       setUsage(null);
       return;
     }
     let live = true;
-    paneUsage(paneId)
+    paneUsageFor(host, paneId)
       .then((next) => {
         if (live) setUsage(next);
       })
@@ -21,6 +23,6 @@ export function usePaneUsage(paneId: string, enabled: boolean, stamp: string): P
     return () => {
       live = false;
     };
-  }, [paneId, enabled, stamp]);
+  }, [host, paneId, enabled, stamp]);
   return usage;
 }

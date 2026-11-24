@@ -1,3 +1,4 @@
+import { rawText } from '../../lib/sayError';
 // When the account route is paused (here or at the other PC), Open fails with a marker and the time it ends. The page says it in plain words.
 
 /** What the PC prints in front of the time (unix ms) when the account route is paused (see `ACCOUNT_LOCKED_MARK` in the backend). */
@@ -17,7 +18,7 @@ const DAY_MS = 24 * 60 * 60_000;
  * print a silly time). 0 means the pause is real but its time cannot be read; null means it is some other error.
  */
 export function lockedUntilOf(e: unknown, nowMs: number = Date.now()): number | null {
-  const text = typeof e === 'string' ? e : e instanceof Error ? e.message : '';
+  const text = rawText(e);
   if (!text.startsWith(LOCKED_MARK)) return null;
   const digits = text.slice(LOCKED_MARK.length);
   const n = /^\d{1,15}$/.test(digits) ? Number(digits) : NaN;

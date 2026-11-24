@@ -12,16 +12,17 @@ import { Sheet } from '../Sheet';
 import { MissionGlyph, PreviewTag } from './MissionGlyph';
 import { MissionProgress } from './MissionProgress';
 import '../../../styles/missions.css';
+import { t } from '../../../i18n';
 
 function headline(m: MissionView): string {
   if (m.card_title) return m.card_title;
   switch (m.needs) {
     case 'tamper':
-      return 'The checks pass, but the tests were changed';
+      return t('r12ui.ms.tamper');
     case 'stuck':
-      return "The mission isn't getting anywhere";
+      return t('r12ui.ms.stuck');
     case 'setup':
-      return "The mission can't go on";
+      return t('r12ui.ms.setup');
     default:
       return m.state_text;
   }
@@ -31,8 +32,8 @@ function headline(m: MissionView): string {
 function acceptBody(m: MissionView): string {
   const lines = m.test_change_lines.filter((l) => !l.startsWith('and '));
   return lines.length
-    ? `The mission will finish with these changes to the tests: ${lines.join('; ')}.`
-    : 'The mission will finish with the tests as the agent changed them.';
+    ? t('r12ui.ms.acceptLines', { lines: lines.join('; ') })
+    : t('r12ui.ms.acceptPlain');
 }
 
 export function MissionCard({
@@ -59,7 +60,7 @@ export function MissionCard({
       .catch((err) => onNotify?.(errorSentence(err)))
       .finally(() => setBusy(false));
   };
-  const agent = m.current_agent ?? 'The agent';
+  const agent = m.current_agent ?? t('r12ui.ms.theAgent');
   return (
     <li className="ck-inbox-item ck-mission-card" data-mission-card={m.needs}>
       <div className="ck-inbox-top">
@@ -77,28 +78,28 @@ export function MissionCard({
               <li key={line}>{line}</li>
             ))}
           </ul>
-          <p className="ck-q-ctx">The mission isn&apos;t done until you decide.</p>
+          <p className="ck-q-ctx">{t('r12ui.ms.notDone')}</p>
           <div className="ck-inbox-actions">
-            <button type="button" className="ck-btn ck-btn--primary" disabled={busy} onClick={() => decide('undo_tests', `Put the tests back. ${agent} is working again.`)}>
-              Undo the test changes and keep going
+            <button type="button" className="ck-btn ck-btn--primary" disabled={busy} onClick={() => decide('undo_tests', t('r12ui.ms.undone', { agent }))}>
+              {t('r12ui.ms.undo')}
             </button>
             <button type="button" className="ck-btn ck-btn--secondary" disabled={busy} onClick={() => setConfirm(true)}>
-              Accept the changes
+              {t('r12ui.ms.accept')}
             </button>
           </div>
         </>
       ) : m.needs === 'stuck' ? (
         <>
-          <p className="ck-q-ctx">{m.sentence ? `${m.sentence}. ` : ''}Their notes are in MISSION.md.</p>
+          <p className="ck-q-ctx">{m.sentence ? `${m.sentence}. ` : ''}{t('r12ui.ms.notesIn')}</p>
           <div className="ck-inbox-actions">
-            <button type="button" className="ck-btn ck-btn--primary" disabled={busy} onClick={() => decide('more_turns', 'Trying 5 more turns.')}>
-              Try 5 more turns
+            <button type="button" className="ck-btn ck-btn--primary" disabled={busy} onClick={() => decide('more_turns', t('r12ui.ms.more5Said'))}>
+              {t('r12ui.ms.more5')}
             </button>
-            <button type="button" className="ck-btn ck-btn--secondary" disabled={busy} onClick={() => decide('hand_to_me', 'The mission is yours. Its separate copy and notes are ready.')}>
-              Hand it to me
+            <button type="button" className="ck-btn ck-btn--secondary" disabled={busy} onClick={() => decide('hand_to_me', t('r12ui.ms.yoursSaid'))}>
+              {t('r12ui.ms.handMe')}
             </button>
-            <button type="button" className="ck-btn ck-btn--plain" disabled={busy} onClick={() => decide('stop', 'Mission stopped. Its separate copy stays.')}>
-              Stop mission
+            <button type="button" className="ck-btn ck-btn--plain" disabled={busy} onClick={() => decide('stop', t('r12ui.ms.stoppedSaid'))}>
+              {t('r12ui.ms.stop')}
             </button>
           </div>
         </>
@@ -106,11 +107,11 @@ export function MissionCard({
         <>
           {m.sentence && <p className="ck-q-ctx">{m.sentence}</p>}
           <div className="ck-inbox-actions">
-            <button type="button" className="ck-btn ck-btn--primary" disabled={busy} onClick={() => decide('try_again', 'Trying again.')}>
-              Try again
+            <button type="button" className="ck-btn ck-btn--primary" disabled={busy} onClick={() => decide('try_again', t('r12ui.ms.againSaid'))}>
+              {t('r12ui.ms.again')}
             </button>
-            <button type="button" className="ck-btn ck-btn--plain" disabled={busy} onClick={() => decide('stop', 'Mission stopped. Its separate copy stays.')}>
-              Stop mission
+            <button type="button" className="ck-btn ck-btn--plain" disabled={busy} onClick={() => decide('stop', t('r12ui.ms.stoppedSaid'))}>
+              {t('r12ui.ms.stop')}
             </button>
           </div>
         </>
@@ -118,22 +119,22 @@ export function MissionCard({
       {confirm && (
         <Sheet labelledBy="ck-mission-accept-t" onClose={() => setConfirm(false)}>
           <h2 className="ck-section" id="ck-mission-accept-t">
-            Count these tests as passing?
+            {t('r12ui.ms.countTitle')}
           </h2>
           <p className="ck-sub">{acceptBody(m)}</p>
           <div className="ck-sheet-actions">
             <button type="button" className="ck-btn ck-btn--secondary" autoFocus onClick={() => setConfirm(false)}>
-              Cancel
+              {t('r12ui.ms.cancel')}
             </button>
             <button
               type="button"
               className="ck-btn ck-btn--primary"
               onClick={() => {
                 setConfirm(false);
-                decide('accept_tests', 'Test changes accepted. The mission is done.');
+                decide('accept_tests', t('r12ui.ms.acceptedSaid'));
               }}
             >
-              Accept and finish
+              {t('r12ui.ms.acceptFinish')}
             </button>
           </div>
         </Sheet>
@@ -173,7 +174,7 @@ export function MissionsSection({
         <MissionGlyph glyph={m.glyph} />
         <span className="ck-row-title">{m.title}</span>
         <PreviewTag />
-        <span className="ck-row-sub">Mission · {m.state_text}</span>
+        <span className="ck-row-sub">{t('r12ui.ms.row', { state: m.state_text })}</span>
       </button>
       {open === m.id && (
         <MissionProgress mission={m} api={api} withCard={false} onChanged={() => onChanged?.()} onOpenPane={onOpenPane} onNotify={onNotify} />
@@ -181,9 +182,9 @@ export function MissionsSection({
     </li>
   );
   return (
-    <section className="ck-missions" aria-label="Missions">
+    <section className="ck-missions" aria-label={t('r12ui.ms.missions')}>
       {cards.length > 0 && (
-        <ul className="ck-list ck-q-list" aria-label="Missions that need you">
+        <ul className="ck-list ck-q-list" aria-label={t('r12ui.ms.needYou')}>
           {cards.map((m) => (
             <MissionCard key={m.id} m={m} api={api} onChanged={() => onChanged?.()} onNotify={onNotify} />
           ))}
@@ -191,13 +192,13 @@ export function MissionsSection({
       )}
       {working.length > 0 && (
         <>
-          <h3 className="ck-mission-cap">Missions</h3>
+          <h3 className="ck-mission-cap">{t('r12ui.ms.missions')}</h3>
           <ul className="ck-list">{working.map(row)}</ul>
         </>
       )}
       {ready.length > 0 && (
         <>
-          <h3 className="ck-mission-cap">Ready for you</h3>
+          <h3 className="ck-mission-cap">{t('r12ui.ms.ready')}</h3>
           <ul className="ck-list">{ready.map(row)}</ul>
         </>
       )}

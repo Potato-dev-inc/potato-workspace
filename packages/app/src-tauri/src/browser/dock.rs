@@ -56,6 +56,14 @@ pub fn child_bounds(rect: Option<Rect>) -> Option<Bounds> {
     Some((r.x, r.y, r.width, r.height))
 }
 
+/// Keeps bounds inside the window's content area `(width, height)` (logical). None when nothing of it is left inside.
+/// Pure.
+pub fn clamp_bounds(b: Bounds, window: (f64, f64)) -> Option<Bounds> {
+    let (x, y) = (b.0.max(0.0), b.1.max(0.0));
+    let (w, h) = ((b.0 + b.2).min(window.0) - x, (b.1 + b.3).min(window.1) - y);
+    (w >= 1.0 && h >= 1.0 && window.0.is_finite() && window.1.is_finite()).then_some((x, y, w, h))
+}
+
 /// Whether a docked child is shown: the pane shows its page area, nothing is drawn over it, and it is the tab in front.
 /// Pure.
 pub fn should_show(has_page_area: bool, frozen: bool, active: bool) -> bool {
@@ -117,6 +125,11 @@ pub struct TabInfo {
 
 /// Whether the Labs switch is on now (a development build reads it as on).
 pub fn enabled(app: &AppHandle) -> bool {
+    // shortcut: on Linux wry packs a child webview into the window's GtkBox, which ignores bounds (the page lands below
+    // the app), so the browser opens in its own window there. Upgrade: parent the child in a GtkFixed.
+    if cfg!(target_os = "linux") {
+        return false;
+    }
     crate::settings_store::read_public_settings(app).get(SETTING).and_then(Value::as_bool).unwrap_or(false)
 }
 
@@ -224,7 +237,9 @@ pub fn apply(app: &AppHandle) {
         let s = STATE.lock();
         (s.rect, s.frozen, s.active.clone(), s.tabs.iter().map(|t| t.id.clone()).collect::<Vec<_>>())
     };
-    let bounds = child_bounds(rect);
+    let host = STATE.lock().host.clone().and_then(|l| app.get_window(&l));
+    let inner = host.and_then(|w| Some((w.inner_size().ok()?, w.scale_factor().ok()?))).map(|(s, f)| (s.width as f64 / f, s.height as f64 / f));
+    let bounds = child_bounds(rect).and_then(|b| inner.map_or(Some(b), |i| clamp_bounds(b, i)));
     for id in ids {
         if !window::is_docked(&id) {
             continue;
@@ -382,6 +397,16 @@ mod tests {
         assert_eq!(child_bounds(Some(rect(520.0, 380.5, 560.0, 370.0))), Some((520.0, 380.5, 560.0, 370.0)));
         // A drag that makes the page area thinner than a pixel hides it.
         assert_eq!(child_bounds(Some(rect(700.0, 450.0, 380.0, 0.4))), None);
+    }
+
+    #[test]
+    fn the_child_is_kept_inside_the_window() {
+        let win = (1440.0, 445.0);
+        assert_eq!(clamp_bounds((700.0, 100.0, 380.0, 300.0), win), Some((700.0, 100.0, 380.0, 300.0)));
+        assert_eq!(clamp_bounds((1200.0, 300.0, 600.0, 400.0), win), Some((1200.0, 300.0, 240.0, 145.0)));
+        assert_eq!(clamp_bounds((-20.0, -5.0, 100.0, 50.0), win), Some((0.0, 0.0, 80.0, 45.0)));
+        assert_eq!(clamp_bounds((0.0, 500.0, 100.0, 100.0), win), None, "below the window");
+        assert_eq!(clamp_bounds((1500.0, 0.0, 100.0, 100.0), win), None, "right of the window");
     }
 
     #[test]

@@ -16,27 +16,13 @@ pub const OPAQUE_PREFIX: &str = "remote:";
 /// The reply for one of this block's commands, or `None` when `cmd` is not one of them.
 pub(super) fn run(cmd: &str, args: &Value) -> Option<Reply> {
     Some(match cmd {
-        "agents_list" => (200, agents()),
+        "agents_list" => (200, pm_core::device_link::pclink::engine_services::agents_list()),
         "agent_lane_get" => (200, crate::commands::agent_lane_get()),
         "agent_default_models" => default_models(),
         "agent_rules_effective" => rules(args),
         "project_recent" => recent(),
         _ => return None,
     })
-}
-
-/// `agents_list` as this PC's page reads it, without what only this PC's own screens need: a user-defined agent's `definition` and
-/// the install hints can carry command lines and paths, and another PC (maybe another account's, at Watch) has no use for them.
-fn agents() -> Value {
-    let mut list = crate::commands::agents_list();
-    for row in list.get_mut("agents").and_then(Value::as_array_mut).into_iter().flatten() {
-        for key in ["definition", "install_hint", "install_fallback"] {
-            if row.get(key).is_some() {
-                row[key] = Value::Null;
-            }
-        }
-    }
-    list
 }
 
 /// Reads the app's settings through its handle. Not compiled into the unit-test binary: a path that holds an `AppHandle` drags a window
@@ -57,13 +43,18 @@ fn default_models() -> Reply {
 fn recent() -> Reply {
     let Some((_, registry)) = link_app_handles() else { return not_ready() };
     let known = known_projects(&registry);
+    (200, Value::Array(recent_rows(known, |path| crate::worktrees::folder::git_state(&crate::worktrees::folder::path_of(path)))))
+}
+
+/// The far list of projects. `known_projects` asks Git nothing (its state is only `folder`), so the state is read here, now, for each
+/// folder (two quick `git rev-parse`): a folder that got `git init` and a commit shows as a repo on the next ask, never what it was.
+pub(super) fn recent_rows(known: Vec<(String, String, String)>, git_state: impl Fn(&str) -> &'static str) -> Vec<Value> {
     let total = known.len() as u64;
-    let rows: Vec<Value> = known
+    known
         .into_iter()
         .enumerate()
-        .map(|(i, (path, name, state))| json!({ "path": format!("{OPAQUE_PREFIX}{}", project_id(&path)), "name": name, "state": state, "last_used_ms": total - i as u64 }))
-        .collect();
-    (200, Value::Array(rows))
+        .map(|(i, (path, name, _))| json!({ "path": format!("{OPAQUE_PREFIX}{}", project_id(&path)), "name": name, "state": git_state(&path), "last_used_ms": total - i as u64 }))
+        .collect()
 }
 
 /// `agent_rules_effective(agent, project)` with the project named by its handle. A fence is a folder path and the notes are the person's

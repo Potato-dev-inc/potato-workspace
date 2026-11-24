@@ -9,14 +9,17 @@ import { desktopAgentSignIn, signInFor, signedInNow } from '../../../lib/agentSi
 import type { Host } from '../../../lib/host/host';
 import type { ChatSignIn } from '../../../lib/chatMore';
 import { errorSentence } from '../../../lib/sayError';
-import { headline, requestUsageRefresh, usageApi, type UsageApi, type UsageRow } from '../../../lib/usage';
+import { loadSettings } from '../../../lib/settings';
+import { headline, windowName, requestUsageRefresh, loginReadsOn, usageApi, type UsageApi, type UsageRow } from '../../../lib/usage';
 import { AgentLogo } from '../../common/AgentLogo';
 import { Btn, Note } from '../settings-ui';
 import { openAddAgentWith } from './agentTarget';
 import { CapChips } from './CapChips';
 import { CardSignIn } from './CardSignIn';
-import { ownLoginApi, ownLoginApiFor, ownSignedState, type OwnLogin } from './ownSignIn';
-import { nextStep, standingWords, type AgentRow } from './useAgentRows';
+import { forgetTest } from '../../../lib/setup-checks/test-memory';
+import { useTestMemory } from '../../../lib/useAgentReadiness';
+import { ownLoginApi, ownLoginApiFor, type OwnLogin } from './ownSignIn';
+import { nextStep, rowReadiness, type AgentRow } from './useAgentRows';
 
 export interface CardApis {
   accounts: AccountsApi;
@@ -58,6 +61,15 @@ export function useCardData(apis: CardApis) {
   const [accounts, setAccounts] = useState<Account[]>([]);
   const [usage, setUsage] = useState<UsageRow[]>([]);
   const [logins, setLogins] = useState<OwnLogin[] | null>(null);
+  // The desktop keeps ONE login-reads switch for every usage read, so this page asks with the person's own setting: asking with another value would flip the status bar's chips to "Usage not shared" until its next read.
+  const [loginReads, setLoginReads] = useState<boolean | null>(null);
+  useEffect(() => {
+    let live = true;
+    loadSettings().then((st) => live && setLoginReads(loginReadsOn(st)), () => live && setLoginReads(true));
+    return () => {
+      live = false;
+    };
+  }, []);
   /** `fresh`: right after a sign-in, so nothing old is reused. */
   const refresh = (fresh = false) => {
     apis.accounts
@@ -65,16 +77,19 @@ export function useCardData(apis: CardApis) {
       .then((o) => setAccounts(o.accounts))
       .catch(() => undefined);
     apis.logins?.(fresh).then(setLogins).catch(() => undefined);
-    if (fresh) apis.usage.snapshot(true, true).then((s) => setUsage(s.rows)).catch(() => undefined);
+    if (fresh) apis.usage.snapshot(true, loginReads ?? true).then((s) => setUsage(s.rows)).catch(() => undefined);
   };
   useEffect(() => {
     refresh();
-    apis.usage
-      .snapshot(false, false)
-      .then((s) => setUsage(s.rows))
-      .catch(() => undefined);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [apis]);
+  useEffect(() => {
+    if (loginReads === null) return;
+    apis.usage
+      .snapshot(false, loginReads)
+      .then((s) => setUsage(s.rows))
+      .catch(() => undefined);
+  }, [apis, loginReads]);
   return { accounts, usage, logins, refresh };
 }
 
@@ -102,7 +117,11 @@ export function AgentCard({
 }) {
   const t = useT();
   const cli = row.caps !== null && terminalOnly(row.caps);
-  const step = nextStep(row);
+  const tests = useTestMemory();
+  // ONE answer for the header and the Sign-in row below it (`agentReadiness`): they cannot disagree.
+  const standing = rowReadiness(row, logins, tests, usage);
+  const step = nextStep(row, standing);
+  const own = standing.state === 'ready' || standing.state === 'signed_in' ? 'in' : standing.state === 'needs_sign_in' ? 'out' : 'cant';
   // The sign-in a Sign out can act on: my first extra account for this agent (never a lend or borrowed one).
   const account = accountsFor(accounts, row.id).filter((a) => !a.lend_only && !a.borrowed)[0];
   const accountState = account?.login_state;
@@ -115,7 +134,6 @@ export function AgentCard({
   const [session, setSession] = useState<{ paneId: string | null } | null>(null);
   const makeSignIn = apis.signIn ?? desktopAgentSignIn;
   const signIn = useMemo(() => makeSignIn(row.id, account?.id), [makeSignIn, row.id, account?.id]);
-  const own = ownSignedState(row, logins, usage);
 
   const startSignIn = async () => {
     setMessage(null);
@@ -148,14 +166,14 @@ export function AgentCard({
   const stateWords = accountState === 'signed_in' ? ` · ${t('accounts.stateIn')}` : accountState === 'signed_out' ? ` · ${t('accounts.stateOut')}` : '';
   return (
     <section className="ag-card" data-testid={`agent-row-${row.id}`} data-agent={row.id} data-installed={row.installed ? 'true' : 'false'} data-signin={session ? 'open' : undefined} aria-label={row.label}>
-      <button type="button" className="ag-open" aria-label={t('agentList.openAria', { label: row.label, standing: standingWords(row) })} onClick={() => onOpen(row.id)}>
+      <button type="button" className="ag-open" aria-label={t('agentList.openAria', { label: row.label, standing: standing.label })} onClick={() => onOpen(row.id)}>
         <span className="ag-mark ag-card-mark">
           <AgentLogo id={row.id} name={row.label} size={28} decorative />
         </span>
         <span className="ag-main">
           <span className="ag-name">{row.label}</span>
-          <span className="ag-standing" data-state={row.state}>
-            {standingWords(row)}
+          <span className="ag-standing" data-state={standing.state}>
+            {standing.label}
             {cli ? ` · ${t('agentList.terminalOnly')}` : ''}
           </span>
         </span>
@@ -163,13 +181,13 @@ export function AgentCard({
           ›
         </span>
       </button>
-      {row.installed && row.state !== 'not_installed' && (
+      {standing.state !== 'not_installed' && (
         <dl className="ag-card-facts">
           <div>
             <dt>{t('agentCard.signIn')}</dt>
-            <dd data-testid={`card-state-${row.id}`} data-state={own.kind}>
-              {t(own.kind === 'in' ? 'agentCard.signedIn' : own.kind === 'out' ? 'agentCard.signedOut' : 'agentCard.cantTell')}
-              {own.why ? <small className="ag-card-state-why">{own.why}</small> : null}
+            <dd data-testid={`card-state-${row.id}`} data-state={own}>
+              {t(own === 'in' ? 'agentCard.signedIn' : own === 'out' ? 'agentCard.signedOut' : 'agentCard.cantTell')}
+              {standing.detail ? <small className="ag-card-state-why">{standing.detail}</small> : null}
             </dd>
           </div>
           <div>
@@ -179,7 +197,7 @@ export function AgentCard({
           {window0 && (
             <div>
               <dt>{t('agentCard.usage')}</dt>
-              <dd data-testid={`card-usage-${row.id}`}>{t('agentCard.usedPercent', { name: window0.name, percent: Math.round(window0.used_percent) })}</dd>
+              <dd data-testid={`card-usage-${row.id}`}>{t('agentCard.usedPercent', { name: windowName(window0.name), percent: Math.round(window0.used_percent) })}</dd>
             </div>
           )}
         </dl>
@@ -190,7 +208,7 @@ export function AgentCard({
         </div>
       )}
       <div className="ag-card-actions">
-        {!row.installed || row.state === 'not_installed' ? (
+        {standing.state === 'not_installed' ? (
           <Btn small className="ag-step" aria-label={t('agentList.stepAria', { step: t('agentList.step.install'), label: row.label })} onClick={() => openAddAgentWith(row.label)}>
             {t('agentList.step.install')}
           </Btn>
@@ -198,7 +216,7 @@ export function AgentCard({
           <>
             <Btn
               small
-              primary={own.kind === 'out' || row.state === 'needs_login'}
+              primary={own === 'out'}
               disabled={session !== null}
               className="ag-step"
               data-testid={`card-signin-${row.id}`}
@@ -237,7 +255,7 @@ export function AgentCard({
           </>
         )}
       </div>
-      {row.installed && row.state !== 'not_installed' && !account && (
+      {standing.state !== 'not_installed' && !account && (
         <p className="ag-card-why" data-testid={`card-why-${row.id}`}>
           {t('agentCard.signOutOwn')}
         </p>
@@ -252,6 +270,8 @@ export function AgentCard({
           pollMs={apis.pollMs}
           onSignedIn={() => {
             requestUsageRefresh();
+            // A Test from before the sign-in no longer speaks for it.
+            forgetTest(row.id);
             onChanged(true);
           }}
           onClose={() => setSession(null)}

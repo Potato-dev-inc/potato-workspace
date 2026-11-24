@@ -4,6 +4,7 @@
 // - A quiet alert (`same_file`) sits under "No clash yet": title, detail, [Ignore], and the footer.
 // The only actions are "open this pane" and "hide this alert". Nothing here can pause, stop or steer an agent.
 import { useState, useEffect } from 'react';
+import { t } from '../../i18n';
 import { isLoud, tauriCollisionApi, type CollisionApi, type CollisionView } from '../../lib/collision';
 import '../../styles/cockpit-collision.css';
 
@@ -47,7 +48,7 @@ function Card({
       {loud && <p className="ck-collision-place">{view.place}</p>}
       <p className="ck-collision-detail">{view.detail}</p>
       {loud && view.files.length > 1 && (
-        <ul className="ck-collision-files" aria-label="Changed files">
+        <ul className="ck-collision-files" aria-label={t('r9.coll.files')}>
           {view.files.map((f) => (
             <li key={f.path}>{`${f.path} - ${f.text}`}</li>
           ))}
@@ -132,9 +133,9 @@ export function CollisionSection({
   const quiet = rows.filter((r) => !isLoud(r));
 
   return (
-    <section className="ck-collision" aria-label="Collision alerts">
+    <section className="ck-collision" aria-label={t('r9.coll.section')}>
       {loud.length > 0 && (
-        <ul className="ck-list ck-collision-list" aria-label="Agents that changed the same work">
+        <ul className="ck-list ck-collision-list" aria-label={t('r9.coll.same')}>
           {loud.map((v) => (
             <Card key={v.id} view={v} select={select} hasPane={hasPane} onIgnore={onIgnore} />
           ))}
@@ -143,9 +144,9 @@ export function CollisionSection({
       {quiet.length > 0 && (
         <>
           <p className="ck-collision-place" role="heading" aria-level={3}>
-            No clash yet
+            {t('r9.coll.noClash')}
           </p>
-          <ul className="ck-list ck-collision-list" aria-label="Same file, different places">
+          <ul className="ck-list ck-collision-list" aria-label={t('r9.coll.different')}>
             {quiet.map((v) => (
               <Card key={v.id} view={v} select={select} hasPane={hasPane} onIgnore={onIgnore} />
             ))}

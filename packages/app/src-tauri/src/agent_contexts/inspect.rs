@@ -1,6 +1,12 @@
 //! Detecting and inspecting the model a pane's agent is running.
 
 use super::*;
+use crate::pty::agents::AgentType;
+use crate::pty::registry::{PaneInfo, PaneRegistry};
+use once_cell::sync::Lazy;
+use parking_lot::Mutex;
+use regex::Regex;
+use std::sync::Arc;
 
 pub(super) struct ModelPattern {
     regex: Regex,

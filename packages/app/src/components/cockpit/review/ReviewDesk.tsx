@@ -5,6 +5,7 @@
 //   - Ask to fix: opens the Ask to fix sheet (FixSheet), or calls `onFix` when the caller passes one.
 //   - Throw away: waits in a 10 s Undo window (review-desk-pending.ts) before the call is made.
 import { useCallback, useEffect, useRef, useState, type ReactNode } from 'react';
+import { useT } from '../../../i18n';
 import { markStep } from '../../../lib/getting-started';
 import {
   onReviewDeskRefresh,
@@ -69,9 +70,8 @@ interface LookedMark {
 /** A long title in the Undo line: 40 characters at most. */
 const short = (title: string): string => (title.length > 40 ? `${title.slice(0, 39)}…` : title);
 
-const EMPTY_TEXT = 'Nothing to review. Finished work from your agents shows up here.';
-
 export function ReviewDesk({ api = reviewDeskApi, onOpenPane, onClose, renderDetail, onKeep, onFix, openFirst = false }: ReviewDeskProps) {
+  const t = useT();
   const [list, setList] = useState<ReviewList | null>(null);
   const [loadError, setLoadError] = useState('');
   const [selectedKey, setSelectedKey] = useState<string | null>(null);
@@ -176,7 +176,7 @@ export function ReviewDesk({ api = reviewDeskApi, onOpenPane, onClose, renderDet
 
   const throwItem = (item: ReviewItem): void => {
     if (item.throw.kind === 'no') {
-      setNotice(item.throw.why ?? 'Throw away is off for this item.');
+      setNotice(item.throw.why ?? t('r11.rd.throwOff'));
       return;
     }
     const start = startThrow({ key: item.key, title: item.title, fingerprint: item.fingerprint }, () => runThrow(item), setNotice);
@@ -186,7 +186,7 @@ export function ReviewDesk({ api = reviewDeskApi, onOpenPane, onClose, renderDet
 
   const keepItem = async (item: ReviewItem): Promise<void> => {
     if (item.keep.kind === 'no') {
-      setNotice(item.keep.why ?? 'Keep is off for this item.');
+      setNotice(item.keep.why ?? t('r11.rd.keepOff'));
       return;
     }
     // Deciding on a finished item is a review: the Getting started list ticks it.
@@ -241,11 +241,11 @@ export function ReviewDesk({ api = reviewDeskApi, onOpenPane, onClose, renderDet
     if (action === 'keep') void keepItem(item);
     else if (action === 'throw') throwItem(item);
     else if (action === 'fix') {
-      if (!item.fixPaneId) setNotice(item.fixWhyNot ?? "The agent's pane is closed.");
+      if (!item.fixPaneId) setNotice(item.fixWhyNot ?? t('r11.rd.paneClosed'));
       else if (onFix) onFix(item);
       else setSheet({ kind: 'fix', item });
     } else if (item.paneId) onOpenPane?.(item.paneId);
-    else setNotice("The agent's pane is closed.");
+    else setNotice(t('r11.rd.paneClosed'));
   };
 
   const hooks: ReviewKeyHooks = {
@@ -304,16 +304,21 @@ export function ReviewDesk({ api = reviewDeskApi, onOpenPane, onClose, renderDet
   const loaded = list !== null;
 
   return (
-    <section className="ck-rd" ref={rootRef} aria-label="Review Desk">
+    <section className="ck-rd" ref={rootRef} aria-label={t('r11.rd.region')}>
       <header className="ck-rd-head">
-        <h2 className="ck-rd-heading">Review · {items.length}</h2>
+        <h2 className="ck-rd-heading">{t('r11.rd.heading', { n: items.length })}</h2>
         <span className="ck-rd-counts">
-          High risk {countOf('high')} · Check first {countOf('check')} · Low risk {countOf('low')}
+          {t('r11.rd.counts', { high: countOf('high'), check: countOf('check'), low: countOf('low') })}
         </span>
         {onClose && (
-          <button type="button" className="ck-rd-btn ck-rd-close" onClick={onClose}>
-            Close
-          </button>
+          <>
+            <button type="button" className="ck-rd-btn ck-rd-back" onClick={onClose}>
+              {t('state.chat.backToChat')}
+            </button>
+            <button type="button" className="ck-rd-btn ck-rd-close" onClick={onClose}>
+              {t('r11.rd.close')}
+            </button>
+          </>
         )}
       </header>
       {list?.notes.map((note) => (
@@ -323,25 +328,25 @@ export function ReviewDesk({ api = reviewDeskApi, onOpenPane, onClose, renderDet
       ))}
       <div className={`ck-rd-body${showDetail ? ' is-open' : ''}`}>
         <div className="ck-rd-list-wrap">
-          <ul className="ck-rd-list" aria-label="Finished work, riskiest first">
+          <ul className="ck-rd-list" aria-label={t('r11.rd.listLabel')}>
             {rows}
           </ul>
-          {!loaded && !loadError && <p className="ck-rd-empty">Loading…</p>}
+          {!loaded && !loadError && <p className="ck-rd-empty">{t('r11.rd.loading')}</p>}
           {loadError && <p className="ck-rd-notice" role="alert">{loadError}</p>}
-          {loaded && items.length === 0 && !throwing && !loadError && <p className="ck-rd-empty">{EMPTY_TEXT}</p>}
+          {loaded && items.length === 0 && !throwing && !loadError && <p className="ck-rd-empty">{t('r11.rd.empty')}</p>}
           {throwing && (
             <div className="ck-rd-toast" role="status">
-              {`Throwing away "${short(throwing.title)}" in ${left} s · `}
+              {t('r11.rd.throwing', { title: short(throwing.title), s: left })}
               <button type="button" className="ck-rd-link" onClick={() => undoThrow()}>
-                Undo (Z)
+                {t('r11.rd.undoZ')}
               </button>
             </div>
           )}
           {looked && (
             <div className="ck-rd-toast" role="status">
-              {'Marked as looked at · '}
+              {t('r11.rd.looked')}
               <button type="button" className="ck-rd-link" onClick={() => undo()}>
-                Undo (Z)
+                {t('r11.rd.undoZ')}
               </button>
             </div>
           )}
@@ -352,7 +357,7 @@ export function ReviewDesk({ api = reviewDeskApi, onOpenPane, onClose, renderDet
           )}
         </div>
         {showDetail && selected && renderDetail && (
-          <section className="ck-rd-detail" data-rd-detail tabIndex={-1} aria-label="Detail">
+          <section className="ck-rd-detail" data-rd-detail tabIndex={-1} aria-label={t('r11.rd.detail')}>
             {renderDetail(selected, { keep: (i) => void keepItem(i), throwAway: throwItem, kept })}
           </section>
         )}
@@ -382,7 +387,7 @@ export function ReviewDesk({ api = reviewDeskApi, onOpenPane, onClose, renderDet
         />
       )}
       <p className="ck-rd-keys">
-        J K move · Enter open · Y keep · F ask to fix · X throw away · Z undo · P open pane · Esc close
+        {t('r11.rd.keys')}
       </p>
     </section>
   );

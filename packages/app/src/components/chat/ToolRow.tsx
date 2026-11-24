@@ -2,6 +2,7 @@
 // Click the header to open the detail (ToolDetail). A card read off the screen has no status and no detail to show:
 // only the note that its output is not read.
 import { useState } from 'react';
+import { t } from '../../i18n';
 import type { ToolStep } from '../../lib/sessionChatModel';
 import '../../styles/chat-agent-cards.css';
 import '../../styles/cockpit-chat-activity.css';
@@ -12,10 +13,17 @@ import { ToolDetail } from './ToolDetail';
 import { QuestionCard } from './QuestionCard';
 import { questionsOfCall } from './questionCall';
 
+// Getters, so the words follow the app's language at the moment they are drawn.
 export const STATUS_LABEL: Record<ToolStep['status'], string> = {
-  running: 'Running',
-  ok: 'Done',
-  error: 'Failed',
+  get running() {
+    return t('r10.status.running');
+  },
+  get ok() {
+    return t('r10.status.done');
+  },
+  get error() {
+    return t('r10.status.failed');
+  },
 };
 
 /** What a card shows: a call with no result in a turn that has ended never finished, so it is pending, not running. */
@@ -28,10 +36,18 @@ export function cardState(status: ToolStep['status'], live: boolean): CardState 
 }
 
 const BADGE_LABEL: Record<CardState, string> = {
-  pending: 'Pending',
-  running: STATUS_LABEL.running,
-  done: STATUS_LABEL.ok,
-  failed: STATUS_LABEL.error,
+  get pending() {
+    return t('r10.status.pending');
+  },
+  get running() {
+    return STATUS_LABEL.running;
+  },
+  get done() {
+    return STATUS_LABEL.ok;
+  },
+  get failed() {
+    return STATUS_LABEL.error;
+  },
 };
 
 export function StatusBadge({ state }: { state: CardState }) {
@@ -83,7 +99,7 @@ export function ToolRow({ step, fromScreen, defaultOpen = false, live = true }: 
       </button>
       {open && (
         <div className="ck-agc-body">
-          {fromScreen ? <p className="ck-agc-note">Tool output is not read from the screen.</p> : <ToolDetail step={step} failed={status === 'error'} />}
+          {fromScreen ? <p className="ck-agc-note">{t('r21.sw.toolOutputIsNot')}</p> : <ToolDetail step={step} failed={status === 'error'} />}
         </div>
       )}
     </div>

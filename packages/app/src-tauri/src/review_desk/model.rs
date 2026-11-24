@@ -124,11 +124,18 @@ fn all_digits(raw: &str) -> bool {
 /// The live layer builds it from `redact::strict_with` + home-to-`~` + [`strip_controls`]; tests pass a fake.
 pub struct Clean {
     pub text: Box<dyn Fn(&str) -> String>,
+    /// For a file path: secrets only, so a long file name is not masked as an opaque run. `None` uses `text`.
+    pub path: Option<Box<dyn Fn(&str) -> String>>,
 }
 
 impl Clean {
     pub fn apply(&self, raw: &str) -> String {
         (self.text)(raw)
+    }
+
+    /// A file path for display (see `path`).
+    pub fn apply_path(&self, raw: &str) -> String {
+        self.path.as_ref().map_or_else(|| self.apply(raw), |f| f(raw))
     }
 }
 
@@ -431,7 +438,7 @@ mod tests {
 
     #[test]
     fn clean_uses_the_injected_text_function() {
-        let clean = Clean { text: Box::new(|s| format!("[{s}]")) };
+        let clean = Clean { text: Box::new(|s| format!("[{s}]")), path: None };
         assert_eq!(clean.apply("cart"), "[cart]");
     }
 

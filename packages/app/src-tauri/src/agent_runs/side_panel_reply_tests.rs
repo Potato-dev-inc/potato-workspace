@@ -5,7 +5,7 @@ use super::completion::{clean_extracted_result, tui_turn_evidence};
 
 const AGENT: &str = "claude";
 const TASK: &str = "Fix the failing test in sum.js, then run npm test.";
-const FIXTURE: &str = include_str!("../tui/claude/fixtures/side_diff_panel_screen.txt");
+const FIXTURE: &str = include_str!("../../crates/pm-core/src/tui/claude/fixtures/side_diff_panel_screen.txt");
 
 /// What `read_snapshot` gave before the fix: `vt100`'s `contents()`, which glues full-width rows.
 fn raw_contents() -> String {

@@ -35,7 +35,7 @@ fn the_sign_in_rows_need_these_levels_and_are_all_in_the_table() {
         assert_eq!(need(cmd), Some(level), "{cmd}");
     }
     // The rows from this block's marker to the next `// ---- ` marker, so a block another phase adds after (or before) it changes nothing here.
-    let source = include_str!("calls.rs");
+    let source = include_str!("../../../crates/pm-core/src/device_link/pclink/calls.rs");
     let from = source.find("    // ---- P2.2 sign-in ----").expect("the P2.2 marker");
     let block: Vec<&str> = source[from..].lines().skip(1).take_while(|l| !l.trim_start().starts_with("// ---- ")).filter_map(|l| l.trim_start().strip_prefix("(\"")?.split('"').next()).collect();
     assert_eq!(block, rows().iter().map(|(c, _, _)| *c).collect::<Vec<_>>(), "the P2.2 block holds exactly these rows, in order");

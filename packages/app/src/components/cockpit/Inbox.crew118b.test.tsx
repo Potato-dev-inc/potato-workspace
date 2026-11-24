@@ -17,7 +17,7 @@ vi.mock('../../lib/collision', async (importOriginal) => ({
   tauriCollisionApi: { list: () => Promise.resolve([]), ignore: vi.fn(), settingsGet: vi.fn(), settingsSet: vi.fn(), onChanged: () => Promise.resolve(() => {}) },
 }));
 const crewsApi = vi.hoisted(() => ({ open: vi.fn(), agents: vi.fn(), check: vi.fn() }));
-vi.mock('../../lib/crews-api', async (importOriginal) => ({ ...(await importOriginal<typeof import('../../lib/crews-api')>()), crewsApi }));
+vi.mock('../../lib/crews-api', async (importOriginal) => ({ ...(await importOriginal<typeof import('../../lib/crews-api')>()), crewsApi, crewsApiFor: () => crewsApi }));
 
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 

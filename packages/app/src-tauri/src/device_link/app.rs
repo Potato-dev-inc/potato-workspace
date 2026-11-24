@@ -35,6 +35,15 @@ pub fn enabled() -> bool {
 /// One line in `lib.rs` setup: keeps the handle for the page's events. Builds nothing.
 pub fn init(app: tauri::AppHandle) {
     let _ = APP.set(app);
+    // The saved settings are applied before this runs (lib.rs setup), so a switch that was already on found no handle and started
+    // nothing: without this the link, its probing and the account listing stayed idle until some page happened to call `start`.
+    if enabled() {
+        tauri::async_runtime::spawn(async {
+            if let Ok(svc) = app_service() {
+                let _ = svc.start().await;
+            }
+        });
+    }
 }
 
 /// One small file, written whole through a temporary file next to it.
@@ -436,6 +445,7 @@ pub fn app_service() -> Result<Arc<DeviceLink>, String> {
         account_removed: store("account-removed.json"),
         pclink: Some({
             super::pclink::calls_chat::install();
+            super::pclink::calls_p4a::install();
             Arc::new(super::pclink::app_services::AppServices::new(Arc::new(computer_name)))
         }),
     };
@@ -567,6 +577,9 @@ impl crate::capacity_proxy::service::OwnPort for AppOwn {
     }
     fn my_name(&self) -> String {
         SERVICE.get().map(|s| s.self_name()).unwrap_or_default()
+    }
+    fn same_account(&self, node: &str) -> bool {
+        SERVICE.get().is_some_and(|s| s.own_account_pc(node))
     }
 }
 

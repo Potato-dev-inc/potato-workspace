@@ -737,7 +737,7 @@ mod tests {
             ("agents/kilo/entry.toml".to_string(), entry_toml("kilo", "verified", true)),
             ("agents/kilo/definition.toml".to_string(), definition),
         ];
-        let dir = root.join("src/tui/declarative/fixtures/kilo");
+        let dir = root.join("crates/pm-core/src/tui/declarative/fixtures/kilo");
         for item in std::fs::read_dir(&dir).expect("kilo fixtures").flatten() {
             if item.file_type().is_ok_and(|t| t.is_file()) {
                 let name = item.file_name().to_string_lossy().into_owned();

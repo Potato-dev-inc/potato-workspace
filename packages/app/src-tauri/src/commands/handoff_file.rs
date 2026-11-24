@@ -8,7 +8,10 @@
 
 use super::AppState;
 use serde::Serialize;
+use parking_lot::Mutex;
 use std::path::{Path, PathBuf};
+use std::sync::Arc;
+use crate::pty::PaneRegistry;
 use std::time::UNIX_EPOCH;
 use tauri::State;
 
@@ -45,10 +48,14 @@ fn stat_path(path: &Path) -> HandoffFileStat {
 
 /// The pane's folder (the default project folder for an unknown pane).
 fn pane_folder(state: &AppState, pane_id: &str) -> String {
+    folder_in(&state.registry, pane_id)
+}
+
+pub(crate) fn folder_in(registry: &Arc<Mutex<PaneRegistry>>, pane_id: &str) -> String {
     if crate::acp::chat::is_remote_pane(pane_id) {
         return crate::acp::chat::NOT_ON_THIS_PC.to_string();
     }
-    let registry = state.registry.lock();
+    let registry = registry.lock();
     registry.get(pane_id).map(|pane| pane.info.cwd.clone()).unwrap_or_else(|| registry.project_path.clone())
 }
 
@@ -60,11 +67,15 @@ async fn blocking<T: Send + 'static>(work: impl FnOnce() -> Result<T, String> + 
 #[tauri::command]
 pub async fn handoff_file_stat(state: State<'_, AppState>, pane_id: String, stamp: Option<String>) -> Result<HandoffFileStat, String> {
     let folder = pane_folder(&state, &pane_id);
-    blocking(move || match stamp {
-        None => Ok(stat_handoff(Path::new(&folder))),
-        Some(stamp) => Ok(stat_path(&quick_path(Path::new(&folder), &stamp)?)),
-    })
-    .await
+    blocking(move || stat_of(&folder, stamp.as_deref())).await
+}
+
+/// The body of `handoff_file_stat`, also run for a paired PC.
+pub(crate) fn stat_of(folder: &str, stamp: Option<&str>) -> Result<HandoffFileStat, String> {
+    match stamp {
+        None => Ok(stat_handoff(Path::new(folder))),
+        Some(stamp) => Ok(stat_path(&quick_path(Path::new(folder), stamp)?)),
+    }
 }
 
 /// What `handoff_quick_prepare` answers: the stamp actually used and the absolute path the agent must write.
@@ -282,11 +293,13 @@ pub async fn handoff_quick_archive(state: State<'_, AppState>, pane_id: String, 
 /// conversation was started with. None: the agent's own login, or not known.
 #[tauri::command]
 pub async fn handoff_pane_account(state: State<'_, AppState>, pane_id: String) -> Result<Option<String>, String> {
-    let from_pane = state.registry.lock().get(&pane_id).and_then(|pane| pane.info.account.clone());
-    if from_pane.is_some() {
-        return Ok(from_pane);
-    }
-    Ok(crate::acp::conversations::global().record(&pane_id).and_then(|r| r.account))
+    Ok(account_of(&state.registry, &pane_id))
+}
+
+/// The body of `handoff_pane_account`, also run for a paired PC.
+pub(crate) fn account_of(registry: &Arc<Mutex<PaneRegistry>>, pane_id: &str) -> Option<String> {
+    let from_pane = registry.lock().get(pane_id).and_then(|pane| pane.info.account.clone());
+    from_pane.or_else(|| crate::acp::conversations::global().record(pane_id).and_then(|r| r.account))
 }
 
 #[cfg(test)]

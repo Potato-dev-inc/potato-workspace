@@ -13,3 +13,6 @@ export const idOfKey = (node: string, key: string): string => {
   const prefix = `dev:${node}:`;
   return key.startsWith(prefix) ? key.slice(prefix.length) : key;
 };
+
+/** Whether `key` is a pane of another PC (a screen that only has to pick the right door for it uses this, never the key's parts). */
+export const isFarKey = (key: string): boolean => key.startsWith('dev:');

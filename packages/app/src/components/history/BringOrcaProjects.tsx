@@ -5,6 +5,7 @@ import { useState } from 'react';
 import { addProjectsToSidebar, type OrcaImportApi, type OrcaProject } from '../../lib/orcaImport';
 import { errorSentence } from '../../lib/sayError';
 import { readProjects, pathKey } from '../../lib/sidebarProjects';
+import { t } from '../../i18n';
 
 export const ORCA_BUTTON = 'Bring my projects from Orca';
 
@@ -41,7 +42,7 @@ export function BringOrcaProjects({ projects, api, onBack }: { projects: readonl
       <button type="button" className="bc-back" onClick={onBack}>
         ‹ Back
       </button>
-      <p className="ck-sub">Projects Orca keeps on this PC. Orca is only read, never changed. Nothing leaves this computer.</p>
+      <p className="ck-sub">{t('r21.sw.projectsOrcaKeepsOn')}</p>
       {error && (
         <p className="bc-error" role="alert">
           {error}
@@ -53,7 +54,7 @@ export function BringOrcaProjects({ projects, api, onBack }: { projects: readonl
         </p>
       ) : (
         <>
-          <ul className="bc-rows" aria-label="Orca projects">
+          <ul className="bc-rows" aria-label={t('r21.sw.orcaProjects')}>
             {projects.map((p) => {
               const already = added.has(pathKey(p.path));
               const usable = p.exists && !already;
@@ -68,7 +69,7 @@ export function BringOrcaProjects({ projects, api, onBack }: { projects: readonl
               );
             })}
           </ul>
-          {projects.length === 0 && <p className="ck-sub">Orca has no projects on this PC.</p>}
+          {projects.length === 0 && <p className="ck-sub">{t('r21.sw.orcaHasNoProjects')}</p>}
           <div className="bc-actions">
             <button type="button" className="ck-btn ck-btn--primary" disabled={busy || picked.size === 0} onClick={() => void add()}>
               {picked.size > 0 ? `Add (${picked.size})` : 'Add'}

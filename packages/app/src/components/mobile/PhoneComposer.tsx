@@ -4,7 +4,7 @@
 import { useEffect, useLayoutEffect, useRef, useState, type KeyboardEvent, type PointerEvent, type ReactNode } from 'react';
 import { useT, type MessageKey } from '../../i18n';
 import { ERROR_NOTES, LISTENING_NOTE, useVoiceInput } from '../../hooks/useVoiceInput';
-import { clearDraft, DRAFT_SAVE_MS, readDraft, writeDraft } from '../../lib/composerDraft';
+import { beginSend, DRAFT_SAVE_MS, endSend, readDraft, writeDraft } from '../../lib/composerDraft';
 import { MAX_MESSAGE_CHARS } from '../../lib/paneOutbox';
 import { useRemoteDraft } from '../../hooks/useRemoteDraft';
 import type { RemoteDraft } from '../../lib/chatMore';
@@ -82,7 +82,7 @@ export function PhoneComposer({
 }) {
   const t = useT();
   const [text, setText] = useState(() => readDraft(draftKey));
-  useRemoteDraft(remoteDraft, text, setText);
+  useRemoteDraft(remoteDraft, text, setText, draftKey);
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const [plus, setPlus] = useState(false);
@@ -196,18 +196,21 @@ export function PhoneComposer({
     setBusy(true);
     setError(null);
     let refused: string | null;
+    const sentText = text.trim();
+    beginSend(draftKey, sentText);
     try {
-      refused = attach.ready.length > 0 ? await onSend(text.trim(), attach.ready) : await onSend(text.trim());
+      refused = attach.ready.length > 0 ? await onSend(sentText, attach.ready) : await onSend(sentText);
     } catch {
       refused = t('phone.composer.sendFailed');
     }
     setBusy(false);
+    endSend(draftKey, !refused, sentText);
     if (refused) {
       setError(refused);
     } else {
       setText('');
       attach.clear();
-      clearDraft(draftKey);
+      remoteDraft?.write('');
     }
     field.current?.focus();
   };

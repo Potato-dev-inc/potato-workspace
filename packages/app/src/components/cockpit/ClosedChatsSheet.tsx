@@ -11,7 +11,7 @@ import { formatAgo } from './history-model';
 import { Sheet } from './Sheet';
 
 /** A chat with no title (or only spaces) is "Untitled chat", never blank and never "No messages". */
-export const closedChatName = (chat: ClosedChat): string => chat.title?.trim() || 'Untitled chat';
+export const closedChatName = (chat: ClosedChat): string => chat.title?.trim() || t('newAgent.continueUntitled');
 
 export function ClosedChatsSheet({
   chats,
@@ -91,11 +91,11 @@ export function ClosedChatsSheet({
   return (
     <Sheet labelledBy="ck-closed-t" role="dialog" onClose={onClose} className="ck-sheet--closed">
       <h2 className="ck-section" id="ck-closed-t">
-        Closed chats
+        {t('r21.closed.title')}
       </h2>
-      <p className="ck-sub">Chats you closed. Reopen one to carry on, or delete it (you can undo for a few seconds).</p>
+      <p className="ck-sub">{t('r21.closed.sub')}</p>
       {shown.length === 0 ? (
-        <p className="ck-closed-empty">No closed chats.</p>
+        <p className="ck-closed-empty">{t('r21.closed.none')}</p>
       ) : (
         <ul className="ck-closed-list">
           {shown.map((chat) => {
@@ -105,20 +105,20 @@ export function ClosedChatsSheet({
                 <div className="ck-closed-main">
                   <span className="ck-closed-title">{name}</span>
                   <span className="ck-closed-meta">
-                    {chat.label} · {folderName(chat.cwd)} · {formatAgo(Math.max(0, now - chat.updated_ms))}
+                    {chat.label} · {folderName(chat.cwd)}{chat.where ? ` · ${chat.where}` : ''} · {formatAgo(Math.max(0, now - chat.updated_ms))}
                   </span>
                 </div>
-                <button type="button" className="ck-btn ck-btn--secondary ck-btn--sm" disabled={busy} aria-label={`Reopen ${name}`} onClick={() => void reopen(chat)}>
-                  Reopen
+                <button type="button" className="ck-btn ck-btn--secondary ck-btn--sm" disabled={busy} aria-label={t('r21.closed.reopenAria', { name })} onClick={() => void reopen(chat)}>
+                  {t('r21.closed.reopen')}
                 </button>
                 <button
                   type="button"
                   className="ck-btn ck-btn--plain ck-btn--sm ck-closed-delete"
                   disabled={busy}
-                  aria-label={`Delete ${name}`}
+                  aria-label={t('r21.closed.deleteAria', { name })}
                   onClick={() => deleteWithUndo([chat.id], t('undo.chatDeleted', { name }), () => api.remove(chat.id))}
                 >
-                  Delete
+                  {t('r21.closed.delete')}
                 </button>
               </li>
             );
@@ -139,11 +139,11 @@ export function ClosedChatsSheet({
               )
             }
           >
-            Delete all closed chats
+            {t('r21.closed.deleteAll')}
           </button>
         )}
         <button type="button" className="ck-btn ck-btn--secondary" onClick={onClose}>
-          Close
+          {t('r21.plans.close')}
         </button>
       </div>
     </Sheet>

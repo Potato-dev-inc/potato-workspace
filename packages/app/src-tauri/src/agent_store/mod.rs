@@ -377,7 +377,7 @@ fn method_word(method: Method) -> &'static str {
 /// the PyPI name after `tool install [--python v]`). A script installs no named package.
 fn package_of(step: &Step) -> String {
     match (&step.action, step.method) {
-        (Action::Script { .. }, _) => String::new(),
+        (Action::Script { .. } | Action::ShellScript { .. }, _) => String::new(),
         (Action::Argv { args, .. }, Method::Winget) => {
             args.iter().skip_while(|arg| arg.as_str() != "--id").nth(1).cloned().unwrap_or_default()
         }

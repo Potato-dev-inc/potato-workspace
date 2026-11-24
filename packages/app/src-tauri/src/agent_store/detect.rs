@@ -105,6 +105,29 @@ pub(super) fn detect_in(
     found
 }
 
+/// Where the program of agent `id` is on the real PATH (no version check), for the Store cards. The PATH listing
+/// is read at most once every 5 s, so a grid of cards costs one scan.
+pub(super) fn located(id: &str) -> Option<PathBuf> {
+    use std::sync::Mutex;
+    use std::time::Instant;
+    static CACHE: Mutex<Option<(Instant, std::collections::HashMap<String, PathBuf>)>> = Mutex::new(None);
+    let mut cache = CACHE.lock().ok()?;
+    if cache.as_ref().map_or(true, |(at, _)| at.elapsed() > Duration::from_secs(5)) {
+        let path_var = std::env::var_os("PATH").unwrap_or_default();
+        let index = index_dirs(&scan_dirs(&path_var, None));
+        let mut map = std::collections::HashMap::new();
+        for c in production_candidates() {
+            if !map.contains_key(&c.id) {
+                if let Some(p) = index.find(&c.program) {
+                    map.insert(c.id, p);
+                }
+            }
+        }
+        *cache = Some((Instant::now(), map));
+    }
+    cache.as_ref().and_then(|(_, m)| m.get(id).cloned())
+}
+
 /// The version of one found program: asks `--version` and nothing else.
 pub(super) fn version_of(program: &Path, runner: &dyn Fn(&Path, &[String]) -> Option<String>) -> Option<String> {
     runner(program, &["--version".to_string()])

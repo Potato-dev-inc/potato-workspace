@@ -1089,6 +1089,7 @@ fn before_of_and_latest_after_pick_the_turn_boundaries() {
             kind: kind.into(),
             label: String::new(),
             note: String::new(),
+            restored_to: String::new(),
             at_ms,
             files: 0,
             added: 0,

@@ -47,16 +47,7 @@ impl From<&KeySwapEvent> for PendingKeySwapInfo {
     }
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
-pub struct KeySwapEvent {
-    pub kind: String,
-    pub pane_id: String,
-    pub from_profile: String,
-    pub to_profile: Option<String>,
-    pub reason: String,
-    pub auto_rotated: bool,
-    pub at_ms: i64,
-}
+pub use pm_core::opencode::KeySwapEvent;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct RateLimitPlan {

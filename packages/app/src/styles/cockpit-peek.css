@@ -1,7 +1,7 @@
 /* The peek card on a sidebar agent row. Grey, quiet, to the right of the row. No motion when less motion is asked for. */
 .cockpit .ck-peek {
   position: fixed;
-  z-index: 50;
+  z-index: 62; /* above the jump-out card (61): a card the person hovers for is not hidden under one that jumped out */
   left: var(--peek-left, 280px);
   top: var(--peek-top, 80px);
   width: 280px;

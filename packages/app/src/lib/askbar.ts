@@ -1,7 +1,7 @@
 // Global Ask bar. Backend: src-tauri askbar/ (window, shortcut, quick_ask wiring) and commands/askbar.rs.
 import { useCallback, useEffect, useState } from 'react';
 import { invoke } from '@tauri-apps/api/core';
-import { listen } from '@tauri-apps/api/event';
+import { listen } from './events';
 
 export interface AskbarSettings {
   enabled: boolean;

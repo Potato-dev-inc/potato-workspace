@@ -54,12 +54,15 @@ export function IncomingRequestCard({
   api = lendApi,
   now,
   onDone,
+  onAnswering,
 }: {
   request: LendRequest;
   state: LendState;
   api?: LendApi;
   now: number;
   onDone?: () => void;
+  /** The person pressed Lend or No: the card is gone at once (the answer takes a few seconds to settle). `false`: it failed, the card is back. */
+  onAnswering?: (sending: boolean) => void;
 }) {
   const t = useT();
   const profiles = profilesFor(state, request);
@@ -68,6 +71,7 @@ export function IncomingRequestCard({
   const [secs, setSecs] = useState(request.secs);
   const [understood, setUnderstood] = useState(false);
   const [busy, setBusy] = useState(false);
+  const [answered, setAnswered] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const teammateOnly = profiles.length === 0 ? teammateOnlyProfilesFor(state, request)[0] : undefined;
   const otherAudience = profiles.length === 0 && !teammateOnly ? otherAudienceProfilesFor(state, request)[0] : undefined;
@@ -90,6 +94,10 @@ export function IncomingRequestCard({
   const run = async (what: () => Promise<unknown>, stayOpen = false) => {
     setBusy(true);
     setError(null);
+    if (!stayOpen) {
+      setAnswered(true);
+      onAnswering?.(true);
+    }
     try {
       await what();
       onDone?.();
@@ -98,9 +106,14 @@ export function IncomingRequestCard({
     } catch (err) {
       setError(errText(err));
       setBusy(false);
+      if (!stayOpen) {
+        setAnswered(false);
+        onAnswering?.(false);
+      }
     }
   };
 
+  if (answered) return null;
   return (
     <InboxCard
       kind="lend"

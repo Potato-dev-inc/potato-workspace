@@ -172,8 +172,6 @@
   border-radius: 999px;
   border: 1px solid var(--sep, currentColor);
   background: var(--bg-float, rgba(0, 0, 0, 0.6));
-  -webkit-backdrop-filter: blur(24px) saturate(1.4);
-  backdrop-filter: blur(24px) saturate(1.4);
   box-shadow: var(--float-shadow, none);
   color: var(--label, #fff);
   font-size: 18px;
@@ -186,6 +184,9 @@
 }
 
 .terminal-scroll-bottom--visible {
+  /* The blur layer exists only while the button shows (an invisible one per pane still costs a GPU layer). */
+  -webkit-backdrop-filter: blur(24px) saturate(1.4);
+  backdrop-filter: blur(24px) saturate(1.4);
   opacity: 0.9;
   pointer-events: auto;
 }

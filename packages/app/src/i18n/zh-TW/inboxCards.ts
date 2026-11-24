@@ -18,7 +18,18 @@ export const inboxCards: Partial<Record<EnglishKey, string>> = {
   'inboxCards.runs': '執行：',
 
   // QuestionCard
+  'inboxCards.verb.Write': '寫入',
+  'inboxCards.verb.Edit': '編輯',
+  'inboxCards.verb.Run': '執行指令',
+  'inboxCards.verb.Read': '讀取',
+  'inboxCards.verb.Delete': '刪除',
+  'inboxCards.verb.Move': '移動',
+  'inboxCards.verb.Fetch': '擷取',
+  'inboxCards.verb.Search': '搜尋',
+  'inboxCards.verb.mcp': '使用 {tool} 工具',
+  'inboxCards.question.gap': ' ',
   'inboxCards.question.alwaysUse': '一律使用這個',
+  'inboxCards.question.wants': '{who} 想要{action}',
   'inboxCards.question.orType': '或輸入回答',
   'inboxCards.question.typeAnswer': '輸入回答',
   'inboxCards.question.yourAnswer': '你的回答',
@@ -33,7 +44,7 @@ export const inboxCards: Partial<Record<EnglishKey, string>> = {
   // PaneApprovalCard and ApprovalPrompt
   'inboxCards.approval.waiting': '正在等你回答',
   'inboxCards.approval.ariaLabel': '核准要求',
-  'inboxCards.failed': '這個回答沒有送到代理。請再試一次，或開啟終端機。',
+  'inboxCards.failed': '這個回答沒有送到 AI 助理。請再試一次，或開啟終端機。',
   'inboxCards.openTerminal': '開啟終端機',
   'inboxCards.stalled': '剛才的回答沒有送出去，Claude 還在等。請再按一次你的回答。',
 
@@ -160,4 +171,11 @@ export const inboxCards: Partial<Record<EnglishKey, string>> = {
   // A risky ask of a minion, docked in the chat of the agent that started it
   'inboxCards.minionAsks': '{parent} 的小代理想問',
   'inboxCards.openMinion': '看看它在做什麼',
+
+  // The jump-out card over the work area (a blocking question that only the Inbox shows)
+  'inboxCards.jumpOut.region': '現在需要你',
+  'inboxCards.jumpOut.later': '稍後',
+  'inboxCards.jumpOut.show': '展開',
+  'inboxCards.jumpOut.laterTip': '先收起來，它仍會留在收件匣。',
+  'inboxCards.jumpOut.more': '收件匣還有 {n} 個 >',
 };

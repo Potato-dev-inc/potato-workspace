@@ -16,6 +16,21 @@
   font-size: 12px;
   line-height: 1.4;
 }
+/* In the cockpit the notice sits in .ck-update-slot, the last flex child of the main column: it takes its own height
+   (any text size) and pushes the page, the Files tree, Settings and the message box up, so nothing is covered. */
+.cockpit .ck-update-slot {
+  flex: none;
+}
+.cockpit .ck-update-slot:empty {
+  display: none;
+}
+.cockpit .ck-update-slot .app-update-notice {
+  position: static;
+  flex-wrap: wrap;
+  max-width: none;
+  border-width: 1px 0 0;
+  border-radius: 0;
+}
 .app-update-btn {
   flex: none;
   padding: 4px 10px;
@@ -128,4 +143,24 @@
 .app-update-row .app-update-detail {
   flex-basis: auto;
   margin-left: 2px;
+}
+
+/* The close button of a floating notice: a small quiet cross at its end. */
+.app-update-x {
+  flex: none;
+  width: 20px;
+  height: 20px;
+  padding: 0;
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
+  color: inherit;
+  font-size: 16px;
+  line-height: 1;
+  opacity: 0.6;
+  cursor: pointer;
+}
+.app-update-x:hover {
+  opacity: 1;
+  background: var(--fill-active, rgba(128, 128, 128, 0.2));
 }

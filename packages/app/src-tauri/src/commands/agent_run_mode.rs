@@ -92,7 +92,7 @@ pub fn stall_minutes_set(value: u32) -> Result<Value, String> {
 }
 
 /// Helpers that read as stuck now: `[{pane_id, minutes}]`.
-#[tauri::command]
+#[tauri::command(async)]
 pub fn stalls_list() -> Value {
     Value::Array(crate::agent_runs::stall::all().into_iter().map(|(pane_id, minutes)| serde_json::json!({ "pane_id": pane_id, "minutes": minutes })).collect())
 }
@@ -119,7 +119,7 @@ pub async fn stall_respawn(state: State<'_, AppState>, app: tauri::AppHandle, pa
 }
 
 /// The helpers that ran hidden (no pane), newest first, for the Inbox.
-#[tauri::command]
+#[tauri::command(async)]
 pub fn hidden_runs_list() -> Vec<crate::hidden_runs::HiddenRunView> {
     crate::hidden_runs::list()
 }

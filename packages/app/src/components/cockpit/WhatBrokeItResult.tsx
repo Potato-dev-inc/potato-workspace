@@ -35,6 +35,7 @@ import {
   undoTitle,
   undoneLine,
 } from './what-broke-it-result-text';
+import { t } from '../../i18n';
 
 /** The calls this card makes. The sheet passes its own object with the same names. */
 export interface WhatBrokeItResultApi {
@@ -206,7 +207,7 @@ export function WhatBrokeItResult({
 
       {showFiles && files !== null && (
         <ul className="ck-list">
-          {files.length === 0 && <li className="ck-sub">No files changed in this turn.</li>}
+          {files.length === 0 && <li className="ck-sub">{t('r21.sw.noFilesChangedIn')}</li>}
           {files.map((f) => (
             <li key={f.path} className="ck-row">
               <button type="button" className="ck-btn ck-btn--plain" onClick={() => openFile(f.path)}>
@@ -220,8 +221,8 @@ export function WhatBrokeItResult({
       {showFiles && patch && (
         <>
           <p className="ck-sub">{patch.path}</p>
-          {patch.text ? <pre className="ck-diff ck-mono">{patch.text}</pre> : <p className="ck-sub">No text change to show.</p>}
-          {patch.truncated && <p className="ck-sub">The diff is cut short.</p>}
+          {patch.text ? <pre className="ck-diff ck-mono">{patch.text}</pre> : <p className="ck-sub">{t('r21.sw.noTextChangeTo')}</p>}
+          {patch.truncated && <p className="ck-sub">{t('r21.sw.theDiffIsCut')}</p>}
         </>
       )}
 

@@ -227,6 +227,22 @@ impl AccountService {
         self.devices()
     }
 
+    /// "Add <machine> to your account?": this signed-in PC answers the code a screen-less machine (an SSH box) printed. `allow` false is
+    /// "Not me". The code reached this PC over the person's own SSH, never through the server; the server sets the machine's join up only
+    /// when a signed PC says yes, and the machine then signs in itself. No login or token crosses.
+    pub fn approve_device_code(&self, user_code: &str, allow: bool) -> Result<(), String> {
+        let digits: String = user_code.chars().filter(char::is_ascii_digit).collect();
+        if digits.len() != 8 || user_code.chars().any(|c| !(c.is_ascii_digit() || c == '-' || c == ' ')) {
+            return Err("That code is not valid. It has eight digits, like 4821-7730.".into());
+        }
+        let body = serde_json::json!({ "user_code": digits, "allow": allow });
+        match self.signed("POST", "/v1/auth/device/approve", Some(&body)) {
+            Ok(_) => Ok(()),
+            Err(ApiError::Unauthorized) => Err("You are not signed in.".into()),
+            Err(e) => Err(e.sentence()),
+        }
+    }
+
     /// Sign this device out: take this PC out of the address book first (so the other PCs stop listing it), tell the
     /// server (best effort) and forget the session here.
     pub fn sign_out_here(&self) -> AccountView {

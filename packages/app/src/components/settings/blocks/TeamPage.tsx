@@ -422,6 +422,29 @@ export function TeamPage({
             onAction={(a) => void save(a === "on" ? true : view.enabled)}
           />
         )}
+        {view.why?.removed && (
+          <div className="tp-removed" role="alert" data-testid="team-removed">
+            <p>{t("teamPage.removed")}</p>
+            <Btn primary disabled={busy} onClick={() => setLeaving(true)}>
+              {t("teamPage.leave")}
+            </Btn>
+          </div>
+        )}
+        {view.why && (view.why.removed || view.link === "denied") && (
+          <details className="tp-why">
+            <summary>{t("teamPage.whyTitle")}</summary>
+            <Note>
+            {view.why.removed ? `${t("teamPage.whyRemoved")} ` : ""}{t("teamPage.why", {
+              saved: t(view.why.teamSaved ? "teamPage.why.yes" : "teamPage.why.no"),
+              roster: t(view.why.onRoster ? "teamPage.why.yes" : "teamPage.why.no"),
+              check: t(view.why.lastCheck === null ? "teamPage.why.ok" : view.why.lastCheck === "refused_by_relay" ? "teamPage.why.refused" : "teamPage.why.failed"),
+            })}
+            </Note>
+          </details>
+        )}
+        {/* Removed: no member list or invite actions are left to use; Leave clears the team here. */}
+        {view.why?.removed ? null : (
+          <>
         {view.admin && (
           <InviteBlock
             api={api}
@@ -513,6 +536,9 @@ export function TeamPage({
                             </small>
                           );
                         })}
+                    {canPing && !m.me && (m.deviceList ?? []).length > 0 && (m.deviceList ?? []).every((d) => pings.byDevice[d.id] && !pings.byDevice[d.id].ok) && (
+                      <small className="st-team-ping" data-ok="false">{t("teamPage.notConnected")}</small>
+                    )}
                     <Suspense fallback={null}>
                       <MemberLends memberId={m.id} lend={lend} api={lendClient} />
                     </Suspense>
@@ -598,6 +624,8 @@ export function TeamPage({
             {t("teamPage.leave")}
           </Btn>
         </div>
+          </>
+        )}
       </>
     );
   };

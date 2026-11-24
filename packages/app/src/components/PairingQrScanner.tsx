@@ -2,6 +2,7 @@ import { errorSentence } from '../lib/sayError';
 import { parsePairingInviteFromQr, parsePairingQrPayload } from '@potato-workspace/shared';
 import { useCallback, useEffect, useId, useRef, useState } from 'react';
 import type { Html5Qrcode } from 'html5-qrcode';
+import { t } from '../i18n';
 
 interface Props {
   open: boolean;
@@ -104,7 +105,7 @@ export function PairingQrScanner({ open, onClose, onScan, onScanInvite }: Props)
   return (
     <div className="fixed inset-0 z-50 flex flex-col bg-black/90">
       <div className="flex items-center justify-between px-4 py-3 border-b border-pm-border/40">
-        <h2 className="text-sm font-semibold text-zinc-100">Scan pairing QR</h2>
+        <h2 className="text-sm font-semibold text-zinc-100">{t('r21.sw.scanPairingQr')}</h2>
         <button
           type="button"
           onClick={() => {
@@ -124,7 +125,7 @@ export function PairingQrScanner({ open, onClose, onScan, onScanInvite }: Props)
           id={readerId}
           className="w-full max-w-sm overflow-hidden rounded-xl border border-pm-border bg-pm-bg [&_video]:rounded-xl"
         />
-        {starting && <p className="text-xs text-pm-muted">Starting camera…</p>}
+        {starting && <p className="text-xs text-pm-muted">{t('r21.sw.startingCamera')}</p>}
         {cameraErr && (
           <div className="w-full max-w-sm space-y-2 text-center">
             <p className="text-xs text-pm-err">{cameraErr}</p>

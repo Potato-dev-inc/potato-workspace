@@ -1,11 +1,11 @@
 import { useEffect, useRef, useState } from 'react';
 import { t, useT } from '../../i18n';
-import { agentLabel, borrowedBillingNote, borrowedShort, chipText, chipLabelOf, errText, grantLine, isActiveIn, isActiveOut, leftText, lendApi, problemText, urgencyOf, usageText, WARN_ONE, WARN_TEN, type Grant, type LendApi } from '../../lib/lend';
+import { agentLabel, borrowedBillingNote, endedNotice, borrowedShort, peerLabel, chipText, chipLabelOf, errText, grantLine, isActiveIn, isActiveOut, leftText, lendApi, problemText, urgencyOf, usageText, WARN_ONE, WARN_TEN, type Grant, type LendApi } from '../../lib/lend';
 import { useLend, type LendHandle } from './useLend';
 import { TakeBack } from './TakeBack';
 import { TestLink } from './TestLink';
 import '../../styles/lend.css';
-import { useDismissable } from '../../hooks/useDismissable';
+import { Popover } from '../common/Floating';
 
 /** Active lends with this member, both ways, as short lines with Revoke or Give back. Used in Settings > Team's People list. */
 export function MemberLends({ memberId, lend, api = lendApi }: { memberId: string; lend: LendHandle; api?: LendApi }) {
@@ -43,7 +43,7 @@ export function MemberLends({ memberId, lend, api = lendApi }: { memberId: strin
             </span>
             <TestLink grantId={g.id} api={api} />
             {g.direction === 'out' ? (
-              <TakeBack profile={g.profile_name || agentLabel(state, g.agent_id)} peer={g.peer_name} busy={busy === g.id} onConfirm={() => void act(g)} />
+              <TakeBack profile={g.profile_name || agentLabel(state, g.agent_id)} peer={peerLabel(g)} busy={busy === g.id} onConfirm={() => void act(g)} />
             ) : (
               <button type="button" className="lend-btn is-small" disabled={busy === g.id} onClick={() => void act(g)}>
                 {t('lend.giveBack')}
@@ -74,8 +74,6 @@ export function BorrowedChip({ paneId, api = lendApi, lend }: { paneId: string; 
   const [error, setError] = useState<string | null>(null);
   const wrap = useRef<HTMLSpanElement>(null);
 
-  useDismissable(open, { inside: [wrap], anchor: wrap, onDismiss: () => setOpen(false) });
-
   const state = handle.state;
   const grant = state?.grants.find((g) => isActiveIn(g, handle.now) && g.pane_ids.includes(paneId));
   if (!state || !grant) return null;
@@ -100,15 +98,15 @@ export function BorrowedChip({ paneId, api = lendApi, lend }: { paneId: string; 
 
   return (
     <span className="lend-chip-wrap" ref={wrap}>
-      <button type="button" className="lend-chip" data-urgency={urgencyOf(left)} data-problem={problem ? 'true' : undefined} title={problem ?? chipLabelOf(grant, agent)} data-testid="lend-chip" aria-haspopup="dialog" aria-expanded={open} onClick={() => setOpen((v) => !v)}>
+      <button type="button" className="lend-chip" data-urgency={urgencyOf(left)} data-problem={problem ? 'true' : undefined} title={open ? undefined : (problem ?? chipLabelOf(grant, agent))} data-testid="lend-chip" aria-haspopup="dialog" aria-expanded={open} onClick={() => setOpen((v) => !v)}>
         {chipText(grant, agent, handle.now)}
       </button>
       {open && (
-        <div className="lend-pop" role="dialog" aria-label={t('lend.borrowedSignIn')}>
+        <Popover anchorRef={wrap} onClose={() => setOpen(false)} align="start" className="lend-pop" label={t('lend.borrowedSignIn')}>
           <p className="lend-pop-title">{chipLabelOf(grant, agent)}</p>
           <p>{t('lend.timeLeftStops', { time: leftText(left) })}</p>
           <p className="lend-note" data-testid="lend-billing-note">
-            {borrowedBillingNote(grant.peer_name)}
+            {borrowedBillingNote(peerLabel(grant))}
           </p>
           {used && (
             <p className="lend-usage" data-testid="lend-usage">
@@ -120,7 +118,7 @@ export function BorrowedChip({ paneId, api = lendApi, lend }: { paneId: string; 
               {problem}
             </p>
           )}
-          {grant.for_other_person && <p className="lend-note">{t('lend.repliesFrom', { peer: grant.peer_name })}</p>}
+          {grant.for_other_person && <p className="lend-note">{t('lend.repliesFrom', { peer: peerLabel(grant) })}</p>}
           {error && (
             <p className="lend-error" role="alert">
               {error}
@@ -131,7 +129,7 @@ export function BorrowedChip({ paneId, api = lendApi, lend }: { paneId: string; 
               {t('lend.giveBackNow')}
             </button>
           </div>
-        </div>
+        </Popover>
       )}
     </span>
   );
@@ -163,4 +161,41 @@ export function useLendToasts(lend: LendHandle, notify: (text: string) => void):
       }
     }
   }, [state, lend.now, notify]);
+}
+
+const SEEN_KEY = 'pm.lend.endedSeen';
+const readSeen = (): number => {
+  try {
+    const v = Number(window.localStorage.getItem(SEEN_KEY));
+    return Number.isFinite(v) && v > 0 ? v : Date.now();
+  } catch {
+    return Date.now();
+  }
+};
+
+/**
+ * One line when a lend ends on its own: the lender's PC restarted, they took it back, or time ran out ("Lend ended: ...").
+ * Also for one that ended while this app was closed (a restart): it is told once, the first time the state is read after it.
+ */
+export function useLendEndedNotice(lend: LendHandle, notify: (text: string) => void): void {
+  const seen = useRef<number | null>(null);
+  const state = lend.state;
+  useEffect(() => {
+    if (!state) return;
+    seen.current ??= readSeen();
+    let newest = seen.current;
+    for (const g of state.grants) {
+      const at = g.ended_ms ?? g.ends_ms;
+      if (g.state !== 'ended' || at <= seen.current) continue;
+      newest = Math.max(newest, at);
+      const line = endedNotice(g);
+      if (line) notify(line);
+    }
+    seen.current = newest;
+    try {
+      window.localStorage.setItem(SEEN_KEY, String(Math.max(newest, Date.now())));
+    } catch {
+      /* no storage here */
+    }
+  }, [state, notify]);
 }

@@ -221,6 +221,25 @@ pub fn plan_placements(anchor: Option<Anchor>, first_slot: usize, grids: &[(u16,
     grids.iter().enumerate().map(|(i, (cols, rows))| pane_placement(anchor, first_slot + i, *cols, *rows)).collect()
 }
 
+/// Where the cockpit window was last (physical pixels), kept in the app's data folder so a restart opens it the same size and place.
+#[derive(Debug, Clone, Copy, PartialEq, serde::Serialize, serde::Deserialize)]
+pub struct SavedWindow {
+    pub x: i32,
+    pub y: i32,
+    pub w: u32,
+    pub h: u32,
+    #[serde(default)]
+    pub maximized: bool,
+}
+
+/// The saved place if it is still on a screen that exists (a monitor is `(x, y, w, h)` in physical pixels): its top-left corner is on one, and it is no bigger than that one.
+pub fn usable_saved(saved: SavedWindow, monitors: &[(i32, i32, u32, u32)]) -> Option<SavedWindow> {
+    monitors
+        .iter()
+        .any(|&(mx, my, mw, mh)| saved.x >= mx && saved.y >= my && saved.x < mx + mw as i32 && saved.y < my + mh as i32 && saved.w <= mw && saved.h <= mh && saved.w >= 400 && saved.h >= 300)
+        .then_some(saved)
+}
+
 /// What the X on one of the app's own windows does.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum MainClose {
@@ -284,6 +303,56 @@ mod runtime {
         STAGGER.fetch_add(count, Ordering::Relaxed)
     }
 
+    fn saved_path() -> std::path::PathBuf {
+        crate::app_paths::app_data_dir().join("cockpit-window.json")
+    }
+
+    /// Puts the cockpit window back where it was, when that place is still on a screen. Never moves it when a dev anchor is set.
+    fn restore_saved(window: &tauri::WebviewWindow) {
+        if std::env::var("PM_WINDOW_ANCHOR").is_ok() {
+            return;
+        }
+        let Some(saved) = std::fs::read_to_string(saved_path()).ok().and_then(|t| serde_json::from_str::<SavedWindow>(&t).ok()) else { return };
+        let monitors: Vec<(i32, i32, u32, u32)> = window.available_monitors().unwrap_or_default().iter().map(|m| (m.position().x, m.position().y, m.size().width, m.size().height)).collect();
+        let Some(saved) = usable_saved(saved, &monitors) else { return };
+        let _ = window.set_size(tauri::PhysicalSize::new(saved.w, saved.h));
+        let _ = window.set_position(tauri::PhysicalPosition::new(saved.x, saved.y));
+        if saved.maximized {
+            let _ = window.maximize();
+        }
+    }
+
+    /// Keeps the cockpit window's size and place as it changes (a moment after the last change, so a drag writes once).
+    fn remember_window(window: &tauri::WebviewWindow) {
+        static LATEST: std::sync::atomic::AtomicUsize = std::sync::atomic::AtomicUsize::new(0);
+        let w = window.clone();
+        window.on_window_event(move |event| {
+            if !matches!(event, tauri::WindowEvent::Resized(_) | tauri::WindowEvent::Moved(_)) {
+                return;
+            }
+            let mine = LATEST.fetch_add(1, Ordering::SeqCst) + 1;
+            let w = w.clone();
+            std::thread::spawn(move || {
+                std::thread::sleep(std::time::Duration::from_millis(600));
+                if LATEST.load(Ordering::SeqCst) != mine || w.is_minimized().unwrap_or(false) {
+                    return;
+                }
+                let maximized = w.is_maximized().unwrap_or(false);
+                let (Ok(pos), Ok(size)) = (w.outer_position(), w.inner_size()) else { return };
+                let mut saved = SavedWindow { x: pos.x, y: pos.y, w: size.width, h: size.height, maximized };
+                if maximized {
+                    // Keep the size it had before it was maximised.
+                    if let Some(old) = std::fs::read_to_string(saved_path()).ok().and_then(|t| serde_json::from_str::<SavedWindow>(&t).ok()) {
+                        saved = SavedWindow { maximized: true, ..old };
+                    }
+                }
+                if let Ok(text) = serde_json::to_string(&saved) {
+                    let _ = std::fs::write(saved_path(), text);
+                }
+            });
+        });
+    }
+
     fn show(window: &tauri::WebviewWindow, focus: bool) {
         let _ = window.unminimize();
         let _ = window.show();
@@ -337,7 +406,7 @@ mod runtime {
             let mut builder = WebviewWindowBuilder::new(&app, &label, WebviewUrl::App(artifact_url(&pane_id, &id).into()))
                 .title(title)
                 .inner_size(960.0, 720.0)
-                .min_inner_size(360.0, 300.0)
+                .min_inner_size(480.0, 360.0)
                 .resizable(true)
                 .focused(true);
             if let Some((x, y)) = next_position(&app) {
@@ -366,7 +435,7 @@ mod runtime {
             let mut builder = WebviewWindowBuilder::new(&app, &label, WebviewUrl::App(tab_url(&pane_id, &tab).into()))
                 .title(title)
                 .inner_size(960.0, 720.0)
-                .min_inner_size(420.0, 320.0)
+                .min_inner_size(480.0, 360.0)
                 .resizable(true)
                 .focused(true);
             if let Some((x, y)) = next_position(&app) {
@@ -407,6 +476,8 @@ mod runtime {
         }
         match builder.build() {
             Ok(window) => {
+                restore_saved(&window);
+                remember_window(&window);
                 show(&window, focus);
                 tracing::info!("cockpit window opened");
                 true
@@ -691,6 +762,18 @@ pub use runtime::{
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn a_saved_window_comes_back_only_onto_a_screen_that_exists() {
+        let screens = [(0, 0, 1920, 1080)];
+        let ok = SavedWindow { x: 100, y: 50, w: 1900, h: 1009, maximized: false };
+        assert_eq!(usable_saved(ok, &screens), Some(ok));
+        // The second screen is gone: its corner is off every screen.
+        assert_eq!(usable_saved(SavedWindow { x: 2500, ..ok }, &screens), None);
+        // Bigger than the screen it is on, or tiny: not trusted.
+        assert_eq!(usable_saved(SavedWindow { w: 4000, ..ok }, &screens), None);
+        assert_eq!(usable_saved(SavedWindow { w: 100, ..ok }, &screens), None);
+    }
 
     #[test]
     fn the_main_window_x_quits_unless_close_to_tray_is_on() {

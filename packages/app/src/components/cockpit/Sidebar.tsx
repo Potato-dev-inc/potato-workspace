@@ -1,4 +1,4 @@
-import { useCallback, useContext, useEffect, useRef, useState } from 'react';
+import { useCallback, useContext, useEffect, useMemo, useRef, useState } from 'react';
 import { PaneContextMenu } from './PaneContextMenu';
 import { helperRows } from './rail/helperRows';
 import { AdoptZone } from '../dnd/AdoptZone';
@@ -77,7 +77,9 @@ import { AgentRowButton } from './AgentRowButton';
 import { PeekCard } from './PeekCard';
 import { usePeek } from './usePeek';
 import { showUndo } from '../../lib/undo-bar';
-import { tauriClosedChatsApi, useClosedChats, type ClosedChatsApi } from '../../lib/closedChats';
+import { closedChatsAcross, tauriClosedChatsApi, useClosedChats, type ClosedChatsApi } from '../../lib/closedChats';
+import { isFarKey } from '../../lib/host/placeKey';
+import { useFarHosts } from '../../lib/host/useFarHosts';
 
 /** `localhost:5173`: where the preview is, without the scheme. */
 const previewAddress = (p: PreviewUrl): string => p.url.replace(/^https?:\/\//, '').replace(/\/$/, '');
@@ -133,7 +135,7 @@ export function Sidebar({
   acp = tauriAcpChatApi,
   addons = tauriAcpAddonApi,
   startModeApi = settingsStartModeApi,
-  closedChatsApi = tauriClosedChatsApi,
+  closedChatsApi: ownClosedChatsApi = tauriClosedChatsApi,
   adoptApi = tauriAdoptApi,
   handoffDeps,
   handoff,
@@ -220,7 +222,11 @@ export function Sidebar({
   const t = useT();
   const list = c.registry.paneList;
   // Closed chats: read again whenever the set of panes changes (a chat was closed or reopened).
-  const { chats: closedChats, reload: reloadClosed } = useClosedChats(closedChatsApi, list.map((p) => p.info.id).join('|'));
+  // Closed chats of the other PCs sit in the same list, each with its PC's name.
+  const farHosts = useFarHosts((devices?.groups ?? NO_GROUPS).map((g) => g.device));
+  const closedChatsApi = useMemo(() => closedChatsAcross(ownClosedChatsApi, farHosts), [ownClosedChatsApi, farHosts]);
+  const { chats: closedChats, reload: reloadClosed } = useClosedChats(closedChatsApi, [...list.map((p) => p.info.id), ...(devices?.groups ?? NO_GROUPS).flatMap((g) => g.rows.map((r) => r.key))].join('|')); // a far chat closed here leaves its PC's list: read the closed ones again
+  const closedHere = useMemo(() => closedChats.filter((c) => !c.where).length, [closedChats]);
   const [closedOpen, setClosedOpen] = useState(false);
   // `Review 4`: how many finished things wait to be looked at. Hidden at 0.
   const reviewCount = useReviewCount(onOpenReview !== undefined);
@@ -315,6 +321,8 @@ export function Sidebar({
   };
   // The folder step: an explicit choice wins, else the selected pane's project.
   const [chosen, setChosen] = useState<ProjectChoice | null>(null);
+  // Settings, Connect and Spaces are pages of their own: only their nav item is lit, not the chat last open beside them.
+  const pageOpen = settingsOpen || spacesOpen || !!connect?.open || newAgentOpen; // the New agent page owns the highlight: no chat row stays lit beside it
   const selectedCwd = c.selectedId ? c.registry.panes.get(c.selectedId)?.info.cwd : undefined;
   // With neither, new agents start in the open project (the app's default folder): name it too.
   const [openProject, setOpenProject] = useState<string | null>(null);
@@ -487,7 +495,7 @@ export function Sidebar({
     return agent ? paneTitle(agent) : null;
   };
   const standbyRowView = (r: StandbyRow) => (
-    <SidebarStandbyRow key={`sb-${r.helper.id}`} row={r} agentLabel={agentLabelOf(r.helper.agent)} active={r.paneId !== null && c.selectedId === r.paneId} movable={movableFor(r)} underTitle={underTitleOf(r)} actions={standbyActions} />
+    <SidebarStandbyRow key={`sb-${r.helper.id}`} row={r} agentLabel={agentLabelOf(r.helper.agent)} active={r.paneId !== null && c.selectedId === r.paneId && !devices?.selectedKey && !pageOpen} movable={movableFor(r)} underTitle={underTitleOf(r)} actions={standbyActions} />
   );
   // Told once when a helper's home agent was closed and another agent took it in.
   const lastUnder = useRef<Map<string, string>>(new Map());
@@ -532,7 +540,8 @@ export function Sidebar({
   const row = (p: Pane, awayFrom?: Pane, helperCount = 0, spinOffOf?: Pane) => {
     const id = p.info.id;
     const since = c.statusSince.get(id);
-    const active = c.selectedId === id && !c.spawn && !openCompanionId && !openTaskId;
+    // A chat of another PC is open in the main area: it is the one active row (this PC's last selection stays remembered, not drawn).
+    const active = c.selectedId === id && !c.spawn && !openCompanionId && !openTaskId && !devices?.selectedKey && !pageOpen;
     // The same function draws a chat of another PC (RemoteProjects): its title or agent, and its second line.
     const { heading, subline } = paneRowFacts(p, { name: c.names.get(id) ?? p.info.agent_type, activity: activityText(p.status, c.activities?.[id]), awayFrom: awayFrom ? paneTitle(awayFrom) : undefined, multiLogin }, t);
     const entry = c.launchEntries.find((e) => e.type === p.info.agent_type);
@@ -649,7 +658,7 @@ export function Sidebar({
         frontId={id}
         name={mark.name ?? null}
         helpers={helpers}
-        active={c.selectedId === id}
+        active={c.selectedId === id && !devices?.selectedKey && !pageOpen}
         onOpen={(frontId) => {
           if (openTaskId) onOpenTask?.(null);
           c.select(frontId);
@@ -723,8 +732,10 @@ export function Sidebar({
     );
 
   // The Projects view: every top-level agent under the folder it works in (see groupByProject).
+  // Stable: a chat keeps its place when it starts needing you (the dot and the Inbox show that); `roots` is grouped by status, `panes` is not.
+  const paneRank = new Map(panes.map((p, i) => [p.info.id, i] as const));
   const projectRoots = applyOrder(
-    roots.filter((n) => !pinnedIds.has(n.pane.info.id)),
+    roots.filter((n) => !pinnedIds.has(n.pane.info.id)).sort((x, y) => (paneRank.get(x.pane.info.id) ?? 0) - (paneRank.get(y.pane.info.id) ?? 0)),
     (n) => n.pane.info.id,
     chatOrder,
   );
@@ -1046,7 +1057,7 @@ export function Sidebar({
       </div>
 
 
-      <nav className="ck-side-scroll">
+      <nav className="ck-side-scroll" aria-label={t('r23ui.sidebar.nav')}>
         {companions &&
           companions.map((companion) => (
             <CompanionRow
@@ -1073,7 +1084,7 @@ export function Sidebar({
         )}
         <button
           type="button"
-          className={`ck-row ck-row--flat${c.selectedId === null && !c.spawn && !openCompanionId && !newAgentOpen && !settingsOpen && !spacesOpen && !connect?.open ? ' is-active' : ''}`}
+          className={`ck-row ck-row--flat${c.selectedId === null && !c.spawn && !openCompanionId && !newAgentOpen && !settingsOpen && !spacesOpen && !connect?.open && !devices?.selectedKey ? ' is-active' : ''}`}
           onClick={() => {
             c.select(null);
             onOpenInbox?.();
@@ -1141,7 +1152,8 @@ export function Sidebar({
             <span className="ck-row-main">
               <span className="ck-row-title">{t('sidebar.closedChats')}</span>
             </span>
-            <span className="ck-side-count">{closedChats.length}</span>
+            {/* This PC's own number: the other PCs' closed chats are in the sheet (with their PC's name) but never added to it. */}
+            {closedHere > 0 && <span className="ck-side-count">{closedHere}</span>}
           </button>
         )}
       </nav>
@@ -1158,6 +1170,23 @@ export function Sidebar({
             >
               {t('sidebar.openFile')}
             </button>
+          )}
+          {hand.status.kind === 'done' && (
+            <>
+              <button type="button" className="ck-handoff-x" data-testid="handoff-open-chat" onClick={() => c.select((hand.status as { newPaneId: string }).newPaneId)}>
+                {t('r14.handoff.openChat')}
+              </button>
+              {hand.status.path && (
+                <button
+                  type="button"
+                  className="ck-handoff-x"
+                  data-testid="handoff-copy-path"
+                  onClick={() => void navigator.clipboard.writeText((hand.status as { path: string }).path).then(() => c.notify(t('r14.handoff.copied')), () => undefined)}
+                >
+                  {t('r14.handoff.copyPath')}
+                </button>
+              )}
+            </>
           )}
           {!handoffBusy && (
             <button type="button" className="ck-handoff-x" aria-label={t('sidebar.dismiss')} onClick={hand.dismiss}>
@@ -1226,7 +1255,11 @@ export function Sidebar({
           onChanged={reloadClosed}
           onReopened={(paneId) => {
             setClosedOpen(false);
-            c.select(paneId);
+            if (!isFarKey(paneId)) return c.select(paneId);
+            // A chat reopened on another PC opens from that PC's list as soon as the list has it.
+            const row = devices?.groups.flatMap((g) => g.rows).find((r) => r.key === paneId);
+            if (row) devices?.onOpen(row);
+            else devices?.onRetry?.();
           }}
           onClose={() => setClosedOpen(false)}
         />

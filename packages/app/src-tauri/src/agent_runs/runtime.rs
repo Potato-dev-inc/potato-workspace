@@ -9,7 +9,6 @@
 mod access;
 mod control;
 mod followup;
-pub(crate) mod guarantees;
 mod present;
 mod queue;
 mod receipt;

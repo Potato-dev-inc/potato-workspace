@@ -1,4 +1,5 @@
 // @vitest-environment jsdom
+import { resetEventHub } from './events';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
 const invoke = vi.fn();
@@ -133,7 +134,8 @@ describe('onTelegramChanged', () => {
     const handler = listen.mock.calls[0][1] as () => void;
     handler();
     expect(cb).toHaveBeenCalledTimes(1);
-    expect(stop).toBe(unlisten);
+    stop();
+    expect(unlisten).toHaveBeenCalledTimes(1);
   });
 
   it('does nothing outside the desktop app', async () => {

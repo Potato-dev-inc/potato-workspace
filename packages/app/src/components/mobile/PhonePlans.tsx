@@ -14,6 +14,7 @@ import {
 } from '../../lib/plans-report';
 import { Sheet } from './MobileSheet';
 import '../../styles/ph-plans.css';
+import { t } from '../../i18n';
 
 function turnsWord(n: number): string {
   return n === 1 ? '1 turn' : `${n} turns`;
@@ -60,13 +61,13 @@ export function PhonePlans({ api, onClose }: { api: PlansApi; onClose: () => voi
   const newer = report ? neighbour(months, here, 'newer') : null;
 
   return (
-    <Sheet title="Your plans" onClose={onClose}>
+    <Sheet title={t('r21.sw.yourPlans')} onClose={onClose}>
       <div className="ph-plans">
         <div className="ph-plans-months" role="group" aria-label="Month">
           <button
             type="button"
             className="ph-plans-icon"
-            aria-label="Earlier month"
+            aria-label={t('r21.sw.earlierMonth')}
             disabled={older === null}
             onClick={() => older && setMonth(older)}
           >
@@ -78,7 +79,7 @@ export function PhonePlans({ api, onClose }: { api: PlansApi; onClose: () => voi
           <button
             type="button"
             className="ph-plans-icon"
-            aria-label="Later month"
+            aria-label={t('r21.sw.laterMonth')}
             disabled={newer === null}
             onClick={() => newer && setMonth(newer)}
           >
@@ -92,7 +93,7 @@ export function PhonePlans({ api, onClose }: { api: PlansApi; onClose: () => voi
           </p>
         )}
 
-        {report !== null && report.rows.length === 0 && <p className="ph-plans-empty">No turns this month yet.</p>}
+        {report !== null && report.rows.length === 0 && <p className="ph-plans-empty">{t('r21.sw.noTurnsThisMonth')}</p>}
 
         {report !== null && report.rows.length > 0 && (
           <>

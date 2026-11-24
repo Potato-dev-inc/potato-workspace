@@ -2,7 +2,7 @@
 // stays mounted and keeps its scroll and its draft); this pane only adds a column, resizable by its left edge, or lies
 // over the whole row ("full width"), or leaves for a window of its own.
 import { useCallback, useEffect } from 'react';
-import { listen } from '@tauri-apps/api/event';
+import { listen } from '../../lib/events';
 import { useT } from '../../i18n';
 import { artifactsApi } from '../../lib/artifacts';
 import {

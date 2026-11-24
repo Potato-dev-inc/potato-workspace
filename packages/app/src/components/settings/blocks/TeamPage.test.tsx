@@ -564,3 +564,21 @@ describe('pinging the people of a relay team', () => {
     expect(hasText(host, "Couldn't check who is online")).toBe(false);
   });
 });
+
+describe('Why am I seeing this?', () => {
+  it('lists the facts only when this computer was removed', async () => {
+    await mount(teamConfig({ error: "You're no longer on this team. The admin removed this computer.", why: { teamSaved: true, onRoster: false, removed: true, lastCheck: null } }));
+    expect(hasText(host, 'Why am I seeing this?')).toBe(true);
+    expect(hasText(host, 'This computer is on the team list: no')).toBe(true);
+  });
+  it('a removed computer sees the removed banner with Leave and no member list', async () => {
+    await mount(teamConfig({ error: 'removed', why: { teamSaved: true, onRoster: false, removed: true, lastCheck: null } }));
+    expect(hasText(host, 'You were removed. Leave to clear.')).toBe(true);
+    expect(host.querySelector('[data-testid="team-removed"]')?.textContent).toContain('Leave');
+    expect(host.querySelector('.st-team-people')).toBeNull();
+  });
+  it('is quiet on a healthy team', async () => {
+    await mount(teamConfig({ why: { teamSaved: true, onRoster: true, removed: false, lastCheck: null } }));
+    expect(hasText(host, 'Why am I seeing this?')).toBe(false);
+  });
+});

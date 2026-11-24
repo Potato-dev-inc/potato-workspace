@@ -4,6 +4,7 @@ import { useEffect, useState } from 'react';
 import type { CompanionAgentOption, CompanionTransport, CompanionView } from '../../../lib/companion';
 import { Sheet } from '../Sheet';
 import { MovePicker } from './MovePicker';
+import { t } from '../../../i18n';
 
 export function WakeOnSheet({
   companion,
@@ -54,9 +55,9 @@ export function WakeOnSheet({
       <h3 className="ck-section" id="ck-wake-on-title">
         Wake {companion.name} on…
       </h3>
-      <p className="ck-sub">Same name, face and memory. It runs on another agent you already have.</p>
+      <p className="ck-sub">{t('r21.sw.sameNameFaceAnd')}</p>
       {agents === null ? (
-        <p className="ck-sub">Looking at your agents…</p>
+        <p className="ck-sub">{t('r21.sw.lookingAtYourAgents')}</p>
       ) : firstOk ? (
         <MovePicker
           currentAgent={companion.agentType}
@@ -69,7 +70,7 @@ export function WakeOnSheet({
           onMove={(agentType, untilMs) => void move(agentType, untilMs)}
         />
       ) : (
-        <p className="ck-sub">No other agent can be used here yet.</p>
+        <p className="ck-sub">{t('r21.sw.noOtherAgentCan')}</p>
       )}
       {error && (
         <p className="ck-memory-msg ck-memory-err" role="alert">

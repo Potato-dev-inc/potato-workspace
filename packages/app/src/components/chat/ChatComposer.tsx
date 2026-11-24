@@ -5,8 +5,9 @@
 // `draftKey` (the pane) keeps the unsent text across pane switches and reloads, see lib/composerDraft.ts.
 // `draft` is a message from the Point and Fix box ("Edit in Chat"): it goes into the box once, see useComposerDraft.
 import { useEffect, useId, useLayoutEffect, useRef, useState, type ClipboardEvent, type KeyboardEvent, type PointerEvent, type ReactNode } from 'react';
+import { errorSentence, rawText } from '../../lib/sayError';
 import { MAX_MESSAGE_ATTACHMENTS, MAX_MESSAGE_CHARS } from '../../lib/paneOutbox';
-import { clearDraft, DRAFT_SAVE_MS, readDraftState, writeDraft, type ComposerDraft } from '../../lib/composerDraft';
+import { beginSend, DRAFT_SAVE_MS, endSend, readDraftState, writeDraft, type ComposerDraft } from '../../lib/composerDraft';
 import { useRemoteDraft } from '../../hooks/useRemoteDraft';
 import type { RemoteDraft } from '../../lib/chatMore';
 import { insertAtCursor } from '../../lib/voice';
@@ -22,8 +23,9 @@ import type { ContextReading } from '../cockpit/rail/railFormat';
 import { ProjectFilePicker, findMentionQuery, removeMention, type ProjectFilePickerHandle } from './ProjectFilePicker';
 import type { ProjectFileHit } from '../../lib/projectFiles';
 import { useVoiceInput } from '../../hooks/useVoiceInput';
-import { commandHint, commandText, filterCommands, slashQuery, type AcpCommand } from '../../lib/acpChat';
+import { commandHint, commandText, RUN_STRIP_KEYS, filterCommands, slashQuery, type AcpCommand } from '../../lib/acpChat';
 import { registerFileDrop } from '../../lib/fileDrop';
+import { BIG_TEXT_CHARS, growBox, refusePaste } from '../../lib/bigText';
 import { draggedFilePath } from '../../lib/dropFiles';
 import { t } from '../../i18n';
 import { registerDropZone, useDragOver } from '../dnd/dragStore';
@@ -111,10 +113,11 @@ function useAttachOff(): string | null {
 
 function ChatComposerBox({ onSend, blockedReason, voice = false, draftKey, draft: pointDraft, remoteDraft, slashCommands, slashLoading = false, onWarm, toolbar, running = false, onStop, status, attachFiles, contextUsage, footnote, history }: ChatComposerProps) {
   const stoppable = running && !!onStop;
+  const host = useHost();
   const attachOff = useAttachOff();
   const [restored] = useState(() => (draftKey ? readDraftState(draftKey) : { text: '', attachments: [] as ChatAttachment[] }));
   const [text, setText] = useState(restored.text);
-  useRemoteDraft(remoteDraft, text, setText);
+  useRemoteDraft(remoteDraft, text, setText, draftKey);
   /** Files attached to the message, as chips inside the box. */
   const [attachments, setAttachments] = useState<ChatAttachment[]>(restored.attachments);
   /** Files being prepared (copied, or a pasted image being saved): each one shows a spinner chip. */
@@ -122,6 +125,8 @@ function ChatComposerBox({ onSend, blockedReason, voice = false, draftKey, draft
   /** Pasted images so far in this box, for the names `Pasted image 1.png`, `Pasted image 2.png`... */
   const pastedCount = useRef(0);
   const [error, setError] = useState<string | null>(null);
+  // The far PC came back (its host is a new one when it goes off or returns): an old "isn't answering" note is no longer true.
+  useEffect(() => setError(null), [host]);
   const [busy, setBusy] = useState(false);
   const [fileOver, setFileOver] = useState(false);
   const zoneId = useId();
@@ -151,7 +156,7 @@ function ChatComposerBox({ onSend, blockedReason, voice = false, draftKey, draft
   const mentionOpen = mention !== null;
   const menuIx = Math.min(menuAt, Math.max(menuItems.length - 1, 0));
   const hint = slashCommands ? commandHint(slashCommands, text) : null;
-  const count = [...text].length;
+  const count = text.length > BIG_TEXT_CHARS ? text.length : [...text].length;
   const tooLong = count > MAX_MESSAGE_CHARS;
   const empty = text.trim() === '';
   const hasContent = !empty || attachments.length > 0;
@@ -222,10 +227,8 @@ function ChatComposerBox({ onSend, blockedReason, voice = false, draftKey, draft
   useLayoutEffect(() => {
     const el = field.current;
     if (!el) return;
-    el.style.height = 'auto';
     const line = parseFloat(getComputedStyle(el).lineHeight);
-    const max = (Number.isFinite(line) ? line : 20) * MAX_LINES;
-    el.style.height = `${Math.min(el.scrollHeight, max)}px`;
+    growBox(el, (Number.isFinite(line) ? line : 20) * MAX_LINES);
   }, [text]);
 
   // Put the cursor after recognized words, once the text has been rendered.
@@ -305,14 +308,39 @@ function ChatComposerBox({ onSend, blockedReason, voice = false, draftKey, draft
     setBusy(true);
     setError(null);
     // The attachments travel only when there are some: a plain message is sent exactly as before.
-    const refused = attachments.length > 0 ? await onSend(text.trim(), attachments) : await onSend(text.trim());
+    // The box can be left while this is going: from here on the words are not a draft, whoever writes them (see composerDraft).
+    const sentText = text.trim();
+    const sentFiles = attachments;
+    if (draftKey) beginSend(draftKey, sentText);
+    // The box empties at once: a far send can take seconds, and the next words typed meanwhile must not join the sent ones.
+    // A refused send puts the words back (only into an empty box: what was typed since is kept).
+    setText('');
+    recall.current = null;
+    setAttachments([]);
+    if (draftKey) {
+      unsaved.current = false;
+      draft.current = { key: draftKey, text: '', attachments: [] };
+      remoteDraft?.write('');
+    }
+    const putBack = () => {
+      // Words typed meanwhile stay; the refused ones go in front of them (nothing the person wrote is lost).
+      setText((now) => (now.trim() === '' ? sentText : `${sentText}\n${now}`));
+      setAttachments((now) => (now.length === 0 ? sentFiles : now));
+    };
+    let refused: string | null;
+    try {
+      refused = sentFiles.length > 0 ? await onSend(sentText, sentFiles) : await onSend(sentText);
+    } catch (e) {
+      if (draftKey) endSend(draftKey, false, sentText, sentFiles);
+      putBack();
+      setBusy(false);
+      throw e;
+    }
     setBusy(false);
-    if (refused) setError(refused);
-    else {
-      setText('');
-      recall.current = null;
-      setAttachments([]);
-      if (draftKey) clearDraft(draftKey);
+    if (draftKey) endSend(draftKey, !refused, sentText, sentFiles);
+    if (refused) {
+      putBack();
+      setError(refused);
     }
     field.current?.focus();
   };
@@ -322,14 +350,16 @@ function ChatComposerBox({ onSend, blockedReason, voice = false, draftKey, draft
   const addPaths = async (paths: readonly string[]) => {
     if (paths.length === 0) return;
     if (!draftKey) {
-      setError('Could not read the chosen files.');
+      setError(t('r21.sw.couldNotReadThe'));
       return;
     }
     setPreparing((n) => n + 1);
     try {
-      addAttachments(await prepareAttachments(draftKey, paths));
-    } catch {
-      setError('Could not read the chosen files.');
+      addAttachments(await prepareAttachments(draftKey, paths, host));
+    } catch (error) {
+      // The backend's own sentence when it has one ("A folder on this PC cannot be sent to another PC."), else the plain line.
+      const said = rawText(error);
+      setError(/^ATTACHMENT_[A-Z_]+:\s*(.+)$/.exec(said)?.[1] ?? 'Could not read the chosen files.');
     } finally {
       setPreparing((n) => n - 1);
       field.current?.focus();
@@ -341,7 +371,7 @@ function ChatComposerBox({ onSend, blockedReason, voice = false, draftKey, draft
     try {
       await addPaths(await attachFiles());
     } catch {
-      setError('Could not open the file dialog.');
+      setError(t('r21.sw.couldNotOpenThe'));
     }
   };
 
@@ -350,7 +380,7 @@ function ChatComposerBox({ onSend, blockedReason, voice = false, draftKey, draft
     try {
       await addPaths(await pick());
     } catch {
-      setError('Could not open the file dialog.');
+      setError(t('r21.sw.couldNotOpenThe'));
     }
   };
 
@@ -362,9 +392,9 @@ function ChatComposerBox({ onSend, blockedReason, voice = false, draftKey, draft
     const ext = sub === 'jpeg' ? 'jpg' : /^[a-z0-9]{1,8}$/i.test(sub) ? sub.toLowerCase() : 'png';
     setPreparing((n) => n + 1);
     try {
-      addAttachments([await savePastedImage(draftKey, file, `Pasted image ${pastedCount.current}.${ext}`)]);
+      addAttachments([await savePastedImage(draftKey, file, `Pasted image ${pastedCount.current}.${ext}`, host)]);
     } catch (error) {
-      setError(error instanceof Error ? error.message : typeof error === 'string' ? error : 'Could not save the pasted image.');
+      setError(errorSentence(error, 'Could not save the pasted image.'));
     } finally {
       setPreparing((n) => n - 1);
     }
@@ -376,7 +406,7 @@ function ChatComposerBox({ onSend, blockedReason, voice = false, draftKey, draft
     try {
       paths = await fileClipboard().filePaths();
     } catch {
-      setError('Could not read the files on the clipboard.');
+      setError(t('r21.sw.couldNotReadThe2'));
       return;
     }
     await addPaths(paths);
@@ -388,6 +418,10 @@ function ChatComposerBox({ onSend, blockedReason, voice = false, draftKey, draft
   // A file the webview gives without a path, or a paste with no text and no files, asks the desktop app for the files
   // on the clipboard. Plain text pastes as it always did: the default is left alone.
   const onPaste = (event: ClipboardEvent<HTMLTextAreaElement>) => {
+    if (refusePaste(event)) {
+      setError(t('r12ui.paste.tooBig'));
+      return;
+    }
     if (!draftKey || blocked || !attachFiles) return;
     const files = Array.from(event.clipboardData?.files ?? []);
     if (files.length === 0 && (event.clipboardData?.getData('text/plain') ?? '') !== '') return;
@@ -537,9 +571,10 @@ function ChatComposerBox({ onSend, blockedReason, voice = false, draftKey, draft
       rows={1}
       value={text}
       disabled={blocked}
-      aria-label="Message to the agent"
+      data-chat-composer=""
+      aria-label={t('r9.composer.message')}
       onFocus={onWarm}
-      placeholder={blocked ? '' : (hint ?? 'Write a message for the agent')}
+      placeholder={blocked ? '' : (hint ?? t('chat.composer.placeholder'))}
       {...(slashCommands && slashCommands.length > 0
         ? {
             role: 'combobox' as const,
@@ -555,12 +590,12 @@ function ChatComposerBox({ onSend, blockedReason, voice = false, draftKey, draft
         setMenuAt(0);
         setMenuShut(false);
         setMentionShut(false);
-        syncMention(event.target.value, event.target.selectionStart);
+        if (event.target.value.length <= BIG_TEXT_CHARS) syncMention(event.target.value, event.target.selectionStart);
         if (error) setError(null);
       }}
       onSelect={(event) => {
         // The caret moved (arrows, click): the picker follows the `@word` under it.
-        syncMention(event.currentTarget.value, event.currentTarget.selectionStart);
+        if (event.currentTarget.value.length <= BIG_TEXT_CHARS) syncMention(event.currentTarget.value, event.currentTarget.selectionStart);
       }}
       onKeyDown={onKeyDown}
       onPaste={onPaste}
@@ -613,7 +648,7 @@ function ChatComposerBox({ onSend, blockedReason, voice = false, draftKey, draft
       )}
       {menuOpen && (
         <div className="ck-slash-anchor">
-          <ul className="ck-slash-menu" id="ck-slash-menu" role="listbox" aria-label="Commands" data-testid="slash-menu">
+          <ul className="ck-slash-menu" id="ck-slash-menu" role="listbox" aria-label={t('r9.composer.commands')} data-testid="slash-menu">
             {menuItems.map((command, i) => (
               <li
                 key={command.name}
@@ -638,7 +673,7 @@ function ChatComposerBox({ onSend, blockedReason, voice = false, draftKey, draft
         </div>
       )}
       <div className="ck-chat-composer-row">
-        <AttachmentChips attachments={attachments} preparing={preparing} onRemove={removeAttachment} className="ck-chat-composer-chips" />
+        <AttachmentChips attachments={attachments} preparing={preparing} onRemove={removeAttachment} className="ck-chat-composer-chips" paneId={draftKey} />
         {voice ? (
           <div className="ck-chat-composer-field-wrap">
             {showMirror && (
@@ -670,7 +705,7 @@ function ChatComposerBox({ onSend, blockedReason, voice = false, draftKey, draft
               type="button"
               className="ck-chat-mic"
               data-testid="chat-composer-mic"
-              aria-label={mic.support === 'hint' ? "Voice typing: use your keyboard's mic" : 'Voice typing'}
+              aria-label={mic.support === 'hint' ? t('r9.composer.voiceHint') : t('r9.composer.voice')}
               aria-pressed={mic.recording}
               aria-disabled={micOff || undefined}
               onPointerDown={onMicDown}
@@ -685,21 +720,21 @@ function ChatComposerBox({ onSend, blockedReason, voice = false, draftKey, draft
           )}
           {stoppable && status && (
             <span className="ck-chat-status" role="status" data-testid="chat-composer-status" data-stopping={status.stopping ? '' : undefined}>
-              {status.text}
+              {RUN_STRIP_KEYS[status.text] ? t(RUN_STRIP_KEYS[status.text]) : status.text}
             </span>
           )}
           {contextUsage && <ContextMeter reading={contextUsage} />}
           {stoppable && !hasContent ? (
             // Nothing typed: the one round button is Stop, filled like the active Send.
-            <button type="button" className="ck-btn ck-btn--primary ck-chat-send ck-chat-stop" data-testid="chat-composer-stop" aria-label="Stop" title="Stop (Esc)" disabled={status?.stopping} onClick={() => onStop?.()}>
+            <button type="button" className="ck-btn ck-btn--primary ck-chat-send ck-chat-stop" data-testid="chat-composer-stop" aria-label={t('r9.composer.stop')} title={t('r9.composer.stopTip')} disabled={status?.stopping} onClick={() => onStop?.()}>
               <StopIcon />
-              <span className="ck-chat-send-label">Stop</span>
+              <span className="ck-chat-send-label">{t('r9.composer.stop')}</span>
             </button>
           ) : (
             <>
               {stoppable && (
                 // Text is typed while the agent works: Send queues it; Stop stays one small button away.
-                <button type="button" className="ck-btn ck-chat-stop-mini" data-testid="chat-composer-stop" aria-label="Stop" title="Stop (Esc)" disabled={status?.stopping} onClick={() => onStop?.()}>
+                <button type="button" className="ck-btn ck-chat-stop-mini" data-testid="chat-composer-stop" aria-label={t('r9.composer.stop')} title={t('r9.composer.stopTip')} disabled={status?.stopping} onClick={() => onStop?.()}>
                   <StopIcon />
                 </button>
               )}
@@ -708,7 +743,7 @@ function ChatComposerBox({ onSend, blockedReason, voice = false, draftKey, draft
                   <path d="M12 19V5" />
                   <path d="m5 12 7-7 7 7" />
                 </svg>
-                <span className="ck-chat-send-label">Send</span>
+                <span className="ck-chat-send-label">{t('r9.composer.send')}</span>
               </button>
             </>
           )}

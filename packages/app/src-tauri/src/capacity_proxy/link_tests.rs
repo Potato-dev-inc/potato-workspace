@@ -377,7 +377,7 @@ fn restart(w: &World2, side: &Side, name: &str, team: Arc<dyn TeamPort>) -> Arc<
         team,
         net,
         accounts: crate::accounts::Store::at(&side.dir),
-        specs: vec![ProxySpec::parse(include_str!("../tui/claude/lend_proxy.toml")).unwrap()],
+        specs: vec![ProxySpec::parse(include_str!("../../crates/pm-core/src/tui/claude/lend_proxy.toml")).unwrap()],
         now: Arc::new(now),
         changed: Arc::new(|| {}),
         pinger,
@@ -458,4 +458,101 @@ async fn a_lend_that_ran_out_is_not_announced_as_revoked() {
     assert!(pending(&w).is_empty());
     let lent = after.state(true).grants.into_iter().find(|g| g.id == grant_id).unwrap();
     assert_eq!(lent.state, GrantState::Ended);
+}
+
+#[tokio::test]
+async fn one_missed_ping_on_the_lenders_check_is_not_a_not_answering() {
+    use super::ping::DevicePing;
+    use super::service::{ping_until_answered, PING_TRIES};
+    let calls = AtomicUsize::new(0);
+    let ping = |ok: bool| DevicePing { member_id: "m".into(), device_id: "d".into(), device_name: "Leo".into(), ok, ms: ok.then_some(40), via: None, message: None };
+    // The first ping is lost, the second is answered: the check says it answers.
+    let r = ping_until_answered(PING_TRIES, || {
+        let n = calls.fetch_add(1, Ordering::SeqCst);
+        std::future::ready(ping(n >= 1))
+    })
+    .await;
+    assert!(r.ok);
+    assert_eq!(calls.load(Ordering::SeqCst), 2);
+    // Every try lost: still not answering, and it asks no more than PING_TRIES times.
+    calls.store(0, Ordering::SeqCst);
+    let r = ping_until_answered(PING_TRIES, || {
+        calls.fetch_add(1, Ordering::SeqCst);
+        std::future::ready(ping(false))
+    })
+    .await;
+    assert!(!r.ok);
+    assert_eq!(calls.load(Ordering::SeqCst), PING_TRIES as usize);
+}
+
+// --------------------------------------------------------------------------- lender and borrower must agree
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 4)]
+async fn a_saved_lend_nothing_serves_is_ended_with_the_restart_note_and_the_borrower_told() {
+    let w = world2(sse_script()).await;
+    let (grant_id, _base) = lend_one(&w, 3600).await;
+    // A lend this service serves is never touched.
+    assert_eq!(w.maya.lend.end_orphans(), 0);
+    assert_eq!(w.maya.lend.state(true).grants[0].state, GrantState::Active);
+
+    // The app starts again (resume not run yet): the saved lend is one this PC cannot honour.
+    let after = restart(&w, &w.maya, "maya", w.maya.team.clone());
+    assert_eq!(after.end_orphans(), 1);
+    assert_eq!(after.end_orphans(), 0, "once");
+    let lent = after.state(true).grants.into_iter().find(|g| g.id == grant_id).unwrap();
+    assert_eq!(lent.state, GrantState::Ended);
+    assert_eq!(lent.end_note.as_deref(), Some(super::service::RESTARTED));
+    assert!(w.maya.secrets.get(&format!("lend:link:{grant_id}")).unwrap().is_none());
+    w.leo.pump();
+    assert_eq!(w.leo.lend.state(true).grants[0].state, GrantState::Ended);
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 4)]
+async fn the_lender_drops_a_lend_its_borrower_no_longer_holds_and_keeps_one_it_holds() {
+    let w = world2(sse_script()).await;
+    let (grant_id, _base) = lend_one(&w, 3600).await;
+
+    // Leo still holds it: nothing comes back, the lend stays.
+    assert_eq!(w.maya.lend.recheck_lent(), 1);
+    w.leo.pump();
+    assert_eq!(w.maya.lend.state(true).grants[0].state, GrantState::Active);
+
+    // Leo restarts and holds nothing now; its own return cannot go out yet (the team is not connected), so only the check tells.
+    let down = Arc::new(FlakyTeam { inner: w.leo.team.clone(), up: AtomicBool::new(false) });
+    let leo2 = restart(&w, &w.leo, "leo", down.clone());
+    leo2.resume();
+    assert_eq!(leo2.state(true).grants[0].state, GrantState::Ended);
+
+    down.up.store(true, Ordering::SeqCst);
+    // Maya's Lending tab opens: she asks, Leo says "not held", the lend ends with that note.
+    assert_eq!(w.maya.lend.recheck_lent(), 1);
+    w.leo.pump_into(&leo2);
+    w.maya.pump();
+    let lent = w.maya.lend.state(true).grants.into_iter().find(|g| g.id == grant_id).unwrap();
+    assert_eq!(lent.state, GrantState::Ended);
+    // Either word is right (Leo's own give-back may beat the check); both end it with a note of mine.
+    assert!(matches!(lent.end_note.as_deref(), Some(super::service::NOT_HELD) | Some(super::service::BORROWER_RESTARTED)), "{:?}", lent.end_note);
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 4)]
+async fn a_borrower_that_restarted_ends_the_lend_tells_the_lender_and_lists_nothing() {
+    let w = world2(sse_script()).await;
+    let (grant_id, base) = lend_one(&w, 3600).await;
+    assert_eq!(post(&base, "/v1/messages").await.status, 200);
+    assert_eq!(w.leo.lend.borrowed_rows().len(), 1);
+
+    let leo2 = restart(&w, &w.leo, "leo", w.leo.team.clone());
+    leo2.resume();
+    let mine = leo2.state(true).grants.into_iter().find(|g| g.id == grant_id).unwrap();
+    assert_eq!(mine.state, GrantState::Ended);
+    assert_eq!(mine.end_note.as_deref(), Some(super::service::BORROWER_RESTARTED));
+    assert!(leo2.borrowed_rows().is_empty());
+    assert!(w.leo.secrets.get(&format!("lend:link:{grant_id}")).unwrap().is_none());
+
+    // The lender hears a give-back with the reason and ends the lend with that note.
+    tokio::time::sleep(Duration::from_millis(300)).await;
+    w.maya.pump();
+    let lent = w.maya.lend.state(true).grants.into_iter().find(|g| g.id == grant_id).unwrap();
+    assert_eq!(lent.state, GrantState::Ended);
+    assert_eq!(lent.end_note.as_deref(), Some(super::service::BORROWER_RESTARTED));
 }

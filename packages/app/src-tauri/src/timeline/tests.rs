@@ -310,6 +310,7 @@ fn points(count: usize, start_ms: u64, step_ms: u64) -> Vec<Checkpoint> {
             kind: "after".into(),
             label: String::new(),
             note: String::new(),
+            restored_to: String::new(),
             at_ms: start_ms + i as u64 * step_ms,
             files: 1,
             added: 1,

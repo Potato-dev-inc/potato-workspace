@@ -1,5 +1,22 @@
 # Changelog
 
+## 1.2.1
+
+This is a beta.
+
+- Chats on another PC are closer to local ones: Rename, Close, Retry, Ctrl+K search, file search with @, the same chat name on both PCs, and a chat that ended while its PC was off stays readable.
+- A PC that stops answering shows as Away with a clear line, and the link recovers by itself after a restart.
+- Sign-in lends are tidier: both PCs say when a lend ended (for example after a restart), Ask to borrow lists your own PCs first, and the lender sees how many requests were used.
+- A chat started from another PC can use a lent sign-in, also on a copy.
+- Undo last turn now clears Changes and Outputs and saves a Before undo point. New files count as added, and files outside the project are not listed.
+- Opening chats is much lighter. Switching fast between chats no longer piles up work, and memory stays flat.
+- Pasting more than 200,000 characters is refused with a message.
+- The Terminal and Chat switch shows only when Show terminals is on.
+- The browser pane stays live on Windows. On Linux, pages open in their own window.
+- A second agent writing the same file is now caught, also outside a Git folder.
+- Text you sent no longer comes back in the box, pop-out windows follow the text size, and many layout fixes for narrow windows and large text.
+- Much more of the app is translated into Traditional Chinese, and the agent name is the same everywhere.
+
 ## 1.2.0
 
 This is alpha 1.

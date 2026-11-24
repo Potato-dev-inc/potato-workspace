@@ -15,6 +15,7 @@ import { plural, splitPatch } from './diff';
 import { anchorFindings, reconcileVerdictText, severityGlyph, severityLabel, type ReviewFinding } from './review-diff';
 import { beginReview, cancelReview, clearReview, sendToAuthor, useReviewRun } from './second-opinion-store';
 import { Sheet } from './Sheet';
+import { t, useT } from '../../i18n';
 import '../../styles/cockpit-changes.css';
 import '../../styles/cockpit-second-opinion.css';
 
@@ -64,27 +65,28 @@ function ReviewerSheet({
   const same = (all ?? []).find((r) => r.same);
   const current = list.some((r) => r.id === picked) ? picked : defaultReviewer(list);
 
+  useT();
   return (
     <Sheet role="dialog" labelledBy="ck-so-t" onClose={onClose}>
         <h2 className="ck-section" id="ck-so-t">
-          Who should review?
+          {t('r11.so.who')}
         </h2>
-        <p className="ck-sub">The reviewer can read your project but cannot change anything.</p>
+        <p className="ck-sub">{t('r11.so.readOnly')}</p>
         {error && (
           <p className="ck-changes-error" role="alert">
             {error}
           </p>
         )}
-        {!all && !error && <p className="ck-sub">Looking for agents…</p>}
+        {!all && !error && <p className="ck-sub">{t('r11.so.looking')}</p>}
         {all && list.length === 0 && (
           <p className="ck-sub">
             {same
-              ? `Only ${same.label} can review right now. Allow it below, or set up another agent.`
-              : 'No agent is ready to review. Open “Set up agents” to install or sign in to one.'}
+              ? t('r11.so.onlySame', { label: same.label })
+              : t('r11.so.noneReady')}
           </p>
         )}
         {list.length > 0 && (
-          <div className="ck-so-list" role="radiogroup" aria-label="Reviewer">
+          <div className="ck-so-list" role="radiogroup" aria-label={t('r11.so.reviewer')}>
             {list.map((r) => (
               <label key={r.id} className={`ck-so-row${current === r.id ? ' is-picked' : ''}`}>
                 <input
@@ -95,8 +97,8 @@ function ReviewerSheet({
                   onChange={() => setPicked(r.id)}
                 />
                 <span className="ck-so-name">{r.label}</span>
-                {r.same && <span className="ck-so-tag">wrote this</span>}
-                {r.ready && <span className="ck-so-tag">ready</span>}
+                {r.same && <span className="ck-so-tag">{t('r11.so.wrote')}</span>}
+                {r.ready && <span className="ck-so-tag">{t('r11.so.ready')}</span>}
               </label>
             ))}
           </div>
@@ -104,12 +106,12 @@ function ReviewerSheet({
         {same && (
           <label className="ck-so-same">
             <input type="checkbox" checked={includeSame} onChange={(e) => setIncludeSame(e.target.checked)} />
-            <span>Also allow {same.label}, the agent that wrote this</span>
+            <span>{t('r11.so.allowSame', { label: same.label })}</span>
           </label>
         )}
         <div className="ck-sheet-actions">
           <button type="button" className="ck-btn ck-btn--secondary" onClick={onClose}>
-            Cancel
+            {t('r11.so.cancel')}
           </button>
           <button
             type="button"
@@ -120,7 +122,7 @@ function ReviewerSheet({
               onClose();
             }}
           >
-            Start review
+            {t('r11.so.start')}
           </button>
         </div>
     </Sheet>
@@ -128,6 +130,7 @@ function ReviewerSheet({
 }
 
 function FindingRow({ finding, authorLabel, onSend }: { finding: ReviewFinding; authorLabel: string; onSend: (f: ReviewFinding) => Promise<void> }) {
+  useT();
   const [state, setState] = useState<'idle' | 'sending' | 'sent'>('idle');
   const [error, setError] = useState<string | null>(null);
   const place = finding.line === null ? finding.file : `${finding.file}:${finding.line}`;
@@ -155,7 +158,7 @@ function FindingRow({ finding, authorLabel, onSend }: { finding: ReviewFinding; 
           );
         }}
       >
-        {state === 'sent' ? 'Sent' : state === 'sending' ? 'Sending…' : `Send to ${authorLabel}`}
+        {state === 'sent' ? t('r11.so.sent') : state === 'sending' ? t('r11.so.sending') : t('r11.so.sendTo', { name: authorLabel })}
       </button>
       {error && (
         <span className="ck-find-error" role="alert">
@@ -196,6 +199,7 @@ function Result({
   api: SecondOpinionApi;
   onAgain: () => void;
 }) {
+  useT();
   const bodies = useMemo(() => splitPatch(start.patch), [start.patch]);
   const { byFile, unanchored } = useMemo(() => anchorFindings(review.findings, bodies), [review.findings, bodies]);
   const [open, setOpen] = useState<string | null>(() => [...byFile.keys()][0] ?? null);
@@ -208,16 +212,16 @@ function Result({
       <Verdict review={review} />
       <p className="ck-sub">
         {start.reviewerLabel} reviewed {reviewedText(start)} · {plural(start.files, 'file')} · +{start.additions} −{start.deletions}
-        {start.patchTruncated ? ' · cut for size' : ''}
+        {start.patchTruncated ? t('r11.so.cut') : ''}
       </p>
-      {working && <p className="ck-sub">The agent is working again, so these notes may be out of date.</p>}
+      {working && <p className="ck-sub">{t('r11.so.stale')}</p>}
       {review.unstructured && (
         <>
-          <p className="ck-sub">{start.reviewerLabel} did not use the expected format. Its answer:</p>
+          <p className="ck-sub">{t('r11.so.badFormat', { name: start.reviewerLabel })}</p>
           <p className="ck-so-raw">{review.unstructured}</p>
         </>
       )}
-      {!review.unstructured && review.findings.length === 0 && <p className="ck-sub">No notes.</p>}
+      {!review.unstructured && review.findings.length === 0 && <p className="ck-sub">{t('r11.so.noNotes')}</p>}
       {pinned > 0 && inChanges && (
         <p className="ck-sub">{plural(pinned, 'note')} pinned to lines in Changes above.</p>
       )}
@@ -246,7 +250,7 @@ function Result({
       )}
       {unanchored.length > 0 && (
         <>
-          <div className="ck-caption">{pinned > 0 ? 'Elsewhere' : 'Notes'}</div>
+          <div className="ck-caption">{pinned > 0 ? t('r11.so.elsewhere') : t('r11.so.notes')}</div>
           <ul className="ck-so-finds">
             {unanchored.map((f) => (
               <FindingRow key={f.id} finding={f} authorLabel={start.authorLabel} onSend={(x) => send(x.file, x.line, x.text)} />
@@ -256,10 +260,10 @@ function Result({
       )}
       <div className="ck-changes-actions">
         <button type="button" className="ck-btn ck-btn--secondary" onClick={onAgain}>
-          Ask again
+          {t('r11.so.again')}
         </button>
         <button type="button" className="ck-btn ck-btn--plain" onClick={() => clearReview(paneId)}>
-          Dismiss
+          {t('r11.so.dismiss')}
         </button>
       </div>
     </div>
@@ -280,28 +284,29 @@ export function SecondOpinion({
   status: string;
   api?: SecondOpinionApi;
 }) {
+  useT();
   const run = useReviewRun(paneId);
   const [sheet, setSheet] = useState(false);
   const working = status === 'running';
   const busy = run?.phase === 'starting' || run?.phase === 'running';
 
   return (
-    <section className="ck-so" aria-label="Second opinion">
+    <section className="ck-so" aria-label={t('r11.so.title')}>
       <div className="ck-changes-head">
-        <h2 className="ck-section">Second opinion</h2>
+        <h2 className="ck-section">{t('r11.so.title')}</h2>
       </div>
       {!run && (
         <>
-          <p className="ck-sub">Ask another agent to review what this one just did. It can only read, never change anything.</p>
+          <p className="ck-sub">{t('r11.so.lead')}</p>
           <div className="ck-changes-actions">
             <button
               type="button"
               className="ck-btn ck-btn--secondary"
               disabled={working}
-              title={working ? 'The agent is still working' : undefined}
+              title={working ? t('r11.so.stillWorking') : undefined}
               onClick={() => setSheet(true)}
             >
-              Second opinion
+              {t('r11.so.title')}
             </button>
           </div>
         </>
@@ -310,10 +315,10 @@ export function SecondOpinion({
         <div className="ck-so-busy" role="status">
           <DotSpinner status="running" />
           <span>
-            {run?.start ? `${run.start.reviewerLabel} is reviewing ${reviewedText(run.start)}…` : 'Starting the review…'}
+            {run?.start ? t('r11.so.reviewing', { name: run.start.reviewerLabel, what: reviewedText(run.start) }) : t('r11.so.starting')}
           </span>
           <button type="button" className="ck-btn ck-btn--plain ck-btn--sm" onClick={() => void cancelReview(paneId, api)}>
-            Stop
+            {t('r11.so.stop')}
           </button>
         </div>
       )}
@@ -324,10 +329,10 @@ export function SecondOpinion({
           </p>
           <div className="ck-changes-actions">
             <button type="button" className="ck-btn ck-btn--secondary" onClick={() => setSheet(true)}>
-              Try another agent
+              {t('r11.so.another')}
             </button>
             <button type="button" className="ck-btn ck-btn--plain" onClick={() => clearReview(paneId)}>
-              Dismiss
+              {t('r11.so.dismiss')}
             </button>
           </div>
         </>

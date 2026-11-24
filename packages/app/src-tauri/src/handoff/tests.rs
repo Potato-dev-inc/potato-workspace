@@ -31,7 +31,7 @@ impl Fixture {
 }
 
 fn fixtures_in(agent: &str) -> Vec<Fixture> {
-    let root = Path::new(env!("CARGO_MANIFEST_DIR")).join("src").join("tui").join(agent).join("fixtures").join("limits");
+    let root = Path::new(env!("CARGO_MANIFEST_DIR")).join("crates/pm-core/src/tui").join(agent).join("fixtures").join("limits");
     let mut out = Vec::new();
     let mut stack = vec![root];
     while let Some(dir) = stack.pop() {
@@ -1129,7 +1129,7 @@ fn the_handoff_module_has_no_way_to_write_to_a_pane() {
         }
     }
     for agent in ["claude", "codex"] {
-        let toml = std::fs::read_to_string(Path::new(env!("CARGO_MANIFEST_DIR")).join("src").join("tui").join(agent).join("limits.toml")).unwrap();
+        let toml = std::fs::read_to_string(Path::new(env!("CARGO_MANIFEST_DIR")).join("crates/pm-core/src/tui").join(agent).join("limits.toml")).unwrap();
         assert!(!toml.contains("keys"), "{agent}/limits.toml declares keys");
     }
 }

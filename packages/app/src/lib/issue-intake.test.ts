@@ -1,4 +1,5 @@
 // @vitest-environment jsdom
+import { resetEventHub } from './events';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 const invoke = vi.fn();
@@ -71,6 +72,7 @@ const config: IntakeConfig = {
 };
 
 beforeEach(() => {
+  resetEventHub();
   invoke.mockReset();
   listen.mockReset();
 });
@@ -129,7 +131,8 @@ describe('onIntakeChanged', () => {
     expect(INTAKE_CHANGED_EVENT).toBe('issue-intake://changed');
     handler?.();
     expect(cb).toHaveBeenCalledTimes(1);
-    expect(stop).toBe(unlisten);
+    stop();
+    expect(unlisten).toHaveBeenCalledTimes(1);
   });
 
   it('does nothing outside the app', async () => {

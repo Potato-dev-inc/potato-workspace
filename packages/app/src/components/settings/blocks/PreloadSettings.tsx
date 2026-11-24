@@ -1,6 +1,7 @@
 // Settings > Preload: keep a warm agent (CLI at its input box + a hidden pane window) per ticked
 // provider, so opening a pane for it is instant. Backed by the standby pool (`standby-pool.json`).
 import { errorSentence } from '../../../lib/sayError';
+import { backendText } from '../../../lib/backendWords';
 import { useT, type MessageKey } from '../../../i18n';
 import { tauriStandbyHelpersApi, useStandbyHelpers, type StandbyHelpersApi } from '../../../lib/standbyHelpers';
 import { useCallback, useEffect, useState } from 'react';
@@ -132,7 +133,7 @@ export function PreloadSettings({ api = DEFAULT_API, helpersApi = tauriStandbyHe
               <div key={standby.id} className="flex flex-wrap items-center gap-x-4 gap-y-1 rounded-lg border border-pm-border px-3 py-2">
                 <span className="font-medium">{registry.agents.find((a) => a.id === standby.agent_type)?.label ?? standby.agent_type}</span>
                 <span className="font-mono text-xs text-pm-muted">{standby.project}</span>
-                <span>{standby.state}</span>
+                <span>{t(standby.state === 'ready' ? 'r15.standby.ready' : 'r15.standby.starting')}</span>
                 {neverClose ? (
                   <span className="text-pm-muted">{t('preload.staysReady')}</span>
                 ) : (
@@ -158,7 +159,7 @@ export function PreloadSettings({ api = DEFAULT_API, helpersApi = tauriStandbyHe
           ))}
           {status?.agents_blocked?.map((agent) => (
             <p key={agent.agent_type} className="text-sm text-pm-text" data-testid={`preload-blocked-${agent.agent_type}`}>
-              {t('preload.cantStay', { agent: registry.agents.find((a) => a.id === agent.agent_type)?.label ?? agent.agent_type, message: agent.message })}{' '}
+              {t('preload.cantStay', { agent: registry.agents.find((a) => a.id === agent.agent_type)?.label ?? agent.agent_type, message: backendText(agent.message) })}{' '}
               <span className="text-pm-muted">
                 {agent.reason === 'untested_version'
                   ? t('preload.untested')

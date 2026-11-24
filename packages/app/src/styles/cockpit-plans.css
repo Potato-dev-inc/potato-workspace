@@ -1,5 +1,6 @@
 /* "Your plans this month": a dense monochrome table. Cockpit tokens only. */
 .cockpit .ck-plans {
+  container: ckplans / inline-size;
   display: flex;
   flex-direction: column;
   gap: 14px;
@@ -47,13 +48,16 @@
   outline-offset: 1px;
 }
 .cockpit .ck-plans-scroll {
+  /* Fills the page height (never squeezed to two rows) and scrolls the page, not itself. */
+  flex: 1 0 auto;
+  min-height: 0;
   overflow-x: auto;
   border-radius: 10px;
   box-shadow: inset 0 0 0 1px var(--sep);
 }
 .cockpit .ck-plans-table {
   width: 100%;
-  min-width: 640px;
+  min-width: 520px;
   border-collapse: collapse;
   font-size: 12.5px;
   color: var(--label-2);
@@ -122,5 +126,27 @@
 @media (max-width: 640px) {
   .cockpit .ck-plans {
     padding: 20px 16px 16px;
+  }
+}
+
+/* Wider than the card (120% text size): scroll inside the card and keep the plan name in view. */
+.cockpit .ck-plans-table thead th:first-child,
+.cockpit .ck-plans-table tbody th,
+.cockpit .ck-plans-table tfoot th {
+  position: sticky;
+  left: 0;
+  z-index: 1;
+  background: var(--bg);
+}
+
+/* A narrow page or big text: the table gives up its minimum width and its cells wrap. */
+@container ckplans (max-width: 900px) {
+  .cockpit .ck-plans-table {
+    min-width: 0;
+  }
+  .cockpit .ck-plans-table th,
+  .cockpit .ck-plans-table td {
+    padding: 8px;
+    white-space: normal;
   }
 }

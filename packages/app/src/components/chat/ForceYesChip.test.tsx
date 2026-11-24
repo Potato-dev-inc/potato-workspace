@@ -7,6 +7,8 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { AcpChatState } from '../../lib/acpChat';
 import { useEnglish } from '../../i18n/test-utils';
 import { ForceYesChip } from './ForceYesChip';
+import { HostProvider } from '../../lib/host/context';
+import { ALL_CAPS, type Host } from '../../lib/host/host';
 
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 
@@ -104,5 +106,30 @@ describe('Force yes chip on a terminal pane', () => {
     await act(async () => root.render(<ForceYesChip paneId="t1" isAcp={false} state={null} agent="claude" cwd="C:\\work" rulesApi={{ paneForceYes: async () => true, paneSetForceYes: async () => false }} />));
     await flush();
     expect(chip()?.textContent).toBe('Force yes on');
+  });
+});
+
+describe('Force yes chip on a far chat', () => {
+  const far = (own: boolean | undefined) => ({ place: { kind: 'pc', node: 'n', name: 'pm-sandbox' }, live: true, caps: ALL_CAPS, forceYesDenied: async () => (own === false ? 'Force yes can only be turned on from pm-sandbox itself.' : null) }) as unknown as Host;
+  const render = (own: boolean | undefined, on = false) =>
+    act(async () => root.render(<HostProvider host={far(own)}><ForceYesChip paneId="p1" isAcp state={chatState(on)} agent="fake" cwd="/w" chatApi={{ setForceYes: vi.fn() }} /></HostProvider>));
+
+  it('is disabled with the reason and what to do when that PC does not count this one as its own', async () => {
+    await render(false);
+    await flush();
+    expect(chip()?.disabled).toBe(true);
+    expect(chip()?.title).toBe('Force yes can only be turned on from pm-sandbox itself.');
+  });
+
+  it('stays usable for the person\'s own PC, for an older far PC that does not say, and to turn it off', async () => {
+    await render(true);
+    await flush();
+    expect(chip()?.disabled).toBe(false);
+    await render(undefined);
+    await flush();
+    expect(chip()?.disabled).toBe(false);
+    await render(false, true);
+    await flush();
+    expect(chip()?.disabled).toBe(false);
   });
 });

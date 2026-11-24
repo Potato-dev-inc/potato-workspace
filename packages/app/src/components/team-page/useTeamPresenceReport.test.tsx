@@ -3,7 +3,7 @@ import { act } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { PresenceReport, TeamApi } from '../../lib/team';
-import { AWAY_AFTER_MS, REPORT_EVERY_MS, useTeamPresenceReport, type PresenceFacts } from './useTeamPresenceReport';
+import { AWAY_AFTER_MS, CHANGE_SETTLE_MS, REPORT_EVERY_MS, useTeamPresenceReport, type PresenceFacts } from './useTeamPresenceReport';
 
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 
@@ -52,11 +52,15 @@ describe('useTeamPresenceReport', () => {
     expect(reports.at(-1)!.away).toBe(false);
   });
 
-  it('tells a change at once (another chat)', async () => {
+  it('tells a change a second later, once for a run of quick changes (another chat)', async () => {
     const { reports, api } = fakeApi();
     await act(async () => root.render(<Probe active facts={FACTS} api={api} />));
     const before = reports.length;
     await act(async () => root.render(<Probe active facts={{ ...FACTS, title: 'Other chat' }} api={api} />));
+    await act(async () => root.render(<Probe active facts={{ ...FACTS, title: 'Third chat' }} api={api} />));
+    await act(async () => root.render(<Probe active facts={{ ...FACTS, title: 'Other chat' }} api={api} />));
+    expect(reports.length).toBe(before);
+    await act(async () => void vi.advanceTimersByTime(CHANGE_SETTLE_MS + 1));
     expect(reports.length).toBe(before + 1);
     expect(reports.at(-1)!.title).toBe('Other chat');
   });

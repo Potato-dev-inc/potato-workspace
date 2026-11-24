@@ -8,6 +8,7 @@ import type { UpdateOffer, UpdateTransport } from '../../lib/app-update';
 import { buttonByText, click, hasText, settle } from '../settings/test-utils';
 import { UpdateRow } from '../settings/sections/UpdateRow';
 import { AppUpdateHost } from './AppUpdateHost';
+import { dismissedNotices } from './UpdateNotice';
 
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 
@@ -39,6 +40,41 @@ async function mount(node: React.ReactElement) {
   await settle(6);
   return host;
 }
+
+describe('the floating notice', () => {
+  it('tells the page it floats, so the right panel can leave room under its last buttons, and stops when it goes', async () => {
+    const h = await mount(<AppUpdateHost transport={transport()} />);
+    expect(h.querySelector('.app-update-notice')).not.toBeNull();
+    expect(document.documentElement.hasAttribute('data-update-notice')).toBe(true);
+    await act(async () => root!.unmount());
+    root = undefined;
+    expect(document.documentElement.hasAttribute('data-update-notice')).toBe(false);
+  });
+  it('the Settings row notice is part of the row, so it does not', async () => {
+    const h = await mount(<UpdateRow transport={transport()} />);
+    expect(h.querySelector('.app-update-row .app-update-notice')).not.toBeNull();
+    expect(document.documentElement.hasAttribute('data-update-notice')).toBe(false);
+  });
+});
+
+describe('closing the floating notice', () => {
+  it('the cross closes it for this version only, and not the Settings row', async () => {
+    dismissedNotices.clear();
+    const h = await mount(<AppUpdateHost transport={transport()} />);
+    await click(h.querySelector('.app-update-x'));
+    expect(h.querySelector('.app-update-notice')).toBeNull();
+    expect(document.documentElement.hasAttribute('data-update-notice')).toBe(false);
+    dismissedNotices.clear();
+  });
+  it('remembers the closed version across launches', async () => {
+    dismissedNotices.clear();
+    const h = await mount(<AppUpdateHost transport={transport()} />);
+    await click(h.querySelector('.app-update-x'));
+    expect(JSON.parse(localStorage.getItem('potato.update.dismissed') ?? '[]')[0]).toMatch(/^available:/);
+    dismissedNotices.clear();
+    localStorage.removeItem('potato.update.dismissed');
+  });
+});
 
 describe('the notice', () => {
   it('is quiet when this is the newest version', async () => {
@@ -375,5 +411,16 @@ describe('a channel that cannot be read', () => {
   it('a quiet check that fails shows nothing in the corner', async () => {
     const h = await mount(<AppUpdateHost transport={transport({ check: vi.fn(async () => Promise.reject(BETA_FAILED)) })} />);
     expect(h.querySelector('.app-update-notice')).toBeNull();
+  });
+});
+
+describe('the in-flow slot', () => {
+  it('puts the notice into .ck-update-slot (a flex child of the page), not over it', async () => {
+    const slot = document.createElement('div');
+    slot.className = 'ck-update-slot';
+    document.body.appendChild(slot);
+    await mount(<AppUpdateHost transport={transport()} />);
+    expect(slot.querySelector('.app-update-notice')).not.toBeNull();
+    slot.remove();
   });
 });

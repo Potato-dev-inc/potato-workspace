@@ -18,6 +18,7 @@ export function PaneApprovalCard({
   onOpen,
   asks,
   openLabel,
+  hints = !!onOpen,
 }: {
   c: CockpitApi;
   paneId: string;
@@ -29,6 +30,8 @@ export function PaneApprovalCard({
   asks?: string;
   /** The open button's words (default "Open"). */
   openLabel?: string;
+  /** The key hints line (default: shown with an Open button). The jump-out card has no card keyboard, so it passes false. */
+  hints?: boolean;
 }) {
   const t = useT();
   const pane = c.registry.panes.get(paneId);
@@ -53,7 +56,7 @@ export function PaneApprovalCard({
         onOpen={onOpen}
         asks={asks}
         openLabel={openLabel}
-        hints={!!onOpen}
+        hints={hints}
         agentId={pane?.info.agent_type}
         onAnswer={(ch, gesture) => void c.answer(paneId, prompt.promptId, ch.id, ch.label, gesture)}
       />
@@ -69,7 +72,7 @@ export function PaneApprovalCard({
       age={age}
       reason={prompt?.failed ? t('inboxCards.failed') : prompt?.stalled ? t('inboxCards.stalled') : null}
       snoozeKeys={[paneId]}
-      body={onOpen && hasChoices ? <KeyHints hints={approvalHints({ answers: prompt.choices.length, high: false, canOpen: true })} /> : undefined}
+      body={hints && onOpen && hasChoices ? <KeyHints hints={approvalHints({ answers: prompt.choices.length, high: false, canOpen: true })} /> : undefined}
       actions={
         hasChoices ? (
           <>

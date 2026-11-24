@@ -2,6 +2,7 @@
 // one fix button. Checks never run a command themselves: they only call the `SetupCheckDeps` they are given.
 import type { AddonList } from '../acpAddon';
 import type { AgentHealth } from '../agent-health';
+import type { OwnLogin } from '../../components/settings/agents/ownSignIn';
 import type { TestMemory } from './test-memory';
 
 /** `quiet`: nothing to do and nothing wrong (an agent that is not installed). It is never counted as a problem. */
@@ -29,6 +30,8 @@ export interface CheckRow {
 /** The status reads the checks need. Defaults are the Tauri commands (see `index.ts`); tests pass fakes. */
 export interface SetupCheckDeps {
   agentHealth: () => Promise<AgentHealth[]>;
+  /** How each agent's own login stands (`agent_login_states`), the one read the agent cards use. Absent or failing: the quick check alone speaks. */
+  logins?: () => Promise<OwnLogin[]>;
   addons: () => Promise<AddonList>;
   /** What the last Test said per agent. Absent: nothing is remembered. */
   tests?: () => TestMemory;

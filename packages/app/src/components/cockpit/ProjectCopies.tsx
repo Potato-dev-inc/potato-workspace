@@ -7,6 +7,7 @@ import { errorSentence } from '../../lib/sayError';
 import { useEffect, useState } from 'react';
 import { shipApi, type PresetView, type ShipApi } from '../../lib/ship-api';
 import '../../styles/cockpit-ship.css';
+import { t } from '../../i18n';
 
 const errText = (err: unknown): string => (errorSentence(err));
 
@@ -45,7 +46,7 @@ export function ProjectCopies({ project, ship = shipApi }: { project: string | u
   }, [ship, project]);
 
   if (!project) {
-    return <p className="ck-sub ck-pad">Open a project first: select an agent, then come back here.</p>;
+    return <p className="ck-sub ck-pad">{t('r21.sw.openAProjectFirst')}</p>;
   }
 
   const dirty =
@@ -75,13 +76,13 @@ export function ProjectCopies({ project, ship = shipApi }: { project: string | u
 
   return (
     <div className="ck-copies">
-      <h2 className="ck-section">When Potato Workspace makes a separate copy</h2>
+      <h2 className="ck-section">{t('r21.sw.whenPotatoWorkspaceMakes')}</h2>
 
       <label className="ck-copies-row">
-        <span className="ck-copies-label">Set up with</span>
+        <span className="ck-copies-label">{t('r21.sw.setUpWith')}</span>
         <textarea
           className="ck-pr-body ck-copies-input"
-          aria-label="Set up with"
+          aria-label={t('r21.sw.setUpWith')}
           rows={3}
           value={setup}
           placeholder={'npm ci'}
@@ -89,14 +90,14 @@ export function ProjectCopies({ project, ship = shipApi }: { project: string | u
           onChange={(e) => setSetup(e.target.value)}
           disabled={view === null}
         />
-        <span className="ck-copies-fine">One command per line. They run in the copy, in order, and the output is kept in a log.</span>
+        <span className="ck-copies-fine">{t('r21.sw.oneCommandPerLine')}</span>
       </label>
 
       <label className="ck-copies-row">
-        <span className="ck-copies-label">Copy these files</span>
+        <span className="ck-copies-label">{t('r21.sw.copyTheseFiles')}</span>
         <textarea
           className="ck-pr-body ck-copies-input"
-          aria-label="Copy these files"
+          aria-label={t('r21.sw.copyTheseFiles')}
           rows={2}
           value={copy}
           placeholder={'.env\n.env.local'}
@@ -104,21 +105,21 @@ export function ProjectCopies({ project, ship = shipApi }: { project: string | u
           onChange={(e) => setCopy(e.target.value)}
           disabled={view === null}
         />
-        <span className="ck-copies-fine">Copied, never committed.</span>
+        <span className="ck-copies-fine">{t('r21.sw.copiedNeverCommitted')}</span>
       </label>
 
       <label className="ck-copies-row">
-        <span className="ck-copies-label">Start with</span>
+        <span className="ck-copies-label">{t('r21.sw.startWith')}</span>
         <input
           className="ck-pr-input"
-          aria-label="Start with"
+          aria-label={t('r21.sw.startWith')}
           value={run}
           placeholder="npm run dev"
           spellCheck={false}
           onChange={(e) => setRun(e.target.value)}
           disabled={view === null}
         />
-        <span className="ck-copies-fine">Kept with the project. Potato Workspace does not start it for you yet.</span>
+        <span className="ck-copies-fine">{t('r21.sw.keptWithTheProject')}</span>
       </label>
 
       {conductor && (

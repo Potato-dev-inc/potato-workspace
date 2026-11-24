@@ -62,9 +62,13 @@ export interface AgentChoice {
   agentId: string;
   accountId?: string;
   label: string;
+  /** The agent's own name, without the sign-in (`Claude` for `Claude · My sign-in from Desk PC`). */
+  agentLabel?: string;
   /** `ready`: can start now. `missing`: the program is not installed. `unavailable`: cannot open a pane. */
   state: 'ready' | 'missing' | 'unavailable';
   hint: string;
+  /** Shown instead of "ready" when this PC's own login is signed out (what a plain start will use). */
+  note?: string;
   /** A lent sign-in of an agent that cannot chat on one: Chat is off for this choice. */
   noChat?: boolean;
 }
@@ -90,7 +94,7 @@ export function agentChoices(agents: readonly AgentDescriptor[], accounts: reado
     const logins = accounts.filter((a) => a.agent_id === agent.id);
     out.push({ key: agent.id, agentId: agent.id, label, state, hint });
     for (const login of logins) {
-      out.push({ key: `${agent.id}:${login.id}`, agentId: agent.id, accountId: login.id, label: `${label} · ${signInLabel(login)}`, state, hint, noChat: login.borrowed && login.chat === false });
+      out.push({ key: `${agent.id}:${login.id}`, agentId: agent.id, accountId: login.id, label: `${label} · ${signInLabel(login)}`, agentLabel: label, state, hint, noChat: login.borrowed && login.chat === false });
     }
   }
   return out;

@@ -38,6 +38,12 @@ pub async fn attachment_save_pasted(state: State<'_, AppState>, pane_id: String,
     tauri::async_runtime::spawn_blocking(move || attach::save_pasted(&cwd, &name, &mime, &data_base64)).await.map_err(failed)?
 }
 
+/// A file of THIS PC read for sending to a chat on another PC (at most 20 MB; a folder is refused). The far PC saves the bytes itself.
+#[tauri::command]
+pub async fn attachment_read_local(path: String) -> Result<attach::far::LocalFile, String> {
+    tauri::async_runtime::spawn_blocking(move || attach::far::read_local(Path::new(&path))).await.map_err(failed)?
+}
+
 /// A `data:` URL of a picture for the thumbnail in the message box, or `None`.
 #[tauri::command]
 pub async fn attachment_preview(path: String) -> Result<Option<String>, String> {

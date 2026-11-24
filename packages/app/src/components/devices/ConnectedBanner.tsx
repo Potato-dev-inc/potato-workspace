@@ -11,7 +11,8 @@ export function ConnectedBanner({ view, api = devicesApi, onDone }: { view: Devi
   const t = useT();
   const [error, setError] = useState<string | null>(null);
   if (!view?.enabled) return null;
-  const who = view.devices.filter((d) => d.connected && d.lets_run);
+  // A stream the dead PC left open still counts as "in use" on the lender's side for a while: the live link state decides.
+  const who = view.devices.filter((d) => d.connected && d.lets_run && d.state === 'online');
   if (who.length === 0) return null;
   return (
     <div className="dev-connected-wrap" data-testid="connected-banner">

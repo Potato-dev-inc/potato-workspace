@@ -3,6 +3,7 @@
 // localStorage per companion; when that is not available (private mode, a full store) the list still shows, from the
 // newest items, and nothing is stored.
 import type { FeedItem } from '../../lib/companion';
+import { t } from '../../i18n';
 
 export const FEED_FIRST = 5;
 export const FEED_ALL = 50;
@@ -50,8 +51,8 @@ export function CompanionFeed({
   if (items.length === 0) return null;
   const shown = items.slice(0, expanded ? FEED_ALL : FEED_FIRST);
   return (
-    <section className="ph-comp-block" aria-label="While you were away">
-      <h2 className="ph-comp-title">While you were away</h2>
+    <section className="ph-comp-block" aria-label={t('r21.sw.whileYouWereAway')}>
+      <h2 className="ph-comp-title">{t('r21.sw.whileYouWereAway')}</h2>
       <ul className="ph-group">
         {shown.map((item) => (
           <li key={item.id} className="ph-comp-feed-row">

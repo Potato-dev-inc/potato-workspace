@@ -12,7 +12,10 @@ import { LoopGuardContext, type LoopSignal } from '../../lib/loop-guard';
 import { waitingCount } from '../../lib/mobile-agent-tabs';
 import type { Question } from '../../lib/questions';
 import { Inbox } from './Inbox';
+import { JumpOutCard } from './JumpOutCard';
 import { Sidebar } from './Sidebar';
+
+vi.mock('../../lib/jump-out-setting', () => ({ useJumpOutEnabled: () => true }));
 
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 (globalThis as { ResizeObserver?: unknown }).ResizeObserver ??= class {
@@ -110,6 +113,30 @@ describe('one Needs-you count', () => {
     expect(badge.textContent).toBe('5');
     expect(group.textContent).toBe('5');
     expect(doto.getAttribute('aria-label')).toBe('5 things need you');
+  });
+
+  it('a jump-out card changes no count: showing it and pressing Later leave every surface at 5, and nothing is dismissed', async () => {
+    vi.useFakeTimers({ toFake: ['Date', 'setTimeout', 'clearTimeout'] });
+    try {
+      const { api } = fixture();
+      renderWithStuck(
+        <>
+          <Sidebar c={api} onOpenPalette={() => {}} />
+          <Inbox c={api} />
+          <JumpOutCard c={api} view="pane" shown={[]} farOpen={null} onOpenInbox={() => {}} />
+        </>,
+      );
+      await act(async () => void vi.advanceTimersByTime(3200));
+      expect(host.querySelector('.ck-jumpout')?.textContent).toContain('Which database?');
+      await act(async () => [...host.querySelectorAll<HTMLButtonElement>('.ck-jumpout button')].find((b) => b.textContent === 'Later')!.click());
+      expect(host.querySelector('.ck-jumpout')).toBeNull();
+      expect(host.querySelector('.ck-inbox-count')!.textContent).toBe('5');
+      expect(host.querySelector('.ck-row--flat .ck-count')!.textContent).toBe('5');
+      expect(host.querySelector('.ck-group .ck-caption-count')!.textContent).toBe('5');
+      expect(api.asked.dismissQuestion).not.toHaveBeenCalled();
+    } finally {
+      vi.useRealTimers();
+    }
   });
 
   it('does not count an Ask-bar answer: it waits under Ready for you', () => {

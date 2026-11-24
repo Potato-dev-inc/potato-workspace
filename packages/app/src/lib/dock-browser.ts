@@ -6,9 +6,10 @@
 // The calls below are the pane's buttons: tabs, back, forward, reload, the address, mark up, pop out, dock back, and the
 // freeze that keeps the page from drawing over a menu.
 import { invoke } from '@tauri-apps/api/core';
-import { listen } from '@tauri-apps/api/event';
+import { listen } from './events';
 import { useEffect, useState } from 'react';
 import { loadSettings } from './settings';
+import { tauri } from './tauri';
 
 export interface PageRect {
   x: number;
@@ -57,12 +58,14 @@ const inTauri = (): boolean => typeof window !== 'undefined' && '__TAURI_INTERNA
 export function useDockBrowserEnabled(): boolean {
   const [on, setOn] = useState(false);
   useEffect(() => {
+    // Rust keeps the page in its own window on Linux (see `dock::enabled`), so the pane is not offered there.
     if (!inTauri()) return undefined;
     let disposed = false;
     let off: (() => void) | undefined;
+    // The OS comes from Rust (`std::env::consts::OS`); WebKitGTK's user agent was not a reliable signal.
     const read = () =>
-      loadSettings().then(
-        (s) => !disposed && setOn((s as { dock_browser_enabled?: boolean }).dock_browser_enabled === true),
+      Promise.all([loadSettings(), tauri.getAppInstallInfo()]).then(
+        ([s, info]) => !disposed && setOn(info?.platform !== 'linux' && (s as { dock_browser_enabled?: boolean }).dock_browser_enabled === true),
         () => undefined,
       );
     void read();

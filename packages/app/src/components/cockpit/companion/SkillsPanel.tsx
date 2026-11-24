@@ -3,6 +3,7 @@
 import { useState } from 'react';
 import { MAX_SKILLS, SKILL_CAP, type CompanionTransport, type MemoryView, type SkillFull, type SkillRef } from '../../../lib/companion';
 import { SKILL_TITLE_MAX, formatCount, skillFileChars } from './model';
+import { t } from '../../../i18n';
 
 export function SkillsPanel({
   companionId,
@@ -78,14 +79,14 @@ export function SkillsPanel({
           <>
             <input
               className="ck-companion-input ck-skill-title-input"
-              aria-label="Skill title"
+              aria-label={t('r21.sw.skillTitle')}
               value={draft.title}
               maxLength={SKILL_TITLE_MAX}
               onChange={(e) => setDraft({ ...draft, title: e.target.value })}
             />
             <textarea
               className="ck-memory-editor ck-companion-editor"
-              aria-label="Skill steps"
+              aria-label={t('r21.sw.skillSteps')}
               value={draft.body}
               onChange={(e) => setDraft({ ...draft, body: e.target.value })}
               spellCheck={false}
@@ -119,7 +120,7 @@ export function SkillsPanel({
               </>
             ) : confirmRemove ? (
               <>
-                <span>Remove it?</span>
+                <span>{t('r21.sw.removeIt')}</span>
                 <button type="button" className="ck-btn ck-btn--sm ck-btn--plain" disabled={busy} onClick={() => setConfirmRemove(false)}>
                   No
                 </button>
@@ -167,7 +168,7 @@ export function SkillsPanel({
                 <span className="ck-skills-name">{skill.title}</span>
                 <span className="ck-sub">{formatCount(skill.chars)} characters</span>
               </button>
-              {skill.unreviewed && <span className="ck-memory-tag">Changed outside Potato Workspace</span>}
+              {skill.unreviewed && <span className="ck-memory-tag">{t('r21.sw.changedOutsidePotatoWorkspace')}</span>}
               {skill.flagged && <span className="ck-memory-tag">{skill.flagged}</span>}
             </li>
           ))}

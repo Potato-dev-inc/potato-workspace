@@ -2,6 +2,7 @@
 import type { PaneInfo } from '@potato-workspace/shared';
 import type { useBridgePaneRegistry } from '../../hooks/useBridgePaneRegistry';
 import { BridgePaneTerminal, useBridgePaneTransport } from '../BridgePaneTerminal';
+import { t } from '../../i18n';
 
 const STATUS_COLOR: Record<string, string> = {
   running: 'bg-pm-ok',
@@ -45,7 +46,7 @@ export function PanesTab({
       ) : (
       <div className="flex-1 min-h-0 overflow-y-auto pt-16">
         {!bridgeReady && (
-          <div className="text-xs text-pm-muted text-center py-6">Connecting to desktop…</div>
+          <div className="text-xs text-pm-muted text-center py-6">{t('r21.sw.connectingToDesktop')}</div>
         )}
         {bridgeReady && panes.length === 0 && (
           <div className="text-xs text-pm-muted text-center py-6 px-4">

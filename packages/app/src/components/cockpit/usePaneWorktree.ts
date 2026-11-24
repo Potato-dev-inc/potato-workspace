@@ -1,5 +1,12 @@
-import { useEffect, useState } from 'react';
-import { cockpitApi, type WorktreeItem } from '../../lib/cockpit-api';
+import { useEffect, useMemo, useState } from 'react';
+import { cockpitApi, worktreeApiFor, type WorktreeApi, type WorktreeItem } from '../../lib/cockpit-api';
+import { useHost } from '../../lib/host/context';
+
+/** The copy calls of the place this screen shows (this PC, or another over the PC link), for the chat `paneId`. */
+export function useWorktreeApi(paneId: string): WorktreeApi {
+  const host = useHost();
+  return useMemo(() => worktreeApiFor(host, paneId), [host, paneId]);
+}
 
 /**
  * The git worktree a pane works in (a run started with `isolation: "worktree"`, from the UI, the
@@ -10,8 +17,10 @@ import { cockpitApi, type WorktreeItem } from '../../lib/cockpit-api';
 export function usePaneWorktree(
   paneId: string,
   status: string,
-  api: Pick<typeof cockpitApi, 'paneWorktree'> = cockpitApi,
+  given?: Pick<typeof cockpitApi, 'paneWorktree'>,
 ): WorktreeItem | null {
+  const own = useWorktreeApi(paneId);
+  const api = given ?? own;
   const [item, setItem] = useState<WorktreeItem | null>(null);
 
   useEffect(() => {

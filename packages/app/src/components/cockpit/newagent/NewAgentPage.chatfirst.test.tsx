@@ -137,4 +137,22 @@ describe('the New agent page with terminals hidden', () => {
     const chat = [...document.querySelectorAll<HTMLButtonElement>('[role=radio]')].find((b) => b.textContent === 'Chat')!;
     expect(chat.getAttribute('aria-checked')).toBe('true');
   });
+  describe('another PC', () => {
+    const far = (terminals: boolean) => ({ deviceName: 'Lab', terminals, blocked: null });
+    it('shows the switch when this PC and that PC both show terminals', async () => {
+      forceShowTerminals(true);
+      await mount({ remote: far(true) });
+      expect(switchGroup()).not.toBeNull();
+    });
+    it('draws no switch when this PC hides terminals, and starts a chat', async () => {
+      forceShowTerminals(false);
+      await mount({ remote: far(true) });
+      expect(switchGroup()).toBeNull();
+    });
+    it('draws no switch when that PC hides terminals', async () => {
+      forceShowTerminals(true);
+      await mount({ remote: far(false) });
+      expect(switchGroup()).toBeNull();
+    });
+  });
 });

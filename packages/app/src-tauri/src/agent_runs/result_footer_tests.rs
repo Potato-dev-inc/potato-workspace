@@ -5,9 +5,9 @@
 
 use super::completion::clean_extracted_result;
 
-const CLAUDE_MANUAL: &str = include_str!("../tui/claude/fixtures/result_footer_manual_mode_live.txt");
-const CLAUDE_EDIT: &str = include_str!("../tui/claude/fixtures/result_footer_edit_live.txt");
-const CODEX: &str = include_str!("../tui/codex/fixtures/result_footer_live.txt");
+const CLAUDE_MANUAL: &str = include_str!("../../crates/pm-core/src/tui/claude/fixtures/result_footer_manual_mode_live.txt");
+const CLAUDE_EDIT: &str = include_str!("../../crates/pm-core/src/tui/claude/fixtures/result_footer_edit_live.txt");
+const CODEX: &str = include_str!("../../crates/pm-core/src/tui/codex/fixtures/result_footer_live.txt");
 
 #[test]
 fn a_claude_result_has_no_permission_mode_or_effort_footer() {
@@ -50,8 +50,8 @@ fn the_same_rows_for_an_agent_without_those_footers_are_left_alone() {
 
 /// The real final screen of the verify run (op 3f82886d, Codex 0.159.3, update pending) and the
 /// screen right before its task was typed.
-const CODEX_NOTICE_SCREEN: &str = include_str!("../tui/codex/fixtures/result_update_notice_screen_live.txt");
-const CODEX_NOTICE_BASELINE: &str = include_str!("../tui/codex/fixtures/result_update_notice_baseline_live.txt");
+const CODEX_NOTICE_SCREEN: &str = include_str!("../../crates/pm-core/src/tui/codex/fixtures/result_update_notice_screen_live.txt");
+const CODEX_NOTICE_BASELINE: &str = include_str!("../../crates/pm-core/src/tui/codex/fixtures/result_update_notice_baseline_live.txt");
 
 #[test]
 fn a_codex_result_does_not_start_with_the_update_notice_box_or_the_banner() {

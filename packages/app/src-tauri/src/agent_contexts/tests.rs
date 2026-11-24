@@ -1,4 +1,6 @@
 use super::*;
+use crate::pty::agents::AgentType;
+use crate::pty::registry::PaneInfo;
 
 #[test]
 fn lists_all_agent_profiles() {

@@ -83,7 +83,7 @@ describe('SetupCheckPage', () => {
     const a = { ...actions(), test: vi.fn(), open: vi.fn(), install: vi.fn() };
     const m = await mountRows([pageRow(many(), a)]);
     await settle(6);
-    expect(hasText(m.host, 'Claude is not tested yet')).toBe(true);
+    expect(hasText(m.host, 'Claude is not checked yet')).toBe(true);
     expect(hasText(m.host, 'OpenCode is installed')).toBe(true);
     expect(hasText(m.host, 'Gemini is not installed')).toBe(true);
     expect(hasText(m.host, '1 to check')).toBe(true);

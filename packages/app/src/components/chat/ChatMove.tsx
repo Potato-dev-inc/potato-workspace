@@ -5,6 +5,7 @@ import { useCallback, useEffect, useState, type ReactNode } from 'react';
 import { useT } from '../../i18n';
 import { devicesApi, useDevicesEnabled, type DevicesApi } from '../../lib/devices';
 import { moveBlock, movedLine, requestOpenRemote, tauriMoveApi, type MoveApi, type MoveStatus } from '../../lib/moveChat';
+import { isFarKey } from '../../lib/host/placeKey';
 import { useDevices } from '../devices/useDevices';
 import { MoveSheet } from './MoveSheet';
 import '../../styles/chat-move.css';
@@ -52,7 +53,8 @@ export function useChatMove(
 
   const moved = status.state === 'moved';
   return {
-    onMove: enabled && !moved ? () => setOpen(true) : undefined,
+    // A chat of another PC cannot be moved from here (the move starts from the PC the chat is on): no one-option list, no entry.
+    onMove: enabled && !moved && !isFarKey(paneId) ? () => setOpen(true) : undefined,
     blockedReason: moveBlock(status),
     note: status.state === 'moved' ? <MovedNote status={status} /> : null,
     sheet: open ? (

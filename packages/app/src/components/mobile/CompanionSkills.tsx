@@ -1,6 +1,7 @@
 // The skills a companion has learned, on the phone (read only). Titles are all the phone gets: the steps stay on the
 // computer, where the person approves, edits and removes skills (SPEC-1028, companion skills).
 import type { SkillRef } from '../../lib/companion';
+import { t } from '../../i18n';
 
 export function CompanionSkills({ name, skills }: { name: string; skills: SkillRef[] }) {
   if (skills.length === 0) return null;
@@ -11,7 +12,7 @@ export function CompanionSkills({ name, skills }: { name: string; skills: SkillR
         {skills.map((skill) => (
           <li key={skill.slug} className="ph-comp-pending">
             <p className="ph-comp-text">{skill.title}</p>
-            {skill.unreviewed && <p className="ph-comp-flag">Changed outside Potato Workspace</p>}
+            {skill.unreviewed && <p className="ph-comp-flag">{t('r21.sw.changedOutsidePotatoWorkspace')}</p>}
           </li>
         ))}
       </ul>

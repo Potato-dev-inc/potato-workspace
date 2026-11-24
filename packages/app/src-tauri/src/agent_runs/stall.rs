@@ -19,10 +19,6 @@ use std::sync::Arc;
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
 use tauri::Emitter;
 
-/// Minutes without progress before a helper reads as stuck, unless the person changed it.
-pub const DEFAULT_MINUTES: u32 = 5;
-/// The most the setting can be (0 turns the signal off).
-pub const MAX_MINUTES: u32 = 120;
 /// What "Nudge" sends: one short line through the normal send_message path.
 pub const NUDGE_TEXT: &str = "Are you still working? Say what you're doing.";
 

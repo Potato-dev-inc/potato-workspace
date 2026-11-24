@@ -5,7 +5,7 @@ use std::sync::Arc;
 
 use serde_json::json;
 
-use super::{chips_json, forget, record_handshake, HandshakeFacts, Tri};
+use super::{chips_json, for_agent_in, forget, record_handshake, HandshakeFacts, Tri};
 use crate::agent_runs::headless::check_read_only;
 use crate::agent_runs::AgentRunRequest;
 use crate::tui::declarative::loader::{last_entries, store_last, DefState, Entry};
@@ -115,4 +115,23 @@ fn list_agents_shows_caps_chips() {
     // A shipped agent's read-only chip follows the run table.
     let claude = after.as_array().unwrap().iter().find(|r| r["id"] == "claude").unwrap();
     assert_eq!(claude["caps"]["read_only"], "yes");
+}
+
+#[test]
+fn read_only_matches_run_table() {
+    let ids = crate::tui::registered_agent_ids();
+    assert!(!ids.is_empty());
+    for id in &ids {
+        let table = crate::agent_runs::read_only_run_table(id);
+        let caps = for_agent_in(&&std::env::temp_dir().join(format!("pm-agent-caps-ro-{}", std::process::id())), id);
+        let facts = super::facts::def_facts(id);
+        if facts.shipped {
+            assert_eq!(caps.read_only.value == Tri::Yes, table, "{id}: caps and run table disagree");
+            assert_ne!(caps.read_only.value, Tri::Unknown, "{id}");
+        }
+        // A terminal or headless run's own answer is a part of the table: never more than it.
+        if crate::agent_runs::read_only_supported(id, false) {
+            assert!(table, "{id}");
+        }
+    }
 }

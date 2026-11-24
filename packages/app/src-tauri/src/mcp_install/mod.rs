@@ -16,7 +16,7 @@ use codex::*;
 use opencode::*;
 pub use stale::refresh_on_start;
 
-pub const MCP_SERVER_NAME: &str = "potato-workspace";
+pub use pm_core::mcp_install::MCP_SERVER_NAME;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum McpLaunchSource {

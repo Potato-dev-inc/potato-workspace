@@ -5,7 +5,7 @@ import { resolve } from 'node:path';
 import { describe, expect, it } from 'vitest';
 import { KEY_DOWN, KEY_UP, keysForOption, parseScreenQuestion } from './screen-question';
 
-const fixture = (path: string) => readFileSync(resolve(__dirname, '../../src-tauri/src', path), 'utf8');
+const fixture = (path: string) => readFileSync(resolve(__dirname, '../../src-tauri/crates/pm-core/src', path), 'utf8');
 
 /** A text-style picker: a check mark after the pointer, a dotted banner above it, a code preview under it. */
 const THEME = fixture('tui/claude/fixtures/first_run_theme_2_1_312.txt');

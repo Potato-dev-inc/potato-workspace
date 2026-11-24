@@ -55,6 +55,7 @@ type BubbleProps = Pick<PendingMessagesProps, 'onCancel' | 'onHold' | 'onEdit' |
 
 /** The small editor of a waiting message: the message is held back while it is open and nothing is sent early. */
 function Editor({ message, onHold, onEdit, onDone }: { message: OutboxMessage; onHold: NonNullable<PendingMessagesProps['onHold']>; onEdit: NonNullable<PendingMessagesProps['onEdit']>; onDone: (note: string | null) => void }) {
+  const t = useT();
   const [text, setText] = useState(message.text);
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
@@ -75,7 +76,7 @@ function Editor({ message, onHold, onEdit, onDone }: { message: OutboxMessage; o
     <div className="ck-chat-pending-edit" data-testid="chat-pending-editor">
       <textarea
         className="ck-chat-pending-edit-box"
-        aria-label="Edit the waiting message"
+        aria-label={t('r10.pending.edit')}
         value={text}
         autoFocus
         rows={Math.min(6, Math.max(2, text.split('\n').length))}

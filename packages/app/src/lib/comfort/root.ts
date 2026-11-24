@@ -3,7 +3,7 @@
 import { useEffect, useState } from 'react';
 import { invoke } from '@tauri-apps/api/core';
 import { COMFORT_KEY, reducedMotion, scaleFactor, stepTextScale, type ComfortPrefs } from './model';
-import { getComfort, refreshComfortFromStorage, setComfort, useComfort } from './store';
+import { COMFORT_EVENT, getComfort, refreshComfortFromStorage, setComfort, useComfort } from './store';
 
 const REDUCE_QUERY = '(prefers-reduced-motion: reduce)';
 
@@ -63,6 +63,24 @@ export function useComfortRoot(): void {
     return () => {
       window.removeEventListener('keydown', onKey);
       window.removeEventListener('storage', onStorage);
+    };
+  }, []);
+
+  // A save made in another window announces itself (comfort://changed, and settings://changed): re-read the stored prefs (the storage event can be missed).
+  useEffect(() => {
+    if (!('__TAURI_INTERNALS__' in window)) return;
+    let off: (() => void) | undefined;
+    let gone = false;
+    void import('../events')
+      .then(async ({ listen }) => {
+        const offs = await Promise.all([listen('settings://changed', () => refreshComfortFromStorage()), listen(COMFORT_EVENT, () => refreshComfortFromStorage())]);
+        return () => offs.forEach((o) => o());
+      })
+      .then((un) => (gone ? un() : (off = un)))
+      .catch(() => undefined);
+    return () => {
+      gone = true;
+      off?.();
     };
   }, []);
 

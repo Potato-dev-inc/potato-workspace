@@ -5,6 +5,7 @@ import { errorSentence } from '../../lib/sayError';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import type { BridgeClient } from '../../lib/bridge';
 import { askerName, isLive, waitCaption, type Question } from '../../lib/questions';
+import { t } from '../../i18n';
 
 /** Fallback poll: the `questions` SSE event is the primary trigger, this only catches missed events. */
 const POLL_MS = 30000;
@@ -134,7 +135,7 @@ export function QuestionsView({
                 value={drafts[q.id] ?? ''}
                 onChange={(e) => setDrafts((d) => ({ ...d, [q.id]: e.target.value }))}
                 placeholder={q.choices.length > 0 ? 'Or type an answer' : 'Type an answer'}
-                aria-label="Your answer"
+                aria-label={t('r21.sw.yourAnswer')}
                 maxLength={4000}
                 className="ph-field"
               />
@@ -161,7 +162,7 @@ export function QuestionsView({
   );
   if (bare) return cards;
   return (
-    <section aria-label="Questions from agents" className="ph-cards">
+    <section aria-label={t('r21.sw.questionsFromAgents')} className="ph-cards">
       {cards}
     </section>
   );

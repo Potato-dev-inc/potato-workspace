@@ -2,6 +2,7 @@
 // Remove. Potato Workspace's suggestions are shown with Use and are never used until the person presses Use. Every save
 // goes through `night_checks_set`, and the popover reads the project's checks again after it.
 import { useState } from 'react';
+import { t, useT } from '../../../i18n';
 import {
   nightApi,
   nightErrorText,
@@ -68,17 +69,18 @@ export function TestsPopover({
     if (await save([...declared, { name: text, command: text, timeoutMin: CHECK_TIMEOUT_MIN }])) setAdding('');
   };
 
+  useT();
   return (
-    <div className="ck-night-pop" role="dialog" aria-label="Tests">
+    <div className="ck-night-pop" role="dialog" aria-label={t('r11.n.tests')}>
       <div className="ck-night-pop-head">
-        <span className="ck-night-label">Tests</span>
-        <button type="button" className="ck-btn ck-btn--plain ck-btn--sm" aria-label="Close tests" onClick={onClose}>
+        <span className="ck-night-label">{t('r11.n.tests')}</span>
+        <button type="button" className="ck-btn ck-btn--plain ck-btn--sm" aria-label={t('r11.n.closeTests')} onClick={onClose}>
           ×
         </button>
       </div>
 
       {!view ? (
-        <p className="ck-night-note">Looking for tests…</p>
+        <p className="ck-night-note">{t('r11.n.lookingTests')}</p>
       ) : (
         <>
           <ul className="ck-night-checks">
@@ -125,8 +127,8 @@ export function TestsPopover({
           <div className="ck-night-check ck-night-check--add">
             <input
               className="ck-night-input"
-              aria-label="Add a test command"
-              placeholder="Add a command, like npm test"
+              aria-label={t('r11.n.addTest')}
+              placeholder={t('r11.n.addTestHint')}
               value={adding}
               disabled={busy}
               onChange={(e) => setAdding(e.target.value)}
@@ -134,13 +136,13 @@ export function TestsPopover({
             />
             {adding.trim() && (
               <button type="button" className="ck-btn ck-btn--secondary ck-btn--sm" disabled={busy} onClick={() => void addTyped()}>
-                Add
+                {t('r11.n.add')}
               </button>
             )}
           </div>
 
           <button type="button" className="ck-btn ck-btn--plain ck-btn--sm ck-night-nochecks" disabled={busy} onClick={onNoTests}>
-            No tests for this project
+            {t('r11.n.noTests')}
           </button>
         </>
       )}
@@ -166,6 +168,7 @@ function DeclaredRow({
   onSave: (text: string) => void;
   onRemove: () => void;
 }) {
+  useT();
   const [draft, setDraft] = useState(text);
   const commit = () => {
     const next = draft.trim();
@@ -184,7 +187,7 @@ function DeclaredRow({
         onKeyDown={(e) => e.key === 'Enter' && commit()}
       />
       <button type="button" className="ck-btn ck-btn--plain ck-btn--sm" disabled={disabled} onClick={onRemove}>
-        Remove
+        {t('r11.n.remove')}
       </button>
     </li>
   );

@@ -190,3 +190,34 @@ describe('QuestionCard', () => {
     expect(waitCaption(base, 600_000)).toBe('Planner has stopped waiting');
   });
 });
+
+describe('Dismiss is optional', () => {
+  it('has a Dismiss button only when the caller gives onDismiss (it cancels the question, so the jump-out card passes none)', () => {
+    render(base);
+    expect(buttons().some((b) => b.dataset.ib === 'dismiss')).toBe(true);
+    act(() => {
+      root.render(<QuestionCard q={base} now={90_000} onAnswer={() => undefined} />);
+    });
+    expect(buttons().some((b) => b.dataset.ib === 'dismiss')).toBe(false);
+    expect(byText('Postgres')).toBeTruthy();
+  });
+});
+
+describe('a tool permission card', () => {
+  const perm: Question = { ...base, agent: undefined, kind: 'acp_permission', question: 'Claude asks permission: Write perm3.txt', choices: [{ id: 'allow', label: 'Allow Once' }] };
+  it('names the agent and the action in plain words and badges Permission, not Question', () => {
+    render(perm);
+    expect(host.querySelector('.ib-title')!.textContent).toBe('Claude wants to write perm3.txt');
+    expect(host.querySelector('.ib-chip')!.textContent).toBe('Permission');
+    expect(host.textContent).not.toContain('an agent');
+  });
+  it('names an MCP tool by its tool, not the raw mcp__ id', () => {
+    render({ ...perm, question: 'Claude asks permission: mcp__potato-workspace__ask_user' });
+    expect(host.querySelector('.ib-title')!.textContent).toBe('Claude wants to use the ask_user tool');
+  });
+  it('an ordinary question keeps its words and its Question badge', () => {
+    render(base);
+    expect(host.querySelector('.ib-title')!.textContent).toBe('Which database?');
+    expect(host.querySelector('.ib-chip')!.textContent).toBe('Question');
+  });
+});

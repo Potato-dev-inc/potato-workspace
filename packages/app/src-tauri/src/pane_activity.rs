@@ -20,7 +20,9 @@ use std::time::Duration;
 /// Cadence of the ticker, and so the minimum gap between two recomputations of one pane.
 pub const TICK: Duration = Duration::from_millis(1000);
 /// Visible non-empty lines handed to the profile.
-const TAIL_LINES: usize = 24;
+pub use pm_core::pane_activity::visible_tail;
+#[cfg(test)]
+pub use pm_core::pane_activity::TAIL_LINES;
 
 /// What the ticker needs to know about one pane.
 pub struct PaneSnapshot {
@@ -57,13 +59,6 @@ pub fn invalidate(pane_id: &str) {
 /// The current phrase of every pane that has one.
 pub fn snapshot() -> HashMap<String, Activity> {
     STATE.lock().last.iter().map(|(id, (_, a))| (id.clone(), a.clone())).collect()
-}
-
-/// The last `TAIL_LINES` non-empty lines of a screen.
-pub fn visible_tail(screen: &str) -> String {
-    let mut lines: Vec<&str> = screen.lines().filter(|l| !l.trim().is_empty()).rev().take(TAIL_LINES).collect();
-    lines.reverse();
-    lines.join("\n")
 }
 
 fn hash_of(tail: &str, status: PaneStatus) -> u64 {

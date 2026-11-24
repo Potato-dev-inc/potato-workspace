@@ -3,6 +3,7 @@
 // the buttons after `CONFIRM_MS` when nothing is pressed. Every string here comes from the agent or from the
 // person's own task, so it is shown as text only (React escapes it), never as HTML.
 import { useEffect, useRef, useState } from 'react';
+import { t, useT } from '../../../i18n';
 import type { NightAttemptEnd, NightAttemptView, NightCounts, NightTaskView } from '../../../lib/night';
 
 /** How long a first press waits for the second one. */
@@ -83,6 +84,7 @@ function checksText(task: NightTaskView): string | null {
 }
 
 export function TaskRow({ task, busy = false, error = null, onKeep, onThrowAway, onOpenPane }: TaskRowProps) {
+  useT();
   const [step, setStep] = useState<Step | null>(null);
   const [open, setOpen] = useState(false);
   const timer = useRef<number | undefined>(undefined);
@@ -143,28 +145,28 @@ export function TaskRow({ task, busy = false, error = null, onKeep, onThrowAway,
                 {keepQuestion(task)}
               </span>
               <button type="button" className="ck-btn ck-btn--primary" disabled={busy} onClick={() => press('keep')}>
-                Keep
+                {t('r11.n.keep')}
               </button>
             </>
           )}
           {step === 'throw' && (
             <>
               <span className="ck-morning-ask" role="status">
-                Delete this copy?
+                {t('r11.n.deleteCopy')}
               </span>
               <button type="button" className="ck-btn ck-btn--primary" disabled={busy} onClick={() => press('throw')}>
-                Throw away
+                {t('r11.n.throw')}
               </button>
             </>
           )}
           {step === null && showKeep && (
             <button type="button" className="ck-btn ck-btn--primary" disabled={busy} onClick={() => press('keep')}>
-              Keep
+              {t('r11.n.keep')}
             </button>
           )}
           {step === null && showThrow && (
             <button type="button" className="ck-btn ck-btn--plain" disabled={busy} onClick={() => press('throw')}>
-              Throw away
+              {t('r11.n.throw')}
             </button>
           )}
         </span>
@@ -172,7 +174,7 @@ export function TaskRow({ task, busy = false, error = null, onKeep, onThrowAway,
           type="button"
           className="ck-icon-btn ck-morning-toggle"
           aria-expanded={open}
-          aria-label={open ? 'Hide details' : 'Show details'}
+          aria-label={open ? t('r11.n.hide') : t('r11.n.show')}
           onClick={() => setOpen((now) => !now)}
         >
           {open ? '^' : 'v'}
@@ -195,7 +197,7 @@ export function TaskRow({ task, busy = false, error = null, onKeep, onThrowAway,
         <div className="ck-morning-details">
           {task.summaries.length > 0 && (
             <section>
-              <p className="ck-morning-section">What it did</p>
+              <p className="ck-morning-section">{t('r11.n.didH')}</p>
               <ul className="ck-morning-list">
                 {task.summaries.map((line, i) => (
                   <li key={i}>{line}</li>
@@ -205,19 +207,19 @@ export function TaskRow({ task, busy = false, error = null, onKeep, onThrowAway,
           )}
           {filesText(task) && (
             <section>
-              <p className="ck-morning-section">Changes</p>
+              <p className="ck-morning-section">{t('r11.n.changesH')}</p>
               <p>{filesText(task)}</p>
             </section>
           )}
           {checks && (
             <section>
-              <p className="ck-morning-section">Checks</p>
+              <p className="ck-morning-section">{t('r11.n.checksH')}</p>
               <p>{checks}</p>
             </section>
           )}
           {task.testChangeLines.length > 0 && (
             <section>
-              <p className="ck-morning-section">Test changes</p>
+              <p className="ck-morning-section">{t('r11.n.testChangesH')}</p>
               <ul className="ck-morning-list">
                 {task.testChangeLines.map((line, i) => (
                   <li key={i}>{line}</li>
@@ -227,7 +229,7 @@ export function TaskRow({ task, busy = false, error = null, onKeep, onThrowAway,
           )}
           {task.attempts.length > 0 && (
             <section>
-              <p className="ck-morning-section">Tries</p>
+              <p className="ck-morning-section">{t('r11.n.triesH')}</p>
               <ul className="ck-morning-list">
                 {task.attempts.map((a) => (
                   <li key={a.n}>{tryText(a)}</li>
@@ -237,7 +239,7 @@ export function TaskRow({ task, busy = false, error = null, onKeep, onThrowAway,
           )}
           {pane && onOpenPane && (
             <button type="button" className="ck-btn ck-btn--plain" onClick={() => onOpenPane(pane)}>
-              Open its terminal
+              {t('r11.n.openTerminal')}
             </button>
           )}
         </div>

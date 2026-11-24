@@ -1,0 +1,30 @@
+// Traditional Chinese (Taiwan) for ../en/myAgents.ts (same keys). Term choices are listed at the top of ../zh-TW.ts.
+import type { EnglishKey } from '../en';
+
+export const myAgents: Partial<Record<EnglishKey, string>> = {
+  'myAgents.title': '使用我自己的 AI 助理',
+  'myAgents.note': 'AI 助理在{name}上執行，它的模型呼叫會經過這台電腦、使用你的帳號。你的登入不會離開這台電腦。',
+  'myAgents.runsOn': '在 {name} 上執行，使用你在 {pc} 上的 {agent} 帳號。',
+  'myAgents.row': '{agent}（我的帳號）',
+  'myAgents.rowHint': '來自這台電腦',
+  'myAgents.hintSignedOut': '請先登入',
+  'myAgents.hintBorrowed': '使用借來的登入',
+  'myAgents.account': '來自{name}的我的帳號',
+  'myAgents.chip': '來自{name}的我的帳號',
+  'myAgents.chipTip': '這個對話在另一台電腦上執行，它的模型呼叫使用你在這台電腦上的帳號。',
+  'myAgents.used': '目前已使用：{used}',
+  'myAgents.signInFirst': '請先登入以供出借。開啟「連結」，再到「出借」，為 {agent} 加入一個帳號。',
+  'myAgents.installFirst': '請先在{name}上安裝 {agent}。',
+  'myAgents.notAllowed': '{name}還不能使用你的帳號。請先在「連結」中允許那台電腦，然後再試一次。',
+  'myAgents.noAnswer': '{name}沒有回應，請再試一次。',
+  'myAgents.connect.uses': '使用你這台電腦的帳號',
+  'myAgents.connect.stop': '停止',
+  'myAgents.connect.stopTip': '停止把你的帳號借給{name}。它上面用這些帳號的對話會停止。',
+  'myAgents.paused': '已暫停：有你帳號的電腦「{name}」已離線。',
+  'myAgents.pausedBack': '已暫停：有你帳號的電腦已離線。',
+  'myAgents.continue': '繼續',
+  'myAgents.continuing': '傳送中…',
+  'myAgents.signedOutHere': '你這台電腦上的登入已結束。請重新登入，然後再試一次。',
+  'myAgents.signedOutThere': '「{name}」借出的登入已結束。請在「{name}」重新登入，然後再試一次。',
+  'myAgents.signedOutThereNoName': '借給這個對話的登入已結束。請在借出的那台電腦重新登入，然後再試一次。',
+};

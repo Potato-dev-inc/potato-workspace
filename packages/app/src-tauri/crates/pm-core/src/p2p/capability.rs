@@ -1,0 +1,199 @@
+//! Capabilities: the named things a linked computer may do for another ("desk/input", "files", later "agents",
+//! "panes", "workspace"). The core knows only the registry: a name, the protocol name it speaks, whether a relay may
+//! carry it, and a handler. Each capability is its own permission, per device, and every one starts off.
+
+use std::collections::{HashMap, HashSet};
+use std::sync::{Arc, Mutex, RwLock};
+
+use async_trait::async_trait;
+
+use super::alpn;
+use super::endpoint::{Link, NodeId, P2pError};
+
+pub const DESK_INPUT: &str = "desk/input";
+pub const DESK_CLIPBOARD: &str = "desk/clipboard";
+pub const FILES: &str = "files";
+pub const SPACES: &str = "spaces";
+/// Share an agent: a borrowing PC's model calls, carried to the lending PC ("Lend through my PC").
+pub const AGENTS_LEND: &str = "agents/lend";
+/// Devices: a paired Workspace runs agents and terminals on this PC (`pm/agents/1`). Its level is a second entry.
+pub const AGENTS_REMOTE: &str = "agents/remote";
+/// Marks the level of `agents/remote` as "Answer" (watch, plus answer, message and stop). Absent (and no Full) = "Watch" only.
+/// Only ever set together with `agents/remote`.
+pub const AGENTS_REMOTE_ANSWER: &str = "agents/remote/answer";
+/// Marks the level of `agents/remote` as "Full": the one switch "Can work on this PC (start agents, use the terminal, change
+/// files)". Absent = no such right. Only ever set together with `agents/remote`.
+pub const AGENTS_REMOTE_FULL: &str = "agents/remote/full";
+/// Marker (not a right): this PC was paired through the person's own account, so Full was its default (`TrustList::grant_account_default`).
+/// Kept when the person lowers the level, so Connect can say why. Never in `PERMISSIONABLE`: no route, phone or window sets it directly.
+pub const AGENTS_REMOTE_ACCOUNT: &str = "agents/remote/account";
+/// Marker (not a right): this PC set up this machine over SSH (`potato-host pair --stdio`). The person who holds the SSH key owns the
+/// box, so Full is its default (`TrustList::grant_ssh_full`). Kept when the person lowers the level. Never in `PERMISSIONABLE`.
+pub const AGENTS_REMOTE_SSH: &str = "agents/remote/ssh";
+/// Pairing is not a permission anyone is given: it is open to strangers only while the person shows a code.
+pub const PAIR: &str = "pair";
+/// Far-away pairing with a pairing link: open to strangers only while a link is shown, and a relay may carry it.
+pub const PAIR_LINK: &str = "pair/link";
+/// Pairing two PCs of one account: open only while this PC's own tick "Let my other PCs open this PC" is on. A caller
+/// that is not one of the account's PCs is refused before any sheet appears.
+pub const PAIR_ACCOUNT: &str = "pair/account";
+/// This PC lets that device also reach it through its own web address (stable link / tunnel), with a device token.
+/// Only ever set together with `agents/remote`.
+pub const AGENTS_REMOTE_WEB: &str = "agents/remote/web";
+/// This PC lets that device also call its read-only `/pclink` routes over this PC's own public tunnel address, each request signed with the
+/// device's node key (`device_link::pcdoor`). Not the old web route (`agents/remote/web`, a phone token, off for good). Only ever set
+/// together with `agents/remote`. Only the person, from an app window, turns it on.
+pub const AGENTS_REMOTE_PCDOOR: &str = "agents/remote/pcdoor";
+/// This PC lets that device ask to borrow its agent sign-ins (the lend ask / yes / take-back items travel on the device link).
+/// Independent of `agents/remote`; the device is still let in on the agents link so the items can arrive.
+pub const LEND_CONTROL: &str = "agents/lend/control";
+
+/// What the person may turn on per computer, in the order the page shows them. Everything starts off.
+pub const PERMISSIONABLE: [&str; 9] = [DESK_INPUT, DESK_CLIPBOARD, FILES, AGENTS_REMOTE, AGENTS_REMOTE_ANSWER, AGENTS_REMOTE_FULL, AGENTS_REMOTE_WEB, AGENTS_REMOTE_PCDOOR, LEND_CONTROL];
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum RelayPolicy {
+    /// Direct connections only.
+    Never,
+    /// A relay may carry it when no direct path exists (the relay sees only encrypted packets).
+    Allowed,
+}
+
+/// What a capability does with a connection that passed every check. It gets the peer and the link; it never gets
+/// the endpoint or the key.
+#[async_trait]
+pub trait CapabilityHandler: Send + Sync {
+    async fn serve(&self, peer: NodeId, link: Arc<dyn Link>);
+}
+
+pub struct Capability {
+    pub id: String,
+    pub alpn: Vec<u8>,
+    pub relay: RelayPolicy,
+    pub handler: Arc<dyn CapabilityHandler>,
+}
+
+impl Capability {
+    pub fn new(id: &str, alpn: &[u8], relay: RelayPolicy, handler: Arc<dyn CapabilityHandler>) -> Self {
+        Self { id: id.to_string(), alpn: alpn.to_vec(), relay, handler }
+    }
+
+    /// The stricter of what the capability asks and what its protocol name allows (`alpn::relay_possible`).
+    pub fn relay_allowed(&self) -> bool {
+        self.relay == RelayPolicy::Allowed && alpn::relay_possible(&self.alpn)
+    }
+}
+
+impl std::fmt::Debug for Capability {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "Capability({} on {})", self.id, String::from_utf8_lossy(&self.alpn))
+    }
+}
+
+#[derive(Default)]
+pub struct Registry {
+    by_id: RwLock<HashMap<String, Arc<Capability>>>,
+}
+
+impl Registry {
+    pub fn new() -> Self {
+        Self::default()
+    }
+
+    pub fn register(&self, cap: Capability) -> Result<(), P2pError> {
+        if cap.id.is_empty() || !alpn::is_valid(&cap.alpn) {
+            return Err(P2pError::BadCapability(format!("{}: bad id or protocol name", cap.id)));
+        }
+        let mut map = self.by_id.write().unwrap_or_else(|p| p.into_inner());
+        if map.contains_key(&cap.id) || map.values().any(|c| c.alpn == cap.alpn) {
+            return Err(P2pError::BadCapability(format!("{}: id or protocol name already taken", cap.id)));
+        }
+        map.insert(cap.id.clone(), Arc::new(cap));
+        Ok(())
+    }
+
+    pub fn get(&self, id: &str) -> Option<Arc<Capability>> {
+        self.by_id.read().unwrap_or_else(|p| p.into_inner()).get(id).cloned()
+    }
+
+    pub fn by_alpn(&self, alpn: &[u8]) -> Option<Arc<Capability>> {
+        self.by_id.read().unwrap_or_else(|p| p.into_inner()).values().find(|c| c.alpn == alpn).cloned()
+    }
+
+    pub fn ids(&self) -> Vec<String> {
+        let mut v: Vec<String> = self.by_id.read().unwrap_or_else(|p| p.into_inner()).keys().cloned().collect();
+        v.sort();
+        v
+    }
+}
+
+/// Who may use which capability on this computer. Default: nobody, nothing. Changed only by the person (the pairing
+/// sheet and the device list, DL-6), never by a peer, an agent, or a request that arrives over the link.
+pub trait Permissions: Send + Sync {
+    fn allowed(&self, peer: &NodeId, capability: &str) -> bool;
+    fn set(&self, peer: &NodeId, capability: &str, on: bool);
+}
+
+/// Permissions held in memory. DL-6 puts the trust list on disk behind the same trait.
+#[derive(Default)]
+pub struct MemoryPermissions {
+    on: Mutex<HashSet<(NodeId, String)>>,
+}
+
+impl MemoryPermissions {
+    pub fn new() -> Self {
+        Self::default()
+    }
+}
+
+/// One capability may bring its own permission rule; everything else asks `base`.
+/// Generic on purpose: it knows only capability ids, never what they do.
+pub struct RoutedPermissions {
+    base: Arc<dyn Permissions>,
+    routes: RwLock<std::collections::BTreeMap<String, Arc<dyn Permissions>>>,
+}
+
+impl RoutedPermissions {
+    pub fn new(base: Arc<dyn Permissions>) -> Arc<Self> {
+        Arc::new(Self { base, routes: RwLock::new(Default::default()) })
+    }
+
+    /// Give `capability` its own rule. Replaces an earlier route for the same id.
+    pub fn route(&self, capability: &str, perms: Arc<dyn Permissions>) {
+        if let Ok(mut r) = self.routes.write() {
+            r.insert(capability.to_string(), perms);
+        }
+    }
+
+    fn pick(&self, capability: &str) -> Arc<dyn Permissions> {
+        self.routes
+            .read()
+            .ok()
+            .and_then(|r| r.get(capability).cloned())
+            .unwrap_or_else(|| self.base.clone())
+    }
+}
+
+impl Permissions for RoutedPermissions {
+    fn allowed(&self, peer: &NodeId, capability: &str) -> bool {
+        self.pick(capability).allowed(peer, capability)
+    }
+    fn set(&self, peer: &NodeId, capability: &str, on: bool) {
+        self.pick(capability).set(peer, capability, on)
+    }
+}
+
+impl Permissions for MemoryPermissions {
+    fn allowed(&self, peer: &NodeId, capability: &str) -> bool {
+        self.on.lock().unwrap_or_else(|p| p.into_inner()).contains(&(*peer, capability.to_string()))
+    }
+
+    fn set(&self, peer: &NodeId, capability: &str, on: bool) {
+        let mut set = self.on.lock().unwrap_or_else(|p| p.into_inner());
+        if on {
+            set.insert((*peer, capability.to_string()));
+        } else {
+            set.remove(&(*peer, capability.to_string()));
+        }
+    }
+}

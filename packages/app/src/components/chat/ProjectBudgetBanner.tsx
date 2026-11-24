@@ -4,6 +4,7 @@
 // It reads the project's standing when the chat changes (`signal`), not on a timer, and shows nothing without a limit.
 import { useEffect, useRef, useState } from 'react';
 import { t, useT } from '../../i18n';
+import { listen } from '../../lib/events';
 import { tauri, type ProjectBudgetStatus } from '../../lib/tauri';
 import '../../styles/cockpit-project-budget.css';
 
@@ -25,6 +26,19 @@ export function ProjectBudgetBanner({ paneId, signal }: { paneId: string; signal
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState(false);
   const alive = useRef(true);
+  // The limit was changed (set to No limit, or raised above what was used): read the standing again, so the card goes.
+  const [limitsChanged, setLimitsChanged] = useState(0);
+  useEffect(() => {
+    let off: (() => void) | undefined;
+    let gone = false;
+    listen('project-budget://changed', () => setLimitsChanged((n) => n + 1))
+      .then((un) => (gone ? un() : (off = un)))
+      .catch(() => undefined);
+    return () => {
+      gone = true;
+      off?.();
+    };
+  }, []);
 
   useEffect(() => {
     alive.current = true;
@@ -39,7 +53,7 @@ export function ProjectBudgetBanner({ paneId, signal }: { paneId: string; signal
     return () => {
       alive.current = false;
     };
-  }, [paneId, signal]);
+  }, [paneId, signal, limitsChanged]);
 
   if (!status?.reached) return null;
 

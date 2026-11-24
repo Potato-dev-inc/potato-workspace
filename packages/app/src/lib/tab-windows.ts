@@ -4,7 +4,7 @@
 // and returns to it. Same pattern as an artifact's "Open in a window" (`artifacts_pop_out`).
 import { useEffect, useSyncExternalStore } from 'react';
 import { invoke } from '@tauri-apps/api/core';
-import { listen } from '@tauri-apps/api/event';
+import { listen } from './events';
 import { closeFileTab, fileTabId, openFileTab, pathOfTab } from './file-tabs';
 
 export const CHAT_TAB = 'chat';

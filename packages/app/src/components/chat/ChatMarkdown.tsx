@@ -22,6 +22,8 @@ const WEB_URL = /^https?:\/\/[^\s<>"']+$/i;
 /** How long the button says "Copied". */
 const COPIED_MS = 1500;
 
+import { t } from '../../i18n';
+
 export function ChatMarkdown({ text, onOpenLink }: ChatMarkdownProps) {
   const blocks = useMemo(() => safeParse(text), [text]);
   return (
@@ -165,7 +167,7 @@ function renderList(list: ListBlock, key?: number): ReactNode {
     }
     return (
       <li key={k} className="ck-chat-md-task" data-checked={checked === null ? undefined : String(checked)}>
-        <span className="ck-chat-md-box" role="img" aria-label={checked ? 'Done' : 'Not done'} />
+        <span className="ck-chat-md-box" role="img" aria-label={checked ? t('r10.status.done') : t('r10.status.notDone')} />
         <span className="ck-chat-md-task-body">
           {renderInlines(children)}
           {item.sub && renderList(item.sub)}

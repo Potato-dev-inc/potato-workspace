@@ -16,7 +16,7 @@ use crate::push::triggers::sanitize;
 use crate::redact::mask_emails;
 
 use super::copy;
-use super::model::{Alert, AlertView, FileView, SideView, MAX_FILES_SHOWN, MAX_PATH_CHARS};
+use super::model::{Alert, AlertView, FileView, Level, Relation, SideView, MAX_FILES_SHOWN, MAX_PATH_CHARS};
 
 /// Pane headings are cut to this many characters (`attention::copy::headings` cuts them the same way).
 const MAX_NAME_CHARS: usize = 40;
@@ -99,7 +99,8 @@ fn build(alert: &Alert, clean: &dyn Fn(&str) -> String, home: Option<&str>) -> A
         title,
         detail,
         advice,
-        place: copy::place(alert.relation),
+        // Two chats that wrote one file (any folder, `paths`): not "in the same folder", the folders may differ.
+        place: if alert.level == Level::SameFile && alert.relation == Relation::SameFolder { "Both wrote the same file.".to_string() } else { copy::place(alert.relation) },
         footer: copy::footer(),
         sides,
         files,
@@ -268,6 +269,15 @@ mod tests {
         assert_eq!(v.level, "same_file");
         assert_eq!(v.title, "fake_a and fake_b both changed src/auth.ts");
         assert_eq!(v.detail, "Different places in the file. No clash yet.");
+        assert_eq!(v.advice, None);
+    }
+
+    #[test]
+    fn a_file_both_chats_wrote_reads_as_one_file_not_one_folder() {
+        let alert = alert_with(Relation::SameFolder, Level::SameFile, vec![file("collide21.txt", How::Shared)], None);
+        let v = view(&alert, &|s: &str| plain(s));
+        assert_eq!(v.title, "fake_a and fake_b both changed collide21.txt");
+        assert_eq!(v.place, "Both wrote the same file.");
         assert_eq!(v.advice, None);
     }
 

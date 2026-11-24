@@ -4,6 +4,7 @@ import type { CockpitApi } from '../../hooks/useCockpit';
 import type { DockItem } from './pane-chrome';
 import { PaneApprovalCard } from './PaneApprovalCard';
 import { PaneStuckCard } from './StuckCard';
+import { t } from '../../i18n';
 
 export function DockedCards({
   c,
@@ -24,7 +25,7 @@ export function DockedCards({
       {dockNow === 'stuck' && <PaneStuckCard c={c} paneId={paneId} />}
       {/* The Inbox's card, docked: same words, same order, same keyboard rules; no "Open" button here. */}
       {dockNow === 'ask' && prompt && (
-        <div className="ib-dock" role="group" aria-label="Agent question">
+        <div className="ib-dock" role="group" aria-label={t('r21.sw.agentQuestion')}>
           <PaneApprovalCard c={c} paneId={paneId} />
         </div>
       )}

@@ -3,58 +3,45 @@
 //   idle = installed or missing but not tested, exited (check) = ready,
 //   waiting_input (plus) = needs you to sign in, error (cross) = problem.
 import { errorSentence } from '../../lib/sayError';
+import { t, useT } from '../../i18n';
+import { backendText } from '../../lib/backendWords';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useHost } from '../../lib/host/context';
-import { agentHealthApiFor, type AgentHealth, type AgentHealthApi, type HealthState } from '../../lib/agent-health';
+import { agentHealthApiFor, type AgentHealth, type AgentHealthApi } from '../../lib/agent-health';
+import { agentReadiness, type AgentReadiness, type ReadinessState } from '../../lib/agentReadiness';
+import { rememberTest } from '../../lib/setup-checks/test-memory';
+import { useTestMemory } from '../../lib/useAgentReadiness';
+import { ownLoginApiFor, type OwnLogin } from '../settings/agents/ownSignIn';
 import { agentInstallApi, type AgentInstallApi, type InstallPlan } from '../../lib/agent-install';
 import { CodeText } from '../common/CodeText';
 import { DotSpinner, type DotSpinnerProps } from './DotSpinner';
 import { InstallSheet } from './InstallSheet';
 import '../../styles/agent-doctor.css';
 
-export function glyphFor(state: HealthState): DotSpinnerProps['status'] {
+export function glyphFor(state: ReadinessState): DotSpinnerProps['status'] {
   switch (state) {
     case 'ready':
+    case 'signed_in':
       return 'exited';
-    case 'needs_login':
+    case 'needs_sign_in':
       return 'waiting_input';
-    case 'error':
+    case 'broken':
       return 'error';
     default:
       return 'idle';
   }
 }
 
-export function stateLabel(state: HealthState): string {
-  switch (state) {
-    case 'ready':
-      return 'Ready';
-    case 'needs_login':
-      return 'Needs login';
-    case 'error':
-      return 'Problem';
-    case 'not_installed':
-      return 'Not installed';
-    default:
-      return 'Not tested';
-  }
-}
-
 type Action = 'install' | 'signin' | 'test' | 'copy';
 
-const ACTION_LABEL: Record<Action, string> = { install: 'Install', signin: 'Sign in', test: 'Test', copy: 'Copy install command' };
-const ACTION_TITLE: Record<Action, string> = {
-  install: 'Shows the command first. Nothing runs until you press Run.',
-  signin: 'A window opens where you sign in.',
-  test: 'Asks the agent one tiny question. Uses a few tokens.',
-  copy: 'Copies the command so you can run it yourself.',
-};
+const actionLabel = (a: Action): string => t(({ install: 'r21.doc.install', signin: 'r21.doc.signin', test: 'r21.doc.test', copy: 'r21.doc.copyInstall' } as const)[a]);
+const actionTitle = (a: Action): string => t(({ install: 'r21.doc.tInstall', signin: 'r21.doc.tSignin', test: 'r21.doc.tTest', copy: 'r21.doc.tCopy' } as const)[a]);
 
 /** The one thing a row asks you to do next; the rest goes under More. `null`: nothing to do. */
-export function primaryAction(r: AgentHealth): Action | null {
-  if (r.state === 'not_installed') return 'install';
-  if (r.state === 'needs_login') return 'signin';
-  if ((r.state === 'unchecked' || r.state === 'error') && r.installed && r.can_test) return 'test';
+export function primaryAction(r: AgentHealth, standing: AgentReadiness): Action | null {
+  if (standing.state === 'not_installed') return 'install';
+  if (standing.state === 'needs_sign_in') return 'signin';
+  if ((standing.state === 'not_checked' || standing.state === 'broken' || standing.state === 'signed_in') && r.installed && r.can_test) return 'test';
   return null;
 }
 
@@ -68,21 +55,21 @@ export function moreActions(r: AgentHealth, primary: Action | null): Action[] {
 }
 
 const GROUPS = [
-  { id: 'needs', title: 'Needs you' },
-  { id: 'ready', title: 'Ready' },
-  { id: 'missing', title: 'Not installed' },
+  { id: 'needs', title: 'r21.doc.needsYou' },
+  { id: 'ready', title: 'r21.doc.ready' },
+  { id: 'missing', title: 'r21.doc.notInstalled' },
 ] as const;
 
-function groupOf(state: HealthState): 'needs' | 'ready' | 'missing' {
-  return state === 'ready' ? 'ready' : state === 'not_installed' ? 'missing' : 'needs';
+function groupOf(state: ReadinessState): 'needs' | 'ready' | 'missing' {
+  return state === 'ready' || state === 'signed_in' ? 'ready' : state === 'not_installed' ? 'missing' : 'needs';
 }
 
 /** The row's sentence. A raw exit code never shows; it stays in the tooltip. */
 function plainReason(r: AgentHealth): string {
   if (r.state === 'error' && /exit code|did not start/i.test(r.reason)) {
-    return `${r.label} did not start. Try Test again, or reinstall it.`;
+    return t('r21.doc.didNotStart', { label: r.label });
   }
-  return r.reason;
+  return backendText(r.reason);
 }
 
 /** The sign-in note sits behind a "?" so the row stays short. Closed by default. */
@@ -94,7 +81,7 @@ function SignInHelp({ id }: { id: string }) {
       <button
         type="button"
         className="ck-btn ck-btn--plain ck-btn--sm"
-        aria-label="About signing in"
+        aria-label={t('r21.doc.aboutSignin')}
         aria-expanded={open}
         aria-controls={open ? panel : undefined}
         onClick={() => setOpen((o) => !o)}
@@ -103,7 +90,7 @@ function SignInHelp({ id }: { id: string }) {
       </button>
       {open && (
         <p id={panel} className="ck-doctor-hint">
-          A window opens where you sign in. Potato Workspace never sees your password.
+          {t('r21.doc.signinHelp')}
         </p>
       )}
     </div>
@@ -153,6 +140,7 @@ export function AgentDoctor({
   onRows,
   onOpenStore,
 }: AgentDoctorProps) {
+  useT();
   const host = useHost();
   const api = useMemo(() => givenApi ?? agentHealthApiFor(host), [givenApi, host]);
   const [rows, setRows] = useState<AgentHealth[] | null>(null);
@@ -165,6 +153,19 @@ export function AgentDoctor({
   keptInstalls = installs;
   const [loadError, setLoadError] = useState<string | null>(null);
   const [testing, setTesting] = useState<Set<string>>(new Set());
+  // How each agent stands is `agentReadiness`, the same words as the Overview and the Agents cards: from the check, the login read and the kept Tests.
+  const tests = useTestMemory();
+  const [logins, setLogins] = useState<OwnLogin[] | null>(null);
+  useEffect(() => {
+    let live = true;
+    Promise.resolve()
+      .then(() => ownLoginApiFor(host).states())
+      .then((l) => live && setLogins(l), () => undefined);
+    return () => {
+      live = false;
+    };
+  }, [host, rows]);
+  const standingOf = (r: AgentHealth): AgentReadiness => agentReadiness(r.id, { health: rows ?? [], logins, tests });
 
   const load = useCallback(() => {
     setLoadError(null);
@@ -185,12 +186,15 @@ export function AgentDoctor({
     setTesting((s) => new Set(s).add(id));
     api
       .test(id)
-      .then((result) => setRows((cur) => (cur ?? []).map((r) => (r.id === id ? result : r))))
+      .then((result) => {
+        rememberTest(result); // the Overview and the Agents cards read the same memory
+        setRows((cur) => (cur ?? []).map((r) => (r.id === id ? result : r)));
+      })
       .catch((e) =>
         setRows((cur) =>
           (cur ?? []).map((r) =>
             r.id === id
-              ? { ...r, state: 'error', reason: `The test could not run: ${errorSentence(e)}` }
+              ? { ...r, state: 'error', reason: t('r21.doc.testFailed', { why: errorSentence(e) }) }
               : r,
           ),
         ),
@@ -249,7 +253,7 @@ export function AgentDoctor({
       .then((res) => {
         setRows((cur) => (cur ?? []).map((r) => (r.id === id ? res.health : r)));
         if (res.health.installed) {
-          setInstall(id, { phase: 'result', tone: 'ok', text: 'Installed. Sign in next.' });
+          setInstall(id, { phase: 'result', tone: 'ok', text: t('r21.doc.installedNext') });
         } else if (tool && exitCode === 0) {
           // A prerequisite is in place: ask about the next step (a fresh plan, so it is accurate).
           openInstall(id);
@@ -257,14 +261,14 @@ export function AgentDoctor({
           setInstall(id, {
             phase: 'result',
             tone: 'problem',
-            text: 'Installed, but Potato Workspace cannot find it yet.',
+            text: t('r21.doc.cannotFind'),
             again: true,
           });
         } else {
           setInstall(id, {
             phase: 'result',
             tone: 'problem',
-            text: `${message ?? 'The install did not finish.'} Your PC is fine. You can try again.`,
+            text: t('r21.doc.pcFine', { message: message ?? t('r21.doc.installUnfinished') }),
           });
         }
       })
@@ -279,18 +283,18 @@ export function AgentDoctor({
       .then((res) => {
         setRows((cur) => (cur ?? []).map((r) => (r.id === id ? res.health : r)));
         if (res.health.installed) {
-          setInstall(id, { phase: 'result', tone: 'ok', text: 'Installed. Sign in next.' });
+          setInstall(id, { phase: 'result', tone: 'ok', text: t('r21.doc.installedNext') });
         } else {
           setInstall(id, {
             phase: 'result',
             tone: 'problem',
-            text: 'Installed, but Potato Workspace cannot find it yet.',
+            text: t('r21.doc.cannotFind'),
             again: true,
             restart: true,
           });
         }
       })
-      .catch(() => setInstall(id, { phase: 'result', tone: 'problem', text: 'Potato Workspace could not check it.', again: true }));
+      .catch(() => setInstall(id, { phase: 'result', tone: 'problem', text: t('r21.doc.couldNotCheck'), again: true }));
   };
 
   // While an install window is open, ask whether its command has finished.
@@ -319,34 +323,33 @@ export function AgentDoctor({
   }, [runningKey, installApi]);
 
   const copy = (text: string) => {
-    const done = () => onNotify?.('Copied. Paste it into a terminal and press Enter.');
-    const failed = () => onNotify?.('Could not copy. Select the command and copy it by hand.');
+    const done = () => onNotify?.(t('r21.doc.copied'));
+    const failed = () => onNotify?.(t('r21.doc.copyFailed'));
     if (!navigator.clipboard) return failed();
     navigator.clipboard.writeText(text).then(done).catch(failed);
   };
 
-  const readyCount = rows?.filter((r) => r.state === 'ready').length ?? 0;
+  const readyCount = rows?.filter((r) => standingOf(r).state === 'ready').length ?? 0;
 
   return (
     <div className={embedded ? 'ck-doctor ck-doctor--embedded' : 'ck-doctor'}>
       <header className="ck-doctor-head">
         {!embedded && (
           <>
-            <h1 className="ck-title">Set up your agents</h1>
+            <h1 className="ck-title">{t('r21.doc.title')}</h1>
             <p className="ck-sub">
-              Agents are the AI helpers that do the work. Here is which ones are on this computer and what to do about the
-              rest.
-              {readyCount > 0 ? ` ${readyCount} tested and ready.` : ''}
+              {t('r21.doc.intro')}
+              {readyCount > 0 ? ` ${t('r21.doc.readyCount', { n: readyCount })}` : ''}
             </p>
           </>
         )}
         <div className="ck-doctor-bar">
           <button type="button" className="ck-btn ck-btn--plain ck-btn--sm" onClick={load}>
-            Check again
+            {t('r21.doc.checkAgain')}
           </button>
           {onClose && !embedded && (
             <button type="button" className="ck-btn ck-btn--plain ck-btn--sm" onClick={onClose}>
-              Close
+              {t('r21.doc.close')}
             </button>
           )}
         </div>
@@ -354,29 +357,30 @@ export function AgentDoctor({
 
       {loadError && (
         <div className="ck-doctor-error">
-          <p className="ck-sub">Could not check your agents.</p>
+          <p className="ck-sub">{t('r21.doc.couldNotCheckAgents')}</p>
           <button type="button" className="ck-btn ck-btn--secondary ck-btn--sm" onClick={load}>
-            Check again
+            {t('r21.doc.checkAgain')}
           </button>
         </div>
       )}
-      {!rows && !loadError && <p className="ck-sub">Looking for your agents</p>}
+      {!rows && !loadError && <p className="ck-sub">{t('r21.doc.looking')}</p>}
 
       {rows && (
         <div className="ck-doctor-groups">
           {GROUPS.map((group) => {
-            const inGroup = rows.filter((r) => groupOf(r.state) === group.id);
+            const inGroup = rows.filter((r) => groupOf(standingOf(r).state) === group.id);
             if (inGroup.length === 0) return null;
             return (
-              <section key={group.id} aria-label={group.title}>
-                <h2 className="ck-doctor-cap">{group.title}</h2>
-                <ul className="ck-list ck-doctor-list" aria-label={group.title}>
+              <section key={group.id} aria-label={t(group.title)}>
+                <h2 className="ck-doctor-cap">{t(group.title)}</h2>
+                <ul className="ck-list ck-doctor-list" aria-label={t(group.title)}>
                   {inGroup.map((r) => {
                     const busy = testing.has(r.id);
                     const inst = installs[r.id];
                     const working = inst?.phase === 'loading' || inst?.phase === 'running' || inst?.phase === 'finishing';
                     const installedNow = r.installed && inst?.phase === 'result' && inst.tone === 'ok';
-                    const primary = primaryAction(r);
+                    const standing = standingOf(r);
+                    const primary = primaryAction(r, standing);
                     const more = moreActions(r, primary);
                     const run = (action: Action) => {
                       if (action === 'install') openInstall(r.id);
@@ -385,27 +389,27 @@ export function AgentDoctor({
                       else if (r.install_hint) copy(r.install_hint);
                     };
                     return (
-                      <li key={r.id} className="ck-doctor-row" data-state={r.state}>
+                      <li key={r.id} className="ck-doctor-row" data-state={standing.state}>
                         <span className="ck-row-glyph">
-                          <DotSpinner status={busy || working ? 'running' : glyphFor(r.state)} />
+                          <DotSpinner status={busy || working ? 'running' : glyphFor(standing.state)} />
                         </span>
                         <div className="ck-doctor-main">
                           <div className="ck-doctor-line">
                             <span className="ck-row-title">{r.label}</span>
                             <span className="ck-doctor-state">
-                              {busy ? 'Testing' : working ? (inst?.phase === 'finishing' ? 'Checking' : 'Installing') : stateLabel(r.state)}
+                              {busy ? t('r21.doc.testing') : working ? (inst?.phase === 'finishing' ? t('r21.doc.checking') : t('r21.doc.installing')) : standing.label}
                             </span>
                             {r.version && <span className="ck-doctor-version">{r.version}</span>}
                           </div>
                           {!installedNow && (
                             <p className="ck-doctor-reason" title={r.state === 'error' ? r.reason : undefined}>
                               {busy
-                                ? 'Asking it a tiny question. This can take a minute.'
+                                ? t('r21.doc.asking')
                                 : inst?.phase === 'running'
-                                  ? `Installing ${inst.label} in the window. Potato Workspace checks again when it is done.`
+                                  ? t('r21.doc.installingIn', { label: inst.label })
                                   : inst?.phase === 'finishing'
-                                    ? 'Checking that it works.'
-                                    : plainReason(r)}
+                                    ? t('r21.doc.checkingWorks')
+                                    : standing.state === 'ready' || standing.state === 'signed_in' ? standing.detail : standing.detail && standing.state === 'needs_sign_in' ? standing.detail : plainReason(r)}
                             </p>
                           )}
                           {inst?.phase === 'result' && (
@@ -413,10 +417,10 @@ export function AgentDoctor({
                               <p className="ck-doctor-hint ck-doctor-result" data-tone={inst.tone} role="status">
                                 {inst.text}
                               </p>
-                              {inst.restart && <p className="ck-doctor-hint">Close Potato Workspace and open it again.</p>}
+                              {inst.restart && <p className="ck-doctor-hint">{t('r21.doc.restart')}</p>}
                               {inst.again && (
                                 <button type="button" className="ck-btn ck-btn--secondary ck-btn--sm" onClick={() => recheck(r.id)}>
-                                  Check again
+                                  {t('r21.doc.checkAgain')}
                                 </button>
                               )}
                             </>
@@ -424,24 +428,24 @@ export function AgentDoctor({
                           {r.installed && r.hooks && r.hooks.state !== 'not_supported' && r.hooks.state !== 'off' && (
                             <>
                               <p className="ck-doctor-live" data-live={r.hooks.state}>
-                                Live updates: {r.hooks.sentence}
+                                {t('r21.doc.live', { sentence: backendText(r.hooks.sentence) })}
                               </p>
-                              {r.hooks.how_to && <p className="ck-doctor-hint">{r.hooks.how_to}</p>}
+                              {r.hooks.how_to && <p className="ck-doctor-hint">{backendText(r.hooks.how_to)}</p>}
                             </>
                           )}
-                          {(r.state === 'needs_login' || installedNow) && <SignInHelp id={r.id} />}
+                          {(standing.state === 'needs_sign_in' || installedNow) && <SignInHelp id={r.id} />}
                           {!working && (r.install_hint || r.install_fallback || r.login_hint) && (
                             <details className="ck-doctor-details">
-                              <summary>Details</summary>
+                              <summary>{t('r21.doc.details')}</summary>
                               {r.state === 'not_installed' && r.install_hint && (
                                 <>
-                                  <p className="ck-doctor-hint">To install it yourself, run this in a terminal.</p>
+                                  <p className="ck-doctor-hint">{t('r21.doc.installYourself')}</p>
                                   <code className="ck-doctor-cmd">{r.install_hint}</code>
                                 </>
                               )}
                               {r.state === 'not_installed' && r.install_fallback && (
                                 <p className="ck-doctor-hint">
-                                  <span className="ck-sub">Or with npm: </span>
+                                  <span className="ck-sub">{t('r21.doc.orNpm')}</span>
                                   <code className="ck-doctor-cmd">{r.install_fallback}</code>
                                 </p>
                               )}
@@ -456,7 +460,7 @@ export function AgentDoctor({
                         <div className="ck-doctor-actions">
                           {inst?.phase === 'running' && onShowPane && (
                             <button type="button" className="ck-btn ck-btn--secondary ck-btn--sm" onClick={() => onShowPane(inst.paneId)}>
-                              Show window
+                              {t('r21.doc.showWindow')}
                             </button>
                           )}
                           {primary && !working && (
@@ -465,14 +469,14 @@ export function AgentDoctor({
                               className="ck-btn ck-btn--primary ck-btn--sm"
                               disabled={busy && primary === 'test'}
                               onClick={() => run(primary)}
-                              title={ACTION_TITLE[primary]}
+                              title={actionTitle(primary)}
                             >
-                              {ACTION_LABEL[primary]}
+                              {actionLabel(primary)}
                             </button>
                           )}
                           {more.length > 0 && !working && (
                             <details className="ck-doctor-more">
-                              <summary aria-label={`More for ${r.label}`}>More</summary>
+                              <summary aria-label={t('r21.doc.moreFor', { label: r.label })}>{t('r21.doc.more')}</summary>
                               <div className="ck-doctor-more-list">
                                 {more.map((action) => (
                                   <button
@@ -481,9 +485,9 @@ export function AgentDoctor({
                                     className="ck-btn ck-btn--plain ck-btn--sm"
                                     disabled={busy && action === 'test'}
                                     onClick={() => run(action)}
-                                    title={ACTION_TITLE[action]}
+                                    title={actionTitle(action)}
                                   >
-                                    {ACTION_LABEL[action]}
+                                    {actionLabel(action)}
                                   </button>
                                 ))}
                               </div>
@@ -497,13 +501,13 @@ export function AgentDoctor({
               </section>
             );
           })}
-          {rows.length === 0 && <p className="ck-sub ck-pad">No agents are registered.</p>}
+          {rows.length === 0 && <p className="ck-sub ck-pad">{t('r21.doc.none')}</p>}
         </div>
       )}
       {onOpenStore && (
         <p className="ck-pad">
           <button type="button" className="ck-link" onClick={onOpenStore}>
-            Browse more agents
+            {t('r21.doc.browse')}
           </button>
         </p>
       )}

@@ -52,4 +52,14 @@ describe('AcpConfigChips', () => {
     expect(setConfig).toHaveBeenCalledWith('p1', 'effort', 'high');
     expect(host.querySelector<HTMLElement>('[data-chip-id]')!.dataset.value).toBe('high');
   });
+
+  it('the narrow-column settings button lists every setting and sends a pick', () => {
+    const setConfig = vi.fn(async () => state([]));
+    act(() => root.render(<AcpConfigChips paneId="p1" state={state([select('model', 'model', ['a', 'b']), select('effort', 'thought_level', ['low', 'high'])])} api={{ setConfig }} />));
+    act(() => host.querySelector<HTMLElement>('[data-testid="acp-chips-more"]')!.click());
+    const pop = document.querySelector('[data-testid="acp-chips-popover"]')!;
+    expect(pop.querySelectorAll('[role="radiogroup"]')).toHaveLength(2);
+    act(() => [...pop.querySelectorAll<HTMLElement>('[role="radio"]')].find((b) => b.textContent?.includes('HIGH'))!.click());
+    expect(setConfig).toHaveBeenCalledWith('p1', 'effort', 'high');
+  });
 });

@@ -69,19 +69,22 @@ const rows = () => [...host.querySelectorAll<HTMLElement>('button, [role="option
 const row = (text: string) => [...host.querySelectorAll<HTMLElement>('button, [role="option"]')].find((e) => e.textContent?.includes(text));
 
 describe('the command palette with terminals hidden', () => {
-  it('offers New <agent> only for agents that can chat, plus the plain shells', () => {
+  it('offers New <agent> only for agents that can chat, and no shell row', () => {
     forceShowTerminals(false);
     act(() => root.render(<Palette c={cockpit()} onClose={() => {}} />));
     expect(rows().some((r) => r.includes('New Claude'))).toBe(true);
     expect(rows().some((r) => r.includes('New Aider'))).toBe(false);
-    expect(rows().some((r) => r.includes('New PowerShell'))).toBe(true);
+    expect(rows().some((r) => r.includes('New PowerShell'))).toBe(false);
   });
 
-  it('a shell row starts through the cockpit', () => {
+  it('has no "Reflow the terminal" action while terminals are hidden, and has it when shown', () => {
+    const c = { ...cockpit(), selectedId: 'p1', registry: { panes: new Map([['p1', {}]]), paneList: [] } };
     forceShowTerminals(false);
-    act(() => root.render(<Palette c={cockpit()} onClose={() => {}} />));
-    act(() => row('New PowerShell')!.click());
-    expect(newAgent).toHaveBeenCalledWith('powershell');
+    act(() => root.render(<Palette c={c as never} onClose={() => {}} />));
+    expect(rows().some((r) => r.includes('Reflow the terminal'))).toBe(false);
+    forceShowTerminals(true);
+    act(() => root.render(<Palette c={c as never} onClose={() => {}} />));
+    expect(rows().some((r) => r.includes('Reflow the terminal'))).toBe(true);
   });
 
   it('a click starts through the cockpit (which starts a chat while terminals are hidden)', () => {

@@ -88,6 +88,16 @@ describe('pane place chip', () => {
     expect(host.textContent).not.toContain('Linux ·');
   });
 
+  it('has a compact where chip carrying the project and the place, for a narrow pane', async () => {
+    const c = cockpit([mk('p', linux)], 'p');
+    await act(async () => root.render(<PaneView c={c} paneId="p" />));
+    await flush();
+    const where = host.querySelector<HTMLElement>('[data-testid="pane-where"]');
+    expect(where?.getAttribute('role')).toBe('img');
+    expect(where?.getAttribute('aria-label')).toContain('Runs in Ubuntu-Test (WSL)');
+    expect(where?.title).toBe(where?.getAttribute('aria-label'));
+  });
+
   it('tooltip names the distro and the folder', async () => {
     const c = cockpit([mk('p', linux)], 'p');
     await act(async () => root.render(<PaneView c={c} paneId="p" />));

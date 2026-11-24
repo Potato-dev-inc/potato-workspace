@@ -181,10 +181,18 @@ describe('General: each control saves a partial patch', () => {
 
   it('Keep this PC awake shows on by default and saves only {keep_awake_while_working}', async () => {
     await mount();
-    expect(m.host.textContent).toContain('Your agents keep going when you lock the PC (Win+L). The screen can still turn off.');
+    expect(m.host.textContent).toContain('Your agents keep going when you lock the PC. The screen can still turn off.');
     expect(switchFor('Keep this PC awake while agents work')!.getAttribute('aria-checked')).toBe('true');
     await click(switchFor('Keep this PC awake while agents work'));
     expect(m.env.patches).toEqual([{ keep_awake_while_working: false }]);
+  });
+
+  it('Show questions that block an agent shows on by default and saves only {jump_out_cards_enabled}', async () => {
+    await mount();
+    expect(m.host.textContent).toContain('It never takes the keyboard.');
+    expect(switchFor('Show questions that block an agent')!.getAttribute('aria-checked')).toBe('true');
+    await click(switchFor('Show questions that block an agent'));
+    expect(m.env.patches).toEqual([{ jump_out_cards_enabled: false }]);
   });
 
   it('Get early versions (beta) is off by default and saves only {early_versions_enabled}', async () => {

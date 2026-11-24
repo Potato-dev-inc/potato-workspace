@@ -3,7 +3,8 @@
 // Rust `Option<T>` arrives as `T | null`. Enum tags are snake_case (serde), view keys are camelCase.
 // Names and argument keys follow SPEC n33 section 3.6 exactly. The words on screen are in the UI, not here.
 import { invoke } from '@tauri-apps/api/core';
-import { listen, type UnlistenFn } from '@tauri-apps/api/event';
+import { listen } from './events';
+import type { UnlistenFn } from '@tauri-apps/api/event';
 
 /** `Source` (snake_case): where the item came from. */
 export type ReviewSource = 'copy' | 'mission' | 'night' | 'issue' | 'folder';

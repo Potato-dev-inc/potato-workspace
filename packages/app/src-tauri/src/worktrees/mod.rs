@@ -22,13 +22,13 @@
 //! - [`merge`] refuses when the origin has uncommitted changes to the same files, and a conflicting
 //!   merge is aborted so the origin is never left mid-merge.
 
-mod git;
+pub use pm_core::worktrees::git;
 pub mod folder;
-pub mod harden;
-pub mod holders;
+pub use pm_core::worktrees::harden;
+pub use pm_core::worktrees::holders;
 pub mod pr;
-pub mod preset;
-pub mod proc;
+pub use pm_core::worktrees::preset;
+pub use pm_core::worktrees::proc;
 pub mod routes;
 pub mod sendback;
 pub mod service;

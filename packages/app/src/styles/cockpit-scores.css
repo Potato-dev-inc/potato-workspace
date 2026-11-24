@@ -1,5 +1,6 @@
 /* "Scores on your code": a dense monochrome table, like "Your plans". Cockpit tokens only, no colour literals. */
 .cockpit .ck-scores {
+  container: ckscores / inline-size;
   display: flex;
   flex-direction: column;
   gap: 14px;
@@ -63,13 +64,16 @@
   font-size: 12.5px;
 }
 .cockpit .ck-scores-scroll {
+  /* Fills the page height (never squeezed to two rows by the controls above it) and scrolls the page, not itself. */
+  flex: 1 0 auto;
+  min-height: 0;
   overflow-x: auto;
   border-radius: 10px;
   box-shadow: inset 0 0 0 1px var(--sep);
 }
 .cockpit .ck-scores-table {
   width: 100%;
-  min-width: 720px;
+  min-width: 560px;
   border-collapse: collapse;
   font-size: 12.5px;
   color: var(--label-2);
@@ -206,5 +210,33 @@
 @media (max-width: 640px) {
   .cockpit .ck-scores {
     padding: 20px 16px 16px;
+  }
+}
+
+/* Wider than the card (120% text size, long zh-TW words): the table scrolls inside its card and the agent name stays in view. */
+.cockpit .ck-scores-table thead th:first-child,
+.cockpit .ck-scores-table tbody th,
+.cockpit .ck-scores-table tfoot th {
+  position: sticky;
+  left: 0;
+  z-index: 1;
+  background: var(--bg);
+}
+
+/* A narrow page or big text: the table gives up its minimum width and its cells wrap, so most of it shows without a sideways scroll. */
+@container ckscores (max-width: 900px) {
+  .cockpit .ck-scores-table {
+    min-width: 0;
+  }
+  .cockpit .ck-scores-table th,
+  .cockpit .ck-scores-table td {
+    padding: 8px;
+    white-space: normal;
+  }
+  .cockpit .ck-scores-table thead th {
+    min-width: 64px;
+  }
+  .cockpit .ck-scores-table tbody th {
+    min-width: 110px;
   }
 }

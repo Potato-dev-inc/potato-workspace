@@ -26,10 +26,13 @@
 //! Naming: this feature is "hand-off", never "relay" (`team/transport/relay.rs` is the team relay).
 
 pub mod card;
-pub mod detect;
+pub use pm_core::handoff::detect;
 pub mod keep_going;
-pub mod limits;
-pub mod reset;
+#[cfg(any(test, feature = "dev-fake-tui"))]
+pub use pm_core::handoff::limits;
+#[cfg(feature = "dev-fake-tui")]
+pub use limits::{CompiledLimits, LimitsTable};
+pub use pm_core::handoff::reset;
 pub mod watch;
 
 #[cfg(test)]
@@ -38,12 +41,11 @@ mod card_tests;
 mod tests;
 
 pub use detect::LimitHit;
-pub use limits::{validate_limits, CompiledLimits, LimitsTable};
 
 use crate::operations::{OperationSnapshot, USAGE_LIMIT_KIND};
 use crate::pty::status::PaneStatus;
 use crate::questions::{Question, QuestionStore};
-use crate::tui::{StartupGate, TuiProfile};
+use crate::tui::TuiProfile;
 use once_cell::sync::Lazy;
 use parking_lot::Mutex;
 use reset::{Clock, SystemClock};
@@ -52,21 +54,8 @@ use std::collections::HashMap;
 use std::path::PathBuf;
 use watch::{Cleared, Event, Standing, Tracker};
 
-/// The gate a usage limit puts on a pane: nothing is typed into it. No dismiss keys, ever: the
-/// person (or the agent's own wait) moves past a limit, Potato Workspace does not.
-pub const USAGE_LIMIT_GATE: StartupGate = StartupGate {
-    id: "usage_limit",
-    summary: "The agent has stopped at its usage limit",
-    dismiss: None,
-};
-
-/// Readiness input (`agent_runs::readiness::assess`): a gate for a screen that shows a usage limit,
-/// an unavailable plan or the vendor's own limit menu. Whether the profile has a `[limits]` table
-/// decides; no agent is named here.
-pub fn limit_gate(profile: &dyn TuiProfile, screen: &str) -> Option<StartupGate> {
-    let hit = profile.detect_limit(screen, &SystemClock)?;
-    hit.kind.stops_typing().then_some(USAGE_LIMIT_GATE)
-}
+#[cfg(test)]
+pub use pm_core::handoff::limit_gate;
 
 /// Where a pane is known and what its run is.
 pub struct PaneCtx {

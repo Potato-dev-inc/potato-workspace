@@ -3,6 +3,7 @@
 import { useEffect, useRef, useState } from 'react';
 import '../../styles/cockpit-chat-attachments.css';
 import { Menu } from '../common/Floating';
+import { t } from '../../i18n';
 
 export interface AttachMenuProps {
   onPickFiles: () => void;
@@ -69,8 +70,8 @@ export function AttachMenu({ onPickFiles, onPickFolder, onPickImage, disabled = 
         type="button"
         className="ck-chat-attach"
         data-testid="chat-composer-attach"
-        aria-label="Add to your message"
-        title={reason ?? 'Add files, a folder or an image (or drop them here, or type @ to add a project file)'}
+        aria-label={t('attach.add')}
+        title={reason ?? t('attach.hint')}
         aria-haspopup="menu"
         aria-expanded={open}
         aria-disabled={disabled || undefined}
@@ -79,24 +80,24 @@ export function AttachMenu({ onPickFiles, onPickFolder, onPickImage, disabled = 
         <PlusIcon />
       </button>
       {open && (
-        <Menu anchorRef={trigger} align="start" prefer="up" className="ck-menu--compact ck-attach-menu" label="Add to your message" onClose={() => setOpen(false)}>
+        <Menu anchorRef={trigger} align="start" prefer="up" className="ck-menu--compact ck-attach-menu" label={t('attach.add')} onClose={() => setOpen(false)}>
           <button type="button" role="menuitem" className="ck-menu-item" tabIndex={-1} onClick={choose(onPickFiles)}>
             <span className="ck-menu-ic">
               <FileIcon />
             </span>
-            <span>Add files…</span>
+            <span>{t('r9.attach.files')}</span>
           </button>
           <button type="button" role="menuitem" className="ck-menu-item" tabIndex={-1} onClick={choose(onPickFolder)}>
             <span className="ck-menu-ic">
               <FolderIcon />
             </span>
-            <span>Add folder…</span>
+            <span>{t('r9.attach.folder')}</span>
           </button>
           <button type="button" role="menuitem" className="ck-menu-item" tabIndex={-1} onClick={choose(onPickImage)}>
             <span className="ck-menu-ic">
               <ImageIcon />
             </span>
-            <span>Add image…</span>
+            <span>{t('r9.attach.image')}</span>
           </button>
         </Menu>
       )}

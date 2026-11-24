@@ -4,7 +4,9 @@ import { act } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { AgentHealth, AgentHealthApi } from '../../lib/agent-health';
-import { AgentDoctor, moreActions, primaryAction } from './AgentDoctor';
+import { AgentDoctor, moreActions, primaryAction as primaryOf } from './AgentDoctor';
+import { agentReadiness } from '../../lib/agentReadiness';
+import { rememberTest } from '../../lib/setup-checks/test-memory';
 
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 
@@ -18,7 +20,14 @@ beforeEach(() => {
 afterEach(async () => {
   await act(async () => root.unmount());
   host.remove();
+  window.localStorage.clear();
 });
+
+/** What the row's primary action is, given how it stands (the quick check says it starts; a kept Test says it works). */
+const primaryAction = (r: AgentHealth, tested = false) => {
+  const tests = tested ? { [r.id]: { state: 'ready' as const, reason: '', at: Date.now() } } : {};
+  return primaryOf(r, agentReadiness(r.id, { health: [r], logins: null, tests }));
+};
 
 const row = (over: Partial<AgentHealth>): AgentHealth => ({
   id: 'a',
@@ -33,7 +42,8 @@ const row = (over: Partial<AgentHealth>): AgentHealth => ({
   ...over,
 });
 
-async function mount(rows: AgentHealth[]) {
+async function mount(rows: AgentHealth[], tested: string[] = []) {
+  for (const id of tested) rememberTest(rows.find((r) => r.id === id)!);
   const api: AgentHealthApi = { check: vi.fn(async () => rows), test: vi.fn() };
   await act(async () => {
     root.render(<AgentDoctor api={api} onOpenAgent={() => {}} />);
@@ -48,7 +58,7 @@ describe('one next step per row', () => {
     expect(primaryAction(row({ state: 'needs_login' }))).toBe('signin');
     expect(primaryAction(row({ state: 'unchecked' }))).toBe('test');
     expect(primaryAction(row({ state: 'error' }))).toBe('test');
-    expect(primaryAction(row({ state: 'ready' }))).toBeNull();
+    expect(primaryAction(row({ state: 'ready' }), true)).toBeNull();
   });
 
   it('keeps the other actions out of the way', () => {
@@ -57,7 +67,7 @@ describe('one next step per row', () => {
     const unchecked = row({ state: 'unchecked' });
     expect(moreActions(unchecked, primaryAction(unchecked))).toEqual(['signin']);
     const ready = row({ state: 'ready' });
-    expect(moreActions(ready, primaryAction(ready))).toEqual(['signin', 'test']);
+    expect(moreActions(ready, primaryAction(ready, true))).toEqual(['signin', 'test']);
   });
 
   it('shows at most one primary button per row', async () => {
@@ -66,7 +76,7 @@ describe('one next step per row', () => {
       row({ id: 'b', state: 'needs_login' }),
       row({ id: 'c', state: 'not_installed', installed: false, can_test: false, install_hint: 'npm i -g c' }),
       row({ id: 'd', state: 'ready' }),
-    ]);
+    ], ['d']);
     for (const li of Array.from(host.querySelectorAll('.ck-doctor-row'))) {
       expect(li.querySelectorAll('.ck-doctor-actions > .ck-btn--primary').length).toBeLessThanOrEqual(1);
     }
@@ -80,7 +90,7 @@ describe('grouped by need', () => {
       row({ id: 'r', label: 'Ready one', state: 'ready' }),
       row({ id: 'm', label: 'Missing one', state: 'not_installed', installed: false, can_test: false }),
       row({ id: 'n', label: 'Needs one', state: 'needs_login' }),
-    ]);
+    ], ['r']);
     const caps = Array.from(host.querySelectorAll('.ck-doctor-cap')).map((e) => e.textContent);
     expect(caps).toEqual(['Needs you', 'Ready', 'Not installed']);
     const order = Array.from(host.querySelectorAll('.ck-row-title')).map((e) => e.textContent);

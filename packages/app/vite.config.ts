@@ -2,6 +2,7 @@ import { defineConfig } from 'vite';
 import react from '@vitejs/plugin-react';
 import { VitePWA } from 'vite-plugin-pwa';
 import { resolve } from 'node:path';
+import { tauriCoreShim } from './vite-tauri-core';
 import { bridgeProxyConfig } from './vite-bridge-proxy';
 import { devInfoPlugin } from './vite-dev-info';
 import { SHARE_TARGET_MANIFEST } from './src/pwa/share-target';
@@ -11,6 +12,7 @@ const LAZY_VIEWER_IGNORES = ['**/DocxView-*.js', '**/SheetView-*.js', '**/PdfVie
 
 export default defineConfig({
   plugins: [
+    tauriCoreShim(),
     react(),
     devInfoPlugin(),
     VitePWA({
@@ -83,9 +85,11 @@ export default defineConfig({
         manualChunks(id: string) {
           // Never split app code by folder: its modules import each other in circles, and chunks that do
           // that crash on load in built apps only (dev mode hides it). Lazy imports still get their own chunks.
+          if (id.includes('/src/lib/tauri-core') || id.includes('/src/lib/ipc-guard')) return 'vendor-tauri';
           if (!id.includes('node_modules')) return undefined;
           if (id.includes('/@xterm/')) return 'vendor-xterm';
           if (id.includes('/qrcode/') || id.includes('/html5-qrcode/')) return 'vendor-qr';
+          // The invoke shim and its guard sit with the Tauri package: the package imports the shim, so a split would be a chunk loop.
           if (id.includes('/@tauri-apps/')) return 'vendor-tauri';
           if (/\/node_modules\/(react|react-dom|scheduler)\//.test(id)) return 'vendor-react';
           return undefined;

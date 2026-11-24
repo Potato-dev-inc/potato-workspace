@@ -1,20 +1,23 @@
 // What the pane of a chat session over ACP says about itself: its status in the person's words, and the compact
 // "what this run produced" line (files changed, the agent's own potato-result block). Pure, so it is tested alone.
 import type { TurnSummary } from '../../lib/cockpit-api';
+import { t } from '../../i18n';
 
 /** The status words of a chat pane: working / waiting for you / done. */
 export function acpStatusWords(status: string): string {
   switch (status) {
     case 'running':
-      return 'Working';
+      return t('state.working');
     case 'waiting_input':
-      return 'Waiting for you';
+      return t('state.waitingForYou');
     case 'idle':
-      return 'Done';
+      return t('state.done');
     case 'error':
-      return 'Error';
+      return t('state.error');
+    case 'away':
+      return t('sidebar.away');
     default:
-      return 'Stopped';
+      return t('state.stopped');
   }
 }
 

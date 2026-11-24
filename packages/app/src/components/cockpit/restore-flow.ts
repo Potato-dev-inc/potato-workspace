@@ -6,6 +6,7 @@ import { errorSentence } from '../../lib/sayError';
 import type { Checkpoint, CheckpointsApi, RestoreReport } from '../../lib/cockpit-api';
 import { checkpointTitle } from './history-model';
 import { markStep } from '../../lib/getting-started';
+import { clearReverted, markReverted, paneFilesTouched } from '../../lib/turn-review';
 
 export interface ToastAction {
   label: string;
@@ -38,6 +39,13 @@ export async function restoreWithUndo(
   try {
     const report = await api.checkpointRestore(paneId, target.id);
     markStep('undo');
+    // Changes, Outputs and Review stop listing what the restore put back, and read the files again.
+    const paths = report.paths ?? [];
+    // Going forward again (to an end-of-turn or a safety point) brings those files back, so they are listed again.
+    const kind = (target as { kind?: string }).kind;
+    if (kind === 'after' || kind === 'undo') clearReverted(paneId, paths);
+    else markReverted(paneId, paths);
+    paneFilesTouched(paneId);
     const failed = report.failed.length ? t('risk.restore.failedFiles', { n: report.failed.length }) : '';
     const text = words ? words.restored(target, report) : t('risk.restore.done', { title: checkpointTitle(target), failed });
     const safetyId = report.safetyId;
@@ -48,7 +56,11 @@ export async function restoreWithUndo(
             label: words?.undo ?? t('risk.restore.undo'),
             run: () => {
               api.checkpointRestore(paneId, safetyId).then(
-                () => notify(words?.undone ?? t('risk.restore.undone')),
+                () => {
+                  clearReverted(paneId, paths);
+                  paneFilesTouched(paneId);
+                  notify(words?.undone ?? t('risk.restore.undone'));
+                },
                 (e) => notify(errText(e)),
               );
             },

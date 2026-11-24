@@ -20,10 +20,7 @@ pub const PLAIN: &str = "plain";
 type Registry = Arc<Mutex<PaneRegistry>>;
 
 /// A copy that was just made: the folder the chat starts in, and the link to remember.
-pub struct Made {
-    pub folder: PathBuf,
-    pub link: CopyLink,
-}
+pub use pm_core::hooks::ChatCopy as Made;
 
 fn failed(message: impl Into<String>) -> StartError {
     StartError { code: "ACP_COPY_FAILED", message: message.into(), fallback: false }

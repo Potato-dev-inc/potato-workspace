@@ -1,6 +1,7 @@
 // One Agent Store card: name, one-line tagline, tier and license chips, the state glyph, the reason and one button.
 // Every text comes from the catalog as data: it is shown as plain text (React escapes it), never as HTML, and no link is made.
 import type { StoreCard, StoreState } from '../../lib/agent-store';
+import type { AgentReadiness } from '../../lib/agentReadiness';
 import { licenseWords, primaryButton, tierWords } from '../../lib/agent-store-model';
 import { AgentLogo } from '../common/AgentLogo';
 import { DotSpinner, type DotSpinnerProps } from '../cockpit/DotSpinner';
@@ -43,9 +44,11 @@ export interface AgentStoreCardProps {
   card: StoreCard;
   /** The card's one button calls this with the agent id. The grid installs nothing itself. */
   onOpen: (agentId: string) => void;
+  /** How an agent that is on the list stands (`agentReadiness`); it says the card's words instead of "Added and ready" (the program is there, nothing more is proven). */
+  standing?: AgentReadiness;
 }
 
-export function AgentStoreCard({ card, onOpen }: AgentStoreCardProps) {
+export function AgentStoreCard({ card, onOpen, standing }: AgentStoreCardProps) {
   const button = primaryButton(card);
   return (
     <article className="ck-store-card" data-state={card.state} data-tier={card.tier}>
@@ -58,7 +61,7 @@ export function AgentStoreCard({ card, onOpen }: AgentStoreCardProps) {
           <p className="ck-store-tagline">{card.tagline}</p>
         </div>
         <span className="ck-store-glyph">
-          <DotSpinner status={stateGlyph(card.state)} label={stateWords(card.state)} />
+          <DotSpinner status={stateGlyph(card.state)} label={standing?.label ?? stateWords(card.state)} />
         </span>
       </div>
 
@@ -70,7 +73,7 @@ export function AgentStoreCard({ card, onOpen }: AgentStoreCardProps) {
         {card.modes.length > 0 && <span className="ck-store-modes">{card.modes.join(' · ')}</span>}
       </div>
 
-      <p className="ck-store-reason">{card.state_reason}</p>
+      <p className="ck-store-reason">{standing ? [standing.label, standing.detail].filter(Boolean).join('. ') : card.state_reason}</p>
 
       {button.kind !== 'none' && (
         <div className="ck-store-actions">

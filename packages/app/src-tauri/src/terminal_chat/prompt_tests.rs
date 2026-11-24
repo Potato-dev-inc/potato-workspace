@@ -5,9 +5,9 @@ use super::*;
 use serde_json::Value;
 use std::path::PathBuf;
 
-const CLAUDE_BASH: &str = include_str!("../tui/claude/fixtures/bash_multi_cd_2_1_299.txt");
-const CLAUDE_TRUST: &str = include_str!("../tui/claude/fixtures/trust_dialog_2_1_299.txt");
-const CLAUDE_EDIT: &str = include_str!("../tui/claude/fixtures/edit_file_2_1_299.txt");
+const CLAUDE_BASH: &str = include_str!("../../crates/pm-core/src/tui/claude/fixtures/bash_multi_cd_2_1_299.txt");
+const CLAUDE_TRUST: &str = include_str!("../../crates/pm-core/src/tui/claude/fixtures/trust_dialog_2_1_299.txt");
+const CLAUDE_EDIT: &str = include_str!("../../crates/pm-core/src/tui/claude/fixtures/edit_file_2_1_299.txt");
 
 fn reading(agent: &str, screen: &str, generation: u64) -> Option<Reading> {
     let detected: Value = crate::pane_prompt::detect_in_screen(agent, screen, false)?;

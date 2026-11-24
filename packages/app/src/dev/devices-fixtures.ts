@@ -262,6 +262,7 @@ export class DevicesFake implements DevicesApi {
   requests: { node: string; method: string; path: string; body?: unknown }[] = [];
   /** Per far chat: the settings state its `acp_chat_state` answers (default: `farChatState`); `set_config` and `set_force_yes` change it. */
   chatStates: Record<string, Record<string, unknown>> = {};
+  private lastCallArgs: Record<string, unknown> = {};
   /** The far calls that were answered (`POST /pclink/call/<cmd>`), in order. */
   farCalls: { cmd: string; args: Record<string, unknown> }[] = [];
   private changed = new Set<(v: DevicesView) => void>();
@@ -350,6 +351,7 @@ data: ${JSON.stringify({ event: 'terminal-data', payload })}
     }
     return shell;
   }
+  farKilled: string[] = [];
   private farCall(node: string, cmd: string, body: Record<string, unknown>, need: (needs: PcLevel) => { status: number; body: unknown } | null): { status: number; body: unknown } {
     const shell = this.farShell(node);
     const full = need('full');
@@ -366,6 +368,10 @@ data: ${JSON.stringify({ event: 'terminal-data', payload })}
         shell.type(text);
         return { status: 200, body: null };
       }
+      case 'kill_pane_cmd':
+        if (full) return full;
+        this.farKilled.push(String(body.paneId));
+        return { status: 200, body: null };
       case 'resize_pane':
         if (full) return full;
         this.farResizes.push([Number(body.cols), Number(body.rows)]);
@@ -625,7 +631,12 @@ data: ${JSON.stringify({ event: 'terminal-data', payload })}
         acp_chat_set_auto_allow: 'full',
         acp_chat_set_agent_answering: 'full',
         acp_chat_warm: 'answer',
+        pane_set_title: 'full',
+        attachment_prepare: 'full',
+        attachment_save_pasted: 'full',
+        acp_chat_start: 'full',
       };
+      this.lastCallArgs = a;
       const agents = cmd === 'agent_model_options' ? null : this.agentsCall(node, cmd);
       if (agents) return agents;
       if (!levelOf[cmd]) return { status: 404, body: { error: 'That PC does not do this yet.', code: 'UNKNOWN_ROUTE' } };
@@ -633,6 +644,13 @@ data: ${JSON.stringify({ event: 'terminal-data', payload })}
       if (denial) return denial;
       this.farCalls.push({ cmd, args: a });
       const pane = String(a.paneId ?? a.pane_id ?? '');
+      if (cmd === 'pane_set_title') {
+        const row = list.find((p) => p.id === pane);
+        if (!row) return { status: 404, body: { error: 'unknown session', code: 'UNKNOWN_SESSION' } };
+        row.title = String(a.title ?? '');
+        this.emit();
+        return { status: 200, body: row.title || null };
+      }
       const state = (this.chatStates[pane] ??= farChatState(pane));
       const feed = this.feedCall(node, cmd, pane, a);
       if (feed) return feed;
@@ -643,7 +661,7 @@ data: ${JSON.stringify({ event: 'terminal-data', payload })}
       if (cmd === 'acp_chat_set_force_yes') state.forceYes = a.on === true;
       return { status: 200, body: state };
     }
-    if (method === 'GET' && segs[1] === 'me') return { status: 200, body: { level, name: d.name, asked: this.asksAt.has(node) } };
+    if (method === 'GET' && segs[1] === 'me') return { status: 200, body: { level, name: d.name, asked: this.asksAt.has(node), you: this.youId } };
     if (method === 'GET' && segs[1] === 'sessions' && segs.length === 2) {
       return { status: 200, body: { sessions: list.map(sessionRowOf) } };
     }
@@ -724,11 +742,32 @@ data: ${JSON.stringify({ event: 'terminal-data', payload })}
       this.asksAt.add(node);
       return { status: 202, body: already ? { asked: true, already: true } : { asked: true, id: `full-${this.asksAt.size}` } };
     }
-    if (method === 'GET' && segs[1] === 'questions') return { status: 200, body: { questions: [] } };
+    if (method === 'GET' && segs[1] === 'questions') return { status: 200, body: { questions: (this.questionsOf[node] ?? []).map((q) => ({ ...q })) } };
+    if (method === 'POST' && segs[1] === 'questions' && segs[3] === 'answer') {
+      const denial = need('answer');
+      if (denial) return denial;
+      const left = (this.questionsOf[node] ?? []).filter((q) => q.id !== id);
+      if (left.length === (this.questionsOf[node] ?? []).length) return { status: 404, body: { code: 'QUESTION_NOT_FOUND', error: 'That question is not waiting any more.' } };
+      this.questionsOf[node] = left;
+      this.answeredQuestions.push({ node, id, answer: (body ?? {}) as Record<string, unknown> });
+      return { status: 200, body: { accepted: true } };
+    }
     return { status: 404, body: { error: 'not found' } };
   };
   /** Per device: the agents its registry lists (default: Claude and Codex, both installed). */
   agentsOf: Record<string, FarAgent[]> = {};
+  /** Per device: the questions and approvals waiting there (`GET /pclink/questions`). A test changes the list and calls `emitQuestions`. */
+  /** The id every far PC in this fake names the caller by (`/pclink/me` `you`). */
+  youId = 'link:this-pc';
+  questionsOf: Record<string, { id: string; question: string; choices: { id: string; label: string }[]; allow_free_text: boolean; pane_id?: string }[]> = {};
+  /** The answers this PC sent to far questions, in order. */
+  answeredQuestions: { node: string; id: string; answer: Record<string, unknown> }[] = [];
+  /** The far PC says its questions changed (the `questions` frame). */
+  emitQuestions(node: string): void {
+    this.emitEvent({ node, frame: `event: questions${'\n'}data: {}${'\n'}${'\n'}` });
+  }
+  /** The files whose bytes reached a far chat (`attachment_save_pasted`): which chat, the name, and the size of the text that carried them. */
+  savedFiles: { pane: string; name: string; mime: string; bytes: number }[] = [];
   /** Per far chat: its message box queue (`pane_messages_list`). */
   outboxes: Record<string, Record<string, unknown>[]> = {};
   private nextMessage = 1;
@@ -747,6 +786,12 @@ data: ${JSON.stringify({ event: 'terminal-data', payload })}
       const all = [...(this.projectsOf[node] ?? [{ id: 'proj-app', name: 'app', state: 'ready' }]), ...(this.opened[node] ?? [])];
       return { status: 200, body: all.filter((p) => p.state !== 'missing').map((p, i) => ({ path: `remote:${p.id}`, name: p.name, state: p.state, last_used_ms: all.length - i })) };
     }
+    // P6.1 (`calls.rs`, `// ---- P6.1 lend ----`): the far PC says what it has installed, and asks the lender back (Full). The grant id is `lg_far_1`.
+    if (cmd === 'agents_detect_installed') return { status: 200, body: rows.filter((r) => r.installed !== false).map((r) => ({ id: r.id, displayName: r.label, path: r.id, kind: 'cli' })) };
+    if (cmd === 'own_borrow_ask') {
+      this.farCalls.push({ cmd, args: this.lastCallArgs });
+      return this.levelOf(node) === 'full' ? { status: 200, body: { grantId: 'lg_far_1' } } : { status: 403, body: { error: 'not_allowed', code: 'DEVICE_NOT_ALLOWED' } };
+    }
     if (cmd === 'agent_model_options') return { status: 200, body: { terminal: false, default_model: null, models: [], live: { id: 'model', options: [{ value: 'sonnet', name: 'Sonnet 5.5', description: null }, { value: 'opus', name: 'Opus 5', description: null }, { value: 'haiku', name: 'Haiku 5', description: null }] } } };
     return null;
   }
@@ -755,6 +800,21 @@ data: ${JSON.stringify({ event: 'terminal-data', payload })}
     const ok = (body: unknown) => ({ status: 200, body });
     const state = (this.chatStates[pane] ??= farChatState(pane));
     switch (cmd) {
+      // P4b: a file's bytes arrive and the far PC keeps them in the chat's project; a chat starts (on a separate copy when asked).
+      case 'attachment_save_pasted': {
+        const name = String(a.name ?? 'file.bin');
+        this.savedFiles.push({ pane, name, mime: String(a.mime ?? ''), bytes: String(a.dataBase64 ?? '').length });
+        return ok({ name, path: `/Users/me/app/.potato-workspace/attachments/${name}`, kind: String(a.mime ?? '').startsWith('image/') ? 'image' : 'file', size: 3, mime: a.mime });
+      }
+      case 'attachment_prepare':
+        return ok([]);
+      case 'acp_chat_start': {
+        const list = this.panes[node] ?? (this.panes[node] = []);
+        const newId = `c${list.length + 1}`;
+        list.push({ id: newId, agent_type: String(a.agentId ?? 'claude'), cwd: '/Users/me/app', status: 'idle', title: 'New chat', lane: 'acp', ...(a.separateCopy === true ? { copy: true } : {}) });
+        this.emit();
+        return ok({ pane_id: newId, agent: a.agentId ?? 'claude', lane: 'acp' });
+      }
       case 'session_chat_open':
         return ok({ available: true, reason: null, source: 'file', items: this.chats[pane] ?? [], waitingFor: null });
       case 'session_chat_close':

@@ -5,6 +5,8 @@ import { accountsFor, type AccountsOverview } from '../../lib/accounts';
 import { checkFailureLine, type CheckFailure, type UpdateOffer } from '../../lib/app-update';
 import type { HelperVisibility } from '../../lib/agentRunMode';
 import { t } from '../../i18n';
+import { peekAgentRegistry } from '../../lib/agentRegistry';
+import { shortAgentName } from '../firstrun/model';
 import { isCantCheck, type CheckRow } from '../../lib/setup-checks';
 import { problemWords } from './problem-words';
 
@@ -91,6 +93,8 @@ export function agentsCard(rows: CheckRow[]): CardView {
 // ---------- Signed in ----------
 
 function titleCase(agentId: string): string {
+  const known = peekAgentRegistry().agents.find((a) => a.id === agentId)?.label;
+  if (known) return shortAgentName(known);
   const spaced = agentId.replace(/[-_]+/g, ' ');
   return spaced.charAt(0).toUpperCase() + spaced.slice(1);
 }
@@ -102,7 +106,8 @@ function titleCase(agentId: string): string {
  */
 export function signedInCard(overview: AccountsOverview, rows: CheckRow[]): CardView {
   const own = overview.accounts.filter((a) => !a.lend_only && !a.borrowed);
-  const ids = overview.agents.map((a) => a.agent_id);
+  // Also an agent the Setup rows say is fine though the accounts overview does not name it (Cursor has no account list); one that is not fine never turns the card amber here.
+  const ids = [...new Set([...overview.agents.map((a) => a.agent_id), ...rows.filter((r) => r.id.startsWith('agent-') && r.status === 'ok').map((r) => r.id.slice('agent-'.length))])];
   const signInAction: CardAction = { label: t('settings.signIn'), kind: 'row', row: 'accounts', primary: true };
   if (ids.length === 0) {
     return { id: 'signed-in', name: CARD_NAMES['signed-in'], glyph: '!', line: t('settings.card.noAgentToSignIn'), actions: [signInAction] };

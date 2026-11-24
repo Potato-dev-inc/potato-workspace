@@ -10,7 +10,7 @@ export const MOVED_FILES: readonly string[] = [
   'components/common/EmptyState.tsx', 'components/common/ErrorBoundary.tsx', 'components/settings/UndoToast.tsx',
   // inbox cards
   'components/pet/Pet.tsx', 'components/pet/PetMenu.tsx', 'components/pet/PetApp.tsx',
-  `${C}QuestionCard.tsx`, `${C}StuckCard.tsx`, `${C}PaneApprovalCard.tsx`, `${C}ApprovalPrompt.tsx`, `${C}ConsentCard.tsx`, `${C}LimitCard.tsx`,
+  `${C}QuestionCard.tsx`, `${C}JumpOutCard.tsx`, `${C}StuckCard.tsx`, `${C}PaneApprovalCard.tsx`, `${C}ApprovalPrompt.tsx`, `${C}ConsentCard.tsx`, `${C}LimitCard.tsx`,
   `${C}BudgetCard.tsx`, `${C}IssueCard.tsx`, `${C}CiFixCard.tsx`, `${C}AskNotices.tsx`, `${C}HiddenRuns.tsx`, `${C}ImportChatsCard.tsx`,
   `${C}CanaryNotices.tsx`,
   // new agent page, pane header and tabs
@@ -111,6 +111,8 @@ export const MOVED_FILES: readonly string[] = [
   'components/cockpit/problems/ProblemsChip.tsx', 'components/cockpit/StartupCheckLine.tsx',
   // Point and Fix
   'components/point/PointBox.tsx', 'components/point/PointBoxApp.tsx', 'components/point/RecheckStrip.tsx',
+  // round 21
+  `${C}PlansMonth.tsx`, `${C}AgentScores.tsx`, `${C}ProjectMemory.tsx`, `${C}ClosedChatsSheet.tsx`, `${C}AgentDoctor.tsx`,
   // routines and chains
   `${C}routines/RoutinesPage.tsx`, `${C}routines/RoutineForm.tsx`, `${C}routines/WorkflowRow.tsx`, `${C}routines/LimitRow.tsx`, `${C}routines/ThenSheet.tsx`,
 ];

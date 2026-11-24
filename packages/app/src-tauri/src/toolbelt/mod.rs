@@ -19,12 +19,6 @@ pub mod sync;
 mod tests;
 
 
-use crate::tui::declarative::schema::McpHostTable;
-
-/// Prefix of every config key the toolbelt owns. Anything else in an agent's config is the user's.
-pub const KEY_PREFIX: &str = "pm-toolbelt-";
-
-/// Parse a built-in `[mcp_host]` declaration (the TOML text a code profile carries).
-pub fn host_from_toml(text: &str) -> Option<McpHostTable> {
-    toml::from_str(text).ok()
-}
+pub use pm_core::toolbelt::KEY_PREFIX;
+#[cfg(test)]
+pub use pm_core::toolbelt::host_from_toml;

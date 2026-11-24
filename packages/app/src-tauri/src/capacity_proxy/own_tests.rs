@@ -18,11 +18,11 @@ use crate::secrets::{MemoryBackend, SecretBackend};
 use crate::team::secure::{Payload, Session};
 use crate::team::tests_v1::temp_dir;
 
-const A_HEX: &str = "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa";
-const B_HEX: &str = "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb";
-const LENDER_KEY: &str = "sk-lender-FAKE";
+pub(super) const A_HEX: &str = "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa";
+pub(super) const B_HEX: &str = "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb";
+pub(super) const LENDER_KEY: &str = "sk-lender-FAKE";
 
-fn now() -> u64 {
+pub(super) fn now() -> u64 {
     crate::team::transport::now_ms()
 }
 
@@ -48,7 +48,7 @@ impl AwakePort for Idle {
 }
 
 /// One end of the fake device link.
-struct Wire {
+pub(super) struct Wire {
     me: String,
     me_name: String,
     peer: String,
@@ -57,6 +57,10 @@ struct Wire {
     other: Mutex<Option<Weak<Lend>>>,
     /// Whether the other PC has "Borrow my agent sign-ins" on for this one.
     allowed: AtomicBool,
+    /// The account dropped the other PC: it is no longer one of mine.
+    pub(super) gone: AtomicBool,
+    /// Paired, but not signed in to the same account (no account marker).
+    pub(super) unmarked: AtomicBool,
     /// Every item that crossed, as text (the canary check reads it).
     log: Mutex<Vec<String>>,
 }
@@ -70,6 +74,8 @@ impl Wire {
             peer_name: peer_name.into(),
             other: Mutex::new(None),
             allowed: AtomicBool::new(true),
+            gone: AtomicBool::new(false),
+            unmarked: AtomicBool::new(false),
             log: Mutex::new(Vec::new()),
         })
     }
@@ -90,6 +96,9 @@ impl OwnPort for Wire {
         other.deliver(&self.me, value).map(|_| ())
     }
     fn peers(&self) -> Vec<(String, String)> {
+        if self.gone.load(Ordering::SeqCst) {
+            return Vec::new();
+        }
         vec![(self.peer.clone(), self.peer_name.clone())]
     }
     fn my_node(&self) -> Option<String> {
@@ -98,11 +107,14 @@ impl OwnPort for Wire {
     fn my_name(&self) -> String {
         self.me_name.clone()
     }
+    fn same_account(&self, node: &str) -> bool {
+        !self.unmarked.load(Ordering::SeqCst) && self.peers().iter().any(|(n, _)| n == node)
+    }
 }
 
-struct Pc {
-    lend: Arc<Lend>,
-    wire: Arc<Wire>,
+pub(super) struct Pc {
+    pub(super) lend: Arc<Lend>,
+    pub(super) wire: Arc<Wire>,
 }
 
 fn pc(name: &str, mem: &MemoryNet, wire: Arc<Wire>) -> Pc {
@@ -117,7 +129,7 @@ fn pc(name: &str, mem: &MemoryNet, wire: Arc<Wire>) -> Pc {
         team: team.clone(),
         net,
         accounts: crate::accounts::Store::at(&dir),
-        specs: vec![ProxySpec::parse(include_str!("../tui/claude/lend_proxy.toml")).unwrap()],
+        specs: vec![ProxySpec::parse(include_str!("../../crates/pm-core/src/tui/claude/lend_proxy.toml")).unwrap()],
         now: Arc::new(now),
         changed: Arc::new(|| {}),
         pinger: super::ping::Pinger::new(team, Arc::new(now)),
@@ -135,7 +147,7 @@ fn pc(name: &str, mem: &MemoryNet, wire: Arc<Wire>) -> Pc {
 }
 
 /// A is the lender, B the borrower.
-fn two() -> (Pc, Pc, MemoryNet) {
+pub(super) fn two() -> (Pc, Pc, MemoryNet) {
     let mem = MemoryNet::new();
     let wa = Wire::new(A_HEX, "Desk PC", B_HEX, "Work laptop");
     let wb = Wire::new(B_HEX, "Work laptop", A_HEX, "Desk PC");
@@ -146,7 +158,7 @@ fn two() -> (Pc, Pc, MemoryNet) {
     (a, b, mem)
 }
 
-fn my_pcs_profile(lend: &Lend) -> String {
+pub(super) fn my_pcs_profile(lend: &Lend) -> String {
     let p = lend
         .profile_save(LendProfile {
             id: String::new(),
@@ -170,7 +182,7 @@ fn my_pcs_profile(lend: &Lend) -> String {
     p.id
 }
 
-async fn borrowed_up(b: &Pc, grant: &str) {
+pub(super) async fn borrowed_up(b: &Pc, grant: &str) {
     for _ in 0..100 {
         if b.lend.borrowed_launch_env("claude", grant).is_ok() {
             return;

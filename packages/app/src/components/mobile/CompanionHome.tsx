@@ -13,6 +13,7 @@ import { CompanionPending } from './CompanionPending';
 import { CompanionSkills } from './CompanionSkills';
 import { PhoneChatView } from './PhoneChatView';
 import '../../styles/ph-companion.css';
+import { t } from '../../i18n';
 
 /** The face on the home is drawn this big (px). */
 export const HOME_FACE_PX = 96;
@@ -125,7 +126,7 @@ export function CompanionHome({ companion, bridge, transport, abilities, chatAll
       </div>
     );
   } else if (!paneId) {
-    chat = state === 'starting' ? <div className="ph-loading">Waking up…</div> : null;
+    chat = state === 'starting' ? <div className="ph-loading">{t('r21.sw.wakingUp')}</div> : null;
   } else if (!chatAllowed) {
     chat = <p className="ph-comp-note">Chat can&apos;t send messages to this agent yet.</p>;
   } else {

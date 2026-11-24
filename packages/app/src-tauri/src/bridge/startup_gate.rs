@@ -129,7 +129,6 @@ pub(crate) fn dismiss_startup_gates(io: &mut dyn GateIo, profile: &dyn TuiProfil
 
 struct PaneGateIo<'a> {
     registry: &'a std::sync::Arc<parking_lot::Mutex<crate::pty::PaneRegistry>>,
-    app: &'a tauri::AppHandle,
     pane_id: &'a str,
 }
 
@@ -145,7 +144,6 @@ impl GateIo for PaneGateIo<'_> {
     fn write(&mut self, permit: &GatePermit) -> Result<(), String> {
         crate::pty::registry_write_input(
             self.registry,
-            self.app,
             self.pane_id,
             permit.keys(),
             false,
@@ -175,12 +173,12 @@ pub(crate) fn notice_on_pane(
 /// True when the gate's dismiss keys went in.
 pub(crate) fn press_on_pane(
     registry: &std::sync::Arc<parking_lot::Mutex<crate::pty::PaneRegistry>>,
-    app: &tauri::AppHandle,
+    _app: &tauri::AppHandle,
     pane_id: &str,
     agent_type: &str,
 ) -> bool {
     let profile = crate::tui::profile_for(agent_type);
-    let mut io = PaneGateIo { registry, app, pane_id };
+    let mut io = PaneGateIo { registry, pane_id };
     matches!(press_once(&mut io, profile.as_ref()), Press::Pressed { .. })
 }
 
@@ -188,14 +186,13 @@ pub(crate) fn press_on_pane(
 pub(super) fn dismiss_for_operation(
     operation: &crate::operations::OperationSnapshot,
     registry: &std::sync::Arc<parking_lot::Mutex<crate::pty::PaneRegistry>>,
-    app: &tauri::AppHandle,
+    _app: &tauri::AppHandle,
     pane_id: &str,
     agent_type: &str,
 ) -> GateReport {
     let profile = crate::tui::profile_for(agent_type);
     let mut io = PaneGateIo {
         registry,
-        app,
         pane_id,
     };
     let report = dismiss_startup_gates(&mut io, profile.as_ref());

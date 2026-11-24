@@ -39,7 +39,7 @@ pub struct AgentRunView {
     pub verified_reason: Option<String>,
     /// What this run guarantees (read-only enforcement and proof, isolation, checks, model); same as `receipt.guarantees`.
     #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub guarantees: Option<super::guarantees::Guarantees>,
+    pub guarantees: Option<crate::agent_runs::guarantees::Guarantees>,
     /// Deprecated: the worker reported a native completion. Read `verified` and `guarantees`.
     #[serde(default, skip_serializing_if = "is_false")]
     pub result_verified: bool,

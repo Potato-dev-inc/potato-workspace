@@ -1,6 +1,7 @@
 // What the palette shows in its "Search all chats" mode: one row per hit (who said it, the words with the match
 // marked, which agent and folder, when), and a read-only card for a hit whose pane is gone.
 import { snippetParts, kindText, whenText, type ChatHit } from '../../lib/chatSearch';
+import { t } from '../../i18n';
 
 export const SEARCH_CHATS_TITLE = 'Search all chats';
 /** Marks a hit in an old chat the person brought in (see "Bring my chats"). */
@@ -24,7 +25,7 @@ function Snippet({ hit }: { hit: ChatHit }) {
 
 /** The meta line: "Old chat" first for an imported hit, then the agent, the folder and when. */
 function metaText(hit: ChatHit, agentName: string, now: number): string {
-  return [hit.imported ? OLD_CHAT_TAG : '', agentName, hit.folder, whenText(hit.atMs, now)].filter(Boolean).join(' · ');
+  return [hit.imported ? OLD_CHAT_TAG : '', agentName, hit.folder, hit.where ?? '', whenText(hit.atMs, now)].filter(Boolean).join(' · ');
 }
 
 export function ChatHitRows({
@@ -77,7 +78,7 @@ export function ChatHitDetail({ hit, agentName, onBack, now }: { hit: ChatHit; a
       <p className="ck-hit-detail-text">
         <Snippet hit={hit} />
       </p>
-      <p className="ck-sub">This chat is closed, so this is all that was kept.</p>
+      <p className="ck-sub">{t('r21.sw.thisChatIsClosed')}</p>
       <button type="button" className="ck-btn" onClick={onBack}>
         Back to results
       </button>

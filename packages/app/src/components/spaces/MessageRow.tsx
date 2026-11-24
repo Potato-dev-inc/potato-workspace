@@ -1,6 +1,7 @@
 import type { ReactNode } from 'react';
 import type { SpaceMessage } from '../../lib/spaces';
 import { FileCard } from './FileCard';
+import { t } from '../../i18n';
 
 export const REACTION_PICTURE: Record<string, string> = {
   thumbs_up: '\u{1F44D}', heart: '\u{2764}\u{FE0F}', laugh: '\u{1F602}', wow: '\u{1F62E}',
@@ -33,7 +34,7 @@ export function MessageRow({ message: m, onReply, menu, onReact, revealBlocked, 
   if (m.blocked && !revealBlocked) {
     return (
       <li className={cls}>
-        <span className="ck-spaces-msg-text">Message from someone you blocked.</span>
+        <span className="ck-spaces-msg-text">{t('r21.sw.messageFromSomeoneYou')}</span>
         <button type="button" className="ck-spaces-link" onClick={onRevealBlocked}>Show</button>
       </li>
     );

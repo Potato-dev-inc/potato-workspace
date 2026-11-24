@@ -2,7 +2,7 @@
 // palette asks it to open through this small bus (the same shape as `openStartMission` for missions).
 // Also the Undo switch, which the sheet needs to know before it lets Start through.
 import { useEffect, useState } from 'react';
-import { listen } from '@tauri-apps/api/event';
+import { listen } from './events';
 import { loadSettings } from './settings';
 
 type Listener = () => void;

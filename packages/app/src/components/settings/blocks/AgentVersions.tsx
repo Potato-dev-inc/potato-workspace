@@ -5,6 +5,7 @@
 // Copy follows UX-PHASE1 §0: "Untested version" is the only chip, no code names or raw ids.
 import { errorSentence } from '../../../lib/sayError';
 import { useT } from '../../../i18n';
+import { canaryText } from '../../../lib/canaryWords';
 import { useCallback, useState } from 'react';
 import { changeLine, lastCheckLine, tauriCanaryApi, useCanary, type CanaryApi } from '../../../lib/canary';
 import { Btn, Note, SettingBlock, SettingRow, SettingToggle } from '../settings-ui';
@@ -63,7 +64,7 @@ export function AgentVersions({ api = tauriCanaryApi, now = () => Date.now(), on
                       </span>
                     )}
                   </div>
-                  <p className="st-ver-plain">{agent.plain}</p>
+                  <p className="st-ver-plain">{canaryText(agent.plain)}</p>
                   {change && (
                     <p className="st-ver-change" data-verdict={agent.change?.verdict} data-testid={`agent-version-change-${agent.agent}`}>
                       {change}

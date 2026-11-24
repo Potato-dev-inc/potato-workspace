@@ -226,7 +226,7 @@ fn the_key_file_is_passed_by_path_and_never_read() {
     // And it is stored as a path only.
     let dir = scratch("key-path");
     let store = Store::at(&dir);
-    store.add(Saved { host: h, os: None, found: vec![], checked_at: None }).unwrap();
+    store.add(Saved { host: h, os: None, found: vec![], checked_at: None, node: None }).unwrap();
     let text = std::fs::read_to_string(dir.join(super::store::FILE_NAME)).unwrap();
     assert!(text.contains("Z:/definitely/not/here/id_rsa"));
     assert!(!text.to_ascii_lowercase().contains("password"));
@@ -352,7 +352,7 @@ fn a_missing_ssh_is_found_or_reported_never_guessed() {
 fn saved_places_round_trip_and_a_bad_entry_is_dropped() {
     let dir = scratch("store");
     let store = Store::at(&dir);
-    store.add(Saved { host: host(), os: None, found: vec![], checked_at: None }).unwrap();
+    store.add(Saved { host: host(), os: None, found: vec![], checked_at: None, node: None }).unwrap();
     assert_eq!(store.list().len(), 1);
     store.set_check("h1", &check::Facts { os: Some("Linux".into()), found: vec!["git".into()] }, 42).unwrap();
     let got = store.get("h1").unwrap();

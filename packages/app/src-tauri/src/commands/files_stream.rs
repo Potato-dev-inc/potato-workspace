@@ -42,3 +42,15 @@ pub fn files_stream_protocol<R: Runtime>(ctx: UriSchemeContext<'_, R>, request: 
         responder.respond(response);
     });
 }
+
+#[cfg(test)]
+mod wiring_tests {
+    /// The protocol and the open command are wired into the app, and the viewer builds its addresses for the same scheme name.
+    #[test]
+    fn the_protocol_and_the_open_command_are_wired_in() {
+        let lib = include_str!("../lib.rs");
+        assert!(lib.contains("register_asynchronous_uri_scheme_protocol(\"pmfile\", commands::files_stream_protocol)"));
+        assert!(lib.contains("commands::files_open_bytes,"));
+        assert!(include_str!("../../../src/lib/files-api.ts").contains("convertFileSrc(`${paneId}/${path}`, 'pmfile')"));
+    }
+}

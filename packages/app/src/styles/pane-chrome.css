@@ -229,7 +229,23 @@
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
-  min-width: 0;
+  /* Never a 2-character stump ("w…"): at least 6 characters, else the header clips it whole; the full text is its hover title. */
+  min-width: 6ch;
+  flex: 0 1 auto;
+}
+/* The project chip is never a stump ("work-…") even when the PC is off and more chips sit in the header: it takes the room the name leaves. */
+.cockpit .ck-pane .ck-pane-id .ck-sub-inline.ck-pane-project {
+  flex: 1 1 8ch;
+  min-width: 8ch;
+}
+.cockpit .ck-pane .ck-pane-id .ck-title {
+  flex: 0 1 auto;
+  /* A long name gives way at 45% of the row, so the project chip beside it keeps at least 8 characters. */
+  max-width: 45%;
+  min-width: 8ch;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 .cockpit .ck-head-gap {
   flex: 1 1 0;
@@ -265,19 +281,35 @@
   background: var(--fill-active);
   color: var(--label);
 }
-/* Narrow: the project name goes first, then the long state words. */
-@media (max-width: 1000px) {
+/* The pane (not the window) decides: below 720px the project, account and device chips become ONE compact "where" chip (icon,
+   full text as its tooltip and name), so a narrow pane never loses where its chat runs. Wide panes keep the readable chips. */
+.cockpit .ck-pane {
+  container: ckpane / inline-size;
+}
+.cockpit .ck-pane .ck-pane-id .ck-pane-where {
+  display: none;
+  align-items: center;
+  flex: none;
+  color: var(--label-3);
+}
+.cockpit .ck-pane .ck-pane-id .ck-sub-inline[data-testid='pane-place'] {
+  /* The device name ("pm-sandbox") is never a stump: at least 10 characters. */
+  min-width: 10ch;
+}
+@container ckpane (max-width: 720px) {
   .cockpit .ck-pane .ck-pane-id .ck-sub-inline {
     display: none;
+  }
+  .cockpit .ck-pane .ck-pane-id .ck-pane-where {
+    display: inline-flex;
   }
   .cockpit .ck-pane .ck-pane-state .ck-pane-doing {
     max-width: 14ch;
   }
 }
-
 /* ---- Pane header: the chat's own buttons live here (view switch, Ask aside, Share), one row ---- */
 .cockpit .ck-pane .ck-pane-head > .ck-pane-id.ck-pane-id {
-  min-width: 9rem;
+  min-width: 14rem;
 }
 .cockpit .ck-head-chat {
   display: flex;
@@ -352,8 +384,35 @@
   background: var(--fill);
   cursor: pointer;
 }
+/* Everything that can move into More has moved and the row is still too wide (a narrow window, big text): the actions wrap to a
+   second row instead of going off the right edge. */
+.cockpit .ck-pane .ck-pane-head[data-fold='3'] {
+  flex-wrap: wrap;
+  row-gap: 4px;
+  padding-block: 4px;
+  overflow: visible;
+}
+.cockpit .ck-pane .ck-pane-head[data-fold='3'] .ck-head-gap {
+  flex-basis: 0;
+}
 /* The state words are never cut: when the header is too narrow they go first (data-compact), then the buttons move into More. */
 .cockpit .ck-pane .ck-pane-head > .ck-pane-state:not([data-compact='true']) {
   flex-shrink: 0;
   min-width: auto;
+}
+
+/* Wrapped header (big text, narrow window): the chat's button group may itself wrap inside the pane, so Share is never cut at the edge. */
+.cockpit .ck-pane .ck-pane-head[data-fold='3'] > .ck-head-chat {
+  flex: 0 1 auto;
+  flex-wrap: wrap;
+  min-width: 0;
+  max-width: 100%;
+  row-gap: 4px;
+}
+
+/* Wide pane: room for the name, the project and the device (10 characters) before the actions start moving into More. Last, so it wins over the 14rem above. */
+@container ckpane (min-width: 721px) {
+  .cockpit .ck-pane .ck-pane-head > .ck-pane-id.ck-pane-id {
+    min-width: 22rem;
+  }
 }

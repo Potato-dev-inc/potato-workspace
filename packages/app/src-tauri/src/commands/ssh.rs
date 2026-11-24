@@ -78,6 +78,8 @@ pub struct HostView {
     pub key_file: Option<String>,
     pub os: Option<String>,
     pub checked_at: Option<u64>,
+    /// "Set it up" has put the program on this machine and paired with it.
+    pub set_up: bool,
     /// The agent CLIs the last check found, as `{ id, label }` (ids from our own list only).
     pub agents: Vec<AgentRef>,
     /// The agents that can chat on a machine over SSH (their chat program is started there; nothing is installed by this app).
@@ -121,6 +123,7 @@ pub fn host_view(saved: &Saved, agents: &[AgentProgram], chat_on: bool) -> HostV
         key_file: saved.host.key_file.clone(),
         os: saved.os.clone(),
         checked_at: saved.checked_at,
+        set_up: saved.node.is_some(),
         agents: agents.iter().filter(|a| saved.found.contains(&a.program)).map(|a| AgentRef { id: a.id.clone(), label: a.label.clone() }).collect(),
         // Chat on a machine is a Labs switch (`ssh_chat_enabled`): off, no agent is offered for it.
         chat_agents: if chat_on { chat_agents() } else { Vec::new() },
@@ -214,7 +217,7 @@ pub async fn ssh_add(name: String, target: String, port: Option<u16>, key_file: 
         let found = sanitize_found(&found.unwrap_or_default(), &agents);
         let os = os.map(|o| crate::ssh::model::clean_line(&o, 24)).filter(|o| !o.is_empty());
         let checked_at = (!found.is_empty() || os.is_some()).then(now_secs);
-        let saved = Saved { host, os, found, checked_at };
+        let saved = Saved { host, os, found, checked_at, node: None };
         store().add(saved.clone()).map_err(|m| OperationError::new(SSH_START_FAILED, m, false))?;
         Ok(host_view(&saved, &agents, chat_on))
     })
@@ -243,10 +246,126 @@ pub async fn ssh_remove(id: String) -> Result<bool, OperationError> {
     off_ui(move || store().remove(&id).map_err(|m| OperationError::new(SSH_START_FAILED, m, false))).await?
 }
 
+/// What "Set it up" / "Update" answers. `failure` is the step that could not be done (after three tries) and what to do by hand.
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct SetupView {
+    pub ok: bool,
+    pub already_current: bool,
+    pub failure: Option<crate::ssh::install::Failure>,
+}
+
+/// The program to put on a machine: its bytes and the checksum it must have.
+fn host_asset() -> Result<(Vec<u8>, String), OperationError> {
+    if let Some(path) = lab_file(std::env::var_os("POTATO_HOST_LAB_FILE"), crate::app_paths::profile().is_some()) {
+        let too_big = std::fs::metadata(&path).map_or(true, |m| m.len() > HOST_MAX_BYTES);
+        if too_big {
+            return Err(not_published());
+        }
+        let sha = crate::acp::pin::sha256_hex(&path).map_err(|_| not_published())?;
+        let bytes = std::fs::read(&path).map_err(|_| not_published())?;
+        return Ok((bytes, sha));
+    }
+    let pubkey = serde_json::from_str::<serde_json::Value>(include_str!("../../tauri.conf.json"))
+        .ok()
+        .and_then(|v| v["plugins"]["updater"]["pubkey"].as_str().map(str::to_string))
+        .ok_or_else(not_published)?;
+    verified_host(crate::app_lifecycle::app_version(), &pubkey, &http_get)
+}
+
+const HOST_RELEASES: &str = "https://github.com/Potato-dev-inc/potato-workspace/releases/download";
+const HOST_MAX_BYTES: u64 = 200 * 1024 * 1024;
+
+fn not_published() -> OperationError {
+    OperationError::new("SSH_HOST_NOT_PUBLISHED", "The program for this machine is not published yet. Update Potato Workspace and try again.", false)
+}
+
+/// GET with a size cap and a timeout. Any failure (offline, 404, too big) is `Err(())`; the caller says it in plain words.
+fn http_get(url: &str, cap: u64) -> Result<Vec<u8>, ()> {
+    use std::io::Read;
+    let resp = ureq::get(url).timeout(std::time::Duration::from_secs(120)).call().map_err(|_| ())?;
+    let mut out = Vec::new();
+    resp.into_reader().take(cap + 1).read_to_end(&mut out).map_err(|_| ())?;
+    if out.len() as u64 > cap { Err(()) } else { Ok(out) }
+}
+
+/// This app version's own signed feed, the tarball it names, and the check against the updater key. Only a verified file gets a checksum,
+/// computed here: the `sha256` field in the feed is not signed and is never used. `fetch` is the network (a test passes a fake one).
+///
+/// shortcut: the signature does not bind the version, so an older signed host served at this exact URL would also verify. The tag URL
+/// over HTTPS from our own release narrows it; the later fix is a signed version in the trusted comment.
+fn verified_host(version: &str, pubkey_b64: &str, fetch: &dyn Fn(&str, u64) -> Result<Vec<u8>, ()>) -> Result<(Vec<u8>, String), OperationError> {
+    use base64::Engine;
+    use sha2::{Digest, Sha256};
+    let prefix = format!("{HOST_RELEASES}/v{version}/");
+    let feed = fetch(&format!("{prefix}latest.json"), 1024 * 1024).map_err(|_| not_published())?;
+    let feed: serde_json::Value = serde_json::from_slice(&feed).map_err(|_| not_published())?;
+    let entry = &feed["potato"]["host"]["linux-x86_64"];
+    let url = entry["url"].as_str().filter(|u| u.starts_with(&prefix)).ok_or_else(not_published)?;
+    let sig = entry["signature"].as_str().filter(|s| !s.trim().is_empty()).ok_or_else(not_published)?;
+    let refused = || OperationError::new("SSH_HOST_UNVERIFIED", "The downloaded program did not pass the signature check, so it was not used. Try again later.", false);
+    let bytes = fetch(url, HOST_MAX_BYTES).map_err(|_| not_published())?;
+    let text = |b: &str| base64::engine::general_purpose::STANDARD.decode(b.trim()).ok().and_then(|v| String::from_utf8(v).ok());
+    let key = text(pubkey_b64).and_then(|t| minisign_verify::PublicKey::decode(&t).ok()).ok_or_else(refused)?;
+    let sig = text(sig).and_then(|t| minisign_verify::Signature::decode(&t).ok()).ok_or_else(refused)?;
+    key.verify(&bytes, &sig, false).map_err(|_| refused())?;
+    let sha = Sha256::digest(&bytes).iter().map(|b| format!("{b:02x}")).collect();
+    Ok((bytes, sha))
+}
+
+/// The lab file only counts under a named profile, never in the installed app.
+fn lab_file(var: Option<std::ffi::OsString>, named_profile: bool) -> Option<std::path::PathBuf> {
+    var.filter(|_| named_profile).map(Into::into)
+}
+
+/// Puts the program on a saved machine and (the first time) pairs with it. Progress goes out as `ssh-setup-progress` events.
+fn setup_machine(app: &AppHandle, id: &str, first: bool) -> Result<SetupView, OperationError> {
+    use crate::ssh::install::{self, Event, Plan};
+    use tauri::Emitter;
+    let st = store();
+    let saved = st.get(id).ok_or_else(|| OperationError::new(SSH_NOT_FOUND, "That machine is not saved any more.", false))?;
+    let (bytes, sha) = host_asset()?;
+    // This PC's side of the pairing, only when the machine has not been paired yet.
+    let svc = crate::device_link::app::app_service().map_err(|m| OperationError::new(SSH_START_FAILED, m, false))?;
+    let pair_line = if first || saved.node.is_none() { Some(svc.ssh_pair_line().map_err(|m| OperationError::new(SSH_START_FAILED, m, false))?) } else { None };
+    let pause = |d: std::time::Duration| std::thread::sleep(d);
+    let plan = Plan { asset: install::Asset { bytes: &bytes, sha256: &sha }, pair_line: pair_line.as_deref(), pause: &pause };
+    let emit = |step: install::Step, state: &str, attempt: u8| {
+        let _ = app.emit("ssh-setup-progress", serde_json::json!({ "id": id, "step": step, "state": state, "attempt": attempt }));
+    };
+    let result = install::run(&runner()?, &saved.host, &plan, &mut |e| match e {
+        Event::Doing(s) => emit(s, "doing", 0),
+        Event::Retrying(s, n) => emit(s, "retrying", n),
+        Event::Done(s) => emit(s, "done", 0),
+    });
+    match result {
+        Ok(done) => {
+            if let Some(p) = &done.paired {
+                svc.ssh_trust_host(&p.node, &p.device_pub, if p.name.is_empty() { &saved.host.name } else { &p.name }).map_err(|m| OperationError::new(SSH_START_FAILED, m, false))?;
+                let _ = st.set_node(id, &p.node);
+            }
+            Ok(SetupView { ok: true, already_current: done.already_current, failure: None })
+        }
+        Err(failure) => Ok(SetupView { ok: false, already_current: false, failure: Some(failure) }),
+    }
+}
+
+/// "Set it up": every step itself, three tries each, then a hand-off. Fixed command lines only (`ssh/install.rs`).
+#[tauri::command]
+pub async fn ssh_setup(id: String, app: AppHandle) -> Result<SetupView, OperationError> {
+    off_ui(move || setup_machine(&app, &id, true)).await?
+}
+
+/// "Update": the same steps for a machine that is already set up (no pairing again); the program restarts.
+#[tauri::command]
+pub async fn ssh_update(id: String, app: AppHandle) -> Result<SetupView, OperationError> {
+    off_ui(move || setup_machine(&app, &id, false)).await?
+}
+
 /// Opens a terminal pane on a saved machine: a local PTY that runs `ssh -t ...`. `agent` is `shell` or an agent id whose
 /// CLI the machine has. The pane has no sign-in, hook or variable of this PC.
 #[tauri::command]
-pub async fn ssh_open(id: String, agent: String, folder: Option<String>, state: State<'_, AppState>, app: AppHandle) -> Result<String, OperationError> {
+pub async fn ssh_open(id: String, agent: String, folder: Option<String>, state: State<'_, AppState>, _app: AppHandle) -> Result<String, OperationError> {
     let registry = state.registry.clone();
     off_ui(move || {
         let saved = store().get(&id).ok_or_else(|| OperationError::new(SSH_NOT_FOUND, "That machine is not saved any more.", false))?;
@@ -274,7 +393,7 @@ pub async fn ssh_open(id: String, agent: String, folder: Option<String>, state: 
             guard_env: None,
         };
         // The registry emits `pty://panes-changed` when the pane starts, as it does for `spawn_pane`.
-        registry_spawn_pane(&registry, &app, args).map_err(|m| OperationError::new(SSH_START_FAILED, m, true))?;
+        registry_spawn_pane(&registry, args).map_err(|m| OperationError::new(SSH_START_FAILED, m, true))?;
         Ok(pane_id)
     })
     .await?
@@ -388,6 +507,68 @@ pub async fn ssh_git_status(pane_id: String, fresh: Option<bool>, app: AppHandle
 mod tests {
     use super::*;
 
+    // Throwaway keys and one signature made for `HOST_BYTES` with key A (not the app's key; no private key is kept anywhere).
+    const HOST_BYTES: &[u8] = b"potato-host test payload";
+    const PUB_A: &str = "dW50cnVzdGVkIGNvbW1lbnQ6IHRlc3Qga2V5ClJXUUJBZ01FQlFZSENHOHc0blFQWEVsQVFncUVWcWdaSFBRQk5DNFVyMXJoRU40NDkzdDRBa0poCg==";
+    const PUB_B: &str = "dW50cnVzdGVkIGNvbW1lbnQ6IHRlc3Qga2V5ClJXUUJBZ01FQlFZSENOVFYrbkZWYWlsVmdVeWFGN0d1R05jcjRNbTdtZEVUaWhBbWFzU3BOZ1p5Cg==";
+    const SIG_A: &str = "dW50cnVzdGVkIGNvbW1lbnQ6IHNpZ25hdHVyZSBmcm9tIHRlc3Qga2V5ClJVUUJBZ01FQlFZSENKdVd1Ti9xd2RoQnQ3VDVSVXBRNFZtaERRVmRtYldKbk9wbk5LS2w2N2cwbUREaEFuYXpxZ3lnQ25YaDlnNlFaaTVxdEt2QVBDeFNGZGFtSnVLUGpBYz0KdHJ1c3RlZCBjb21tZW50OiB0aW1lc3RhbXA6MQlmaWxlOmhvc3QKTVRnK2xKSVpqSlZYbTVremc5ZXlKVkRLSC80RUQ2cW13K2RBMjdjMGp4Rlk1cXRETGNiS3pYMlYvQlJRZmYyWEkrU1ZFbWFiSnA2elJkRTUrUFVuRHc9PQo=";
+
+    fn feed(sig: Option<&str>) -> Vec<u8> {
+        let url = format!("{HOST_RELEASES}/v1.2.3/potato-host-linux-x86_64.tar.gz");
+        // The feed's own sha256 is deliberately wrong: it must never be trusted.
+        let mut e = serde_json::json!({ "url": url, "sha256": "00" });
+        if let Some(s) = sig {
+            e["signature"] = s.into();
+        }
+        serde_json::to_vec(&serde_json::json!({ "potato": { "host": { "linux-x86_64": e } } })).unwrap()
+    }
+    fn net(feed: Vec<u8>, file: Vec<u8>) -> impl Fn(&str, u64) -> Result<Vec<u8>, ()> {
+        move |u, _| if u.ends_with("latest.json") { Ok(feed.clone()) } else if u.ends_with(".tar.gz") { Ok(file.clone()) } else { Err(()) }
+    }
+
+    #[test]
+    fn host_download_is_checked_against_the_key() {
+        use sha2::{Digest, Sha256};
+        let (bytes, sha) = verified_host("1.2.3", PUB_A, &net(feed(Some(SIG_A)), HOST_BYTES.to_vec())).unwrap();
+        assert_eq!(bytes, HOST_BYTES);
+        let want: String = Sha256::digest(HOST_BYTES).iter().map(|b| format!("{b:02x}")).collect();
+        assert_eq!(sha, want, "the checksum is computed here, not read from the feed");
+
+        let code = |r: Result<(Vec<u8>, String), OperationError>| r.unwrap_err().code;
+        let mut tampered = HOST_BYTES.to_vec();
+        tampered[3] ^= 1;
+        assert_eq!(code(verified_host("1.2.3", PUB_A, &net(feed(Some(SIG_A)), tampered))), "SSH_HOST_UNVERIFIED");
+        assert_eq!(code(verified_host("1.2.3", PUB_B, &net(feed(Some(SIG_A)), HOST_BYTES.to_vec()))), "SSH_HOST_UNVERIFIED");
+        let cut = &SIG_A[..SIG_A.len() / 2];
+        assert_eq!(code(verified_host("1.2.3", PUB_A, &net(feed(Some(cut)), HOST_BYTES.to_vec()))), "SSH_HOST_UNVERIFIED");
+        assert_eq!(code(verified_host("1.2.3", PUB_A, &net(feed(None), HOST_BYTES.to_vec()))), "SSH_HOST_NOT_PUBLISHED");
+        // A url outside this version's own release folder is not followed.
+        assert_eq!(code(verified_host("9.9.9", PUB_A, &net(feed(Some(SIG_A)), HOST_BYTES.to_vec()))), "SSH_HOST_NOT_PUBLISHED");
+    }
+
+    #[test]
+    fn offline_feed_says_not_published_yet() {
+        let e = verified_host("1.2.3", PUB_A, &|_, _| Err(())).unwrap_err();
+        assert_eq!((e.code.as_str(), e.message.as_str()), ("SSH_HOST_NOT_PUBLISHED", "The program for this machine is not published yet. Update Potato Workspace and try again."));
+    }
+
+    #[test]
+    fn app_updater_key_is_a_minisign_key() {
+        let v: serde_json::Value = serde_json::from_str(include_str!("../../tauri.conf.json")).unwrap();
+        let key = v["plugins"]["updater"]["pubkey"].as_str().unwrap();
+        use base64::Engine;
+        let text = String::from_utf8(base64::engine::general_purpose::STANDARD.decode(key).unwrap()).unwrap();
+        minisign_verify::PublicKey::decode(&text).unwrap();
+    }
+
+    #[test]
+    fn lab_file_needs_a_named_profile() {
+        let f = || Some(std::ffi::OsString::from("x"));
+        assert!(lab_file(f(), true).is_some());
+        assert!(lab_file(f(), false).is_none());
+        assert!(lab_file(None, true).is_none());
+    }
+
     fn agents() -> Vec<AgentProgram> {
         vec![
             AgentProgram { id: "claude".into(), label: "Claude".into(), program: "claude".into() },
@@ -422,7 +603,7 @@ mod tests {
         assert!(err.message.contains("switched off"), "{}", err.message);
         assert!(ssh_chat_gate(true).is_ok());
         let host = SshHost::parse("i1", "Build box", "dev@build.local", None, None).unwrap();
-        let saved = Saved { host, os: None, found: vec![], checked_at: None };
+        let saved = Saved { host, os: None, found: vec![], checked_at: None, node: None };
         assert!(host_view(&saved, &agents(), false).chat_agents.is_empty());
         assert!(!host_view(&saved, &agents(), true).chat_agents.is_empty(), "on: the agents with a chat program are offered");
     }
@@ -430,7 +611,7 @@ mod tests {
     #[test]
     fn a_saved_host_view_has_no_secret_fields() {
         let host = SshHost::parse("i1", "Build box", "dev@build.local", None, Some("C:/k/id")).unwrap();
-        let v = host_view(&Saved { host, os: Some("Linux".into()), found: vec!["claude".into()], checked_at: Some(5) }, &agents(), false);
+        let v = host_view(&Saved { host, os: Some("Linux".into()), found: vec!["claude".into()], checked_at: Some(5), node: None }, &agents(), false);
         let json = serde_json::to_string(&v).unwrap().to_ascii_lowercase();
         assert!(!json.contains("password") && !json.contains("passphrase"));
         assert_eq!(v.agents, vec![AgentRef { id: "claude".into(), label: "Claude".into() }]);

@@ -33,6 +33,7 @@ import { BringAgentList, type AgentStanding } from './BringAgentList';
 import { BringChatRows } from './BringChatRows';
 import { orcaImportApi, type OrcaImportApi, type OrcaScan } from '../../lib/orcaImport';
 import { BringOrcaProjects, ORCA_BUTTON } from './BringOrcaProjects';
+import { t } from '../../i18n';
 
 export const BRING_CHATS_TITLE_ID = 'bc-panel-title';
 export const BRING_CHATS_TITLE = 'Bring my chats';
@@ -314,7 +315,7 @@ export function BringChatsPanel({
 
       {view === 'off' && !orcaOpen && (
         <>
-          <p className="ck-sub">Chat search is off. Turn it on to bring your chats.</p>
+          <p className="ck-sub">{t('r21.sw.chatSearchIsOff')}</p>
           <div className="bc-actions">
             {closeButton}
             {orca?.found && orca.projects.length > 0 && (
@@ -333,7 +334,7 @@ export function BringChatsPanel({
 
       {view === 'agents' && found && !orcaOpen && (
         <>
-          <p className="ck-sub">Pick an agent to see its chats on this PC. Nothing leaves this computer.</p>
+          <p className="ck-sub">{t('r21.sw.pickAnAgentTo')}</p>
           <BringAgentList
             found={found}
             unreadable={(state?.agents ?? []).filter((a) => !found.some((f) => f.id === a.id))}
@@ -344,7 +345,7 @@ export function BringChatsPanel({
               setAgent(id);
             }}
           />
-          {found.length === 0 && <p className="ck-sub">No agent has chats to bring.</p>}
+          {found.length === 0 && <p className="ck-sub">{t('r21.sw.noAgentHasChats')}</p>}
           <div className="bc-actions">
             {closeButton}
             {orca?.found && orca.projects.length > 0 && (
@@ -362,7 +363,7 @@ export function BringChatsPanel({
             ‹ All agents
           </button>
           <p className="ck-sub">{`${chosen}: newest chats first. Pick some, or bring a whole time range.`}</p>
-          <div className="bc-chips" role="group" aria-label="Time range">
+          <div className="bc-chips" role="group" aria-label={t('r21.sw.timeRange')}>
             {RANGE_CHIPS.map((chip) => (
               <button key={chip.key} type="button" className="bc-chip" aria-pressed={rangeKey === chip.key} onClick={() => chooseChip(chip.key)}>
                 {chip.label}
@@ -372,10 +373,10 @@ export function BringChatsPanel({
           {rangeKey === 'custom' && (
             <div className="bc-dates">
               <label>
-                From <input type="date" aria-label="From date" value={custom.from} onChange={(e) => setCustom((c) => ({ ...c, from: e.target.value }))} />
+                From <input type="date" aria-label={t('r21.sw.fromDate')} value={custom.from} onChange={(e) => setCustom((c) => ({ ...c, from: e.target.value }))} />
               </label>
               <label>
-                To <input type="date" aria-label="To date" value={custom.to} onChange={(e) => setCustom((c) => ({ ...c, to: e.target.value }))} />
+                To <input type="date" aria-label={t('r21.sw.toDate')} value={custom.to} onChange={(e) => setCustom((c) => ({ ...c, to: e.target.value }))} />
               </label>
             </div>
           )}
@@ -384,7 +385,7 @@ export function BringChatsPanel({
               Loading…
             </p>
           )}
-          {!loadingRows && rows.length === 0 && customReady && <p className="ck-sub">No chats in this range.</p>}
+          {!loadingRows && rows.length === 0 && customReady && <p className="ck-sub">{t('r21.sw.noChatsInThis')}</p>}
           {rows.length > 0 && <BringChatRows rows={rows} picked={picked} now={when} onToggle={toggle} onOpen={(session) => agent && requestImportedChat(agent, session)} />}
           {more && (
             <button type="button" className="ck-btn ck-btn--secondary" disabled={loadingRows} onClick={() => void loadRows(next)}>
@@ -394,7 +395,7 @@ export function BringChatsPanel({
           {rangeCount > 0 && (
             <div className="bc-range">
               <span>{`${chatCount(total)} in this range. A few of them:`}</span>
-              <ul aria-label="A few of them">
+              <ul aria-label={t('r21.sw.aFewOfThem')}>
                 {sample.map((row) => (
                   <li key={row.session}>{row.title}</li>
                 ))}
@@ -419,7 +420,7 @@ export function BringChatsPanel({
           <div
             className="bc-bar"
             role="progressbar"
-            aria-label="Bringing chats"
+            aria-label={t('r21.sw.bringingChats')}
             aria-valuemin={0}
             aria-valuemax={Math.max(progress.chatsTotal, 1)}
             aria-valuenow={progress.chatsDone}

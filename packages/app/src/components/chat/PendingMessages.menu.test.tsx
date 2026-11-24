@@ -12,7 +12,7 @@ import { PendingMessages } from './PendingMessages';
 
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 
-const model = readFileSync(resolve(__dirname, '../../../src-tauri/src/pane_outbox/model.rs'), 'utf8');
+const model = readFileSync(resolve(__dirname, '../../../src-tauri/crates/pm-core/src/pane_outbox/model.rs'), 'utf8');
 const constant = (name: string) => new RegExp(`pub const ${name}: &str = "([^"]+)";`).exec(model)?.[1] ?? '';
 const WAIT_MENU = constant('WAIT_MENU');
 const WAIT_BUSY = constant('WAIT_BUSY');

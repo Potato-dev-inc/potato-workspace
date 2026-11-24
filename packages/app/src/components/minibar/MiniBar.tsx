@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useLayoutEffect, useRef, useState, type KeyboardEvent, type WheelEvent } from 'react';
 import type { PaneInfo } from '../../lib/tauri-types';
-import { useT } from '../../i18n';
+import { t, useT } from '../../i18n';
 import '../../styles/individual-mode.css';
 
 export interface MiniBarProps {
@@ -83,17 +83,17 @@ export function MiniBar({ panes, toast, onFocusPane, onClosePane, onWantWidth, o
   };
 
   return (
-    <div className="mb" role="toolbar" aria-label="Individual mode" ref={barRef}>
+    <div className="mb" role="toolbar" aria-label={t('r21.sw.individualMode')} ref={barRef}>
       {toast ? (
         <div className="mb-toast" role="status">
-          <span>Each agent now has its own window.</span>
+          <span>{t('r21.sw.eachAgentNowHas')}</span>
           <button type="button" className="mb-link" onClick={onUndo}>
             Undo
           </button>
         </div>
       ) : panes.length === 0 ? (
         <>
-          <span className="mb-empty">No agents yet</span>
+          <span className="mb-empty">{t('r21.sw.noAgentsYet')}</span>
           <button type="button" className="mb-btn" onClick={onNew}>
             Start one
           </button>
@@ -126,7 +126,7 @@ export function MiniBar({ panes, toast, onFocusPane, onClosePane, onWantWidth, o
                         type="button"
                         className="mb-chip-x"
                         aria-label={`Close ${name}${proj ? ` ${proj}` : ''}`}
-                        title="Close this agent"
+                        title={t('r21.sw.closeThisAgent')}
                         onClick={(e) => {
                           e.stopPropagation();
                           onClosePane(p.id);

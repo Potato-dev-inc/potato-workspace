@@ -3,7 +3,8 @@
 // The room's secrets (read token, content key) stay in the link's #fragment. The UI only ever sees the masked link.
 import { invoke } from '@tauri-apps/api/core';
 import { t } from '../i18n';
-import { listen, type UnlistenFn } from '@tauri-apps/api/event';
+import { listen } from './events';
+import type { UnlistenFn } from '@tauri-apps/api/event';
 
 /** What a viewer may see about a pane. `gone` = the pane closed. */
 export type LiveState = 'working' | 'idle' | 'waiting' | 'error' | 'gone';

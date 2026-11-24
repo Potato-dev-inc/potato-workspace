@@ -20,7 +20,7 @@ import {
 
 const RUST_MODEL = path.resolve(
   path.dirname(fileURLToPath(import.meta.url)),
-  '../../src-tauri/src/prompt_risk/packages/model.rs',
+  '../../src-tauri/crates/pm-core/src/prompt_risk/packages/model.rs',
 );
 
 // The same JSON the Rust golden test (`package_item_golden_json_camel_case`) pins.

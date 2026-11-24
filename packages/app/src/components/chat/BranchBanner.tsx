@@ -6,6 +6,7 @@
 //   failed:       "Branch couldn't start: <state text>"
 //   partial:      "3 files couldn't be written into the copy"
 // It reads `branchLineage` and reloads when `branch://changed` names this pane. Nothing here starts a branch.
+import { readUnlessCancelled } from '../../lib/pane-read';
 import { Fragment, useEffect, useRef, useState, type CSSProperties, type ReactNode } from 'react';
 import {
   branchBrief,
@@ -17,6 +18,7 @@ import {
 } from '../../lib/branch-from';
 import { BriefSheet } from '../cockpit/BriefSheet';
 import { plainKeepGoingError } from './KeepGoingBanner';
+import { t } from '../../i18n';
 
 const ROW_STYLE: CSSProperties = { display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' };
 
@@ -45,14 +47,17 @@ export function BranchBanner({ paneId, onOpenPane }: { paneId: string; onOpenPan
 
   useEffect(() => {
     alive.current = true;
+    // This run's own flag: a late answer for the chat just left must not land on the chat now shown.
+    let live = true;
     let unlisten: (() => void) | undefined;
+    setLineage(null);
     const load = () => {
-      branchLineage(paneId).then(
+      readUnlessCancelled(() => branchLineage(paneId), () => live).then(
         (next) => {
-          if (alive.current) setLineage(next);
+          if (live && next !== undefined) setLineage(next);
         },
         () => {
-          if (alive.current) setLineage(null);
+          if (live) setLineage(null);
         },
       );
     };
@@ -61,13 +66,14 @@ export function BranchBanner({ paneId, onOpenPane }: { paneId: string; onOpenPan
       if (event.paneIds.includes(paneId)) load();
     }).then(
       (stop) => {
-        if (alive.current) unlisten = stop;
+        if (live) unlisten = stop;
         else stop();
       },
       // No event channel (a test stub, a window without it): the rows still show what they loaded.
       () => {},
     );
     return () => {
+      live = false;
       alive.current = false;
       unlisten?.();
     };
@@ -123,7 +129,7 @@ export function BranchBanner({ paneId, onOpenPane }: { paneId: string; onOpenPan
           )}
         </Row>
       )}
-      {making && <Row kind="making">Making a copy from the save point…</Row>}
+      {making && <Row kind="making">{t('r21.sw.makingACopyFrom')}</Row>}
       {failed && <Row kind="failed">{`Branch couldn't start: ${branchStateText(failed)}`}</Row>}
       {partial && (
         <Row kind="partial">

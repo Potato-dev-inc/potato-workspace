@@ -376,8 +376,8 @@ export function AgentDefinitions({
         />
       )}
       <SettingBlock
-        label="Definitions"
-        description="Add your own agents with a small settings file. A definition runs a program, so a new or changed one stays off until you review and approve it here."
+        label={t('r13ui.def.title')}
+        description={t('r13ui.def.blurb')}
       >
         <div className="mb-3 flex items-center gap-2">
           <button type="button" className={BTN} disabled={busy} onClick={() => void reload()}>
@@ -406,15 +406,15 @@ export function AgentDefinitions({
           </p>
         )}
         {listing && listing.definitions.length === 0 && (
-          <p className="text-sm text-pm-muted">No definition files found.</p>
+          <p className="text-sm text-pm-muted">{t('r13ui.def.none')}</p>
         )}
         <div className="mb-3 flex items-center gap-2">
           <input
             type="text"
-            aria-label="Command name"
+            aria-label={t('r13ui.def.cmdName')}
             value={genericCommand}
             onChange={(e) => setGenericCommand(e.target.value)}
-            placeholder="command name, e.g. mycoder"
+            placeholder={t('r13ui.def.cmdPlaceholder')}
             className="min-w-0 flex-1 rounded-lg border border-pm-border bg-transparent px-2 py-1 text-xs"
           />
           <button type="button" className={BTN} disabled={busy || !genericCommand.trim()} onClick={() => void addGeneric()}>
@@ -482,8 +482,8 @@ export function AgentDefinitions({
       </SettingBlock>
       {api.removedList && removed.length > 0 && (
         <SettingBlock
-          label="Recently removed"
-          description="Agents you removed. Their files wait in the .removed folder next to your agents, so you can bring one back."
+          label={t('r13ui.def.removedTitle')}
+          description={t('r13ui.def.removedBlurb')}
         >
           {api.purgeAll && (
             <div className="mb-3 flex justify-end">
@@ -532,8 +532,8 @@ export function AgentDefinitions({
         </SettingBlock>
       )}
       <SettingBlock
-        label="Sources"
-        description="Where definitions are read from. Project and extra directories only load after you consent to that location."
+        label={t('r13ui.def.sourcesTitle')}
+        description={t('r13ui.def.sourcesBlurb')}
       >
         <ul className="space-y-2">
           {listing?.sources.map((source) => (
@@ -563,9 +563,9 @@ export function AgentDefinitions({
             </li>
           ))}
         </ul>
-        <h4 className="mb-1 mt-4 text-xs font-semibold">Consented projects</h4>
+        <h4 className="mb-1 mt-4 text-xs font-semibold">{t('r13ui.def.consented')}</h4>
         {(listing?.projects ?? []).length === 0 && (
-          <p className="text-xs text-pm-muted">No project is allowed to load definitions.</p>
+          <p className="text-xs text-pm-muted">{t('r13ui.def.noConsented')}</p>
         )}
         <ul className="space-y-2">
           {(listing?.projects ?? []).map((project) => (
@@ -585,13 +585,13 @@ export function AgentDefinitions({
             </li>
           ))}
         </ul>
-        <h4 className="mb-1 mt-4 text-xs font-semibold">Extra directories</h4>
+        <h4 className="mb-1 mt-4 text-xs font-semibold">{t('r13ui.def.extraDirs')}</h4>
         <ul className="space-y-2">
           {(listing?.extra_dirs ?? []).map((dir) => (
             <li key={dir.path} data-testid="extra-dir-row" className="flex items-center gap-3 rounded-lg border border-pm-border p-3">
               <div className="min-w-0 flex-1">
                 <p className="break-all text-xs">{dir.path}</p>
-                {!dir.exists && <p className="text-xs text-pm-muted">This folder does not exist.</p>}
+                {!dir.exists && <p className="text-xs text-pm-muted">{t('r13ui.def.dirMissing')}</p>}
               </div>
               <Switch
                 checked={dir.consent}
@@ -608,7 +608,7 @@ export function AgentDefinitions({
         <div className="mt-2 flex items-center gap-2">
           <input
             type="text"
-            aria-label="Extra directory"
+            aria-label={t('r13ui.def.extraDir')}
             value={extraPath}
             onChange={(e) => setExtraPath(e.target.value)}
             placeholder="D:\team-agents"
@@ -696,14 +696,15 @@ function ConsentBanner({
   onAllow: () => void;
   onDismiss: () => void;
 }) {
+  const t = useT();
   return (
     <div
       role="region"
-      aria-label="Project agent definitions"
+      aria-label={t('r13ui.def.bannerRegion')}
       data-testid="consent-banner"
       className="mb-4 rounded-lg border border-pm-border bg-pm-border/20 p-3"
     >
-      <p className="text-sm font-semibold">This project contains agent definitions</p>
+      <p className="text-sm font-semibold">{t('r13ui.def.bannerTitle')}</p>
       <p className="mt-1 break-all text-xs text-pm-muted">{scan.project}</p>
       <ul className="mt-2 list-disc pl-5 text-xs">
         {scan.files.map((file) => (
@@ -793,7 +794,7 @@ function DefinitionItem({
         {row.experimental && (
           <span
             data-testid="experimental-badge"
-            title="Experimental: runs a generic command with no verified behavior"
+            title={t('r13ui.def.experimental')}
             className={`${BADGE} border-pm-border text-pm-muted`}
           >
             experimental
@@ -864,7 +865,7 @@ function DefinitionItem({
       )}
       {check && check.status === 'ran' && (
         <ul data-testid="fixture-results" className="mt-2 space-y-1">
-          {check!.results.length === 0 && <li className="text-xs text-pm-muted">No fixtures found.</li>}
+          {check!.results.length === 0 && <li className="text-xs text-pm-muted">{t('r13ui.def.noFixtures')}</li>}
           {check!.results.map((r) => (
             <li key={r.fixture} data-testid="fixture-result" className="text-xs">
               <span className={r.passed ? 'text-pm-muted' : 'font-semibold text-pm-text'}>{r.passed ? 'PASS' : 'FAIL'}</span>{' '}
@@ -916,6 +917,7 @@ function RemoveDialog({
   onRemove: () => void;
   onCancel: () => void;
 }) {
+  const t = useT();
   const name = rowName(row);
   const stem = baseName(row.file).replace(/\.toml$/i, '');
   return (
@@ -926,19 +928,13 @@ function RemoveDialog({
         aria-label={`Remove ${name}`}
         className="max-h-full w-full max-w-md overflow-auto rounded-xl border border-pm-border bg-pm-panel p-5"
       >
-        <h3 className="text-sm font-semibold">Remove {name}?</h3>
-        <p className="mt-3 text-xs text-pm-muted">These are moved to a .removed folder next to your agents. Nothing is deleted.</p>
+        <h3 className="text-sm font-semibold">{t('r13ui.def.removeTitle', { name })}</h3>
+        <p className="mt-3 text-xs text-pm-muted">{t('r13ui.def.removeNote')}</p>
         <ul className="mt-2 list-disc space-y-1 pl-5 text-xs">
-          <li>
-            The definition file, <span className="font-mono">{baseName(row.file)}</span>
-          </li>
-          <li>
-            Its test fixtures folder, <span className="font-mono">{stem}/</span>, if it has one
-          </li>
-          <li>
-            <span className="font-mono">{stem}.wizard.json</span>, if it has one
-          </li>
-          <li>Its approval</li>
+          <li>{t('r13ui.def.itsFile', { file: baseName(row.file) })}</li>
+          <li>{t('r13ui.def.itsFixtures', { dir: `${stem}/` })}</li>
+          <li>{t('r13ui.def.itsWizard', { file: `${stem}.wizard.json` })}</li>
+          <li>{t('r13ui.def.itsApproval')}</li>
         </ul>
         <p className="mt-3 text-xs text-pm-muted">
           Windows already running this agent keep running. It leaves the New agent menu now. You can undo this right
@@ -977,6 +973,7 @@ function PurgeDialog({
   onConfirm: () => void;
   onCancel: () => void;
 }) {
+  const t = useT();
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
       <div
@@ -986,7 +983,7 @@ function PurgeDialog({
         className="max-h-full w-full max-w-md overflow-auto rounded-xl border border-pm-border bg-pm-panel p-5"
       >
         <h3 className="text-sm font-semibold">{message}</h3>
-        <p className="mt-3 text-xs text-pm-muted">The files are deleted from the .removed folder. Nothing is kept.</p>
+        <p className="mt-3 text-xs text-pm-muted">{t('r13ui.def.purgeNote')}</p>
         <div className="mt-4 flex justify-end gap-2">
           <button type="button" className={BTN} onClick={onCancel}>
             Cancel
@@ -1011,6 +1008,7 @@ function ApproveDialog({
   onApprove: () => void;
   onCancel: () => void;
 }) {
+  const t = useT();
   const { row, preview } = reviewing;
   const rendered = preview?.rendered;
   const blocked = !preview || !preview.ok;
@@ -1027,8 +1025,8 @@ function ApproveDialog({
         {reviewing.error && <p className="mt-3 text-sm text-pm-text">{reviewing.error}</p>}
         {rendered && (
           <div className="mt-3 space-y-2">
-            <CommandBlock title="Headless command" program={preview?.program} argv={rendered.headless_argv} kind="headless" />
-            <CommandBlock title="Visible pane command" program={preview?.program} argv={rendered.tui_argv} kind="tui" />
+            <CommandBlock title={t('r13ui.def.headless')} program={preview?.program} argv={rendered.headless_argv} kind="headless" />
+            <CommandBlock title={t('r13ui.def.visible')} program={preview?.program} argv={rendered.tui_argv} kind="tui" />
           </div>
         )}
         <ChangesSinceApproval preview={preview} />
@@ -1056,16 +1054,17 @@ function ApproveDialog({
 }
 
 function ChangesSinceApproval({ preview }: { preview: DefinitionPreview | null }) {
+  const t = useT();
   const approved = preview?.approved;
   if (!preview || !approved) return null;
   const blocks = [
-    { title: 'Headless command', before: approved.headless_argv, after: preview.rendered.headless_argv },
+    { title: t('r13ui.def.headless'), before: approved.headless_argv, after: preview.rendered.headless_argv },
     { title: 'Visible pane command', before: approved.tui_argv, after: preview.rendered.tui_argv },
   ].filter((b) => b.before && b.after && b.before.join('\u0000') !== b.after.join('\u0000'));
   if (blocks.length === 0 && !preview.binary_changed) return null;
   return (
     <div data-testid="approval-diff" className="mt-3 rounded-lg border border-pm-border p-2">
-      <div className="text-xs font-medium">Changed since you approved it</div>
+      <div className="text-xs font-medium">{t('r13ui.def.changedSince')}</div>
       {blocks.map((block) => (
         <div key={block.title} className="mt-2">
           <div className="text-xs text-pm-muted">{block.title}</div>

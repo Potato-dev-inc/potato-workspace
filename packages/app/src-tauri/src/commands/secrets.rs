@@ -84,6 +84,14 @@ pub fn secret_get_custom_ai_key() -> Option<String> {
 mod tests {
     use super::*;
 
+    /// `secrets`, `app_paths` and `device_identity` live in pm-core, where this crate's `cfg(test)` does not reach: its
+    /// `test-util` feature must keep the app's tests off the real credential store and the `dev` profile.
+    #[test]
+    fn app_tests_use_pm_cores_memory_store_and_default_profile() {
+        assert_eq!(secrets::backend().label(), "memory");
+        assert_eq!(crate::app_paths::profile(), None);
+    }
+
     #[test]
     fn the_masked_commands_take_provider_keys_and_refuse_strangers() {
         // One test: both touch the one process-wide in-memory store, so they must not run side by side.

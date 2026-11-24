@@ -12,6 +12,7 @@ import { DevicePage } from '../devices/DevicePage';
 import { useDevices } from '../devices/useDevices';
 import type { ConnectApi } from './ConnectPage';
 import { PcGroup } from './PcGroup';
+import type { LendHandle } from '../lend/useLend';
 import { PhoneGroup } from './PhoneGroup';
 import { SshGroup } from './SshGroup';
 import { ThisPcRow, type ThisPcHandle } from './ThisPc';
@@ -24,6 +25,7 @@ export function DevicesTab({
   active,
   onOpenPc,
   onOpenPane,
+  lend,
 }: {
   api: ConnectApi;
   settings: Settings | null;
@@ -35,6 +37,8 @@ export function DevicesTab({
   onOpenPc?: (node: string) => boolean | void;
   /** A terminal was opened on an SSH computer: show that pane. */
   onOpenPane?: (paneId: string) => void;
+  /** The lend state, shared with the Lending tab. */
+  lend?: LendHandle;
 }) {
   const t = useT();
   const { view, refresh } = useDevices(api.devices);
@@ -86,7 +90,7 @@ export function DevicesTab({
         active={active}
         waiting={pc.state === 'broken'}
       />
-      <PcGroup api={api} settings={settings} patch={patch} onOpenPc={onOpenPc ?? ((node) => setSelected(node))} waiting={pc.state === 'broken'} needsUpdate={pc.needsUpdate} onUpdate={pc.startSetup} />
+      <PcGroup api={api} settings={settings} patch={patch} onOpenPc={onOpenPc ?? ((node) => setSelected(node))} waiting={pc.state === 'broken'} needsUpdate={pc.needsUpdate} onUpdate={pc.startSetup} lend={lend} />
       <SshGroup api={api.ssh} onOpenPane={onOpenPane} />
     </div>
   );

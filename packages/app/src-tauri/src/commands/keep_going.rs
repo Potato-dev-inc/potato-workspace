@@ -74,7 +74,7 @@ async fn blocking<T: Send + 'static>(work: impl FnOnce() -> T + Send + 'static) 
 
 /// The limit card the person answered in the sheet. Dismissed so it does not also start a second
 /// hand-over. Only a limit card of this same pane counts.
-fn dismiss_limit_card(app: &AppHandle, card_id: &str, pane_id: &str) {
+fn dismiss_limit_card(_app: &AppHandle, card_id: &str, pane_id: &str) {
     let now = now_ms();
     let store = questions::store();
     let Some(question) = store.get(card_id, now) else { return };
@@ -82,7 +82,7 @@ fn dismiss_limit_card(app: &AppHandle, card_id: &str, pane_id: &str) {
         return;
     }
     if store.dismiss(card_id, now).is_ok() {
-        questions::routes::publish_changed(app);
+        questions::routes::publish_changed();
     }
 }
 

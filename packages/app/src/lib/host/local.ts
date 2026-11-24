@@ -1,7 +1,7 @@
 // This PC: the Tauri commands and events, as the screen has always called them. The only place (with the window-only code
 // that never runs for a project) that may import `@tauri-apps/api`.
 import { invoke } from '@tauri-apps/api/core';
-import { listen } from '@tauri-apps/api/event';
+import { listen } from '../events';
 import { ALL_CAPS, type Host } from './host';
 
 const isTauri = (): boolean => typeof window !== 'undefined' && '__TAURI_INTERNALS__' in window;

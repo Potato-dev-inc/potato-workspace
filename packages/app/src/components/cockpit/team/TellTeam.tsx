@@ -1,6 +1,7 @@
 import { errorSentence } from '../../../lib/sayError';
 import { useEffect, useRef, useState } from 'react';
 import { cardMeta, cardTitle, draftTitle, MAX_NOTE, tellLabel, teamApi, type TeamApi, type TeamDraft } from '../../../lib/team';
+import { t } from '../../../i18n';
 
 const errText = (err: unknown): string => (errorSentence(err));
 
@@ -50,11 +51,11 @@ export function TellTeamPrompt({
     <div className={`ck-tell ck-tell--${variant}`} data-team-draft={draft.id} onFocusCapture={onTouched} onMouseDown={onTouched} onClickCapture={onTouched}>
       <div className="ck-tell-head">
         <span className="ck-row-title">{draftTitle(draft)}</span>
-        <span className="ck-team-meta">Tell the team?</span>
+        <span className="ck-team-meta">{t('r21.sw.tellTheTeam')}</span>
       </div>
       {draft.draftedBy && <p className="ck-team-meta">Drafted by {draft.draftedBy}. Nothing is sent until you click.</p>}
       {preview && (
-        <div className="ck-tell-preview" aria-label="What your teammates will see">
+        <div className="ck-tell-preview" aria-label={t('r21.sw.whatYourTeammatesWill')}>
           <p className="ck-row-title">{cardTitle(shown)}</p>
           <p className="ck-team-meta">{cardMeta(shown)}</p>
           {shown.note && <p className="ck-team-note">“{shown.note}”</p>}
@@ -62,12 +63,12 @@ export function TellTeamPrompt({
             className="ck-team-input"
             type="text"
             maxLength={MAX_NOTE}
-            placeholder="Add a note (optional)"
-            aria-label="Note for your teammates"
+            placeholder={t('r21.sw.addANoteOptional')}
+            aria-label={t('r21.sw.noteForYourTeammates')}
             value={note}
             onChange={(e) => setNote(e.target.value)}
           />
-          <p className="ck-team-meta">No code is shared. They see the branch, the commit and the file count.</p>
+          <p className="ck-team-meta">{t('r21.sw.noCodeIsShared')}</p>
         </div>
       )}
       {error && (

@@ -6,7 +6,7 @@ use crate::operations::OperationError;
 use serde_json::Value;
 use tauri::{AppHandle, Emitter, State};
 
-fn text(error: OperationError) -> String {
+pub(crate) fn text(error: OperationError) -> String {
     let files = error
         .context
         .get("files")
@@ -44,14 +44,20 @@ pub async fn worktree_list(
     .await
 }
 
+/// What `pane_worktree` last said, kept for a second (it runs git); a merge or discard forgets it.
+static PANE_WORKTREES: std::sync::LazyLock<super::brief_cache::BriefCache<Value>> =
+    std::sync::LazyLock::new(|| super::brief_cache::BriefCache::new(std::time::Duration::from_millis(1000)));
+
 /// The worktree a pane works in (by its working directory), or null.
 #[tauri::command]
 pub async fn pane_worktree(state: State<'_, AppState>, pane_id: String) -> Result<Value, String> {
     let registry = state.registry.clone();
     blocking(move || {
-        Ok(crate::worktrees::service::for_pane(&registry, &pane_id)
-            .map(|item| serde_json::to_value(item).unwrap_or(Value::Null))
-            .unwrap_or(Value::Null))
+        Ok(PANE_WORKTREES.get_or(&pane_id, || {
+            crate::worktrees::service::for_pane(&registry, &pane_id)
+                .map(|item| serde_json::to_value(item).unwrap_or(Value::Null))
+                .unwrap_or(Value::Null)
+        }))
     })
     .await
 }
@@ -84,6 +90,7 @@ pub async fn worktree_merge(
             .map(|outcome| serde_json::to_value(outcome).unwrap_or(Value::Null))
     })
     .await;
+    PANE_WORKTREES.clear();
     let _ = app.emit("worktree://changed", ());
     let _ = app.emit("pty://panes-changed", ());
     result
@@ -101,6 +108,7 @@ pub async fn worktree_discard(
         crate::worktrees::service::discard(project_path.as_deref(), &handle, &registry)
     })
     .await;
+    PANE_WORKTREES.clear();
     let _ = app.emit("worktree://changed", ());
     let _ = app.emit("pty://panes-changed", ());
     result
@@ -256,6 +264,7 @@ pub async fn worktree_pr_create(
             .map(|pr| serde_json::to_value(pr).unwrap_or(Value::Null))
     })
     .await;
+    PANE_WORKTREES.clear();
     let _ = app.emit("worktree://changed", ());
     result
 }

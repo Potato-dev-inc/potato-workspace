@@ -32,9 +32,21 @@ fn on(webview: &tauri::Webview) -> Result<std::sync::Arc<lend::service::Lend>, S
 pub async fn lend_state(webview: tauri::Webview) -> Result<LendState, String> {
     guard(&webview)?;
     if !lend::enabled() {
-        return Ok(LendState { enabled: false, profiles: vec![], grants: vec![], requests_in: vec![], requests_out: vec![], drivers: vec![], keeping_awake: false });
+        // Off: no service runs, but what already ended is still news (its Inbox row).
+        let grants = lend::service::ended_grants_saved(&crate::app_paths::app_data_dir().join("lend"));
+        return Ok(LendState { enabled: false, profiles: vec![], grants, requests_in: vec![], requests_out: vec![], drivers: vec![], keeping_awake: false });
     }
-    Ok(lend::app_service()?.state(true))
+    // The state reads each profile's key slot (the system keychain), so it runs off the async threads.
+    let svc = lend::app_service()?;
+    tokio::task::spawn_blocking(move || svc.state(true)).await.map_err(|e| e.to_string())
+}
+
+/// The Lending tab opened: lends this PC can no longer serve end now, and each borrower is asked whether it still holds its lend.
+/// Answers come back through the lend channel; a borrower that does not answer changes nothing.
+#[tauri::command(rename_all = "snake_case")]
+pub async fn lend_recheck_lent(webview: tauri::Webview) -> Result<usize, String> {
+    let svc = on(&webview)?;
+    tokio::task::spawn_blocking(move || svc.recheck_lent()).await.map_err(|e| e.to_string())
 }
 
 /// Test link on a lend row: the real link handshake (borrower) or the lender's own checks and a ping (lender).
@@ -70,9 +82,9 @@ pub async fn lend_account_add(webview: tauri::Webview, agent_id: String, label: 
 /// the person stays where they are. Returns the pane id (the sheet shows its terminal). The pane is stopped by
 /// `lend_signin_stop`, or after ten minutes.
 #[tauri::command(rename_all = "snake_case")]
-pub async fn lend_signin_start(webview: tauri::Webview, app: AppHandle, state: State<'_, AppState>, account_id: String) -> Result<serde_json::Value, String> {
+pub async fn lend_signin_start(webview: tauri::Webview, _app: AppHandle, state: State<'_, AppState>, account_id: String) -> Result<serde_json::Value, String> {
     let acc = on(&webview)?.signin_pane_account(&account_id)?;
-    let ports = std::sync::Arc::new(lend::signin_pane::AppPorts { registry: state.registry.clone(), app });
+    let ports = std::sync::Arc::new(lend::signin_pane::AppPorts { registry: state.registry.clone() });
     let cwd = crate::app_paths::app_data_dir().join("lend").join("signin");
     let pane_id = lend::signin_pane::app_panes().start(ports, &acc, cwd)?;
     Ok(serde_json::json!({ "pane_id": pane_id }))
@@ -190,7 +202,7 @@ pub async fn lend_start_agent(
         account: Some(account),
         guard_env: None,
     };
-    let pane_id = registry_spawn_pane(&state.registry, &app, args)?;
+    let pane_id = registry_spawn_pane(&state.registry, args)?;
     let _ = app.emit("pty://panes-changed", ());
     Ok(serde_json::json!({ "pane_id": pane_id }))
 }
@@ -224,4 +236,43 @@ pub async fn lend_request_own(
     tauri::async_runtime::spawn_blocking(move || svc.request_own(&node, &agent_id, secs, &reason, profile_id.as_deref(), profile_name.as_deref()))
         .await
         .map_err(|e| e.to_string())?
+}
+
+// ---- P6.1 "Use my own agents" ---- (the person's own click, in this window: `capacity_proxy::service::own_far`)
+
+/// The click "Use my own <agent>" on another PC's New agent page: this PC writes down the promise (or names the lend already running).
+/// Nothing is minted here: the other PC asks next, and this PC says yes only to a request that names the promise.
+#[tauri::command(rename_all = "snake_case")]
+pub async fn lend_far_offer(webview: tauri::Webview, node: String, agent_id: String) -> Result<lend::service::FarOffer, String> {
+    let svc = on(&webview)?;
+    tauri::async_runtime::spawn_blocking(move || svc.far_offer(&node, &agent_id)).await.map_err(|e| e.to_string())?
+}
+
+/// A far chat started on the lend: it is listed on the grant (so Connect and the chat chip can name it).
+#[tauri::command(rename_all = "snake_case")]
+pub async fn lend_far_note_pane(webview: tauri::Webview, grant_id: String, pane_id: String) -> Result<(), String> {
+    on(&webview)?.note_pane(&grant_id, &pane_id);
+    Ok(())
+}
+
+/// A far chat on the lend is alive: roll the lend on (12 hours from now). Returns the new end in epoch milliseconds.
+#[tauri::command(rename_all = "snake_case")]
+pub async fn lend_far_renew(webview: tauri::Webview, grant_id: String) -> Result<u64, String> {
+    let svc = on(&webview)?;
+    tauri::async_runtime::spawn_blocking(move || svc.renew_far(&grant_id)).await.map_err(|e| e.to_string())?
+}
+
+/// The far call row of the same name (`pclink::calls_lend`): this PC asks the lender `lender_node` for the lend its click promised.
+#[tauri::command(rename_all = "snake_case")]
+pub async fn own_borrow_ask(webview: tauri::Webview, lender_node: String, agent_id: String, offer_ref: String, profile_id: Option<String>, secs: u64) -> Result<String, String> {
+    let svc = on(&webview)?;
+    tauri::async_runtime::spawn_blocking(move || svc.ask_lender(&lender_node, &agent_id, &offer_ref, profile_id.as_deref(), secs)).await.map_err(|e| e.to_string())?
+}
+
+/// The far call row of the same name (`pclink::calls_lend`), asked of this PC itself: the own sign-in state and the lend a plain start would take.
+#[tauri::command]
+pub async fn own_borrow_plan(webview: tauri::Webview, agent_id: String) -> Result<serde_json::Value, String> {
+    on(&webview)?;
+    let (signed_out, lend) = tauri::async_runtime::spawn_blocking(move || crate::capacity_proxy::far_plan(&agent_id, None)).await.map_err(|e| e.to_string())?;
+    Ok(serde_json::json!({ "signedOut": signed_out, "lend": lend.map(|(grant, name)| serde_json::json!({ "grantId": grant, "name": name })) }))
 }

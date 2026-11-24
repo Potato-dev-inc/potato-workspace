@@ -5,6 +5,9 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { agentHealthApi, type AgentHealth, type AgentHealthApi } from '../../lib/agent-health';
 import type { AgentInstallApi } from '../../lib/agent-install';
+import { ownLoginApi, type OwnLogin } from '../settings/agents/ownSignIn';
+import { agentReadiness } from '../../lib/agentReadiness';
+import { loadTestMemory, type TestMemory } from '../../lib/setup-checks';
 import { AgentDoctor } from '../cockpit/AgentDoctor';
 import { requestAddAgentAction } from '../../lib/addAgentActions';
 import { loadAgentView, pickHandoffAgent } from '../../lib/workerUpdate';
@@ -24,18 +27,24 @@ import {
   type EverythingStepId,
 } from './setup-everything';
 
-type Row = Pick<AgentHealth, 'id' | 'label' | 'state' | 'installed'>;
+type Row = Pick<AgentHealth, 'id' | 'label' | 'state' | 'installed'> & { /** The one word every screen says for how it stands (`agentReadiness`): a login read says "Signed in", not "Ready". */ standing?: string };
 
 /** The four watched agents, in a fixed order, from a full health list. */
-export function watchedRows(rows: AgentHealth[]): AgentHealth[] {
-  return WATCHED_AGENTS.flatMap((id) => rows.filter((r) => r.id === id).slice(0, 1));
+export function watchedRows(rows: AgentHealth[], remembered: TestMemory = loadTestMemory(), logins: OwnLogin[] | null = null): (AgentHealth & { standing?: string })[] {
+  // How each stands is `agentReadiness` (the Overview and Settings > Agents say the same); the welcome only needs its three words.
+  return WATCHED_AGENTS.flatMap((id) => rows.filter((r) => r.id === id).slice(0, 1)).map((r) => {
+    if (!r.installed) return r;
+    const readiness = agentReadiness(r.id, { health: rows, logins, tests: remembered });
+    const standing = readiness.state;
+    return { ...r, standing: readiness.label, state: standing === 'needs_sign_in' ? ('needs_login' as const) : standing === 'broken' ? ('error' as const) : standing === 'ready' || standing === 'signed_in' ? ('ready' as const) : ('unchecked' as const) };
+  });
 }
 
 function RowStatus({ row }: { row: Row }) {
   useT();
   if (row.state === 'not_installed' || !row.installed) return <>{T.agentMissing}</>;
   if (row.state === 'needs_login') return <>{T.agentLogin}</>;
-  return <>{T.agentFound}</>;
+  return <>{row.standing ?? T.agentFound}</>;
 }
 
 export function StepAgents({
@@ -92,16 +101,15 @@ export function StepAgents({
   const onReadyRef = useRef(onReady);
   onReadyRef.current = onReady;
 
-  const apply = useCallback((all: AgentHealth[]) => {
-    setRows(watchedRows(all));
+  const apply = useCallback((all: AgentHealth[], logins: OwnLogin[] | null = null) => {
+    setRows(watchedRows(all, undefined, logins));
     // Only the rows shown count, so "N agents are ready" matches the list.
-    onReadyRef.current(usableAgents(watchedRows(all)));
+    onReadyRef.current(usableAgents(watchedRows(all, undefined, logins)));
   }, []);
 
   const check = useCallback(() => {
-    api
-      .check()
-      .then((all) => alive.current && apply(all))
+    Promise.all([api.check(), ownLoginApi.states().catch(() => null)])
+      .then(([all, logins]) => alive.current && apply(all, logins))
       .catch(() => alive.current && apply([]));
   }, [api, apply]);
 

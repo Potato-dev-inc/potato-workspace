@@ -167,3 +167,47 @@ fn put_back_with_an_unknown_save_point_is_refused() {
     let (t, _) = one_turn();
     assert!(matches!(go(&t, "999", "a.txt").unwrap_err(), CheckpointError::NotFound));
 }
+
+/// The agent's status flickered to idle mid-turn: two "after" points for one turn. The file made before the flicker is still the turn's.
+#[test]
+fn a_file_made_before_a_mid_turn_after_point_stays_in_the_review_as_added() {
+    let t = Tmp::new();
+    t.write("a.txt", "one\n");
+    let before = snap(&t, TestKind::Before, 1_000);
+    t.write("b.txt", "hello\n");
+    snap(&t, TestKind::After, 2_000);
+    t.write("a.txt", "one\nline3\n");
+    snap(&t, TestKind::After, 3_000);
+    let review = turn_review(t.p(), "p1").unwrap().expect("a review");
+    assert_eq!(review.before_id, before);
+    let names: Vec<(&str, &str)> = review.files.iter().map(|f| (f.path.as_str(), f.status.as_str())).collect();
+    assert_eq!(names, vec![("a.txt", "M"), ("b.txt", "A")]);
+}
+
+/// "Undo last turn" puts the files back to the turn's start: the review is gone, and the "Before undo" row exists even
+/// though the files equalled the newest save point (so the dialog's promise is true).
+#[test]
+fn undoing_the_turn_clears_the_review_and_saves_a_before_undo_row() {
+    let (t, before) = one_turn();
+    let report = super::super::engine::restore(t.p(), "p1", &before, false, 3_000, &Limits::default()).unwrap();
+    assert!(report.paths.contains(&"new.txt".to_string()) && report.paths.contains(&"a.txt".to_string()));
+    let items = super::super::engine::list(t.p(), "p1").unwrap();
+    let safety = items.iter().find(|c| Some(&c.id) == report.safety_id.as_ref()).expect("safety row");
+    assert_eq!(safety.kind, "undo");
+    assert_eq!(safety.restored_to, before);
+    // The row counts what the restore changed (new.txt and a.txt), not zero.
+    assert!(safety.files >= 2, "files: {}", safety.files);
+    assert!(report.safety_made.is_some());
+    assert!(turn_review(t.p(), "p1").unwrap().is_none());
+    // Undo of the undo: the turn is back, and so is its review.
+    super::super::engine::restore(t.p(), "p1", report.safety_id.as_ref().unwrap(), false, 4_000, &Limits::default()).unwrap();
+    assert!(turn_review(t.p(), "p1").unwrap().is_some());
+}
+
+/// A Put back keeps the review of the other files of the turn.
+#[test]
+fn put_back_does_not_clear_the_review() {
+    let (t, before) = one_turn();
+    go(&t, &before, "new.txt").unwrap();
+    assert!(turn_review(t.p(), "p1").unwrap().is_some());
+}

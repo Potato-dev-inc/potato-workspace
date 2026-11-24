@@ -10,7 +10,9 @@ import { EmptyState } from '../common/EmptyState';
 import { PaneApprovalCard } from './PaneApprovalCard';
 import { PaneStuckCard } from './StuckCard';
 import { blockingItems, itemsOfKind } from '../../lib/attention';
-import { useNeedsYou } from '../../hooks/useNeedsYou';
+import { FarNeedsContext, useNeedsYou } from '../../hooks/useNeedsYou';
+import { asQuestion } from '../../lib/runtime/farQuestions';
+import { errorSentence } from '../../lib/sayError';
 import { AskNotices } from './AskNotices';
 import { CanaryNotices } from './CanaryNotices';
 import { HiddenRuns } from './HiddenRuns';
@@ -19,7 +21,7 @@ import { BudgetCard } from './BudgetCard';
 import { ConsentCard } from './ConsentCard';
 import { LimitCard } from './LimitCard';
 import { QuestionCard } from './QuestionCard';
-import { openSettingsAt } from '../../lib/openSettingsAt';
+import { openSettingsAt, SETUP_CHECK_ROW_ID } from '../../lib/openSettingsAt';
 import { IssueCard } from './IssueCard';
 import { CiFixCard } from './CiFixCard';
 import { PaneErrorCard } from './InboxError';
@@ -29,6 +31,7 @@ import { useNextCard } from './useNextCard';
 import { accountsFor, pickableAccounts, signInLabel, tauriAccountsApi, type Account } from '../../lib/accounts';
 import { SIGN_IN } from '../../lib/glossary';
 import { TeamSection } from './team/TeamSection';
+import { AskedLends } from './inbox/AskedLends';
 import { DoneToday } from './inbox/DoneToday';
 import { WorkingNow } from './inbox/WorkingNow';
 import { workingRows } from '../../lib/working-now';
@@ -99,6 +102,8 @@ export function Inbox({
   const t = useT();
   // One list for every surface: the badge, the Doto counter and the sidebar group use its length.
   const needs = useNeedsYou(c);
+  // What other PCs wait on: the same card as a question here, with the one line that says where. Answering sends it there; it clears there.
+  const farNeeds = useContext(FarNeedsContext);
   // The mission cards themselves are drawn by MissionsSection; their count is already in `needs`
   // (CockpitApp passes the missions to useNeedsYouSource), like the tray and the phone's number.
   const missions = useMissions();
@@ -241,6 +246,24 @@ export function Inbox({
       }
     }
 
+    for (const far of farNeeds?.questions ?? []) {
+      out.push({
+        key: `question:${far.key}`,
+        kind: 'question',
+        since: far.seenAt,
+        quick: far.choices.length > 0,
+        render: () => (
+          <QuestionCard
+            q={asQuestion(far, t('inbox.onHost', { name: far.pcName || t('inbox.onAnotherComputer') }))}
+            now={c.now}
+            onAnswer={(a) => void farNeeds?.answer(far.key, a).catch((e: unknown) => c.notify(errorSentence(e)))}
+            onDismiss={() => farNeeds?.hide(far.key)}
+            onOpenPane={far.paneId && farNeeds?.open ? () => void farNeeds.open?.(`dev:${far.node}:${far.paneId}`) : undefined}
+          />
+        ),
+      });
+    }
+
     for (const p of waiting) {
       const id = p.info.id;
       const since = c.statusSince.get(id);
@@ -331,7 +354,12 @@ export function Inbox({
 
   // The heading counts the cards the person can see: the list above (a stopped companion's card is a helper, not a
   // waiting item, so the sidebar badge leaves it out) and the mission cards drawn by MissionsSection.
-  const count = inboxCardCount(entries.map((e) => e.kind), blocking);
+  const cards = inboxCardCount(entries.map((e) => e.kind), blocking);
+  // The badge and the status bar count every waiting item; some (a borrow request) are drawn lower, under Team activity. The heading and the
+  // all-clear follow the same number, so "Nothing needs you" never sits beside a badge of 1.
+  const below = blocking.filter((i) => i.kind === 'team_ci').length;
+  // A borrow request is drawn at the top (AskedLends) with the waiting cards, so it counts here but is not "lower down".
+  const count = cards + below + blocking.filter((i) => i.kind === 'lend_request').length;
   const quick = entries.some((e) => e.quick);
   const [keys, setKeys] = useState(false);
 
@@ -440,6 +468,11 @@ export function Inbox({
       <p className="ib-next" role="status" aria-live="polite">
         {nextCard.next !== null && t('inbox.next', { name: nextCard.next })}
       </p>
+      {!firstRun && below > 0 && cards === 0 && (
+        <p className="ib-next" role="status" data-testid="inbox-below">
+          {t('inbox.below', { count: below })}
+        </p>
+      )}
       {!firstRun && count === 0 && (
         <EmptyState
           plain
@@ -491,6 +524,7 @@ export function Inbox({
         </>
       )}
 
+      <AskedLends now={c.now} />
       <MissionsSection missions={missions.missions} onChanged={missions.reload} onOpenPane={(id) => c.select(id)} onNotify={c.notify} />
       <CollisionSection select={(id) => c.select(id)} hasPane={(id) => c.registry.panes.has(id)} />
 
@@ -510,9 +544,9 @@ export function Inbox({
         />
       )}
 
-      {!firstRun && <DoneToday summaries={lastTurns} names={c.names} now={c.now} onOpen={(id) => c.select(id)} onMorning={onOpenMorning} hasPane={(id) => c.registry.panes.has(id)} onClosed={() => c.notify(t('inbox.doneClosed'))} />}
+      {!firstRun && <DoneToday summaries={lastTurns} names={c.names} now={c.now} onOpen={(id) => c.select(id)} onMorning={onOpenMorning} onSignIn={() => openSettingsAt('agents', SETUP_CHECK_ROW_ID)} hasPane={(id) => c.registry.panes.has(id)} onClosed={() => c.notify(t('inbox.doneClosed'))} />}
 
-      {!firstRun && <TeamSection now={c.now} paneNames={c.names} team={team} />}
+      {!firstRun && <TeamSection now={c.now} paneNames={c.names} team={team} hideAsked />}
       {crewOpen && <CrewCanvas slug={crewOpen.slug} focusRole={crewOpen.role} onClose={() => setCrewOpen(null)} />}
     </div>
   );

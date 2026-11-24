@@ -1,5 +1,6 @@
 use super::*;
 use std::path::PathBuf;
+use std::time::Instant;
 
 struct TempDir(PathBuf);
 impl TempDir {

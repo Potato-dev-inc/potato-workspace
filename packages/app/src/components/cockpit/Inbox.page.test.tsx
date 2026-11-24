@@ -154,7 +154,7 @@ describe('Inbox page: Done today', () => {
     expect(rows[0].querySelector('.ib-add')?.textContent).toBe('+1,204');
     expect(rows[0].querySelector('.ib-del')?.textContent).toBe('−998');
     expect(rows[0].querySelector('button')?.textContent).toBe('Review');
-    expect(rows[2].textContent).toContain('Answered a question · no changes');
+    expect(rows[2].textContent).toContain('No file changes');
     expect(rows[2].querySelector('button')?.textContent).toBe('Open');
   });
 
@@ -164,6 +164,15 @@ describe('Inbox page: Done today', () => {
     await flush();
     act(() => host.querySelector<HTMLButtonElement>('[data-done-row="p2"] button')!.click());
     expect(select).toHaveBeenCalledWith('p2');
+  });
+
+  it('a done row is one Tab stop: its button, not the row as well', async () => {
+    mount(api().c, TURNS);
+    await flush();
+    for (const row of host.querySelectorAll<HTMLElement>('[data-done-row]')) {
+      expect(row.hasAttribute('tabindex')).toBe(false);
+      expect(row.querySelectorAll('button')).toHaveLength(1);
+    }
   });
 
   it('says so when nothing finished today', async () => {

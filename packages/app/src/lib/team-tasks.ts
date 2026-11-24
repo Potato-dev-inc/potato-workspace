@@ -1,7 +1,8 @@
 // "Pass a task to a teammate": the typed command surface. The Rust side (src-tauri/src/team) holds the tasks; this file
 // only calls it. A teammate's words (title, text, summary, note, repo name) are untrusted: screens show them as plain text.
 import { invoke } from '@tauri-apps/api/core';
-import { listen, type UnlistenFn } from '@tauri-apps/api/event';
+import { type UnlistenFn } from '@tauri-apps/api/event';
+import { listen } from './events';
 
 export type RepoHistory = 'latest' | 'full';
 

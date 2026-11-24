@@ -4,6 +4,7 @@ import { launchMenuEntries, useAgentRegistry } from '../lib/agentRegistry';
 import { TerminalPane } from './TerminalPane';
 import type { PaneRegistryApi } from '../hooks/usePaneRegistry';
 import { detachedWindowSizeFromGrid, openDetachedPaneWindow } from '../lib/detached-pane-window';
+import { t } from '../i18n';
 
 interface Props {
   registry: PaneRegistryApi;
@@ -226,7 +227,7 @@ export function TerminalGrid({
             className="w-full h-full rounded-lg border border-dashed border-pm-border text-pm-muted hover:bg-pm-panel/40 hover:text-zinc-200 flex flex-col items-center justify-center text-sm gap-0.5"
           >
             <span className="text-lg leading-none">+</span>
-            <span>New session</span>
+            <span>{t('r21.sw.newSession')}</span>
           </button>
           {showAdd && (
             <div className="absolute top-full left-0 mt-1 z-10 w-64 rounded-md border border-pm-border bg-pm-panel shadow-lg">

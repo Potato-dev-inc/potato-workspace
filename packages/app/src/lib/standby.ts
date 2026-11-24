@@ -118,9 +118,9 @@ export function clampInt(value: number, min: number, max: number, fallback: numb
 export function formatDuration(ms: number | null | undefined): string {
   if (ms == null || !Number.isFinite(ms)) return '-';
   const seconds = Math.max(0, Math.round(ms / 1000));
-  if (seconds < 60) return `${seconds}s`;
+  if (seconds < 60) return t('r15.dur.sec', { n: seconds });
   const minutes = Math.floor(seconds / 60);
-  return minutes < 60 ? `${minutes}m ${seconds % 60}s` : `${Math.floor(minutes / 60)}h ${minutes % 60}m`;
+  return minutes < 60 ? t('r15.dur.minSec', { m: minutes, s: seconds % 60 }) : t('r15.dur.hourMin', { h: Math.floor(minutes / 60), m: minutes % 60 });
 }
 
 /** One line for the status strip: "2 warm (1 ready, 1 starting)" or why nothing is warm. */

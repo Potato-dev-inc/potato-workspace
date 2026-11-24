@@ -31,6 +31,7 @@ import {
 } from '../../lib/screen-question';
 import { CardButton, InboxCard } from '../cockpit/InboxCard';
 import { AnswerableQuestionCard } from './AnswerableQuestionCard';
+import { t } from '../../i18n';
 
 const POLL_MS = 1000;
 /** A pane that is not asking anything is looked at less often. */
@@ -242,11 +243,11 @@ function ReadOnlyScreenQuestionCard({
   return (
     <div className="ck-chat-dock">
       <div className="ck-dock">
-        <div className="ib-dock" role="group" aria-label="Agent question">
+        <div className="ib-dock" role="group" aria-label={t('r21.sw.agentQuestion')}>
           <InboxCard
             kind="question"
             glyph="needs"
-            title="Agent is asking"
+            title={t('r21.sw.agentIsAsking')}
             data={{ 'data-screen-question': '' }}
             body={
               <>
@@ -258,8 +259,8 @@ function ReadOnlyScreenQuestionCard({
                     className="ib-screen-input"
                     type="text"
                     value={text}
-                    placeholder="Type an answer"
-                    aria-label="Type an answer"
+                    placeholder={t('r21.sw.typeAnAnswer')}
+                    aria-label={t('r21.sw.typeAnAnswer')}
                     autoComplete="off"
                     spellCheck={false}
                     onChange={(event) => setText(event.target.value)}

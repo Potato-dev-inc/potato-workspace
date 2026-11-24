@@ -7,7 +7,8 @@
 // level); the buttons here only hide what would be refused. Anything that comes from a device (its name, its panes,
 // their titles) is untrusted text: render it as text only.
 import { invoke } from '@tauri-apps/api/core';
-import { listen, type UnlistenFn } from '@tauri-apps/api/event';
+import { type UnlistenFn } from '@tauri-apps/api/event';
+import { listen } from './events';
 import { useEffect, useState } from 'react';
 import { t } from '../i18n';
 import { loadSettings } from './settings';
@@ -27,6 +28,8 @@ export interface Device {
   name: string;
   added_at: number;
   state: DeviceLinkState;
+  /** Display only, set on this PC: the link says online but the PC has not answered for a while (lib/runtime/farBeat). */
+  quiet?: boolean;
   path: DevicePath;
   /** Unix seconds. */
   last_seen: number | null;
@@ -93,7 +96,7 @@ export interface HostingView {
   worker?: boolean;
 }
 
-export type ActivityKind = 'connected' | 'started' | 'typed' | 'messaged' | 'answered' | 'stopped' | 'changed' | 'refused' | 'copied' | 'sent';
+export type ActivityKind = 'connected' | 'started' | 'typed' | 'messaged' | 'answered' | 'stopped' | 'changed' | 'refused' | 'copied' | 'sent' | 'no_answer' | 'could_not_connect' | 'refreshed';
 
 /** One line of "Device activity". Never holds prompt text. `in`: that device did it on THIS PC. `out`: this PC did it there. */
 export interface ActivityEntry {
@@ -486,7 +489,7 @@ export function deviceNotices(d: Device, agentsOfPane?: readonly string[]): Devi
   return out;
 }
 
-const ACTIVITY_KINDS: readonly ActivityKind[] = ['connected', 'started', 'typed', 'messaged', 'answered', 'stopped', 'changed', 'refused', 'copied', 'sent'];
+const ACTIVITY_KINDS: readonly ActivityKind[] = ['connected', 'started', 'typed', 'messaged', 'answered', 'stopped', 'changed', 'refused', 'copied', 'sent', 'no_answer', 'could_not_connect', 'refreshed'];
 
 /** Newest first; an entry that is not one of ours is dropped (a bad answer is no line at all). */
 export function sortActivity(list: unknown): ActivityEntry[] {
@@ -500,7 +503,9 @@ export function sortActivity(list: unknown): ActivityEntry[] {
 /** `14:02 Desk-PC started an agent` (it did it here) or `14:02 Started an agent on Mac mini` (this PC did it there). */
 export function activityLine(e: ActivityEntry): string {
   const name = clipText(e.name, 40);
-  return `${clockText(e.at)} ${t(`devices.act.${e.dir}.${e.kind}`, { name })}`;
+  // A failed try is this PC's own line (never "in"), whatever direction the log carried.
+  const outOnly = e.kind === 'no_answer' || e.kind === 'could_not_connect' || e.kind === 'refreshed';
+  return `${clockText(e.at)} ${t(`devices.act.${outOnly ? 'out' : e.dir}.${e.kind}` as 'devices.act.out.sent', { name })}`;
 }
 
 

@@ -4,7 +4,8 @@
 // pane output: the card carries the issue text, and this file only carries the status around it.
 import { invoke } from '@tauri-apps/api/core';
 import { t } from '../i18n';
-import { listen, type UnlistenFn } from '@tauri-apps/api/event';
+import { listen } from './events';
+import type { UnlistenFn } from '@tauri-apps/api/event';
 
 /** The event the backend sends when a run or the settings change. The payload is not read: call `intakeView()`. */
 export const INTAKE_CHANGED_EVENT = 'issue-intake://changed';

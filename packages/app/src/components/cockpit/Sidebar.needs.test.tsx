@@ -82,3 +82,12 @@ describe('rows that need the person', () => {
     expect(rowOf('Gamma').getAttribute('aria-label')).toBeNull();
   });
 });
+
+describe('the Projects view keeps the order of the chats while one needs the person', () => {
+  it('Beta waiting for an answer does not jump above Alpha', async () => {
+    localStorage.setItem('pm.sidebar.groupBy', 'projects');
+    await render(fakeApi());
+    const titles = () => [...host.querySelectorAll('button.ck-row .ck-row-title')].map((n) => n.textContent);
+    expect(titles().filter((x) => x !== 'Inbox')).toEqual(['Alpha', 'Beta', 'Gamma']);
+  });
+});

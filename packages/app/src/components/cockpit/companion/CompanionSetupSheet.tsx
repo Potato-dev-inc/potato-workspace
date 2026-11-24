@@ -137,8 +137,8 @@ export function CompanionSetupSheet({
       <p className="ck-sub">{t('companion.setup.lead')}</p>
 
       <fieldset className="ck-companion-step">
-        <legend className="ck-caption">1. Pick a face</legend>
-        <div className="ck-companion-faces" role="radiogroup" aria-label="Pick a face">
+        <legend className="ck-caption">{t('r21.sw.1PickAFace')}</legend>
+        <div className="ck-companion-faces" role="radiogroup" aria-label={t('r21.sw.pickAFace')}>
           {FACES.map((id) => (
             <button
               key={id}
@@ -175,7 +175,7 @@ export function CompanionSetupSheet({
       </fieldset>
 
       <label className="ck-companion-step ck-companion-field">
-        <span className="ck-caption">2. Give it a name</span>
+        <span className="ck-caption">{t('r21.sw.2GiveItA')}</span>
         <input
           className="ck-companion-input"
           value={name}
@@ -188,11 +188,11 @@ export function CompanionSetupSheet({
       </label>
 
       <fieldset className="ck-companion-step">
-        <legend className="ck-caption">3. Which agent should it use?</legend>
-        <p className="ck-sub ck-companion-hint">It uses your own plan. No extra cost.</p>
-        {agents === null && !error && <p className="ck-sub">Looking for agents…</p>}
-        {shown?.length === 0 && <p className="ck-sub">No agents yet. Set up an agent first.</p>}
-        <div className="ck-companion-agents" role="radiogroup" aria-label="Which agent should it use?">
+        <legend className="ck-caption">{t('r21.sw.3WhichAgentShould')}</legend>
+        <p className="ck-sub ck-companion-hint">{t('r21.sw.itUsesYourOwn')}</p>
+        {agents === null && !error && <p className="ck-sub">{t('r21.sw.lookingForAgents')}</p>}
+        {shown?.length === 0 && <p className="ck-sub">{t('r21.sw.noAgentsYetSet')}</p>}
+        <div className="ck-companion-agents" role="radiogroup" aria-label={t('r21.sw.whichAgentShouldIt')}>
           {shown?.map((a) => (
             <button
               key={a.id}
@@ -211,7 +211,7 @@ export function CompanionSetupSheet({
       </fieldset>
 
       <fieldset className="ck-companion-step">
-        <legend className="ck-caption">4. How should it talk?</legend>
+        <legend className="ck-caption">{t('r21.sw.4HowShouldIt')}</legend>
         <div className="ck-companion-chips">
           {PERSONA_OPTIONS.map((o) => (
             <button
@@ -252,7 +252,7 @@ export function CompanionSetupSheet({
       )}
 
       <fieldset className="ck-companion-step">
-        <legend className="ck-caption">5. Where does it live?</legend>
+        <legend className="ck-caption">{t('r21.sw.5WhereDoesIt')}</legend>
         <div className="ck-companion-folder">
           <span className="ck-companion-folder-name" title={folder || undefined}>
             {folder ? folder : 'A folder of its own, made for it'}

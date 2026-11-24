@@ -6,50 +6,13 @@
 //! terminal can run the agent instead mean: run it in the terminal (`StartError::fallback`).
 
 use super::*;
-use crate::acp::chat::{self, ChatHost, StartDeps, StartError, StartRequest};
-use crate::pty::status::PaneStatus;
+use crate::acp::chat::{self, StartDeps, StartError, StartRequest};
+use pm_core::device_link::pclink::engine_services as engine;
 use serde_json::json;
 
-/// The chat host over the live app: Tauri events for the windows, the event log for the status.
-pub struct LiveChatHost {
-    app: AppHandle,
-}
-
-impl LiveChatHost {
-    pub fn new(app: AppHandle) -> Self {
-        Self { app }
-    }
-}
-
-impl ChatHost for LiveChatHost {
-    fn status_changed(&self, pane_id: &str, status: PaneStatus) {
-        crate::event_log::append_system_event(crate::events::SystemEvent::PaneStatusChanged {
-            pane_id: crate::events::PaneId(pane_id.to_string()),
-            status: status.as_str().to_string(),
-        });
-        let _ = self.app.emit("pty://status", json!({ "pane_id": pane_id, "status": status.as_str() }));
-    }
-
-    fn state_changed(&self, pane_id: &str, state: &Value) {
-        // A paired PC sees the same new state (an `app` frame, `pclink::events`); a chat on another computer is this window's alone.
-        if !chat::is_remote_pane(pane_id) {
-            crate::bridge::push_sse(crate::device_link::pclink::events::app_frame("acp-chat-state", &json!({ "paneId": pane_id, "state": state })));
-        }
-        let _ = self.app.emit("acp-chat-state", json!({ "paneId": pane_id, "state": state }));
-    }
-
-    fn questions_changed(&self, _raised: Option<&crate::questions::Question>) {
-        crate::questions::routes::publish_changed(&self.app);
-    }
-
-    fn panes_changed(&self) {
-        let _ = self.app.emit("pty://panes-changed", ());
-    }
-}
-
-/// What a start needs from the live app.
-pub fn live_deps(app: &AppHandle, registry: &Arc<Mutex<PaneRegistry>>) -> StartDeps {
-    StartDeps { registry: registry.clone(), host: Arc::new(LiveChatHost::new(app.clone())), env: Arc::new(crate::acp::config::RealHost), conversations: Some(crate::acp::conversations::global().clone()) }
+/// What a start needs from the live app (the engine's own: `pm_core::device_link::pclink::engine_services`).
+pub fn live_deps(_app: &AppHandle, registry: &Arc<Mutex<PaneRegistry>>) -> StartDeps {
+    engine::live_deps(registry)
 }
 
 pub fn start_error_text(error: &StartError) -> String {
@@ -73,8 +36,14 @@ pub(crate) fn resolve_folder(named: &str, default_project: impl FnOnce() -> Stri
 pub async fn acp_chat_start(app: AppHandle, state: State<'_, AppState>, agent_id: String, folder: String, explicit: Option<bool>, account_id: Option<String>, separate_copy: Option<bool>) -> Result<Value, String> {
     let deps = live_deps(&app, &state.registry);
     let folder = resolve_folder(&folder, || crate::standby::default_project(&state.registry));
-    let request = StartRequest { agent_id, folder: PathBuf::from(folder), explicit: explicit.unwrap_or(false), account: account_id.filter(|a| !a.trim().is_empty()), separate_copy: separate_copy.unwrap_or(false), ..Default::default() };
-    let started = tauri::async_runtime::spawn_blocking(move || chat::start_gated(&deps, request)).await.map_err(|e| format!("ACP_START_FAILED: {e}"))?;
+    let mut request = StartRequest { agent_id, folder: PathBuf::from(folder), explicit: explicit.unwrap_or(false), account: account_id.filter(|a| !a.trim().is_empty()), separate_copy: separate_copy.unwrap_or(false), ..Default::default() };
+    let started = tauri::async_runtime::spawn_blocking(move || {
+        // No sign-in picked and this PC's own login is signed out: run on the lend this PC holds, if any.
+        if request.account.is_none() {
+            request.account = crate::capacity_proxy::default_account(&request.agent_id, None);
+        }
+        chat::start_gated(&deps, request)
+    }).await.map_err(|e| format!("ACP_START_FAILED: {e}"))?;
     match started {
         Ok(session) => Ok(json!({ "pane_id": session.pane_id(), "agent": session.agent_id(), "lane": chat::LANE })),
         Err(error) => Err(start_error_text(&error)),
@@ -121,8 +90,7 @@ pub async fn acp_chat_cancel(pane_id: String) -> Result<bool, String> {
 
 /// The body of `acp_chat_cancel`, also run for a paired PC (`pclink::calls_chat`).
 pub(crate) fn chat_cancel(pane_id: &str) -> Result<bool, String> {
-    let session = chat::get(pane_id).ok_or_else(|| format!("PANE_NOT_FOUND: {pane_id} is not a chat session"))?;
-    session.cancel().map_err(|e| e.to_string())
+    engine::chat_cancel(pane_id)
 }
 
 /// "Keep waiting": the agent was quiet, the person chose to wait; the quiet window starts again. True when a turn was running.
@@ -135,8 +103,7 @@ pub async fn acp_chat_take_back(pane_id: String) -> Result<Option<String>, Strin
 
 /// The body of `acp_chat_take_back`, also run for a paired PC (`pclink::calls_chat`).
 pub(crate) fn chat_take_back(pane_id: &str) -> Result<Option<String>, String> {
-    let chat = crate::acp::chat::get(pane_id).ok_or_else(|| "This chat is not open any more.".to_string())?;
-    Ok(chat.take_back())
+    engine::chat_take_back(pane_id)
 }
 
 #[tauri::command]
@@ -146,8 +113,7 @@ pub async fn acp_chat_keep_waiting(pane_id: String) -> Result<bool, String> {
 
 /// The body of `acp_chat_keep_waiting`, also run for a paired PC (`pclink::calls_chat`).
 pub(crate) fn chat_keep_waiting(pane_id: &str) -> Result<bool, String> {
-    let session = chat::get(pane_id).ok_or_else(|| format!("PANE_NOT_FOUND: {pane_id} is not a chat session"))?;
-    Ok(session.keep_waiting())
+    engine::chat_keep_waiting(pane_id)
 }
 
 /// "Restart chat": brings the adapter of a chat that stopped back. Resolves with the new state; fails with the reason
@@ -172,13 +138,7 @@ pub async fn acp_chat_state(pane_id: String) -> Result<Value, String> {
 
 /// The body of `acp_chat_state`, also run for a paired PC (`pclink::calls`).
 pub(crate) fn chat_state(pane_id: &str) -> Value {
-    match chat::get(pane_id) {
-        Some(session) => {
-            session.reconcile_cards();
-            session.state()
-        }
-        None => Value::Null,
-    }
+    engine::chat_state(pane_id)
 }
 
 /// The message box got the focus: start the chat's adapter if it sleeps, so "/" has its commands. Starts nothing else.
@@ -190,9 +150,7 @@ pub async fn acp_chat_warm(pane_id: String) -> Result<(), String> {
 
 /// The body of `acp_chat_warm`, also run for a paired PC (`pclink::calls_chat`).
 pub(crate) fn chat_warm(pane_id: &str) {
-    if let Some(session) = chat::get(pane_id) {
-        session.warm();
-    }
+    engine::chat_warm(pane_id)
 }
 
 /// Changes a setting the agent offers (model, mode, effort) in a chat session. Refused while a turn runs. Returns the
@@ -204,15 +162,7 @@ pub async fn acp_chat_set_config(pane_id: String, option_id: String, value: Stri
 
 /// The body of `acp_chat_set_config` (blocking: the agent answers), also run for a paired PC (`pclink::calls`).
 pub(crate) fn chat_set_config(pane_id: &str, option_id: &str, value: &str) -> Result<Value, String> {
-    let session = chat::get(pane_id).ok_or_else(|| format!("PANE_NOT_FOUND: {pane_id} is not a chat session"))?;
-    session.set_config(option_id, value).map_err(|e| match e {
-        crate::acp::error::AcpError::Busy => "BUSY: The agent is working. Change this when the turn ends.".to_string(),
-        crate::acp::error::AcpError::BadOption(what) => format!("INVALID_ARGUMENT: the agent does not offer {what}"),
-        other => format!("ACP_CONFIG_FAILED: {other}"),
-    })?;
-    // A model the person picks is the next chat's starting model (for an agent that has a default-model rule).
-    crate::acp::chat::default_model::remember_pick(&session, option_id, value);
-    Ok(session.state())
+    engine::chat_set_config(pane_id, option_id, value)
 }
 
 /// The person's switch: may agents answer this chat's permission questions (default: no, only you)? Only this
@@ -224,9 +174,7 @@ pub async fn acp_chat_set_agent_answering(pane_id: String, allowed: bool) -> Res
 
 /// The body of `acp_chat_set_agent_answering`, also run for a paired PC (`pclink::calls_chat`).
 pub(crate) fn chat_set_agent_answering(pane_id: &str, allowed: bool) -> Result<Value, String> {
-    let session = chat::get(pane_id).ok_or_else(|| format!("PANE_NOT_FOUND: {pane_id} is not a chat session"))?;
-    session.set_agent_answering(allowed);
-    Ok(session.state())
+    engine::chat_set_agent_answering(pane_id, allowed)
 }
 
 /// The person's Force yes switch for this chat (default off, or what the agent and project start with). A fence still
@@ -238,9 +186,7 @@ pub async fn acp_chat_set_force_yes(pane_id: String, on: bool) -> Result<Value, 
 
 /// The body of `acp_chat_set_force_yes`, also run for a paired PC (`pclink::calls`).
 pub(crate) fn chat_set_force_yes(pane_id: &str, on: bool) -> Result<Value, String> {
-    let session = chat::get(pane_id).ok_or_else(|| format!("PANE_NOT_FOUND: {pane_id} is not a chat session"))?;
-    session.set_force_yes(on);
-    Ok(session.state())
+    engine::chat_set_force_yes(pane_id, on)
 }
 
 /// "Don't ask again in this chat" for one kind of tool call (`on`), or "Turn back on". In memory for this chat only.
@@ -252,9 +198,7 @@ pub async fn acp_chat_set_auto_allow(pane_id: String, kind: String, on: bool) ->
 
 /// The body of `acp_chat_set_auto_allow`, also run for a paired PC (`pclink::calls_chat`).
 pub(crate) fn chat_set_auto_allow(pane_id: &str, kind: &str, on: bool) -> Result<Value, String> {
-    let session = chat::get(pane_id).ok_or_else(|| format!("PANE_NOT_FOUND: {pane_id} is not a chat session"))?;
-    session.set_auto_allow(kind, on)?;
-    Ok(session.state())
+    engine::chat_set_auto_allow(pane_id, kind, on)
 }
 
 /// "I'm signed in — try again": sends the message the agent refused for want of a sign-in. Fails with the agent's own

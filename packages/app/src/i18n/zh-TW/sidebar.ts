@@ -15,6 +15,7 @@ export const sidebar: Partial<Record<EnglishKey, string>> = {
   'sidebar.working': '工作中',
   'sidebar.idle': '閒置',
   'sidebar.ended': '已結束',
+  'sidebar.away': '離開中',
   'sidebar.moreFor': '{name} 的更多選項',
   'sidebar.more': '更多',
   'sidebar.helpersOf': '{name} 啟動的 AI 助理',

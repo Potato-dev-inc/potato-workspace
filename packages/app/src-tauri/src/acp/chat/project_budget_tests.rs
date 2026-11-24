@@ -5,7 +5,7 @@ use std::path::PathBuf;
 use std::sync::Arc;
 
 use super::start::start;
-use super::workspace_tests::{agents, conversations_in, deps_for};
+use pm_core::test_support::chat_rig::{agents, conversations_in, deps_for};
 use super::{AcpChat, SendError, StartRequest};
 use crate::project_budget::{self, Limits, Reached};
 use crate::test_support::wait::wait_until;

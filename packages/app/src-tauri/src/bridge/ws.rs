@@ -141,7 +141,6 @@ pub(super) fn serve(
         peer_loopback,
         session: session.as_deref(),
         registry: &registry,
-        app,
     };
     let mut watch: Option<HashSet<String>> = None;
     let mut last_ping = Instant::now();
@@ -220,7 +219,6 @@ struct InputCtx<'a> {
     peer_loopback: bool,
     session: Option<&'a str>,
     registry: &'a Arc<Mutex<PaneRegistry>>,
-    app: &'a AppHandle,
 }
 
 /// Handle one client text message; returns a reply text frame when there is one to send.
@@ -302,7 +300,7 @@ fn write_input(
     // The flight recorder also wants which caller (an agent's session, a phone, the local app).
     let tag = crate::flight::InputTag::for_bridge(ctx.session.is_some(), paired_phone_typing);
     crate::flight::with_tag(tag, || {
-        crate::pty::registry_write_input(ctx.registry, ctx.app, pane_id, text, append_newline, false, None, origin)
+        crate::pty::registry_write_input(ctx.registry, pane_id, text, append_newline, false, None, origin)
     })
     .map_err(|err| Value::String(err))
 }

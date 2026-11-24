@@ -130,7 +130,7 @@ mod tests {
 
     /// A stand-in for the live redaction: wraps the text so tests can see the hook ran.
     fn marker() -> Clean {
-        Clean { text: Box::new(|s| format!("[{s}]")) }
+        Clean { text: Box::new(|s| format!("[{s}]")), path: None }
     }
 
     fn keys(items: &[Item]) -> Vec<&str> {

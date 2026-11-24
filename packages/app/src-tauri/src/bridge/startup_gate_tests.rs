@@ -11,7 +11,7 @@ use parking_lot::Mutex;
 use std::sync::Arc;
 use std::time::{Duration, Instant};
 
-const TRUST: &str = include_str!("../tui/claude/fixtures/trust_dialog_2_1_299.txt");
+const TRUST: &str = include_str!("../../crates/pm-core/src/tui/claude/fixtures/trust_dialog_2_1_299.txt");
 /// What Claude draws once the folder is trusted (live capture of the pane right after the answer).
 const READY: &str = "\n \u{2590}\u{259b}\u{2588}\u{2588}\u{2588}\u{259c}\u{258c}   Claude Code v2.1.299\n\u{259d}\u{259c}\u{2588}\u{2588}\u{2588}\u{2588}\u{2588}\u{2588}\u{259b}\u{2580}  Haiku 5.5 \u{b7} Claude Pro\n \u{259d}\u{259d}   \u{259d}\u{259d}   D:\\pm-demo-untrusted-2\n\n\u{2500}\u{2500}\u{2500}\u{2500}\u{2500}\u{2500}\u{2500}\u{2500}\n\u{276f} Try \"edit <filepath> to...\"\n\u{2500}\u{2500}\u{2500}\u{2500}\u{2500}\u{2500}\u{2500}\u{2500}\n";
 
@@ -152,7 +152,7 @@ fn declining_the_dialog_fails_the_run_with_a_clear_code() {
 /// Real Claude capture (this branch, 2026-10-14, folder never trusted): after "No, exit" Claude
 /// quits, the dialog's text stays above, and the pane's host PowerShell prints its prompt on the
 /// last line. The pane stays alive and reads `idle`.
-const DECLINED_HOST_SHELL: &str = include_str!("../tui/claude/fixtures/trust_declined_host_shell.txt");
+const DECLINED_HOST_SHELL: &str = include_str!("../../crates/pm-core/src/tui/claude/fixtures/trust_declined_host_shell.txt");
 
 #[test]
 fn declining_the_dialog_while_the_host_shell_stays_alive_still_fails_the_run() {
@@ -210,7 +210,7 @@ fn a_task_is_never_typed_when_the_agent_has_fallen_back_to_the_host_shell() {
     assert!(dispatch_blocker("codex", "some output\nPS D:\\pm-demo> ").is_some());
     assert!(dispatch_blocker("powershell", "PS D:\\pm-demo> ").is_none(), "a shell's own prompt is its input box");
     // Agent screens, however they end, are not host shells.
-    for screen in [READY, TRUST, include_str!("../tui/claude/fixtures/side_diff_panel_screen.txt")] {
+    for screen in [READY, TRUST, include_str!("../../crates/pm-core/src/tui/claude/fixtures/side_diff_panel_screen.txt")] {
         assert_ne!(
             dispatch_blocker("claude", screen).map(|e| e.code),
             Some("AGENT_EXITED".to_string()),
@@ -255,8 +255,8 @@ fn a_pane_that_dies_without_a_gate_keeps_the_old_error() {
 /// Hand-written from the Codex CLI's layout (no live capture of these two exists).
 const CODEX_TRUST: &str = "> You are running Codex in ~/sandbox\n\n  Do you trust the files in this folder?\n\n\u{203a} 1. Yes, continue\n  2. No, quit\n\n  Press enter to continue\n";
 const CODEX_LOGIN: &str = ">_ Welcome to Codex\n\n  1. Sign in with ChatGPT\n  2. Provide your own API key\n";
-const CODEX_UPDATE_MENU: &str = include_str!("../tui/codex/fixtures/update_prompt_live.txt");
-const CODEX_READY: &str = include_str!("../tui/codex/fixtures/standby_ready_live.txt");
+const CODEX_UPDATE_MENU: &str = include_str!("../../crates/pm-core/src/tui/codex/fixtures/update_prompt_live.txt");
+const CODEX_READY: &str = include_str!("../../crates/pm-core/src/tui/codex/fixtures/standby_ready_live.txt");
 
 fn pane_for(agent: &str, id: &str) -> Arc<Mutex<PaneRegistry>> {
     let registry = claude_pane(id);
@@ -546,8 +546,8 @@ fn accepting_the_dialog_still_resumes_the_dispatch() {
 
 /// The very screens of the live run that got stuck (`D:\pm-nighterify-r7\evidence	2b-pane-at-card.txt`
 /// and `t2b-pane-final.txt`, build 4ea9f63, folder D:\pm-verify2	rust-1), through both answer paths.
-const LIVE_CARD: &str = include_str!("../tui/claude/fixtures/trust_card_verify_r7_live.txt");
-const LIVE_DECLINED: &str = include_str!("../tui/claude/fixtures/trust_declined_verify_r7_live.txt");
+const LIVE_CARD: &str = include_str!("../../crates/pm-core/src/tui/claude/fixtures/trust_card_verify_r7_live.txt");
+const LIVE_DECLINED: &str = include_str!("../../crates/pm-core/src/tui/claude/fixtures/trust_declined_verify_r7_live.txt");
 
 #[test]
 fn the_live_stuck_run_of_round_7_ends_failed_through_the_card_and_through_the_handle() {
@@ -563,7 +563,7 @@ fn the_live_stuck_run_of_round_7_ends_failed_through_the_card_and_through_the_ha
 // at, and resumes by itself once the composer shows; or ends `SCREEN_NOT_READY` with the screen.
 // Never typed into, never a headless fallback.
 
-const CODEX_LOADING: &str = include_str!("../tui/codex/fixtures/loading_0_162_1_live.txt");
+const CODEX_LOADING: &str = include_str!("../../crates/pm-core/src/tui/codex/fixtures/loading_0_162_1_live.txt");
 
 fn codex_pane(id: &str) -> Arc<Mutex<PaneRegistry>> {
     let mut registry = PaneRegistry::new();
@@ -713,7 +713,7 @@ fn a_half_drawn_redraw_of_the_trust_dialog_does_not_release_the_parked_run() {
 // ---- a gate that draws after the readiness look (VERIFY-R13 #1) --------------------------------
 
 /// Real Codex 0.162 capture of the first-launch folder-trust screen.
-const CODEX_TRUST_LIVE: &str = include_str!("../tui/codex/fixtures/trust_folder_live.txt");
+const CODEX_TRUST_LIVE: &str = include_str!("../../crates/pm-core/src/tui/codex/fixtures/trust_folder_live.txt");
 
 #[test]
 fn a_trust_screen_that_drew_after_the_readiness_look_parks_the_run_instead_of_failing_it() {

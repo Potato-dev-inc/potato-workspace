@@ -1,0 +1,78 @@
+# Lend through my PC (Labs "lend_enabled", `crate::capacity_proxy`): Codex with an OpenAI API key, as data.
+# The key never leaves the lending PC. The borrowing PC's Codex sends its Responses API calls to a local shim, which
+# carries them over the PC link to the lender; the lender adds its own key and forwards them to the ONE upstream below,
+# for the listed method + path pairs only. Generic code reads `shape`, never the agent name.
+# Proven in the lend lab (2026-11-11, fake upstream, real Codex 0.166.0 and codex-acp 1.1.4): terminal and chat reach the
+# gateway with the grant secret only, the upstream sees only the lender's key, usage is counted. Not run against OpenAI
+# with a real key, so "lab".
+agent_id = "codex"
+support = "lab"
+
+# How usage is counted from the replies (`response.completed` carries `response.usage`).
+shape = "openai_responses_sse"
+upstream = "https://api.openai.com"
+paths = ["POST /v1/responses", "POST /v1/responses/compact", "GET /v1/models"]
+max_body_bytes = 16777216
+# Organisation and project headers would steer the lender's key to another organisation.
+strip_headers = ["openai-organization", "openai-project"]
+
+[auth]
+# Codex signed in with ChatGPT goes to another backend (chatgpt.com) and its reply stream was NOT proven in the lab
+# (workspace routing discovery). It is not offered: the screens show this sentence instead.
+#
+# P6.4 "a second spec for ChatGPT sign-in": written CANNOT (2026-11-22), with the reasons. No spec file was added, because none would be true:
+# 1. A different wire, not a different key. Codex 0.167 with a ChatGPT sign-in calls `https://chatgpt.com/backend-api/codex/responses` (its
+#    `chatgpt_base_url` setting), with the access token as `Authorization: Bearer` AND a second header, `chatgpt-account-id`, that the lender
+#    must read from its own `auth.json`. A spec here has ONE upstream and ONE path set per agent (`upstream`, `paths`), and `add_headers` only
+#    takes fixed text, so a second Codex spec needs a spec per sign-in kind in `service.rs` and a header read from the sign-in file
+#    (`json_pointer`) in `forward.rs`. That is a change to the lender's door, not data, and it is not made on a guess.
+# 2. The borrower's Codex checks its own sign-in file before it calls anything: a ChatGPT mode `auth.json` needs an id token it can read and a
+#    refresh token it will spend at `auth.openai.com/oauth/token` when the token is old. A refresh token must never leave the lender, and a
+#    placeholder one makes Codex try that URL directly (outside the shim). Pointing Codex at the shim with a PLACEHOLDER API key (as the spec
+#    below does) works only for an API key, because that mode has no refresh and no account header.
+# 3. It needs a real ChatGPT sign-in on the lending PC to prove a reply stream (usage fields, `response.completed`) and nothing in the lab
+#    has one: signing in is the person's own step (a password and a browser), never typed by the lab.
+# What it would take: the founder signs Codex in with ChatGPT in a lend sign-in folder on a test PC; then (a) `forward.rs` learns a header from
+# a JSON pointer and a path rewrite (`/v1/responses` -> `/backend-api/codex/responses`), so the borrower can keep the API-key hookup below,
+# and (b) a second `[auth.account]` table with `upstream` per auth kind. Until then the screens say the sentence below.
+account_not_yet = "Codex signed in with ChatGPT is not supported yet. Only an OpenAI API key can be lent."
+
+# A pasted OpenAI API key (kept in the OS credential store, never in a file).
+[auth.api_key]
+header = "authorization"
+scheme = "Bearer"
+
+# Terminal. The pane gets its own CODEX_HOME for this lend with one config.toml, so nothing is read from the borrower's
+# real Codex setup. WebSockets are switched off (the shim carries HTTP and server-sent events only). The key variable
+# holds the grant's secret.
+[hookup]
+set = [{ name = "LEND_KEY", value = "{secret}" }]
+home_env = "CODEX_HOME"
+remove_prefixes = ["OPENAI_", "CODEX_"]
+remove = ["OPENAI_API_KEY", "OPENAI_BASE_URL", "OPENAI_ORG_ID", "OPENAI_PROJECT_ID", "CODEX_API_KEY"]
+files = [{ path = "config.toml", content = """
+model_provider = "lend"
+
+[model_providers.lend]
+name = "lend"
+base_url = "{base_url}/v1"
+env_key = "LEND_KEY"
+wire_api = "responses"
+supports_websockets = false
+""" }]
+
+# Chat (the Codex ACP adapter). The adapter reads the grant's secret from its environment, the client must call
+# authenticate("api-key") first, and the base URL is the built-in provider's `openai_base_url` in the same kind of
+# scratch CODEX_HOME. (The adapter's CODEX_CONFIG setting is not used: the app builds that one itself.)
+[chat]
+set = [
+  { name = "CODEX_API_KEY", value = "{secret}" },
+  { name = "OPENAI_API_KEY", value = "{secret}" },
+]
+home_env = "CODEX_HOME"
+authenticate = "api-key"
+remove_prefixes = ["OPENAI_", "CODEX_"]
+remove = ["OPENAI_BASE_URL", "OPENAI_ORG_ID", "OPENAI_PROJECT_ID"]
+files = [{ path = "config.toml", content = """
+openai_base_url = "{base_url}/v1"
+""" }]

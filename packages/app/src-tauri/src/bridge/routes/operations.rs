@@ -68,7 +68,7 @@ fn delegate(cx: &Ctx) -> RouteResult {
         &mut req,
         owner.as_deref(),
         &crate::accounts::Store::default_location(),
-        &|| crate::questions::routes::publish_changed(&app),
+        &|| crate::questions::routes::publish_changed(),
     )
     .map_err(operation_http_error)?;
     delegate_operation_http(req, registry, app)

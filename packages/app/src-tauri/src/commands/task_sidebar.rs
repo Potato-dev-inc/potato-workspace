@@ -8,7 +8,7 @@ use std::collections::HashMap;
 use tauri::State;
 
 /// The tasks shown in the sidebar, in order. Rows of agents that are closed are dropped first.
-#[tauri::command]
+#[tauri::command(async)]
 pub fn task_sidebar_get(state: State<'_, AppState>) -> Store {
     let registry = state.registry.clone();
     let _ = task_sidebar::file().edit(|store| {

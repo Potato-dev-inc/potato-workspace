@@ -217,20 +217,29 @@ pub async fn chat_search(
     limit: Option<usize>,
     filters: Option<Filters>,
 ) -> Result<Answer, String> {
-    let Some(index) = chat.index(&state.registry) else { return Ok(Answer { enabled: crate::chat_index::enabled(), hits: Vec::new() }) };
-    let filters = filters.unwrap_or_default();
-    tauri::async_runtime::spawn_blocking(move || index.search_filtered(&query, limit.unwrap_or(30), &filters))
-        .await
-        .map_err(|e| format!("INTERNAL: {e}"))?
+    let index = chat.index(&state.registry);
+    tauri::async_runtime::spawn_blocking(move || search_in(index, &query, limit, filters)).await.map_err(|e| format!("INTERNAL: {e}"))?
+}
+
+/// The body of `chat_search`, also run for a paired PC (`pclink::calls_p4a`, which filters the hits to the chats that PC may see).
+pub(crate) fn search_in(index: Option<Arc<crate::chat_index::ChatIndex>>, query: &str, limit: Option<usize>, filters: Option<Filters>) -> Result<Answer, String> {
+    let Some(index) = index else { return Ok(Answer { enabled: crate::chat_index::enabled(), hits: Vec::new() }) };
+    index.search_filtered(query, limit.unwrap_or(30), &filters.unwrap_or_default())
 }
 
 /// The agents and folders the index holds, for the "Search all chats" filter menus.
 #[tauri::command]
 pub async fn chat_search_facets(state: State<'_, AppState>, chat: State<'_, SessionChatState>) -> Result<Facets, String> {
-    let Some(index) = chat.index(&state.registry) else { return Ok(Facets::default()) };
-    tauri::async_runtime::spawn_blocking(move || index.facets())
-        .await
-        .map_err(|e| format!("INTERNAL: {e}"))?
+    let index = chat.index(&state.registry);
+    tauri::async_runtime::spawn_blocking(move || facets_in(index)).await.map_err(|e| format!("INTERNAL: {e}"))?
+}
+
+/// The body of `chat_search_facets`, also run for a paired PC.
+pub(crate) fn facets_in(index: Option<Arc<crate::chat_index::ChatIndex>>) -> Result<Facets, String> {
+    match index {
+        Some(index) => index.facets(),
+        None => Ok(Facets::default()),
+    }
 }
 
 /// Start following the pane's session file, or its screen. `{ available, reason, items, source }`; the items so far

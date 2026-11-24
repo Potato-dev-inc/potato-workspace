@@ -4,6 +4,7 @@ import { tauriAskbarApi, clipboardChipLabel, type AskbarAgent, type AskbarApi, t
 import { splitBlocks } from '../../lib/askbar-text';
 import { DotSpinner } from '../cockpit/DotSpinner';
 import { useDismissable } from '../../hooks/useDismissable';
+import { t } from '../../i18n';
 
 /** `code` between backticks shows as code, without the backticks. */
 function inlineCode(text: string): ReactNode[] {
@@ -329,8 +330,8 @@ export function AskBar({ api = tauriAskbarApi }: { api?: AskbarApi }): JSX.Eleme
         <input
           ref={inputRef}
           className="askbar-input"
-          placeholder="Ask anything…"
-          aria-label="Question"
+          placeholder={t('askbar.placeholder')}
+          aria-label={t('askbar.question')}
           autoFocus
           autoComplete="off"
           spellCheck={false}

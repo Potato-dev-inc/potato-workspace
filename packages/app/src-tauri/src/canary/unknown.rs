@@ -162,9 +162,9 @@ mod tests {
     use super::*;
     use crate::tui::profile_for;
 
-    const CODEX_READY: &str = include_str!("../tui/codex/fixtures/standby_ready_live.txt");
-    const CODEX_UPDATE_MENU: &str = include_str!("../tui/codex/fixtures/update_prompt_live.txt");
-    const CODEX_WORKING: &str = include_str!("../tui/codex/fixtures/working_live.txt");
+    const CODEX_READY: &str = include_str!("../../crates/pm-core/src/tui/codex/fixtures/standby_ready_live.txt");
+    const CODEX_UPDATE_MENU: &str = include_str!("../../crates/pm-core/src/tui/codex/fixtures/update_prompt_live.txt");
+    const CODEX_WORKING: &str = include_str!("../../crates/pm-core/src/tui/codex/fixtures/working_live.txt");
     const UNREADABLE: &str = "  Codex 0.171\n\n  ┌──────────────────────────────┐\n  │ Pick a theme to continue     │\n  │  a) light    b) dark         │\n  └──────────────────────────────┘\n";
 
     fn secs(base: Instant, n: u64) -> Instant {

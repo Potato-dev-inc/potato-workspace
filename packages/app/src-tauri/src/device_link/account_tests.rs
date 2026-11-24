@@ -481,7 +481,7 @@ async fn the_account_sheet_has_no_way_to_ask_for_a_right_and_only_the_pairing_ma
     assert_eq!((on_a["lets_web"].clone(), on_a["lets_files"].clone(), on_a["lets_lend"].clone()), (json!(false), json!(false), json!(false)));
     assert_eq!((on_a["level"].clone(), on_a["account_default"].clone()), (json!("full"), json!(true)));
     // The source of the account route (this file and the service hook) turns nothing on by itself: the grant is one call in the pairing manager.
-    let pairing = include_str!("../p2p/pairing/account.rs");
+    let pairing = include_str!("../../crates/pm-core/src/p2p/pairing/account.rs");
     assert!(!pairing.contains("set_permission") && !pairing.contains("AGENTS_REMOTE"));
     let service = include_str!("mod.rs");
     let hook = &service[service.find("set_on_account_paired(Arc::new(").unwrap()..];

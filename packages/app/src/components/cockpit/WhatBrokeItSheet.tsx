@@ -26,6 +26,7 @@ import '../../styles/cockpit-whatbrokeit.css';
 import type { Notify } from './restore-flow';
 import { Sheet } from './Sheet';
 import { WhatBrokeItResult } from './WhatBrokeItResult';
+import { t } from '../../i18n';
 
 /** The calls the sheet makes. The desktop window uses `whatBrokeItApi`; tests pass their own. */
 export const whatBrokeItApi = {
@@ -207,7 +208,7 @@ export function WhatBrokeItSheet({
         <div className="ck-wb-bar" aria-hidden="true">
           <span />
         </div>
-        <p className="ck-wb-muted">Your agents can keep working. This runs at low priority.</p>
+        <p className="ck-wb-muted">{t('r21.sw.yourAgentsCanKeep')}</p>
         {error && (
           <p className="ck-wb-error" role="alert">
             {error}
@@ -296,7 +297,7 @@ export function WhatBrokeItSheet({
           <div className="ck-wb-rows">
             <div className="ck-wb-row">
               <span className="ck-wb-label" id="ck-wb-cmd-l">
-                Test command
+                {t('r21.sw.testCommand')}
               </span>
               {!showPicker && current ? (
                 <span className="ck-wb-value">
@@ -358,7 +359,7 @@ export function WhatBrokeItSheet({
                 >
                   <input
                     className="ck-wb-input"
-                    aria-label="Test command"
+                    aria-label={t('r21.sw.testCommand')}
                     placeholder="Type a command, like npm test"
                     value={typed}
                     onChange={(e) => setTyped(e.target.value)}
@@ -380,7 +381,7 @@ export function WhatBrokeItSheet({
                 Tests last passed
               </label>
               <select id="ck-wb-good" className="ck-wb-select" value={goodId} onChange={(e) => setGoodId(e.target.value)}>
-                <option value="">Find it for me</option>
+                <option value="">{t('r21.sw.findItForMe')}</option>
                 {o.points.map((p) => (
                   <option key={p.checkpointId} value={p.checkpointId}>
                     {p.label}

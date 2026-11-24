@@ -9,6 +9,9 @@ import '../../styles/startup-check.css';
 /** How long after the start the check runs, so it never competes with the window opening. */
 export const STARTUP_CHECK_DELAY_MS = 4000;
 
+/** How long the update-address note stays up. */
+export const NOTE_SHOWS_MS = 8000;
+
 export interface StartupFixActions {
   signIn: (agentId: string) => void;
 }
@@ -50,6 +53,13 @@ export function StartupCheckLine({
   }, [enabled, delayMs]);
 
   const line = lines[0];
+  // "Can't reach the update address" is only a note: it clears itself (the next check tries again anyway).
+  const lineId = line?.id;
+  useEffect(() => {
+    if (lineId !== 'update') return undefined;
+    const id = window.setTimeout(() => setHidden(true), NOTE_SHOWS_MS);
+    return () => window.clearTimeout(id);
+  }, [lineId]);
   if (!line || hidden) return null;
   const more = lines.length - 1;
   const fix = (f: StartupFix) => {

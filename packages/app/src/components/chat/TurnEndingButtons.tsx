@@ -3,6 +3,7 @@
 // signed out) and Keep going with <other agent> (usage limit). Only the newest turn gets buttons: an old turn is
 // history. A button the pane cannot honour (no message box, no other agent set up) is simply not drawn.
 import { useState } from 'react';
+import { t } from '../../i18n';
 import type { TurnEnding } from '../../lib/sessionChatModel';
 
 /** What the buttons do. Each is optional: without it the button is not drawn. */
@@ -13,13 +14,16 @@ export interface EndingActions {
   onSignIn?: () => void;
   /** Hand the task to another agent that is set up. `label` is that agent's name. */
   keepGoing?: { label: string; run: () => Promise<string | null> } | null;
+  /** A far chat whose own sign-in ended while this PC lends that PC the agent: start the chat again on the lend ("Switch to the borrowed sign-in"). */
+  onUseLend?: () => Promise<string | null>;
 }
 
 /** Which buttons a reason gets, in order. */
-export function endingButtons(reason: string, actions: EndingActions): ('retry' | 'signIn' | 'keepGoing')[] {
-  const out: ('retry' | 'signIn' | 'keepGoing')[] = [];
+export function endingButtons(reason: string, actions: EndingActions): ('retry' | 'signIn' | 'useLend' | 'keepGoing')[] {
+  const out: ('retry' | 'signIn' | 'useLend' | 'keepGoing')[] = [];
   if (reason === 'usage_limit' && actions.keepGoing) out.push('keepGoing');
   if (reason === 'signed_out' && actions.onSignIn) out.push('signIn');
+  if (reason === 'signed_out' && actions.onUseLend) out.push('useLend');
   if ((reason === 'empty' || reason === 'failed' || reason === 'no_answer') && actions.onRetry) out.push('retry');
   return out;
 }
@@ -35,7 +39,7 @@ export function TurnEndingButtons({ ending, actions }: { ending: TurnEnding; act
     setBusy(true);
     setNote(null);
     job()
-      .then(setNote, () => setNote('That did not work. Try again.'))
+      .then(setNote, () => setNote(t('r9.end.failedTry')))
       .finally(() => setBusy(false));
   };
 
@@ -47,17 +51,22 @@ export function TurnEndingButtons({ ending, actions }: { ending: TurnEnding; act
           <span aria-hidden="true">·</span>{' '}
           {button === 'retry' && (
             <button type="button" className="ck-chat-link" data-ending-action="retry" disabled={busy} onClick={() => run(actions.onRetry!)}>
-              {busy ? 'Sending…' : 'Retry'}
+              {busy ? t('r9.end.sending') : t('r9.end.retry')}
             </button>
           )}
           {button === 'signIn' && (
             <button type="button" className="ck-chat-link" data-ending-action="sign-in" onClick={() => actions.onSignIn!()}>
-              Sign in
+              {t('r9.end.signIn')}
+            </button>
+          )}
+          {button === 'useLend' && (
+            <button type="button" className="ck-chat-link" data-ending-action="use-lend" disabled={busy} onClick={() => run(actions.onUseLend!)}>
+              {busy ? t('r9.end.starting') : t('chat.signin.useLend')}
             </button>
           )}
           {button === 'keepGoing' && (
             <button type="button" className="ck-chat-link" data-ending-action="keep-going" disabled={busy} onClick={() => run(actions.keepGoing!.run)}>
-              {busy ? 'Starting…' : `Keep going with ${actions.keepGoing!.label}`}
+              {busy ? t('r9.end.starting') : t('r9.end.keepGoing', { name: actions.keepGoing!.label })}
             </button>
           )}
         </span>

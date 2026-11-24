@@ -29,6 +29,12 @@
   font-weight: 400;
   color: var(--label-3);
 }
+.cockpit .ck-usage-lent {
+  margin-left: 6px;
+  font-weight: 400;
+  color: var(--label-2);
+  white-space: nowrap;
+}
 .cockpit .ck-usage-chips {
   flex: 1;
   min-width: 0;

@@ -1096,17 +1096,25 @@
   gap: 8px;
   margin-top: 12px;
 }
+/* ONE column for every corner note (toasts and the update notice), bottom right, above the status bar and left of a docked
+   browser (--dock-inset, set by the browser pane): they stack with a gap and never cover each other or the page. */
 .cockpit .ck-toasts {
   position: absolute;
-  left: 50%;
-  bottom: 20px;
+  right: calc(16px + var(--dock-inset, 0px));
+  bottom: 44px;
   z-index: 60;
-  transform: translateX(-50%);
   display: flex;
   flex-direction: column;
   gap: 6px;
-  align-items: center;
+  align-items: flex-end;
+  max-width: calc(100% - 32px);
   pointer-events: none;
+}
+.cockpit .ck-toasts > * {
+  pointer-events: auto;
+}
+.cockpit .ck-toasts .app-update-notice {
+  position: static;
 }
 .cockpit .ck-toast {
   padding: 8px 14px;
@@ -1620,4 +1628,34 @@
   box-sizing: border-box;
   max-width: calc(calc(100vw / var(--ui-scale, 1)) - 16px);
   overflow-y: auto;
+}
+
+/* "Skip to content": out of sight until the keyboard reaches it, then a small chip over the top left. */
+.cockpit .ck-skip {
+  position: fixed;
+  top: 8px;
+  left: 8px;
+  z-index: 1001;
+  padding: 6px 12px;
+  border-radius: 8px;
+  background: var(--bg-float);
+  border: 1px solid var(--sep);
+  color: var(--label);
+  font-size: 12px;
+  transform: translateY(-300%);
+}
+.cockpit .ck-skip:focus {
+  transform: none;
+}
+.cockpit .ck-main:focus {
+  outline: none;
+}
+
+/* The rename box's count: "12/40", so a name cut at 40 is not a surprise. */
+.cockpit .ck-title-count {
+  flex: none;
+  margin-inline-start: 8px;
+  font-size: 11px;
+  color: var(--label-3);
+  font-variant-numeric: tabular-nums;
 }

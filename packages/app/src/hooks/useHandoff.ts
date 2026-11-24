@@ -1,7 +1,7 @@
 // "Handoff from here": one hook that both the sidebar (row menu) and the pane's top bar ("Hand off") use, so there is
 // one starter and one "one at a time". The cockpit holds it once and passes it down.
 import { useEffect, useRef, useState } from 'react';
-import { listen } from '@tauri-apps/api/event';
+import { listen } from '../lib/events';
 import { DEFAULT_OPTIONS, realHandoffDeps, runHandoff, type HandoffDeps, type HandoffMode, type HandoffOptions, type HandoffStatus } from '../lib/handoff';
 import { t } from '../i18n';
 import { loadSettings } from '../lib/settings';
@@ -16,7 +16,8 @@ export interface HandoffControl {
   mode: HandoffMode;
   /** Plain shells have no conversation to hand over. */
   allowed: (paneId: string) => boolean;
-  start: (paneId: string) => void;
+  /** `with`: the calls of another place (a chat of another PC hands off through that PC's host); absent: this PC's own. */
+  start: (paneId: string, withDeps?: HandoffDeps) => void;
   dismiss: () => void;
 }
 
@@ -25,6 +26,9 @@ export async function readHandoffOptions(): Promise<HandoffOptions> {
   const settings = await loadSettings().catch(() => null);
   return { mode: settings?.handoff_mode === 'file' ? 'file' : 'new_agent', fixedNotes: settings?.handoff_fixed_notes ?? '' };
 }
+
+/** How long a failed handoff's line stays. */
+const FAILED_SHOWN_MS = 10_000;
 
 export function useHandoff(c: CockpitApi, deps?: HandoffDeps, readOptions: () => Promise<HandoffOptions> = readHandoffOptions): HandoffControl {
   const [status, setStatus] = useState<HandoffStatus | null>(null);
@@ -51,12 +55,19 @@ export function useHandoff(c: CockpitApi, deps?: HandoffDeps, readOptions: () =>
       off?.();
     };
   }, []);
+  // A failure says its piece and goes: it must not sit in the sidebar for an hour.
+  useEffect(() => {
+    if (status?.kind !== 'failed') return;
+    const timer = setTimeout(() => setStatus((s) => (s === status ? null : s)), FAILED_SHOWN_MS);
+    return () => clearTimeout(timer);
+  }, [status]);
   const busy = status?.kind === 'writing' || status?.kind === 'opening';
   const cRef = useRef(c);
   cRef.current = c;
-  const start = (paneId: string) => {
+  const start = (paneId: string, withDeps?: HandoffDeps) => {
     if (busy) return;
     const real =
+      withDeps ??
       deps ??
       realHandoffDeps({
         pane: (id) => {

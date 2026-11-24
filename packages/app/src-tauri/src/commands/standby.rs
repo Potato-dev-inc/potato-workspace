@@ -2,7 +2,7 @@
 
 use crate::standby::{self, StandbyConfig, StatusView};
 
-#[tauri::command]
+#[tauri::command(async)]
 pub fn standby_get_status() -> StatusView {
     standby::status()
 }

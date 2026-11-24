@@ -1,6 +1,7 @@
 // What's new state: the last version whose card was closed or whose tour was opened (`pm.whatsnew.seen`), the running
 // version, and whether the tour is open. Storage is guarded: with none, the card may show again after a restart.
-import { emit, listen } from '@tauri-apps/api/event';
+import { emit } from '@tauri-apps/api/event';
+import { listen } from '../lib/events';
 import { getCurrentWindow } from '@tauri-apps/api/window';
 import { useSyncExternalStore } from 'react';
 import { hasTour, latestVersion, normalVersion } from './catalog';

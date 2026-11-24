@@ -5,6 +5,7 @@
 //   failed:    "<agent> couldn't start · Try again from the card"
 // It reads the pane's lineage and reloads when `keep-going://changed` names this pane. The state line is
 // `sideText(view, isNew)`: per-side wording while it runs, the server text otherwise. Nothing here starts or stops an agent.
+import { readUnlessCancelled } from '../../lib/pane-read';
 import { useEffect, useRef, useState } from 'react';
 import {
   keepGoingBrief,
@@ -53,14 +54,17 @@ export function KeepGoingBanner({ paneId, onOpenPane }: { paneId: string; onOpen
 
   useEffect(() => {
     alive.current = true;
+    // This run's own flag: a late answer for the chat just left must not land on the chat now shown.
+    let live = true;
     let unlisten: (() => void) | undefined;
+    setLineage(null);
     const load = () => {
-      keepGoingLineage(paneId).then(
+      readUnlessCancelled(() => keepGoingLineage(paneId), () => live).then(
         (next) => {
-          if (alive.current) setLineage(next);
+          if (live && next !== undefined) setLineage(next);
         },
         () => {
-          if (alive.current) setLineage(null);
+          if (live) setLineage(null);
         },
       );
     };
@@ -69,13 +73,14 @@ export function KeepGoingBanner({ paneId, onOpenPane }: { paneId: string; onOpen
       if (event.paneIds.includes(paneId)) load();
     }).then(
       (stop) => {
-        if (alive.current) unlisten = stop;
+        if (live) unlisten = stop;
         else stop();
       },
       // No event channel (a test stub, a window without it): the line still shows what it loaded.
       () => {},
     );
     return () => {
+      live = false;
       alive.current = false;
       unlisten?.();
     };

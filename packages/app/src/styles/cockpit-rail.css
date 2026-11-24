@@ -737,3 +737,16 @@
   color: var(--label-2);
   margin-right: 4px;
 }
+
+/* A line that says why a panel is empty (an ended far chat: "not available on this PC") is a sentence: it wraps, never "…". */
+.cockpit .rp-row.is-empty {
+  height: auto;
+  align-items: flex-start;
+  padding-block: 4px;
+}
+.cockpit .rp-row.is-empty .rp-name {
+  white-space: normal;
+  overflow: visible;
+  text-overflow: clip;
+  overflow-wrap: anywhere;
+}

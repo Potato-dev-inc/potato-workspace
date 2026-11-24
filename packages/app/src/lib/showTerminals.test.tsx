@@ -75,7 +75,8 @@ describe('useShowTerminals', () => {
     const host = document.createElement('div');
     const root = createRoot(host);
     await act(async () => root.render(<P />));
-    await act(async () => {});
+    // The settings and event modules are loaded on use (dynamic imports): give them a moment before the first read and listen.
+    await act(async () => new Promise((r) => setTimeout(r, 50)));
     expect(host.textContent).toBe('false');
     saved = { show_terminals: true };
     await act(async () => {

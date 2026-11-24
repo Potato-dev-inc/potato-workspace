@@ -12,6 +12,7 @@
 //! - `hunks`: parses `git diff -U0` output. `advice`: which side to finish first (fixed rules).
 //! - `groups`: panes that share a repo, and the look schedule. `compare`: copies and same folder.
 //! - `alerts`: one alert per pair, in-place updates, ignore. `copy` and `view`: the exact words.
+//! - `paths`: the same file written by two chats, in any folder (no git needed).
 //! - `probe`: the git reads (hardened). `engine`: one pure step. `live`: the watch thread and the
 //!   snapshot the commands read.
 //!
@@ -51,6 +52,7 @@ pub mod view;
 pub mod probe;
 pub mod engine;
 pub mod live;
+pub mod paths;
 
 #[cfg(test)]
 mod tests;

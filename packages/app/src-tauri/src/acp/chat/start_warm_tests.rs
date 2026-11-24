@@ -8,7 +8,8 @@ use std::time::{Duration, Instant};
 
 use parking_lot::Mutex;
 
-use super::{start, StartDeps, StartRequest};
+use super::start::start;
+use super::{StartDeps, StartRequest};
 use crate::acp::chat::{AcpChat, QuietHost};
 use crate::acp::config::{AgentConfig, HostEnv};
 use crate::acp::conversations::{AgentSource, Conversations};

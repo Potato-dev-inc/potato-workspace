@@ -5,7 +5,7 @@
 // Backup agents, Hand off. Never "worktree", "round", "tamper" or an id.
 import { useCallback, useEffect, useState } from 'react';
 import { invoke } from '@tauri-apps/api/core';
-import { listen } from '@tauri-apps/api/event';
+import { listen } from './events';
 import { loadSettings } from './settings';
 
 /** One of the five glyphs: `~` working, `+` needs you, `v` done, `:` paused, `x` ended. */

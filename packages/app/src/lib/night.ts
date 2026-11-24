@@ -4,7 +4,8 @@
 // (`night.test.ts` checks them against `commands/night.rs`). Plain words follow SPEC n32 3.10.
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { invoke } from '@tauri-apps/api/core';
-import { listen, type UnlistenFn } from '@tauri-apps/api/event';
+import { type UnlistenFn } from '@tauri-apps/api/event';
+import { listen } from './events';
 
 /** The event the desktop listens to (`NIGHT_EVENT` in `commands/night.rs`). */
 export const NIGHT_EVENT = 'night://changed';

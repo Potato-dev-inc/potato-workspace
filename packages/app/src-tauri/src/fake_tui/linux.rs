@@ -95,7 +95,6 @@ impl Session {
     pub fn spawn_pane_guarded(&self, agent_type: &str, guard: &str) -> Result<String, String> {
         crate::pty::registry_spawn_pane(
             &self.world.registry,
-            &self.world.app,
             crate::pty::SpawnPaneArgs {
                 agent_type: agent_type.to_string(),
                 cwd: Some(self.project.to_string_lossy().into_owned()),

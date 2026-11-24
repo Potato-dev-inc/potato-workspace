@@ -8,7 +8,7 @@ export const DONE_CLEARED_KEY = 'pm.inbox.doneCleared';
 /** How many rows show before "Show all". */
 export const DONE_SHOWN = 6;
 
-export type DoneKind = 'review' | 'open' | 'night';
+export type DoneKind = 'review' | 'open' | 'night' | 'setup';
 
 export interface DoneRow {
   paneId: string;
@@ -38,6 +38,9 @@ export function dayKey(ms: number): string {
   return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}`;
 }
 
+/** A turn that failed at once because the agent has no sign-in yet is a setup problem, not finished work. */
+export const needsSetup = (s: TurnSummary): boolean => (s.files?.count ?? 0) === 0 && /Missing environment variable|isn't set up on this PC/i.test(`${s.sentence} ${s.end.prompt ?? ''}`);
+
 /** Turns that ended since local midnight and stopped cleanly (a turn that waits for an answer is in Needs you). */
 export function doneToday(summaries: Iterable<TurnSummary>, now: number): DoneRow[] {
   const from = startOfDay(now);
@@ -50,7 +53,7 @@ export function doneToday(summaries: Iterable<TurnSummary>, now: number): DoneRo
       paneId: s.paneId,
       agent: s.agent,
       endedAtMs: s.endedAtMs,
-      kind: files > 0 ? 'review' : 'open',
+      kind: files > 0 ? 'review' : needsSetup(s) ? 'setup' : 'open',
       files,
       added: s.files?.added ?? 0,
       deleted: s.files?.deleted ?? 0,

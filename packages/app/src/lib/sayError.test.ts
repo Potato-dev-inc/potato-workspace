@@ -63,4 +63,10 @@ describe('sayError', () => {
   it('treats a very long message as unreadable', () => {
     expect(sayError('x'.repeat(500)).text).toBe(GENERIC_ERROR);
   });
+
+  it('hides a command argument error behind the generic sentence', () => {
+    const raw = 'invalid args `pane_id` for command `devices_chat_export`: command devices_chat_export missing required key pane_id';
+    expect(sayError(raw).text).toBe(GENERIC_ERROR);
+    expect(sayError('unknown pane: c9f7; pane_id must be a full pane id').text).toBe(GENERIC_ERROR);
+  });
 });

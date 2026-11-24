@@ -116,6 +116,7 @@ fn every_shipped_agent_install_spec_parses_and_names_its_sources() {
 }
 
 #[test]
+#[cfg(windows)]
 fn the_shipped_specs_say_what_the_research_found() {
     let spec = |id: &str| crate::tui::profile_for(id).install_spec().unwrap();
     assert_eq!(spec("claude").winget.as_deref(), Some("Anthropic.ClaudeCode"));
@@ -128,9 +129,10 @@ fn the_shipped_specs_say_what_the_research_found() {
 }
 
 #[test]
+#[cfg(windows)]
 fn a_native_install_does_not_pull_in_node_or_git_for_the_big_agents() {
     // With winget present, these install in one step and need no prerequisites.
-    let tools = Tools { winget: Some("winget".into()), present: Default::default() };
+    let tools = Tools { winget: Some("winget".into()), present: Default::default(), home: None };
     for id in ["claude", "codex", "opencode"] {
         let (plan, _) = plan_for(id, &tools).unwrap();
         assert_eq!(plan.steps.len(), 1, "{id}: {:?}", plan.steps.iter().map(|s| &s.command).collect::<Vec<_>>());
@@ -139,8 +141,9 @@ fn a_native_install_does_not_pull_in_node_or_git_for_the_big_agents() {
 }
 
 #[test]
+#[cfg(windows)]
 fn cursor_agent_offers_only_the_confirmed_script() {
-    let tools = Tools { winget: Some("winget".into()), present: Default::default() };
+    let tools = Tools { winget: Some("winget".into()), present: Default::default(), home: None };
     let (plan, hint) = plan_for("cursor_agent", &tools).unwrap();
     assert_eq!(plan.steps.len(), 1);
     assert!(plan.steps[0].high_risk);
@@ -157,7 +160,7 @@ fn an_unknown_agent_is_an_error_not_a_guess() {
 fn an_unregistered_store_id_gets_a_plan_from_its_catalog_entry() {
     let entry = store_entry("acme");
     let spec = InstallSpec { source: "https://example.com/acme".into(), npm: Some("test-acme-cli".into()), ..Default::default() };
-    let tools = Tools { winget: None, present: ["node".to_string()].into_iter().collect() };
+    let tools = Tools { winget: None, present: ["node".to_string()].into_iter().collect(), home: None };
     let plan = store_plan(&entry, Some(&spec), &tools);
     assert!(plan.blocked.is_none(), "{:?}", plan.blocked);
     assert_eq!(plan.agent_id, "acme");
@@ -194,7 +197,7 @@ fn the_install_code_never_matches_an_agent_name() {
         ("mod.rs", include_str!("mod.rs")),
         ("plan.rs", include_str!("plan.rs")),
         ("command.rs", include_str!("command.rs")),
-        ("path_refresh.rs", include_str!("path_refresh.rs")),
+        ("path_refresh.rs", include_str!("../../crates/pm-core/src/path_refresh.rs")),
     ] {
         let code = text.split("#[cfg(test)]").next().unwrap().to_ascii_lowercase();
         for agent in ["claude", "codex", "cursor", "opencode", "gemini", "kilo"] {

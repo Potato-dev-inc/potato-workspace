@@ -57,6 +57,19 @@ describe('Settings in the cockpit has no Connect page', () => {
     expect(opened).toEqual(['devices']);
   });
 
+  it('"borrow" + Down + Enter opens the highlighted result (the Connect one is first, Down reaches the next)', async () => {
+    const opened: string[] = [];
+    registerConnectOpener((tab) => opened.push(tab));
+    await mount({ initialTab: 'look' });
+    await typeInto(search(), 'borrow');
+    await settle(6);
+    const key = async (k: string) => act(async () => void search().dispatchEvent(new KeyboardEvent('keydown', { key: k, bubbles: true, cancelable: true })));
+    // First highlighted result is the Open Connect button: Enter opens Connect and not a Labs row.
+    expect(main().querySelector('[data-testid="settings-open-connect"] [data-active="true"]')).not.toBeNull();
+    await key('Enter');
+    expect(opened).toEqual(['devices']);
+  });
+
   it('Overview shows four cards, none of them a Phone card', async () => {
     await mount();
     expect(host.querySelectorAll('.st-card')).toHaveLength(4);

@@ -718,6 +718,24 @@
 }
 .settings .st-suffix {
   color: var(--label-3);
+  white-space: nowrap;
+}
+/* Custom limits: each number sits with its unit on one line; the numbers wrap as whole units, never a unit alone on a line. */
+.settings .st-limit {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px 12px;
+}
+.settings .st-limit-custom {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px 14px;
+}
+.settings .st-limit-custom .st-number {
+  flex: none;
+  white-space: nowrap;
 }
 .settings .st-btn {
   display: inline-flex;
@@ -921,6 +939,34 @@
   display: flex;
   gap: 8px;
   margin-top: 10px;
+}
+/* Fixed to the window, not to whatever scrolling box the row sits in, so it can never open below the visible area. */
+.settings .st-scrim.st-diag-scrim {
+  position: fixed;
+  z-index: 120;
+}
+/* The review is a real dialog: centred, opaque, its list scrolls and Save / Cancel stay in view under it. */
+.settings .st-sheet.st-diag-sheet {
+  display: flex;
+  flex-direction: column;
+  width: min(560px, calc(calc(100vw / var(--ui-scale, 1)) - 32px));
+  max-height: calc(calc(85vh / var(--ui-scale, 1)));
+  background: var(--window);
+  backdrop-filter: none;
+  -webkit-backdrop-filter: none;
+  outline: none;
+}
+.settings .st-sheet.st-diag-sheet .st-diag-body {
+  flex: 1 1 auto;
+  min-height: 0;
+  margin-top: 10px;
+  overflow-y: auto;
+}
+.settings .st-sheet.st-diag-sheet .st-diag-actions {
+  flex: none;
+  justify-content: flex-end;
+  padding-top: 10px;
+  border-top: 1px solid var(--sep);
 }
 /* Security: recent approvals and control changes (read-only list). Monochrome, one line per entry. */
 .settings .st-audit {
@@ -1805,4 +1851,45 @@
   flex-wrap: wrap;
   align-items: center;
   gap: 8px 14px;
+}
+
+/* Under 600 px the page list is one dropdown on top (the side column would leave about 110 px for the page),
+   and the cockpit's mark rail steps aside while Settings is open. */
+.settings .st-nav[hidden] {
+  display: none;
+}
+.settings .st-nav-select {
+  margin: 0 12px 10px;
+  height: 30px;
+  min-width: 0;
+  padding: 0 8px;
+  border: 0;
+  border-radius: 8px;
+  background: var(--fill);
+  color: var(--label);
+  font: inherit;
+}
+@media (max-width: 599px) {
+  .settings,
+  .settings.settings--inline {
+    grid-template-columns: minmax(0, 1fr);
+    grid-template-rows: auto minmax(0, 1fr);
+  }
+  .settings .st-side {
+    border-right: 0;
+    border-bottom: 1px solid var(--sep);
+  }
+  .cockpit:has(.settings--inline) .ck-side {
+    display: none;
+  }
+  /* The cockpit is a grid whose first column is the sidebar: with the sidebar gone the page must take that column's place
+     (else it lands in the 57px strip column). The data attribute is the same rule without :has(), set by the cockpit. */
+  .cockpit:has(.settings--inline),
+  .cockpit[data-settings-open] {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .cockpit[data-settings-open] > .ck-side,
+  .cockpit[data-settings-open] > .ck-resize--side {
+    display: none;
+  }
 }

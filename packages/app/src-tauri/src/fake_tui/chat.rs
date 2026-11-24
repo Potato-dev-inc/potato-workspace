@@ -17,9 +17,19 @@ struct Viewer {
     resets: usize,
 }
 
-impl Sink for Mutex<Viewer> {
+/// The viewer behind a lock; a type of this crate, so it may implement the engine's `Sink`.
+struct SharedViewer(Mutex<Viewer>);
+
+impl std::ops::Deref for SharedViewer {
+    type Target = Mutex<Viewer>;
+    fn deref(&self) -> &Mutex<Viewer> {
+        &self.0
+    }
+}
+
+impl Sink for SharedViewer {
     fn send(&self, _pane_id: &str, items: Vec<ChatItem>, reset: bool) {
-        let mut viewer = self.lock();
+        let mut viewer = self.0.lock();
         viewer.batches += 1;
         if reset {
             viewer.resets += 1;
@@ -50,12 +60,12 @@ impl PaneLookup for Screens {
 /// An open chat over one pane. Dropping it stops its reader.
 pub struct ChatProbe {
     watchers: Watchers,
-    viewer: Arc<Mutex<Viewer>>,
+    viewer: Arc<SharedViewer>,
 }
 
 impl ChatProbe {
     pub(super) fn open(registry: Arc<Mutex<PaneRegistry>>, pane_id: &str, agent_type: &str) -> Self {
-        let viewer = Arc::new(Mutex::new(Viewer::default()));
+        let viewer = Arc::new(SharedViewer(Mutex::new(Viewer::default())));
         let watchers = Watchers::new(viewer.clone(), Arc::new(Screens(registry)));
         let first = watchers.open_screen(pane_id, "w", agent_type);
         {
@@ -73,7 +83,7 @@ impl ChatProbe {
         let source = crate::tui::profile_for(source_agent)
             .session_chat()
             .unwrap_or_else(|| panic!("{source_agent} has no session file source"));
-        let viewer = Arc::new(Mutex::new(Viewer::default()));
+        let viewer = Arc::new(SharedViewer(Mutex::new(Viewer::default())));
         let watchers = Watchers::new(viewer.clone(), Arc::new(crate::commands::RegistryPanes(registry)));
         let first = watchers.open(pane_id, "w", source);
         {

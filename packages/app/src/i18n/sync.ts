@@ -28,7 +28,7 @@ export function startLanguageSync(): () => void {
       if (!disposed) setLanguagePref(isLanguagePref(settings.ui_language) ? settings.ui_language : 'auto');
     })
     .catch(() => undefined);
-  void import('@tauri-apps/api/event')
+  void import('../lib/events')
     .then(({ listen }) =>
       listen<{ ui_language?: unknown } | null>('settings://changed', (event) => {
         const next = event.payload?.ui_language;

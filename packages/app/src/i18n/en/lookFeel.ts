@@ -1,7 +1,7 @@
 // English messages: lookFeel (Settings > Look and feel page rows). Keys are dotted (`lookFeel.something`).
 export const lookFeel = {
   "lookFeel.language.label": "Language",
-  "lookFeel.language.hint": "Automatic follows Windows.",
+  "lookFeel.language.hint": "Automatic follows your system.",
   "lookFeel.language.auto": "Automatic",
   "lookFeel.theme.label": "Theme",
   "lookFeel.theme.hint": "Light, light but softer, dark, or follow your computer.",
@@ -32,7 +32,9 @@ export const lookFeel = {
   "lookFeel.confirmClose.label": "Ask before closing a working agent",
   "lookFeel.confirmClose.hint": "Asks first when you close an agent or quit from the tray while it works.",
   "lookFeel.keepAwake.label": "Keep this PC awake while agents work",
-  "lookFeel.keepAwake.hint": "Your agents keep going when you lock the PC (Win+L). The screen can still turn off.",
+  "lookFeel.keepAwake.hint": "Your agents keep going when you lock the PC. The screen can still turn off.",
+  "lookFeel.jumpOut.label": "Show questions that block an agent",
+  "lookFeel.jumpOut.hint": "When a question is only in the Inbox, a small card shows it. It never takes the keyboard.",
   "lookFeel.away.label": "Tell me what happened while I was away",
   "lookFeel.away.hint": "Shows what agents did after this many idle minutes. 0 turns it off.",
   "lookFeel.away.aria": "Minutes away before I hear what happened (0 is off)",

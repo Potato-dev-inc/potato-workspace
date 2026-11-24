@@ -9,8 +9,8 @@ use crate::agent_runs::transcript;
 use crate::operations::OperationSnapshot;
 use serde_json::Value;
 
-const CREATE: &str = include_str!("../../../tui/claude/fixtures/create_file_2_1_299.txt");
-const BASH: &str = include_str!("../../../tui/claude/fixtures/bash_simple_4_options_2_1_299.txt");
+const CREATE: &str = include_str!("../../../../crates/pm-core/src/tui/claude/fixtures/create_file_2_1_299.txt");
+const BASH: &str = include_str!("../../../../crates/pm-core/src/tui/claude/fixtures/bash_simple_4_options_2_1_299.txt");
 
 fn action_of(screen: &str) -> Value {
     let prompt = crate::pane_prompt::detect_in_screen("claude", screen, false).expect("a dialog");
@@ -102,8 +102,8 @@ fn the_same_command_asked_again_after_its_dialog_went_away_is_a_new_entry() {
 // dialog: the pane at the phone's 52 columns, then at the desktop's 120). VERIFY-R11 #2: answering
 // from the phone's Keys panel re-wrapped the pane, the command text broke at different places, and the
 // transcript listed the approval once per width change (live: wrapped, wide, wrapped = 3 entries).
-const BASH_52: &str = include_str!("../../../tui/claude/fixtures/bash_approval_52col_2_1_299_live.txt");
-const BASH_WIDE: &str = include_str!("../../../tui/claude/fixtures/bash_approval_wide_2_1_299_live.txt");
+const BASH_52: &str = include_str!("../../../../crates/pm-core/src/tui/claude/fixtures/bash_approval_52col_2_1_299_live.txt");
+const BASH_WIDE: &str = include_str!("../../../../crates/pm-core/src/tui/claude/fixtures/bash_approval_wide_2_1_299_live.txt");
 
 #[test]
 fn one_approval_read_at_two_widths_is_one_prompt() {

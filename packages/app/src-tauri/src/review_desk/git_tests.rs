@@ -227,7 +227,7 @@ impl DeskIo for RealIo {
         now_ms()
     }
     fn clean(&self) -> Clean {
-        Clean { text: Box::new(|raw| clean_line(raw, &test_ctx(), Some(HOME))) }
+        Clean { text: Box::new(|raw| clean_line(raw, &test_ctx(), Some(HOME))), path: None }
     }
     fn clean_patch(&self, raw: &str) -> String {
         redact_patch(raw, &test_ctx(), Some(HOME))

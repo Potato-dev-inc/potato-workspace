@@ -1,7 +1,7 @@
 use super::*;
 use std::sync::atomic::{AtomicUsize, Ordering};
 
-const CLAUDE: &str = include_str!("../tui/claude/lend_proxy.toml");
+const CLAUDE: &str = include_str!("../../crates/pm-core/src/tui/claude/lend_proxy.toml");
 const FAR: u64 = 9_999_999_999_999;
 
 #[derive(Default)]

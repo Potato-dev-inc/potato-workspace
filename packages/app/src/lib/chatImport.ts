@@ -3,7 +3,7 @@
 // src-tauri/src/commands/chat_import.rs. Nothing here reads an agent folder: that starts only after "Find my chats".
 import { invoke } from '@tauri-apps/api/core';
 import { t } from '../i18n';
-import { listen } from '@tauri-apps/api/event';
+import { listen } from './events';
 import { useSyncExternalStore } from 'react';
 import { formatBytes, type ChatIndexStatus } from './chatIndex';
 import type { ChatItem } from './sessionChatModel';

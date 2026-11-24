@@ -5,11 +5,14 @@ import { previewLabel } from '../../lib/pane-preview';
 import { pointApi } from '../../lib/point-api';
 import { agentLabel, useAgentRegistry } from '../../lib/agentRegistry';
 import { requestChatJump } from '../../lib/chatJump';
+import { isFarKey } from '../../lib/host/placeKey';
+import type { FarChatRow } from '../../lib/host/farChats';
 import { requestContentSearch } from '../../lib/files-search-request';
 import { requestBringChats, requestImportedChat } from '../../lib/chatImport';
 import { liveRoomApi, requestGoLive } from '../../lib/live-room';
 import { LiveStatusContext } from './live/useLiveRoom';
 import type { ChatHit } from '../../lib/chatSearch';
+import type { Host } from '../../lib/host/host';
 import { useChatSearch } from '../../hooks/useChatSearch';
 import { useChatFacets } from '../../hooks/useChatFacets';
 import { dropShortcut, hasChatFilters, mergeChatFilters, parseChatQuery, type ChatFilters } from '../../lib/chatFilters';
@@ -85,6 +88,10 @@ export function Palette({
   companions,
   onOpenCompanion,
   onNewCompanion,
+  farHosts,
+  openFar,
+  farSelected,
+  farChats,
 }: {
   c: CockpitApi;
   /** `chats`: open straight in "Search all chats" (Ctrl+Shift+F by default). */
@@ -122,6 +129,14 @@ export function Palette({
   companions?: CompanionView[] | null;
   onOpenCompanion?: (id: string) => void;
   onNewCompanion?: () => void;
+  /** The other PCs that are online: "Search all chats" asks them too and marks their hits with the PC's name. */
+  farHosts?: readonly Host[];
+  /** Opens the chat of another PC under its key (`dev:<node>:<id>`) in the main area; false when that PC does not list it now (a closed chat). */
+  openFar?: (key: string) => boolean;
+  /** The chat of another PC on screen now (its key), when one is: "Undo last turn" is for that chat, never for a chat of this PC that is not on screen. */
+  farSelected?: string | null;
+  /** The chats of the other PCs that are online, as this PC lists them: each is a row that opens it (through `openFar`). */
+  farChats?: readonly FarChatRow[];
 }) {
   const [query, setQuery] = useState('');
   const [index, setIndex] = useState(0);
@@ -134,7 +149,7 @@ export function Palette({
   const facets = useChatFacets(mode === 'chats');
   const parsed = useMemo(() => parseChatQuery(query, facets), [query, facets]);
   const filters = useMemo(() => mergeChatFilters(chips, parsed.typed), [chips, parsed]);
-  const chats = useChatSearch(parsed.text, filters, mode === 'chats');
+  const chats = useChatSearch(parsed.text, filters, mode === 'chats', farHosts);
   // A chip picked for a filter takes over from a typed shortcut for it (the shortcut leaves the box).
   const pickChip = (key: ChipKey, value: string | undefined) => {
     setChips((now) => ({ ...now, [key]: value }) as ChatFilters);
@@ -188,9 +203,20 @@ export function Palette({
         id: `pane:${id}`,
         group: 'Panes',
         title: heading.primary,
-        desc: `${paneSubline(p.info, agentName, projectWithCopy(p.info.cwd), multiLogin)} · ${waiting.has(id) ? 'Needs you' : stateText(p.status)}`,
+        desc: `${paneSubline(p.info, agentName, projectWithCopy(p.info.cwd), multiLogin)} · ${waiting.has(id) ? t('pane.needsYou') : stateText(p.status)}`,
         icon: <AgentLogo id={p.info.agent_type} name={agentName} size={14} decorative />,
         run: () => c.select(id),
+      });
+    }
+    for (const f of farChats ?? []) {
+      out.push({
+        id: `far:${f.key}`,
+        group: 'Panes',
+        title: f.title,
+        desc: `${f.device} · ${f.folder ? `${f.folder} · ` : ''}${stateText(f.status)}`,
+        keywords: `${f.agentLabel} ${f.device} ${f.folder}`,
+        icon: <AgentLogo id={f.agent} name={f.agentLabel} size={14} decorative />,
+        run: () => void openFar?.(f.key),
       });
     }
     // Plain shells (PowerShell, bash) go in their own group under the agents, not next to them.
@@ -198,6 +224,7 @@ export function Palette({
     const chatIds = !terminals && laneView?.labs_enabled ? chatAgentIds(laneView) : null;
     for (const e of c.launchEntries) {
       if (e.disabled) continue;
+      if (!terminals && e.shell) continue; // terminals off: chat agents only, no shell
       if (chatIds && !e.shell && !chatIds.has(e.type.toLowerCase())) continue;
       const row: Item = {
         id: `new:${e.type}`,
@@ -258,6 +285,7 @@ export function Palette({
         { id: 'close', title: 'Close this agent', icon: <IconClose />, keywords: 'close end quit remove' },
       ] as const;
       for (const a of paneActions) {
+        if (a.id === 'reflow' && !terminals) continue; // a terminal-only action
         out.push({
           id: `act:${a.id}`,
           group: 'Actions',
@@ -271,7 +299,7 @@ export function Palette({
       for (const row of guidePaletteRows(guideOn)) {
         out.push({ id: row.id, group: 'Actions', title: row.title, desc: c.names.get(sel), keywords: row.keywords, icon: <IconInfo />, run: () => requestPaneAction(sel, 'guide') });
       }
-      if (onUndoLastTurn) {
+      if (onUndoLastTurn && !farSelected) {
         out.push({
           id: 'act:undo',
           group: 'Actions',
@@ -291,6 +319,16 @@ export function Palette({
           run: () => onWhatBroke(sel),
         });
       }
+    }
+    if (onUndoLastTurn && farSelected) {
+      out.push({
+        id: 'act:undo',
+        group: 'Actions',
+        title: 'Undo last turn…',
+        desc: 'Restore files to before the last turn. The agent keeps its memory.',
+        icon: <IconReflow />,
+        run: () => onUndoLastTurn(farSelected),
+      });
     }
     for (const p of c.registry.paneList) {
       const id = p.info.id;
@@ -581,7 +619,7 @@ export function Palette({
     // One row per id: a repeated id makes React keep stale copies of the row while you type.
     const seen = new Set<string>();
     return out.filter((i) => (seen.has(i.id) ? false : (seen.add(i.id), true)));
-  }, [c, terminals, laneView, onOpenDoctor, onStopAll, onOpenMemory, onOpenPlans, onOpenScores, onOpenTeam, onOpenReview, onReviewRiskiest, onOpenStore, onUndoLastTurn, onWhatBroke, onOpenWelcome, onStartCrew, onOpenShortcuts, onOpenInbox, needsYou, openedStandbyPanes, keysVersion, missionsOn, nightOn, guideOn, onOpenMorning, companions, onOpenCompanion, onNewCompanion, liveStatus, liveOn, deskAway, deskStore, t]);
+  }, [c, terminals, laneView, onOpenDoctor, onStopAll, onOpenMemory, onOpenPlans, onOpenScores, onOpenTeam, onOpenReview, onReviewRiskiest, onOpenStore, onUndoLastTurn, farSelected, farChats, openFar, onWhatBroke, onOpenWelcome, onStartCrew, onOpenShortcuts, onOpenInbox, needsYou, openedStandbyPanes, keysVersion, missionsOn, nightOn, guideOn, onOpenMorning, companions, onOpenCompanion, onNewCompanion, liveStatus, liveOn, deskAway, deskStore, t]);
 
   const filtered = useMemo(
     () => items.filter((i) => matchesQuery(`${i.title} ${i.desc ?? ''} ${i.keywords ?? ''} ${i.group}`, query)),
@@ -593,6 +631,8 @@ export function Palette({
   useEffect(() => {
     listRef.current?.querySelector<HTMLElement>('[data-active="true"]')?.scrollIntoView({ block: 'nearest' });
   }, [index, filtered, chats.hits]);
+
+  const [opener] = useState<Element | null>(() => (typeof document === 'undefined' ? null : document.activeElement));
 
   const choose = (item: Item | undefined) => {
     if (!item) return;
@@ -614,7 +654,13 @@ export function Palette({
       requestImportedChat(hit.agent, hit.session, hit.itemId);
       return;
     }
-    if (!c.registry.panes.has(hit.paneId)) {
+    // A chat that lives on another PC opens as the normal chat screen of that PC, at the message; one it no longer lists shows what was kept.
+    if (isFarKey(hit.paneId) && openFar?.(hit.paneId)) {
+      onClose();
+      requestChatJump(hit.paneId, hit.itemId);
+      return;
+    }
+    if (isFarKey(hit.paneId) || !c.registry.panes.has(hit.paneId)) {
       setClosedHit(hit);
       return;
     }
@@ -637,7 +683,13 @@ export function Palette({
     } else if (e.key === 'Escape') {
       e.preventDefault();
       if (closedHit) setClosedHit(null);
-      else onClose();
+      else {
+        // Esc goes back to the message box of the chat that is open, if there is one; else to what had the focus (never the page body).
+        const composer = document.querySelector<HTMLTextAreaElement>('textarea[data-chat-composer]:not(:disabled)');
+        const back = composer ?? (opener instanceof HTMLElement && opener.isConnected ? opener : null);
+        back?.focus({ preventScroll: true });
+        onClose();
+      }
     } else if (e.key === 'Backspace' && mode === 'chats' && !query) {
       // Nothing left to delete: back to the commands.
       e.preventDefault();
@@ -648,7 +700,7 @@ export function Palette({
   let lastGroup = '';
   return (
     <div className="ck-scrim ck-scrim--top" onMouseDown={onClose}>
-      <div className="ck-palette" role="dialog" aria-label="Command palette" onMouseDown={(e) => e.stopPropagation()}>
+      <div className="ck-palette" role="dialog" aria-label={t('r10.palette')} onMouseDown={(e) => e.stopPropagation()}>
         <input
           className="ck-palette-input"
           autoFocus
@@ -664,7 +716,7 @@ export function Palette({
         {mode === 'chats' && (
           <div className="ck-palette-mode">
             <span>{SEARCH_CHATS_TITLE}</span>
-            <span className="ck-palette-mode-note">Chats you have opened</span>
+            <span className="ck-palette-mode-note">{t('r21.sw.chatsYouHaveOpened')}</span>
           </div>
         )}
         {mode === 'chats' && !closedHit && (
@@ -699,7 +751,7 @@ export function Palette({
               />
             </>
           )}
-          {mode === 'commands' && filtered.length === 0 && <p className="ck-sub ck-pad">No matches</p>}
+          {mode === 'commands' && filtered.length === 0 && <p className="ck-sub ck-pad">{t('r21.sw.noMatches')}</p>}
           {mode === 'commands' && filtered.map((item, i) => {
             const header = item.group !== lastGroup ? item.group : null;
             lastGroup = item.group;

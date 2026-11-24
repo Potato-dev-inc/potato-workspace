@@ -42,6 +42,7 @@ export const EXPORTABLE_SETTINGS: readonly string[] = [
   'desktop_pet_size',
   'desktop_pet_quiet',
   'keep_awake_while_working',
+  'jump_out_cards_enabled',
   'helper_answers_enabled',
   'early_versions_enabled',
 ];

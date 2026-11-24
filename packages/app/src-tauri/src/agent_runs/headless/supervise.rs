@@ -310,7 +310,6 @@ impl Supervisor {
                 // Empty text + newline writes just Enter.
                 let _ = crate::pty::registry_write_input(
                     &self.registry,
-                    &self.app,
                     pane_id,
                     "",
                     true,
@@ -516,7 +515,6 @@ impl Supervisor {
             if crate::pane_prompt::detect(&self.registry, pane_id, false).is_none() {
                 let sent = crate::pty::registry_write_input(
                     &self.registry,
-                    &self.app,
                     pane_id,
                     clear,
                     false,

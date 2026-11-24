@@ -227,6 +227,12 @@ describe('Agents: every row renders', () => {
     expect(heads).toEqual(['Add an agent', 'Your agents', 'Check my setup', 'Sign in', 'Speed', 'Standbys', 'Models', 'Rules for all agents', 'How they run', 'Handoff', 'Updates', 'Chat', 'Live updates', 'Keep going', 'Where agents start', 'Linux', 'Same file', '']);
   });
 
+  it('says "Add an agent" once as a heading and not again as a second named region', async () => {
+    await mount();
+    const named = [...m.host.querySelectorAll('h1,h2,h3,h4,[role="heading"],section[aria-label],[role="region"]')].filter((e) => (e.getAttribute('aria-label') ?? e.textContent ?? '').trim() === 'Add an agent');
+    expect(named.map((e) => e.tagName + '.' + e.className)).toEqual(['H2.']);
+  });
+
   it('mounts the same-file switch under Same file and it is found by search', async () => {
     await mount();
     const row = rowOf('collision');

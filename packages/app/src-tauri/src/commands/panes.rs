@@ -9,11 +9,11 @@ pub async fn list_panes(state: State<'_, AppState>) -> Result<Vec<PaneInfo>, Str
 
 #[tauri::command]
 pub async fn spawn_pane(
-    app: AppHandle,
+    _app: AppHandle,
     state: State<'_, AppState>,
     args: SpawnPaneArgs,
 ) -> Result<String, String> {
-    registry_spawn_pane(&state.registry, &app, args)
+    registry_spawn_pane(&state.registry, args)
 }
 
 #[tauri::command]
@@ -54,7 +54,7 @@ pub(super) fn default_true() -> bool {
 
 #[tauri::command]
 pub async fn write_pane_input(
-    app: AppHandle,
+    _app: AppHandle,
     state: State<'_, AppState>,
     pane_id: String,
     args: WriteInputArgs,
@@ -67,7 +67,6 @@ pub async fn write_pane_input(
     );
     registry_write_input(
         &state.registry,
-        &app,
         &pane_id,
         &args.text,
         args.append_newline,

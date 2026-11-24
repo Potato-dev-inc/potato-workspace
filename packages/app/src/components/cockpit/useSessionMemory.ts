@@ -78,14 +78,22 @@ export function useSessionMemory(opts: {
     return true;
   }, [panes, select]);
 
-  const dismiss = useCallback(() => setEnded([]), []);
+  // The stored memory forgets an ended terminal at once (the delayed drop above never fires while the pane list keeps changing, or the app quits first, and the banner came back on every start).
+  const forgetEnded = useCallback((ids: ReadonlySet<string>) => patchSessionMemory((m) => ({ ...m, terminals: m.terminals.filter((t) => !ids.has(t.id)) })), []);
+  const dismiss = useCallback(() => {
+    forgetEnded(new Set(keep.map((t) => t.id)));
+    setEnded([]);
+  }, [keep, forgetEnded]);
   const reopen = useCallback(async () => {
     for (const t of keep) {
       // These were terminals: they come back as terminals, whatever "Show terminals" says.
       const id = await newAgent(t.agent, t.account, false, t.cwd || undefined, undefined, 'terminal');
-      if (id) setEnded((cur) => (cur ?? []).filter((x) => x.id !== t.id));
+      if (id) {
+        forgetEnded(new Set([t.id]));
+        setEnded((cur) => (cur ?? []).filter((x) => x.id !== t.id));
+      }
     }
-  }, [keep, newAgent]);
+  }, [keep, newAgent, forgetEnded]);
 
   return { ended: keep, dismiss, reopen, restoreSelection };
 }

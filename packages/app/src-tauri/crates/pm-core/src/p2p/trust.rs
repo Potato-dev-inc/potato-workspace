@@ -1,0 +1,530 @@
+//! The trust list: which computers this one has been paired with, and what each may do. It implements
+//! `Permissions`, so the link layer's admission check reads it directly.
+//!
+//! - **No secrets.** An entry holds the peer's node id, its device public key, a name, the capabilities the person
+//!   turned on, and when it was added. Public halves only.
+//! - **Signed.** The whole list is signed with this device's key (`TrustSigner`). A list that was edited outside the
+//!   app, copied from another computer, or cut short fails the check on load: it is ignored and `tampered()` says so.
+//! - **No file here.** Bytes go through `TrustStorage`; the app's file lives in `pairing_commands.rs`, tests use memory.
+//! - **Everything off.** A new entry has no capability. Only the person turns one on (`set`), never a peer.
+//! - Pairing itself is not a permission: `allowed(_, "pair")` is true only while the person shows a code.
+
+use std::collections::BTreeSet;
+use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::{Arc, Mutex, OnceLock};
+
+use ed25519_dalek::{Signature, Signer, Verifier, VerifyingKey};
+use serde_json::{json, Value};
+
+use super::capability::{self, Permissions};
+use super::endpoint::NodeId;
+use crate::keys::SigningKey;
+use crate::keys::KeyStore;
+
+const LIST_PREFIX: &[u8] = b"pm/p2p/trust-list/v1";
+const NAME_MAX: usize = 40;
+
+/// Where the signed bytes live.
+pub trait TrustStorage: Send + Sync {
+    fn load(&self) -> Option<Vec<u8>>;
+    fn save(&self, bytes: &[u8]) -> Result<(), String>;
+}
+
+/// Signs the list with this device's key.
+pub trait TrustSigner: Send + Sync {
+    fn device_pub(&self) -> Result<[u8; 32], String>;
+    fn sign(&self, message: &[u8]) -> Result<[u8; 64], String>;
+}
+
+/// Reads the device key from the keystore the first time it is needed, never at app start.
+pub struct KeyStoreSigner {
+    keys: KeyStore,
+    key: OnceLock<SigningKey>,
+}
+
+impl KeyStoreSigner {
+    pub fn new(keys: KeyStore) -> Self {
+        Self { keys, key: OnceLock::new() }
+    }
+
+    fn key(&self) -> Result<&SigningKey, String> {
+        if let Some(k) = self.key.get() {
+            return Ok(k);
+        }
+        let k = self.keys.device_sign()?;
+        Ok(self.key.get_or_init(|| k))
+    }
+}
+
+impl TrustSigner for KeyStoreSigner {
+    fn device_pub(&self) -> Result<[u8; 32], String> {
+        Ok(self.key()?.verifying_key().to_bytes())
+    }
+
+    fn sign(&self, message: &[u8]) -> Result<[u8; 64], String> {
+        Ok(self.key()?.sign(message).to_bytes())
+    }
+}
+
+#[derive(Default)]
+pub struct MemoryTrustStorage {
+    bytes: Mutex<Option<Vec<u8>>>,
+}
+
+impl MemoryTrustStorage {
+    pub fn new() -> Arc<Self> {
+        Arc::new(Self::default())
+    }
+
+    /// Replace the stored bytes (a test playing the person who edits the file).
+    pub fn put(&self, bytes: Vec<u8>) {
+        *self.bytes.lock().unwrap_or_else(|p| p.into_inner()) = Some(bytes);
+    }
+}
+
+impl TrustStorage for MemoryTrustStorage {
+    fn load(&self) -> Option<Vec<u8>> {
+        self.bytes.lock().unwrap_or_else(|p| p.into_inner()).clone()
+    }
+
+    fn save(&self, bytes: &[u8]) -> Result<(), String> {
+        self.put(bytes.to_vec());
+        Ok(())
+    }
+}
+
+/// How much a paired computer may do when it runs agents here.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum RemoteLevel {
+    /// Read live transcripts and lists. Nothing else.
+    Watch,
+    /// Watch, plus answer an agent's question, message a running agent, stop and continue it.
+    Answer,
+    /// Answer, plus work on this PC: start agents, use the terminal, change files. One switch, off by default.
+    Full,
+}
+
+/// One paired computer.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct TrustedDevice {
+    pub node: NodeId,
+    pub device_pub: [u8; 32],
+    pub name: String,
+    pub added_at: u64,
+    pub allowed: BTreeSet<String>,
+}
+
+/// Characters that draw nothing or change how the text around them reads: zero-width and joiner characters, direction marks and
+/// overrides (a name can be made to read backwards), soft hyphen, word joiner, the byte-order mark, variation selectors, tags.
+pub fn is_invisible(c: char) -> bool {
+    matches!(c as u32,
+        0x00AD | 0x034F | 0x061C | 0x115F | 0x1160 | 0x17B4 | 0x17B5 | 0x180B..=0x180E | 0x200B..=0x200F | 0x202A..=0x202E | 0x2060..=0x206F
+        | 0x3164 | 0xFE00..=0xFE0F | 0xFEFF | 0xFFA0 | 0xFFF9..=0xFFFB | 0xE0000..=0xE0FFF)
+}
+
+pub fn clean_name(raw: &str) -> String {
+    let s: String = raw.chars().filter(|c| !c.is_control() && !is_invisible(*c)).collect();
+    let s = s.trim();
+    let s: String = s.chars().take(NAME_MAX).collect();
+    if s.is_empty() {
+        "Another computer".to_string()
+    } else {
+        s
+    }
+}
+
+fn hex(b: &[u8]) -> String {
+    b.iter().map(|x| format!("{x:02x}")).collect()
+}
+
+fn unhex<const N: usize>(s: &str) -> Option<[u8; N]> {
+    if s.len() != N * 2 || !s.is_ascii() {
+        return None;
+    }
+    let mut out = [0u8; N];
+    for (i, o) in out.iter_mut().enumerate() {
+        *o = u8::from_str_radix(&s[i * 2..i * 2 + 2], 16).ok()?;
+    }
+    Some(out)
+}
+
+/// The bytes that are signed: a fixed layout, independent of JSON spacing or key order.
+fn signed_message(owner: &[u8; 32], entries: &[TrustedDevice]) -> Vec<u8> {
+    let mut sorted: Vec<&TrustedDevice> = entries.iter().collect();
+    sorted.sort_by_key(|e| e.node);
+    let mut m = Vec::new();
+    m.extend_from_slice(LIST_PREFIX);
+    m.extend_from_slice(owner);
+    m.extend_from_slice(&(sorted.len() as u32).to_be_bytes());
+    for e in sorted {
+        m.extend_from_slice(&e.node.0);
+        m.extend_from_slice(&e.device_pub);
+        m.extend_from_slice(&e.added_at.to_be_bytes());
+        m.extend_from_slice(&(e.name.len() as u32).to_be_bytes());
+        m.extend_from_slice(e.name.as_bytes());
+        m.extend_from_slice(&(e.allowed.len() as u32).to_be_bytes());
+        for c in &e.allowed {
+            m.extend_from_slice(&(c.len() as u32).to_be_bytes());
+            m.extend_from_slice(c.as_bytes());
+        }
+    }
+    m
+}
+
+fn encode(owner: &[u8; 32], entries: &[TrustedDevice], sig: &[u8; 64]) -> Vec<u8> {
+    let items: Vec<Value> = entries
+        .iter()
+        .map(|e| {
+            json!({
+                "node": e.node.to_hex(),
+                "device": hex(&e.device_pub),
+                "name": e.name,
+                "added_at": e.added_at,
+                "allowed": e.allowed.iter().collect::<Vec<_>>(),
+            })
+        })
+        .collect();
+    json!({ "v": 1, "owner": hex(owner), "devices": items, "sig": hex(sig) }).to_string().into_bytes()
+}
+
+fn decode(bytes: &[u8]) -> Option<([u8; 32], Vec<TrustedDevice>, [u8; 64])> {
+    let v: Value = serde_json::from_slice(bytes).ok()?;
+    if v.get("v")?.as_u64()? != 1 {
+        return None;
+    }
+    let owner = unhex::<32>(v.get("owner")?.as_str()?)?;
+    let sig = unhex::<64>(v.get("sig")?.as_str()?)?;
+    let mut out = Vec::new();
+    for d in v.get("devices")?.as_array()? {
+        let allowed = d.get("allowed")?.as_array()?.iter().map(|c| c.as_str().map(str::to_string)).collect::<Option<BTreeSet<_>>>()?;
+        out.push(TrustedDevice {
+            node: NodeId(unhex::<32>(d.get("node")?.as_str()?)?),
+            device_pub: unhex::<32>(d.get("device")?.as_str()?)?,
+            name: d.get("name")?.as_str()?.to_string(),
+            added_at: d.get("added_at")?.as_u64()?,
+            allowed,
+        });
+    }
+    Some((owner, out, sig))
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, thiserror::Error)]
+pub enum TrustError {
+    #[error("not a paired computer")]
+    Unknown,
+    #[error("that cannot be turned on")]
+    NotPermissionable,
+    #[error("could not save the list: {0}")]
+    Save(String),
+}
+
+pub struct TrustList {
+    storage: Arc<dyn TrustStorage>,
+    signer: Arc<dyn TrustSigner>,
+    entries: Mutex<Vec<TrustedDevice>>,
+    tampered: AtomicBool,
+    /// The list is whole and properly signed, but by another key than this PC has now (the key was reset or lost).
+    key_changed: AtomicBool,
+    pairing_open: AtomicBool,
+    link_open: AtomicBool,
+    account_open: AtomicBool,
+}
+
+impl TrustList {
+    /// Reads and checks the stored list. A list that fails the check (wrong signature, another device's list,
+    /// garbage) is ignored: the list starts empty and `tampered()` is true until the next change is saved.
+    pub fn open(storage: Arc<dyn TrustStorage>, signer: Arc<dyn TrustSigner>) -> Arc<Self> {
+        let mut entries = Vec::new();
+        let (mut tampered, mut key_changed) = (false, false);
+        if let Some(bytes) = storage.load() {
+            match Self::verified(&bytes, signer.as_ref()) {
+                Some(list) => entries = list,
+                None => {
+                    tampered = true;
+                    key_changed = Self::signed_by_another_key(&bytes, signer.as_ref());
+                }
+            }
+        }
+        Arc::new(Self {
+            storage,
+            signer,
+            entries: Mutex::new(entries),
+            tampered: AtomicBool::new(tampered),
+            key_changed: AtomicBool::new(key_changed),
+            pairing_open: AtomicBool::new(false),
+            link_open: AtomicBool::new(false),
+            account_open: AtomicBool::new(false),
+        })
+    }
+
+    fn verified(bytes: &[u8], signer: &dyn TrustSigner) -> Option<Vec<TrustedDevice>> {
+        let (owner, entries, sig) = decode(bytes)?;
+        if owner != signer.device_pub().ok()? {
+            return None;
+        }
+        let vk = VerifyingKey::from_bytes(&owner).ok()?;
+        vk.verify(&signed_message(&owner, &entries), &Signature::from_bytes(&sig)).ok()?;
+        Some(entries)
+    }
+
+    /// A list that checks out under its own key, which is not this PC's key now: not an edit but a reset key (Linux used to lose its
+    /// key on every restart). It was dropped all the same.
+    fn signed_by_another_key(bytes: &[u8], signer: &dyn TrustSigner) -> bool {
+        let Some((owner, entries, sig)) = decode(bytes) else { return false };
+        let Ok(now) = signer.device_pub() else { return false };
+        owner != now && VerifyingKey::from_bytes(&owner).is_ok_and(|vk| vk.verify(&signed_message(&owner, &entries), &Signature::from_bytes(&sig)).is_ok())
+    }
+
+    pub fn key_changed(&self) -> bool {
+        self.tampered() && self.key_changed.load(Ordering::SeqCst)
+    }
+
+    pub fn tampered(&self) -> bool {
+        self.tampered.load(Ordering::SeqCst)
+    }
+
+    pub fn list(&self) -> Vec<TrustedDevice> {
+        let mut v = self.entries.lock().unwrap_or_else(|p| p.into_inner()).clone();
+        v.sort_by(|a, b| a.added_at.cmp(&b.added_at).then(a.node.cmp(&b.node)));
+        v
+    }
+
+    pub fn get(&self, node: &NodeId) -> Option<TrustedDevice> {
+        self.entries.lock().unwrap_or_else(|p| p.into_inner()).iter().find(|e| e.node == *node).cloned()
+    }
+
+    pub fn is_trusted(&self, node: &NodeId) -> bool {
+        self.get(node).is_some()
+    }
+
+    /// Opened and closed by the pairing manager: strangers may connect to the pairing protocol only while a code
+    /// is on screen.
+    pub fn set_pairing_open(&self, open: bool) {
+        self.pairing_open.store(open, Ordering::SeqCst);
+    }
+
+    pub fn pairing_open(&self) -> bool {
+        self.pairing_open.load(Ordering::SeqCst)
+    }
+
+    /// The same, for a pairing link (far away): the link protocol is open to strangers only while a link is shown.
+    pub fn set_link_pairing_open(&self, open: bool) {
+        self.link_open.store(open, Ordering::SeqCst);
+    }
+
+    pub fn link_pairing_open(&self) -> bool {
+        self.link_open.load(Ordering::SeqCst)
+    }
+
+    /// The same, for the person's own account PCs: open while this PC's tick "Let my other PCs open this PC" is on.
+    /// Strangers are still refused by the pairing manager before any sheet appears.
+    pub fn set_account_pairing_open(&self, open: bool) {
+        self.account_open.store(open, Ordering::SeqCst);
+    }
+
+    pub fn account_pairing_open(&self) -> bool {
+        self.account_open.load(Ordering::SeqCst)
+    }
+
+    /// Adds (or refreshes the name of) a computer both people confirmed. A new entry has nothing turned on. The
+    /// same node with another device key is refused: that is not the computer that was paired.
+    pub fn add(&self, node: NodeId, device_pub: [u8; 32], name: &str, now_secs: u64) -> Result<(), TrustError> {
+        self.change(|entries| {
+            if let Some(e) = entries.iter_mut().find(|e| e.node == node) {
+                if e.device_pub != device_pub {
+                    return Err(TrustError::Unknown);
+                }
+                e.name = clean_name(name);
+            } else {
+                entries.push(TrustedDevice { node, device_pub, name: clean_name(name), added_at: now_secs, allowed: BTreeSet::new() });
+            }
+            Ok(())
+        })
+    }
+
+    pub fn remove(&self, node: &NodeId) -> Result<(), TrustError> {
+        self.change(|entries| {
+            let before = entries.len();
+            entries.retain(|e| e.node != *node);
+            if entries.len() == before {
+                Err(TrustError::Unknown)
+            } else {
+                Ok(())
+            }
+        })
+    }
+
+    pub fn set_permission(&self, node: &NodeId, capability: &str, on: bool) -> Result<(), TrustError> {
+        if !capability::PERMISSIONABLE.contains(&capability) {
+            return Err(TrustError::NotPermissionable);
+        }
+        self.change(|entries| {
+            let e = entries.iter_mut().find(|e| e.node == *node).ok_or(TrustError::Unknown)?;
+            // "Full control" is a level of running agents here: it cannot exist without the switch it belongs to.
+            if on
+                && (capability == capability::AGENTS_REMOTE_ANSWER || capability == capability::AGENTS_REMOTE_FULL || capability == capability::AGENTS_REMOTE_WEB || capability == capability::AGENTS_REMOTE_PCDOOR)
+                && !e.allowed.contains(capability::AGENTS_REMOTE)
+            {
+                return Err(TrustError::NotPermissionable);
+            }
+            if on {
+                e.allowed.insert(capability.to_string());
+            } else {
+                e.allowed.remove(capability);
+                if capability == capability::AGENTS_REMOTE {
+                    e.allowed.remove(capability::AGENTS_REMOTE_ANSWER);
+                    e.allowed.remove(capability::AGENTS_REMOTE_FULL);
+                    e.allowed.remove(capability::AGENTS_REMOTE_WEB);
+                    e.allowed.remove(capability::AGENTS_REMOTE_PCDOOR);
+                }
+            }
+            Ok(())
+        })
+    }
+
+    /// A PC of the person's own account gets Full on this one by default, with the account marker so Connect can say why. Once the
+    /// marker is there (granted, kept or lowered by the person) this does nothing: a level the person lowered stays lowered.
+    pub fn grant_account_default(&self, node: &NodeId) -> Result<(), TrustError> {
+        self.change(|entries| {
+            let e = entries.iter_mut().find(|e| e.node == *node).ok_or(TrustError::Unknown)?;
+            if !e.allowed.contains(capability::AGENTS_REMOTE_ACCOUNT) {
+                for c in [capability::AGENTS_REMOTE, capability::AGENTS_REMOTE_ANSWER, capability::AGENTS_REMOTE_FULL, capability::AGENTS_REMOTE_ACCOUNT] {
+                    e.allowed.insert(c.to_string());
+                }
+            }
+            Ok(())
+        })
+    }
+
+    /// "Lower" on the one-time card of a PC paired through the account before the default existed: only the marker is set (the card
+    /// is answered, nothing is raised).
+    pub fn lower_account_default(&self, node: &NodeId) -> Result<(), TrustError> {
+        self.change(|entries| {
+            let e = entries.iter_mut().find(|e| e.node == *node).ok_or(TrustError::Unknown)?;
+            e.allowed.insert(capability::AGENTS_REMOTE_ACCOUNT.to_string());
+            Ok(())
+        })
+    }
+
+    /// A PC that set this machine up over SSH gets Full and the ssh marker (`potato-host pair --stdio`). Paired again later it is
+    /// raised to Full again: running the setup is the person's own act. Never touches the account marker.
+    pub fn grant_ssh_full(&self, node: &NodeId) -> Result<(), TrustError> {
+        self.change(|entries| {
+            let e = entries.iter_mut().find(|e| e.node == *node).ok_or(TrustError::Unknown)?;
+            for c in [capability::AGENTS_REMOTE, capability::AGENTS_REMOTE_ANSWER, capability::AGENTS_REMOTE_FULL, capability::AGENTS_REMOTE_SSH] {
+                e.allowed.insert(c.to_string());
+            }
+            Ok(())
+        })
+    }
+
+    pub fn ssh_marked(&self, node: &NodeId) -> bool {
+        self.get(node).is_some_and(|e| e.allowed.contains(capability::AGENTS_REMOTE_SSH))
+    }
+
+    /// The person's own PC: paired through their account, or the one that set this machine up over SSH (the SSH key holder owns the box).
+    /// Such a PC is not asked to press and hold. A level the person lowered still applies: this lifts the hold, never a right.
+    pub fn own_pc(&self, node: &NodeId) -> bool {
+        self.account_marked(node) || self.ssh_marked(node)
+    }
+
+    pub fn account_marked(&self, node: &NodeId) -> bool {
+        self.get(node).is_some_and(|e| e.allowed.contains(capability::AGENTS_REMOTE_ACCOUNT))
+    }
+
+    /// The account no longer lists that PC: the run rights and the marker go at once. Only a marked PC is touched (a PC never paired
+    /// through the account keeps what its person set). Returns whether anything changed.
+    pub fn drop_account_rights(&self, node: &NodeId) -> bool {
+        if !self.account_marked(node) {
+            return false;
+        }
+        self.change(|entries| {
+            let e = entries.iter_mut().find(|e| e.node == *node).ok_or(TrustError::Unknown)?;
+            for c in [capability::AGENTS_REMOTE, capability::AGENTS_REMOTE_ANSWER, capability::AGENTS_REMOTE_FULL, capability::AGENTS_REMOTE_WEB, capability::AGENTS_REMOTE_PCDOOR, capability::AGENTS_REMOTE_ACCOUNT] {
+                e.allowed.remove(c);
+            }
+            Ok(())
+        })
+        .is_ok()
+    }
+
+    /// What this computer lets `node` do when it runs agents here: `None` while the switch is off.
+    pub fn remote_level(&self, node: &NodeId) -> Option<RemoteLevel> {
+        let e = self.get(node)?;
+        if !e.allowed.contains(capability::AGENTS_REMOTE) {
+            return None;
+        }
+        Some(if e.allowed.contains(capability::AGENTS_REMOTE_FULL) {
+            RemoteLevel::Full
+        } else if e.allowed.contains(capability::AGENTS_REMOTE_ANSWER) {
+            RemoteLevel::Answer
+        } else {
+            RemoteLevel::Watch
+        })
+    }
+
+    /// Whether this computer lets `node` ask to borrow its agent sign-ins.
+    pub fn lend_allowed(&self, node: &NodeId) -> bool {
+        self.get(node).is_some_and(|e| e.allowed.contains(capability::LEND_CONTROL))
+    }
+
+    /// Whether this computer lets `node` also reach it through its web address (only with the run switch on).
+    pub fn web_allowed(&self, node: &NodeId) -> bool {
+        self.get(node).is_some_and(|e| e.allowed.contains(capability::AGENTS_REMOTE) && e.allowed.contains(capability::AGENTS_REMOTE_WEB))
+    }
+
+    /// Whether this computer lets `node` also call its read-only routes through its public tunnel address, signed per request (only with
+    /// the run switch on). Read at every request, so turning it off, lowering the run switch or removing the device ends it at once.
+    pub fn pcdoor_allowed(&self, node: &NodeId) -> bool {
+        self.get(node).is_some_and(|e| e.allowed.contains(capability::AGENTS_REMOTE) && e.allowed.contains(capability::AGENTS_REMOTE_PCDOOR))
+    }
+
+    /// Renames a paired computer (the person's own label for it).
+    pub fn rename(&self, node: &NodeId, name: &str) -> Result<(), TrustError> {
+        self.change(|entries| {
+            let e = entries.iter_mut().find(|e| e.node == *node).ok_or(TrustError::Unknown)?;
+            e.name = clean_name(name);
+            Ok(())
+        })
+    }
+
+    /// Applies a change to a copy, signs and saves it, and only then keeps it: a failed save changes nothing.
+    fn change(&self, f: impl FnOnce(&mut Vec<TrustedDevice>) -> Result<(), TrustError>) -> Result<(), TrustError> {
+        let mut guard = self.entries.lock().unwrap_or_else(|p| p.into_inner());
+        let mut next = guard.clone();
+        f(&mut next)?;
+        let owner = self.signer.device_pub().map_err(TrustError::Save)?;
+        let sig = self.signer.sign(&signed_message(&owner, &next)).map_err(TrustError::Save)?;
+        self.storage.save(&encode(&owner, &next, &sig)).map_err(TrustError::Save)?;
+        *guard = next;
+        self.tampered.store(false, Ordering::SeqCst);
+        self.key_changed.store(false, Ordering::SeqCst);
+        Ok(())
+    }
+}
+
+impl Permissions for TrustList {
+    fn allowed(&self, peer: &NodeId, capability: &str) -> bool {
+        if capability == capability::PAIR {
+            return self.pairing_open();
+        }
+        if capability == capability::PAIR_LINK {
+            return self.link_pairing_open();
+        }
+        if capability == capability::PAIR_ACCOUNT {
+            return self.account_pairing_open();
+        }
+        self.entries.lock().unwrap_or_else(|p| p.into_inner()).iter().any(|e| {
+            e.node == *peer
+                && (e.allowed.contains(capability)
+                    // A device that may only borrow still has to be let in on the agents link, so its items can arrive. What it may
+                    // do there is its bridge rights (`Cap::Lend` alone); `remote_level` stays strict.
+                    || (capability == capability::AGENTS_REMOTE && e.allowed.contains(capability::LEND_CONTROL)))
+        })
+    }
+
+    /// The person's switch. Unknown computers and capabilities that are not switchable are ignored.
+    fn set(&self, peer: &NodeId, capability: &str, on: bool) {
+        let _ = self.set_permission(peer, capability, on);
+    }
+}

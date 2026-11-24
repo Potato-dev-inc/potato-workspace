@@ -398,12 +398,13 @@ async fn the_lend_switch_is_off_by_default_and_grants_the_lend_right_alone() {
 }
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 4)]
-async fn the_run_level_never_carries_the_lend_right_and_both_switches_add_up() {
+async fn a_linked_pc_reaches_the_lend_door_and_the_lend_switch_stands_alone() {
     let (_net, a, b) = memory();
     pair(&b, &a).await;
     let b_node = b.node();
     a.link.set_permission(&b_node, true, Some("full")).unwrap();
-    assert!(crate::mobile_pairing::authorize_link(&b_node, &["lend", "item"], "POST").is_err(), "Full control is not the lend right");
+    // A linked PC may reach the lend door; the door itself (lend_item_allowed) asks for the per-PC right or an own-account PC.
+    assert!(crate::mobile_pairing::authorize_link(&b_node, &["lend", "item"], "POST").is_ok(), "a linked PC reaches the lend door");
     a.link.set_lend(&b_node, true).unwrap();
     assert!(crate::mobile_pairing::authorize_link(&b_node, &["lend", "item"], "POST").is_ok());
     assert!(crate::mobile_pairing::authorize_link(&b_node, &["agents", "run"], "POST").is_ok());

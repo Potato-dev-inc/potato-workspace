@@ -87,6 +87,17 @@
   flex: 1;
   min-width: 0;
 }
+.dev-handoff {
+  display: block;
+  font-family: var(--font-mono, ui-monospace, monospace);
+  font-size: 12px;
+  padding: 8px 10px;
+  color: var(--label);
+  background: var(--fill, rgba(255, 255, 255, 0.06));
+  border-radius: 8px;
+  overflow-wrap: anywhere;
+  user-select: all;
+}
 .dev-code {
   font-family: var(--font-mono, ui-monospace, monospace);
   font-size: 26px;
@@ -858,7 +869,7 @@
 
 /* A pairing link: Copy + picture; the text is folded away. */
 .dev-linkbox-main { align-items: center; gap: 12px; }
-.dev-qr { flex: none; border-radius: 6px; background: #fff; }
+.dev-qr { flex: none; border-radius: 6px; background: var(--paper); }
 .dev-link-text > summary { cursor: pointer; font-size: 12px; color: var(--label-2, inherit); }
 .dev-link-text[open] > summary { margin-bottom: 6px; }
 .dev-more > summary { cursor: pointer; font-size: 12px; color: var(--label-2, inherit); }
@@ -950,8 +961,8 @@
   color: var(--label-1, inherit);
 }
 .cockpit .dev-pcchip.is-amber {
-  border-color: var(--amber, #d9a441);
-  color: var(--amber, #d9a441);
+  border-color: var(--risk);
+  color: var(--risk);
 }
 .cockpit .dev-pcchip-text {
   overflow: hidden;
@@ -1066,4 +1077,25 @@
 .dev-remote-term > .pm-terminal-stage {
   flex: 1;
   min-width: 0;
+}
+
+/* A far chat: a plain line above it when its PC is away or the chat ended there, then the normal pane screen. */
+.dev-farchat {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  min-height: 0;
+}
+.dev-farchat > .ck-pane {
+  flex: 1;
+  min-height: 0;
+}
+.dev-farchat-note {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 8px 16px;
+  color: var(--label-3);
+  border-bottom: 1px solid var(--sep);
 }

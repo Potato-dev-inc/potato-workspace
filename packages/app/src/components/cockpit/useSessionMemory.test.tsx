@@ -112,6 +112,8 @@ describe('useSessionMemory', () => {
     render({ ready: true, selectedId: null, panes: paneMap() });
     act(() => press('Dismiss'));
     expect(host.textContent).toBe('');
+    // Forgotten at once: a quit before the delay must not bring the banner back on the next start.
+    expect(readSessionMemory().terminals).toEqual([]);
     act(() => void vi.advanceTimersByTime(FORGET_DELAY_MS + 10));
     expect(readSessionMemory().terminals).toEqual([]);
   });

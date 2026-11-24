@@ -1,4 +1,5 @@
 // @vitest-environment jsdom
+import { resetEventHub } from './events';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 const invoke = vi.fn();
@@ -33,7 +34,10 @@ const setTauri = (on: boolean) => {
   else delete w.__TAURI_INTERNALS__;
 };
 
-beforeEach(() => setTauri(true));
+beforeEach(() => {
+  resetEventHub();
+  setTauri(true);
+});
 
 afterEach(() => {
   invoke.mockReset();

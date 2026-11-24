@@ -4,6 +4,7 @@
 //   shared folder: "fake_b is working in the same folder · Open fake_b · Ignore"
 // It reads the list when it mounts and again when `collision://changed` fires. `Open` focuses the other pane through
 // the callback the chat panel gives; `Ignore` hides the alert until a new file clashes. Nothing here pauses, stops or steers an agent.
+import { readUnlessCancelled } from '../../lib/pane-read';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import {
   collisionIgnore,
@@ -47,9 +48,9 @@ export function CollisionBanner({ paneId, onOpenPane }: { paneId: string; onOpen
   const alive = useRef(true);
 
   const reload = useCallback(() => {
-    collisionList().then(
+    readUnlessCancelled(() => collisionList(), () => alive.current).then(
       (next) => {
-        if (alive.current) setViews(Array.isArray(next) ? next : []);
+        if (alive.current && next !== undefined) setViews(Array.isArray(next) ? next : []);
       },
       () => {
         if (alive.current) setViews([]);

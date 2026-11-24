@@ -17,6 +17,8 @@ import { HostProvider } from '../../lib/host/context';
 import { ALL_CAPS, WATCH_CAPS, type Host } from '../../lib/host/host';
 import { placeKey } from '../../lib/host/placeKey';
 import type { PcLinkClient } from '../../lib/runtime/pclink';
+import { farCockpit } from '../../lib/host/farCockpit';
+import { farQuestionsOf } from '../../lib/runtime/farQuestions';
 
 vi.mock('@tauri-apps/api/core', () => ({ invoke: async () => null }));
 vi.mock('@tauri-apps/api/event', () => ({ listen: async () => () => undefined, emit: async () => undefined }));
@@ -128,7 +130,7 @@ async function render(host: Host, far: boolean): Promise<{ html: string; dom: HT
   const dom = box.querySelector<HTMLElement>('.ck-pane')!;
   const copy = dom.cloneNode(true) as HTMLElement;
   // The one allowed hint: the small badge. Its row in the right panel carries the same name.
-  copy.querySelectorAll('[data-testid="pane-place"]').forEach((el) => el.remove());
+  copy.querySelectorAll('[data-testid="pane-place"], [data-testid="pane-where"]').forEach((el) => el.remove());
   const html = copy.outerHTML.split(`dev:${NODE}:p1`).join('p1').split(NAME).join('This computer');
   return { html, dom };
 }
@@ -194,5 +196,78 @@ describe('sameness: the chat screen is the same HTML on this PC and on another P
     const reasons = new Set([...far.dom.querySelectorAll('[title]')].map((e) => e.getAttribute('title')).filter((v) => v?.includes(`Not on ${NAME} yet.`)));
     expect([...reasons]).toEqual([`Not on ${NAME} yet.`]);
     expect(far.dom.textContent).toContain(`Not on ${NAME} yet.`);
+  });
+
+  it('P4a: on a far PC of this version Ask aside and Share are the normal controls, switched on', async () => {
+    sent.length = 0;
+    const far = await render(farNow, true);
+    const buttons = [...far.dom.querySelectorAll<HTMLButtonElement>('button')];
+    const aside = buttons.find((b) => b.textContent === 'Ask aside')!;
+    const share = buttons.find((b) => b.getAttribute('aria-haspopup') === 'menu' && b.textContent === 'Share')!;
+    expect(aside.disabled).toBe(false);
+    expect(share.disabled).toBe(false);
+    expect(aside.title).not.toContain('yet');
+    // Share's entries are on (no "Not on <PC> yet" reason on any of them).
+    await act(async () => share.click());
+    const items = [...document.querySelectorAll<HTMLButtonElement>('[role="menuitem"]')];
+    expect(items.length).toBeGreaterThan(1);
+    expect(items.filter((i) => /Save as/.test(i.textContent ?? '')).every((i) => !i.disabled)).toBe(true);
+    await act(async () => share.click());
+  });
+});
+
+// A far chat's pending tool permission is the same card as a local chat's, never a bare "waiting" line. The far PC's own
+// `/pclink/questions` JSON goes through the real parser (`farQuestionsOf`), the real far cockpit and the real PaneView.
+describe('sameness: a far chat that waits on a tool permission', () => {
+  const RAW_QUESTION = { id: 'q1', pane_id: 'p1', kind: 'acp_permission', question: 'Claude asks permission: Show hostname and OS info', choices: [{ id: 'allow', label: 'Yes' }, { id: 'reject', label: 'No' }], allow_free_text: false, urgency: 'normal', created_at_ms: NOW, expires_at_ms: NOW + 600_000, state: 'pending' };
+  const waitingState = farChatState('p1', {
+    phase: 'needs_input',
+    status: 'waiting_input',
+    turnInFlight: true,
+    permissions: [{ askId: 1, title: 'Show hostname and OS info', toolKind: 'execute', questionId: 'q1', options: [{ id: 'allow', name: 'Yes', kind: 'allow_once' }, { id: 'reject', name: 'No', kind: 'reject_once' }], sinceMs: NOW }],
+  });
+
+  async function renderFar(withQuestion: boolean) {
+    const id = placeKey(farAll.place, 'p1');
+    const pane = { info: info(id, true), status: 'waiting_input' as const };
+    const base = cockpit(id, true);
+    const answerFar = vi.fn(async () => undefined);
+    const hide = vi.fn();
+    const questions = withQuestion ? farQuestionsOf(NODE, NAME, wire([RAW_QUESTION]), () => NOW) : [];
+    const c = farCockpit({ ...base, registry: { ...base.registry, paneList: [pane], panes: new Map([[id, pane]]) } } as CockpitApi, client, NAME, [], '', () => undefined, { questions, answer: answerFar, hide });
+    const waiting: Host = { ...farAll, invoke: async <T,>(cmd: string, args?: Record<string, unknown>) => (cmd === 'acp_chat_state' ? (wire(waitingState) as T) : farAll.invoke<T>(cmd, args)) };
+    await act(async () => root.render(<HostProvider host={waiting}><PaneView c={c} paneId={id} /></HostProvider>));
+    await settle(16);
+    return { dom: box.querySelector<HTMLElement>('.ck-pane')!, answerFar, hide, id };
+  }
+
+  it('shows the permission card with its question, the agent\'s own options and "Don\'t ask again", and Yes answers the far agent', async () => {
+    const { dom, answerFar } = await renderFar(true);
+    const card = dom.querySelector('[data-testid="decision-card"]')!;
+    expect(card).toBeTruthy();
+    expect(card.textContent).toContain('Run command');
+    expect(card.textContent).toContain('Show hostname and OS info');
+    expect(dom.querySelector('[data-testid="decision-never"]')).toBeTruthy();
+    expect(dom.textContent).not.toContain("didn't say what for");
+    const yes = [...card.querySelectorAll('button')].find((b) => b.textContent === 'Yes')!;
+    await act(async () => yes.click());
+    // The far PC's own question id, through the far key the Inbox uses too.
+    expect(answerFar).toHaveBeenCalledWith(`dev:${NODE}:q1`, { choice_id: 'allow' });
+  });
+
+  it('the rail Answer button finds the card (it scrolls to the dock and focuses its first button)', async () => {
+    const { dom } = await renderFar(true);
+    const go = dom.querySelector<HTMLButtonElement>('[data-testid="rail-needs-you"]')!;
+    expect(go).toBeTruthy();
+    await act(async () => go.click());
+    await settle(4);
+    await new Promise((r) => setTimeout(r, 20));
+    expect(dom.querySelector('[data-testid="acp-dock"]')!.contains(document.activeElement)).toBe(true);
+  });
+
+  it('the far PC\'s Inbox card and this chat card are the same question (same key, so one answer settles both)', async () => {
+    const [q] = farQuestionsOf(NODE, NAME, wire([RAW_QUESTION]), () => NOW);
+    expect(q.key).toBe(`dev:${NODE}:q1`);
+    expect(q).toMatchObject({ paneId: 'p1', kind: 'acp_permission' });
   });
 });

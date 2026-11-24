@@ -47,11 +47,15 @@ describe('setup checks: mapping', () => {
   });
 
   it('agents: ready is ok, needs login has a Sign in fix, not installed is quiet', () => {
-    const rows = checkAgents([
-      agent({}),
-      agent({ id: 'claude', label: 'Claude', state: 'needs_login', reason: 'Sign in first.' }),
-      agent({ id: 'gemini', label: 'Gemini', installed: false, state: 'not_installed' }),
-    ]);
+    const rows = checkAgents(
+      [
+        agent({}),
+        agent({ id: 'claude', label: 'Claude', state: 'needs_login', reason: 'Sign in first.' }),
+        agent({ id: 'gemini', label: 'Gemini', installed: false, state: 'not_installed' }),
+      ],
+      {},
+      [{ agent_id: 'codex', state: 'signed_in', why: null }],
+    );
     expect(rows).toHaveLength(3);
     expect(rows[2]).toMatchObject({ id: 'agentoff-gemini', status: 'quiet', sentence: 'Gemini is not installed' });
     expect(rows[0]).toMatchObject({ status: 'ok', sentence: 'Codex is signed in', fix: null });
@@ -92,7 +96,15 @@ describe('setup checks: mapping', () => {
       agent({ id: 'claude', label: 'Claude', state: 'unchecked', reason: '' }),
     ]);
     expect(rows[0]).toMatchObject({ status: 'fail', sentence: 'Codex was found but did not start (exit code 1)', fix: { kind: 'test', label: 'Try again', agentId: 'codex' } });
-    expect(rows[1]).toMatchObject({ status: 'warn', sentence: 'Claude is not tested yet', fix: { kind: 'test', label: 'Test', agentId: 'claude' } });
+    expect(rows[1]).toMatchObject({ status: 'warn', sentence: 'Claude is not checked yet', fix: { kind: 'test', label: 'Test', agentId: 'claude' } });
+  });
+
+  it('one truth with the Agents card: a started agent nobody tested or read the login of is "not checked yet", never "signed in" or "works"', () => {
+    const rows = checkAgents([agent({ id: 'cursor', label: 'Cursor', state: 'ready' }), agent({ id: 'claude', label: 'Claude', state: 'unchecked', reason: '' })]);
+    expect(rows.map((r) => r.sentence)).toEqual(['Cursor is not checked yet', 'Claude is not checked yet']);
+    const at = Date.now();
+    expect(checkAgents([agent({ id: 'claude', label: 'Claude', state: 'unchecked', reason: '' })], { claude: { state: 'ready', reason: '', at } })[0].sentence).toMatch(/^Claude works \(tested/);
+    expect(checkAgents([agent({ id: 'cursor', label: 'Cursor', state: 'ready' })], {}, [{ agent_id: 'cursor', state: 'signed_in', why: null }])[0].sentence).toBe('Cursor is signed in');
   });
 
   it('there is no Labs row in the list', async () => {
@@ -150,7 +162,7 @@ describe('agent rows: every agent has an action and the last Test is remembered'
       unchecked({ id: 'opencode', label: 'OpenCode', can_test: false }),
       unchecked({ id: 'aider', label: 'Aider', can_test: false }),
     ]);
-    expect(rows[0]).toMatchObject({ status: 'warn', sentence: 'Claude is not tested yet', fix: { kind: 'test', agentId: 'claude' } });
+    expect(rows[0]).toMatchObject({ status: 'warn', sentence: 'Claude is not checked yet', fix: { kind: 'test', agentId: 'claude' } });
     for (const r of rows.slice(1)) {
       expect(r.status).toBe('ok'); // not a "to check"
       expect(r.sentence).toContain('cannot be tested here');
@@ -173,6 +185,22 @@ describe('agent rows: every agent has an action and the last Test is remembered'
     expect(rows[1]).toMatchObject({ status: 'fail', fix: { kind: 'test', label: 'Try again' } });
     expect(rows[1].sentence).toContain('It failed: boom (');
     expect(rows[2]).toMatchObject({ status: 'warn', fix: { kind: 'signin' } });
+  });
+
+  it('an agent whose login reads signed in is never "needs sign-in" (the quick check or an old Test); a real failure still shows', () => {
+    const signedIn = [{ agent_id: 'cursor', state: 'signed_in' as const, why: null }, { agent_id: 'codex', state: 'signed_in' as const, why: null }];
+    const at = Date.now();
+    const rows = checkAgents(
+      [agent({ id: 'cursor', label: 'Cursor', state: 'needs_login' }), unchecked({ id: 'codex', label: 'Codex' })],
+      { codex: { state: 'needs_login', reason: 'sign in', at } },
+      signedIn,
+    );
+    expect(rows.map((r) => [r.status, r.sentence, r.fix])).toEqual([['ok', 'Cursor is signed in', null], ['ok', 'Codex is signed in', null]]);
+    const broken = checkAgents([unchecked({ id: 'codex', label: 'Codex' })], { codex: { state: 'error', reason: 'It failed: boom.', at } }, signedIn);
+    expect(broken[0].status).toBe('fail');
+    // Signed out, or no answer: the quick check speaks as before.
+    expect(checkAgents([agent({ id: 'cursor', label: 'Cursor', state: 'needs_login' })], {}, [{ agent_id: 'cursor', state: 'signed_out', why: null }])[0].status).toBe('warn');
+    expect(checkAgents([agent({ id: 'cursor', label: 'Cursor', state: 'needs_login' })], {}, null)[0].status).toBe('warn');
   });
 
   it('runAllChecks reads the remembered results from deps', async () => {

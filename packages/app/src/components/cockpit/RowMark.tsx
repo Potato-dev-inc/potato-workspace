@@ -18,7 +18,7 @@ export function RowMark({
   agentName?: string;
 }) {
   const t = useT();
-  const LABEL: Record<string, string> = { running: t('sidebar.working'), waiting_input: t('sidebar.needsYou'), idle: t('sidebar.idle'), error: t('sidebar.error') };
+  const LABEL: Record<string, string> = { running: t('sidebar.working'), waiting_input: t('sidebar.needsYou'), idle: t('sidebar.idle'), error: t('sidebar.error'), away: t('sidebar.away') };
   const kind = asking ? 'needs' : status === 'running' ? 'working' : status === 'waiting_input' ? 'needs' : status === 'idle' ? 'idle' : status === 'error' ? 'error' : 'ended';
   const label = asking ? t('sidebar.needsYou') : (LABEL[status] ?? t('sidebar.ended'));
   if (!agentId) {

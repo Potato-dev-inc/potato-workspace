@@ -10,8 +10,8 @@ use std::time::Duration;
 use super::types::Level;
 use super::{store, HandshakeFacts};
 use crate::tui::declarative::wizard::exec::{self, RunSpec};
-use crate::tui::declarative::wizard::ladder::{handshake_record, launch_of, Launch};
-use crate::tui::declarative::wizard::ladder_handshake::{self as hs, Hello, HelloError, HelloSpec, NewOutcome};
+use crate::wizard_ladder::{handshake_record, launch_of, Launch};
+use pm_core::tui::declarative::wizard::ladder_handshake::{self as hs, Hello, HelloError, HelloSpec, NewOutcome};
 use crate::tui::declarative::wizard::locate;
 
 /// How many model names the table keeps (the ladder keeps the same).

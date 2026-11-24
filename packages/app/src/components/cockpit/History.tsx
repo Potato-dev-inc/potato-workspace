@@ -1,8 +1,9 @@
 import { errorSentence } from '../../lib/sayError';
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useT } from "../../i18n";
+import { useHost } from "../../lib/host/context";
 import {
-  cockpitApi,
+  checkpointsApiFor,
   type Checkpoint,
   type CheckpointList,
   type CheckpointsApi,
@@ -13,6 +14,7 @@ import {
   formatAgo,
   formatDelta,
   lastTurnStart,
+  oneEndPerTurn,
 } from "./history-model";
 import { RestoreSheet } from "./RestoreSheet";
 import { restoreWithUndo, type Notify } from "./restore-flow";
@@ -31,7 +33,7 @@ export function History({
   status,
   now,
   notify,
-  api = cockpitApi,
+  api: given,
   sharedWith = [],
   agentName = "the agent",
   onWhatBroke,
@@ -52,6 +54,8 @@ export function History({
   onSeeDay?: () => void;
 }) {
   const t = useT();
+  const host = useHost();
+  const api = useMemo(() => given ?? checkpointsApiFor(host), [given, host]);
   const [listing, setListing] = useState<CheckpointList | undefined>(undefined);
   const [error, setError] = useState<string | null>(null);
   const [open, setOpen] = useState<string | null>(null);
@@ -133,18 +137,18 @@ export function History({
   if (error) {
     return (
       <div className="ck-empty">
-        <h2 className="ck-section">History unavailable</h2>
+        <h2 className="ck-section">{t("r10.hist.unavailable")}</h2>
         <p className="ck-sub">{error}</p>
       </div>
     );
   }
-  if (listing === undefined) return <p className="ck-sub ck-pad">Loading…</p>;
+  if (listing === undefined) return <p className="ck-sub ck-pad">{t("r10.loading")}</p>;
   if (listing.state === "too_big") {
     return (
       <div className="ck-empty">
-        <h2 className="ck-section">Undo is off for this folder</h2>
+        <h2 className="ck-section">{t("r10.hist.tooBigTitle")}</h2>
         <p className="ck-sub">
-          It is too big. Add big folders to .gitignore.
+          {t("r10.hist.tooBig")}
         </p>
       </div>
     );
@@ -153,11 +157,11 @@ export function History({
     return (
       <div className="ck-empty">
         <h2 className="ck-section">
-          {listing.state === "off" ? "Checkpoints are off" : "Git is needed"}
+          {listing.state === "off" ? t("r10.hist.offTitle") : t("r10.hist.gitTitle")}
         </h2>
         <p className="ck-sub">
           {listing.state === "off"
-            ? "Turn them on in Settings > General to save your files at the start and end of every turn."
+            ? t("r10.hist.offBody")
             : listing.message}
         </p>
       </div>
@@ -166,10 +170,9 @@ export function History({
   if (listing.items.length === 0) {
     return (
       <div className="ck-empty">
-        <h2 className="ck-section">No checkpoints yet</h2>
+        <h2 className="ck-section">{t("r10.hist.noneTitle")}</h2>
         <p className="ck-sub">
-          Your files are saved automatically when this agent starts and finishes
-          a turn. They will show up here, and you can go back to any of them.
+          {t("r10.hist.noneBody")}
         </p>
       </div>
     );
@@ -182,22 +185,21 @@ export function History({
       <div className="ck-scroll ck-fade-in">
         <div className="ck-hist-head">
           <p className="ck-hist-note">
-            Restoring puts your files back. It doesn't change what the agent
-            remembers.
-            {running && " The agent is working: interrupt it before restoring."}
+            {t("r10.hist.note")}
+            {running && ` ${t("r10.hist.noteRunning")}`}
           </p>
           {lastStart && (
             <button
               type="button"
               className="ck-btn ck-btn--sm ck-btn--primary"
               disabled={running || busy}
-              title={running ? "Interrupt the agent first" : undefined}
+              title={running ? t("r10.hist.interruptFirst") : undefined}
               onClick={() => {
                 setUndoing(true);
                 setPending(lastStart);
               }}
             >
-              Undo last turn
+              {t("r10.hist.undoLast")}
             </button>
           )}
           {onSeeDay && (
@@ -211,12 +213,12 @@ export function History({
               className="ck-btn ck-btn--sm ck-btn--secondary"
               onClick={() => onWhatBroke(paneId)}
             >
-              What broke the tests?
+              {t("r10.hist.whatBroke")}
             </button>
           )}
         </div>
-        <ol className="ck-hist" aria-label="Checkpoints">
-          {listing.items.map((item) => {
+        <ol className="ck-hist" aria-label={t("r10.hist.list")}>
+          {oneEndPerTurn(listing.items).map((item, at, rows) => {
             const expanded = open === item.id;
             const diff = diffs[item.id];
             return (
@@ -242,36 +244,39 @@ export function History({
                         <span className="ck-hist-sub">{item.note}</span>
                       )}
                     </span>
-                    <span className="ck-hist-delta">{formatDelta(item)}</span>
+                    <span className="ck-hist-delta">
+                      {/* The oldest save point counts the whole folder against nothing: that is a starting point, not a change. */}
+                      {at === rows.length - 1 && item.kind === "before" ? t("r14.hist.start") : formatDelta(item)}
+                    </span>
                   </button>
                   <button
                     type="button"
                     className="ck-btn ck-btn--sm ck-btn--secondary ck-hist-restore"
                     disabled={running || busy}
-                    title={running ? "Interrupt the agent first" : undefined}
+                    title={running ? t("r10.hist.interruptFirst") : undefined}
                     onClick={() => {
                       setUndoing(false);
                       setPending(item);
                     }}
                   >
-                    Restore
+                    {t("r10.hist.restore")}
                   </button>
                   <button
                     type="button"
                     className="ck-btn ck-btn--sm ck-btn--secondary ck-hist-branch"
                     onClick={() => setBranchFrom({ kind: "save_point", checkpoint_id: item.id })}
                   >
-                    Branch from here
+                    {t("r10.branch.title")}
                   </button>
                 </div>
                 {expanded && (
                   <div className="ck-hist-files">
                     {diff === undefined ? (
-                      <span className="ck-sub">Loading…</span>
+                      <span className="ck-sub">{t("r10.loading")}</span>
                     ) : typeof diff === "string" ? (
                       <span className="ck-sub">{diff}</span>
                     ) : diff.length === 0 ? (
-                      <span className="ck-sub">No file changes.</span>
+                      <span className="ck-sub">{t("r10.hist.noChanges")}</span>
                     ) : (
                       <ul>
                         {diff.map((f) => (
@@ -280,7 +285,7 @@ export function History({
                             <span className="ck-hist-path">{f.path}</span>
                             <span className="ck-hist-delta">
                               {f.binary
-                                ? "binary"
+                                ? t("r10.hist.binary")
                                 : `+${f.added} −${f.deleted}`}
                             </span>
                           </li>

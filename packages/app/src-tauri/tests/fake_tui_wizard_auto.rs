@@ -18,7 +18,7 @@ use std::collections::HashSet;
 use std::time::{Duration, Instant};
 
 /// The recorded draft a stand-in drafter answers with. `@@COMMAND@@` is the program the person typed.
-const DRAFT: &str = include_str!("../src/tui/declarative/wizard/tests/drafts/visible_nimbus.toml");
+const DRAFT: &str = include_str!("../crates/pm-core/src/tui/declarative/wizard/tests/drafts/visible_nimbus.toml");
 
 /// The agent: a folder question, then an input box under a banner row that mentions "approve" (the wizard cannot tell
 /// that screen is a ready one), a thinking-and-tool turn, a long reply and the two permission questions.

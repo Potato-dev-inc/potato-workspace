@@ -131,6 +131,7 @@ fn checkpoint(id: &str, turn: u32, kind: &str, sec: u64) -> Checkpoint {
         kind: kind.into(),
         label: format!("{title} turn {turn}"),
         note: String::new(),
+        restored_to: String::new(),
         at_ms: ms(sec),
         files: 2,
         added: 0,

@@ -1,6 +1,6 @@
-import { describe, expect, it } from 'vitest';
+import { beforeEach, describe, expect, it } from 'vitest';
 import type { PaneData } from '../../hooks/usePaneRegistry';
-import { formatElapsed, groupPanes, matchesQuery, paneNames, receiptRows, spawnLogLine, spinnerStatus, stateText } from './model';
+import { formatElapsed, groupPanes, matchesQuery, paneNames, receiptRows, resetPaneOrdinals, spawnLogLine, spinnerStatus, stateText } from './model';
 
 function pane(id: string, agent: string, status: string): PaneData {
   return {
@@ -28,6 +28,14 @@ describe('cockpit model', () => {
     expect(formatElapsed(4000)).toBe('4s');
     expect(formatElapsed(125_000)).toBe('2m');
     expect(formatElapsed(3_900_000)).toBe('1h 5m');
+  });
+  beforeEach(resetPaneOrdinals);
+  it('keeps a chat number when an earlier same-agent chat closes', () => {
+    const l = (ids: string[]) => ids.map((i) => pane(i, 'opencode', 'idle'));
+    const first = paneNames(l(['a', 'b', 'c']), (id) => id);
+    expect([first.get('a'), first.get('b'), first.get('c')]).toEqual(['opencode 1', 'opencode 2', 'opencode 3']);
+    const after = paneNames(l(['a', 'c', 'd']), (id) => id);
+    expect([after.get('a'), after.get('c'), after.get('d')]).toEqual(['opencode 1', 'opencode 3', 'opencode 4']);
   });
   it('numbers duplicate agents', () => {
     const names = paneNames(

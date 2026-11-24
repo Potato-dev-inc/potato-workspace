@@ -12,6 +12,7 @@ import {
 import { useTerminalSession } from '../hooks/useTerminalSession';
 import type { PaneData } from '../hooks/usePaneRegistry';
 import { SessionChatPanel } from './chat/SessionChatPanel';
+import { t } from '../i18n';
 
 interface Props {
   pane: PaneData;
@@ -102,8 +103,8 @@ export function TerminalPane({
         <button
           type="button"
           className="cursor-grab active:cursor-grabbing px-1 text-pm-muted hover:text-pm-text"
-          title="Drag to reorder pane"
-          aria-label="Drag to reorder pane"
+          title={t('r21.sw.dragToReorderPane')}
+          aria-label={t('r21.sw.dragToReorderPane')}
           {...dragHandleProps}
         >
           ::
@@ -125,7 +126,7 @@ export function TerminalPane({
           ))}
         </select>
         {chatAllowed && (
-          <div role="group" aria-label="Pane view" className="flex overflow-hidden rounded border border-pm-border">
+          <div role="group" aria-label={t('r21.sw.paneView')} className="flex overflow-hidden rounded border border-pm-border">
             {(['terminal', 'chat'] as const).map((v) => (
               <button
                 key={v}
@@ -145,7 +146,7 @@ export function TerminalPane({
         <div className="flex-1" />
         <button
           className="px-1.5 py-0.5 rounded text-pm-muted hover:text-pm-text hover:bg-pm-border/40"
-          title="Pop out pane"
+          title={t('r21.sw.popOutPane')}
           onClick={() => {
             const rect =
               containerRef.current?.getBoundingClientRect() ??

@@ -12,6 +12,11 @@ export interface RememberedTest {
 export type TestMemory = Record<string, RememberedTest>;
 
 const KEY = 'pm.setupcheck.tests.v1';
+/** A Test was kept or forgotten: every screen that shows how an agent stands reads it again. */
+export const TEST_MEMORY_EVENT = 'pm:test-memory';
+const changed = () => {
+  if (typeof window !== 'undefined') window.dispatchEvent(new Event(TEST_MEMORY_EVENT));
+};
 
 export function loadTestMemory(): TestMemory {
   try {
@@ -31,6 +36,18 @@ export function rememberTest(result: AgentHealth, at = Date.now()): void {
   } catch {
     /* ignore */
   }
+  changed();
+}
+
+/** Forgets what the last Test said about one agent (a new sign-in makes it old news). */
+export function forgetTest(agentId: string): void {
+  try {
+    const { [agentId]: _gone, ...rest } = loadTestMemory();
+    window.localStorage.setItem(KEY, JSON.stringify(rest));
+  } catch {
+    /* ignore */
+  }
+  changed();
 }
 
 /** "2:05 PM", or "下午 2:05" in Traditional Chinese: the time in the language the app shows, not the computer's. */

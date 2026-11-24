@@ -3,6 +3,7 @@ import { agentLabel, useAgentRegistry } from '../../lib/agentRegistry';
 import type { SpawnState } from '../../hooks/useCockpit';
 import { DotSpinner } from './DotSpinner';
 import { spawnLogLine } from './model';
+import { t } from '../../i18n';
 
 export function SpawnView({ spawn, onDismiss }: { spawn: SpawnState; onDismiss: () => void }) {
   const listing = useAgentRegistry();
@@ -35,7 +36,7 @@ export function SpawnView({ spawn, onDismiss }: { spawn: SpawnState; onDismiss: 
             )}
           </li>
         ))}
-        {spawn.log.length === 0 && !spawn.failed && <li>Getting started</li>}
+        {spawn.log.length === 0 && !spawn.failed && <li>{t('r21.sw.gettingStarted')}</li>}
       </ol>
       {spawn.failed && (
         <>

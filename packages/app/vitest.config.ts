@@ -1,6 +1,8 @@
 import { defineConfig } from 'vitest/config';
+import { tauriCoreShim } from './vite-tauri-core';
 
 export default defineConfig({
+  plugins: [tauriCoreShim()],
   test: {
     // Node by default: a test that needs `document` or `window` says so on its first line with
     // `// @vitest-environment jsdom`. Building a jsdom window for every file cost about 40 % of a full run

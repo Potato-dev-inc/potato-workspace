@@ -3,6 +3,7 @@ import { useRef, useState } from 'react';
 import { Menu } from '../common/Floating';
 import type { SpaceMember } from '../../lib/spaces';
 import { ConfirmSheet } from './ConfirmSheet';
+import { t } from '../../i18n';
 
 export interface MemberMenuProps {
   member: SpaceMember;
@@ -24,7 +25,7 @@ export function MemberMenu({ member, spaceName, canRemove, onRemove, onBlock }: 
       {open && (
         <Menu anchorRef={btn} align="end" className="ck-spaces-menu-list" label={`Actions for ${member.name}`} onClose={() => setOpen(false)}>
           {canRemove && (
-            <button type="button" role="menuitem" onClick={() => { setOpen(false); setSheet('remove'); }}>Remove from space</button>
+            <button type="button" role="menuitem" onClick={() => { setOpen(false); setSheet('remove'); }}>{t('r21.sw.removeFromSpace')}</button>
           )}
           {member.blocked ? (
             <button type="button" role="menuitem" onClick={() => { setOpen(false); onBlock(false); }}>Unblock</button>

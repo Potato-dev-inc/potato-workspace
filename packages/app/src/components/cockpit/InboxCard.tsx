@@ -98,17 +98,19 @@ export interface InboxCardProps {
   more?: ReactNode;
   /** Keys a 30-minute snooze is set on (pane id, `q-<question id>`). Adds the Snooze button. Never for high risk or consent. */
   snoozeKeys?: string[];
+  /** The badge says Permission (a tool permission an agent asked for), whatever the kind. */
+  permission?: boolean;
   /** Extra attributes for tests and deep links (`data-consent-id`). */
   data?: Record<string, string | undefined>;
   /** Content outside the card's grid (a sheet that portals out). */
   children?: ReactNode;
 }
 
-export function InboxCard({ kind, glyph, agent, title, meta, status, age, risk, info, guard, reason, caution, body, note, actions, more, snoozeKeys, data, children }: InboxCardProps) {
+export function InboxCard({ kind, glyph, agent, title, meta, status, age, risk, info, guard, reason, caution, body, note, actions, more, snoozeKeys, permission, data, children }: InboxCardProps) {
   useT(); // the chip and the age are words: this card redraws when the language changes
   const extra = Object.fromEntries(Object.entries(data ?? {}).filter(([, v]) => v !== undefined));
   const hasAge = age !== undefined && age !== null;
-  const chip = chipFor(kind, glyph);
+  const chip = permission ? { kind: 'permission' as const, label: t('inbox.chipPermission') } : chipFor(kind, glyph);
   const brand = !!agent && !!agentLogoFor(agent);
   return (
     <section

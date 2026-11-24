@@ -18,6 +18,7 @@ import { groupTurns } from '../../lib/sessionChatModel';
 import { SessionChatView } from '../chat/SessionChatView';
 import { Sheet } from '../cockpit/Sheet';
 import '../../styles/history-viewer.css';
+import { t } from '../../i18n';
 
 /** "14 Aug", with the year added when the chat is from another year. */
 export function chatDate(ms: number, now: number = Date.now()): string {
@@ -133,7 +134,7 @@ export function ImportedChatSheet({ request, api = chatImportApi, onContinue, on
             {bannerText(agentName, loaded.chat.meta.updatedMs)}
           </p>
           {continueReason && <p className="ck-sub history-viewer-reason">{continueReason}</p>}
-          {loaded.chat.meta.cutShort && <p className="ck-sub">Only the first part of this chat is shown.</p>}
+          {loaded.chat.meta.cutShort && <p className="ck-sub">{t('r21.sw.onlyTheFirstPart')}</p>}
         </>
       )}
       <div className="history-viewer-body">

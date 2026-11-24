@@ -107,8 +107,8 @@ describe('guided setup: Start fresh on Cloudflare', () => {
     const fresh = q('stable-fresh')!;
     expect(fresh.textContent).toContain('Start fresh on Cloudflare');
     await click(fresh.querySelector('[data-testid="worker-update-go"]'));
-    expect(q('worker-fresh-confirm')!.textContent).toContain('deletes your potato-stable-link Worker on Cloudflare');
-    expect(q('worker-fresh-confirm')!.textContent).toContain('pair again');
+    expect(q('worker-fresh-confirm')!.textContent).toContain('deletes your potato-stable-link link on Cloudflare');
+    expect(q('worker-fresh-confirm')!.textContent).toContain('need to scan again');
     expect(q('worker-fresh-confirm')!.textContent).toContain('Nothing else in your Cloudflare account is touched');
     expect(steps).toEqual([]);
     // Cancel: nothing ran.

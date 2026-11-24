@@ -27,6 +27,8 @@ pub enum Method {
 pub enum Action {
     Argv { exe: String, args: Vec<String> },
     Script { url: String },
+    /// A Linux or macOS PC: the vendor's shell script, `curl -fsSL '<url>' | bash` (same URL rules as `Script`).
+    ShellScript { url: String },
 }
 
 /// One command the user is asked to confirm.
@@ -60,6 +62,9 @@ pub struct Tools {
     pub winget: Option<String>,
     /// Tool ids (`git`, `node`) whose programs are all on PATH.
     pub present: BTreeSet<String>,
+    /// Set on a Linux or macOS PC: the person's home folder. Installs there need no root: npm installs into `<home>/.local`, and the
+    /// vendor script is a shell script. `None` on Windows.
+    pub home: Option<String>,
 }
 
 #[derive(Debug, Deserialize)]
@@ -67,6 +72,9 @@ pub struct Tools {
 struct ToolDef {
     label: String,
     programs: Vec<String>,
+    /// The program names on a Linux or macOS PC (`programs` are the Windows file names).
+    #[serde(default)]
+    unix_programs: Vec<String>,
     install: InstallTable,
 }
 
@@ -107,12 +115,17 @@ impl Tools {
                 .filter(|alias| std::fs::symlink_metadata(alias).is_ok())
                 .map(|alias| alias.to_string_lossy().into_owned())
         };
+        let unix = !cfg!(windows);
         let present = tool_defs()
             .into_iter()
-            .filter(|(_, def)| def.programs.iter().all(|p| find_in_path(p, path).is_some()))
+            .filter(|(_, def)| {
+                let names = if unix { &def.unix_programs } else { &def.programs };
+                !names.is_empty() && names.iter().all(|p| find_in_path(p, path).is_some())
+            })
             .map(|(id, _)| id)
             .collect();
-        Self { winget, present }
+        let home = unix.then(|| std::env::var("HOME").ok().filter(|h| h.starts_with('/'))).flatten();
+        Self { winget, present, home }
     }
 
     fn has(&self, tool: &str) -> bool {
@@ -126,8 +139,16 @@ fn winget_args(id: &str) -> Vec<String> {
     ["install", "--id", id, "-e", "--source", "winget"].iter().map(|s| s.to_string()).collect()
 }
 
-fn npm_args(package: &str) -> Vec<String> {
-    ["install", "-g", package].iter().map(|s| s.to_string()).collect()
+/// `install -g <package>`; on a Linux PC `install -g --prefix <home>/.local <package>`, so the program lands in `<home>/.local/bin` and
+/// nothing needs root.
+fn npm_args(package: &str, home: Option<&str>) -> Vec<String> {
+    let mut args: Vec<String> = ["install", "-g"].iter().map(|s| s.to_string()).collect();
+    if let Some(home) = home {
+        args.push("--prefix".into());
+        args.push(format!("{}/.local", home.trim_end_matches('/')));
+    }
+    args.push(package.into());
+    args
 }
 
 /// `tool install [--python <v>] <package>`. The package and version were checked by the spec
@@ -159,8 +180,14 @@ fn winget_uninstall_args(id: &str) -> Vec<String> {
 }
 
 /// `uninstall -g <package>`, the removal that matches `npm_args`.
-fn npm_uninstall_args(package: &str) -> Vec<String> {
-    ["uninstall", "-g", package].iter().map(|s| s.to_string()).collect()
+fn npm_uninstall_args(package: &str, home: Option<&str>) -> Vec<String> {
+    let mut args: Vec<String> = ["uninstall", "-g"].iter().map(|s| s.to_string()).collect();
+    if let Some(home) = home {
+        args.push("--prefix".into());
+        args.push(format!("{}/.local", home.trim_end_matches('/')));
+    }
+    args.push(package.into());
+    args
 }
 
 /// Text for the sheet and the pane banner. Every token passed the spec validator, so plain
@@ -174,6 +201,7 @@ fn display(action: &Action) -> String {
             parts.join(" ")
         }
         Action::Script { url } => format!("irm '{url}' | iex"),
+        Action::ShellScript { url } => format!("curl -fsSL '{url}' | bash"),
     }
 }
 
@@ -185,7 +213,7 @@ fn step(label: &str, tool: Option<&str>, spec: &InstallSpec, method: &str, tools
         }
         "npm" => (
             Method::Npm,
-            Action::Argv { exe: "npm".into(), args: npm_args(spec.npm.as_deref()?) },
+            Action::Argv { exe: "npm".into(), args: npm_args(spec.npm.as_deref()?, tools.home.as_deref()) },
             false,
         ),
         "uv" => (
@@ -193,7 +221,10 @@ fn step(label: &str, tool: Option<&str>, spec: &InstallSpec, method: &str, tools
             Action::Argv { exe: "uv".into(), args: uv_args(spec.uv.as_deref()?, spec.python.as_deref())? },
             false,
         ),
-        "script" => (Method::Script, Action::Script { url: spec.script_url.clone()? }, true),
+        "script" => {
+            let url = spec.script_url.clone()?;
+            (Method::Script, if tools.home.is_some() { Action::ShellScript { url } } else { Action::Script { url } }, true)
+        }
         // Never guess: a method this file does not know gets no step at all.
         _ => return None,
     };
@@ -274,6 +305,9 @@ pub fn plan_install(agent_id: &str, label: &str, spec: Option<&InstallSpec>, too
     if let Some(script) = ready_script {
         return Plan { agent_id: agent_id.into(), label: label.into(), steps: vec![script], blocked: None };
     }
+    if tools.home.is_some() {
+        return blocked("This PC has no Node.js and no one-line installer for this one. Use the command below, or download it from the website.");
+    }
     if tools.winget.is_none() {
         return blocked(
             "This PC cannot install apps from the command line (winget is missing). Use the command below, or download it from the website.",
@@ -324,7 +358,7 @@ pub fn plan_uninstall(
                 )
             }
         },
-        Method::Npm => Action::Argv { exe: "npm".into(), args: npm_uninstall_args(record_package) },
+        Method::Npm => Action::Argv { exe: "npm".into(), args: npm_uninstall_args(record_package, tools.home.as_deref()) },
         Method::Uv => Action::Argv { exe: "uv".into(), args: uv_uninstall_args(record_package) },
         Method::Script => return blocked(INSTALLED_ANOTHER_WAY),
     };

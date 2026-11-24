@@ -7,7 +7,7 @@
 import { useCallback, useEffect, useState } from 'react';
 import type { AttentionItem, AttentionSnapshot } from '../../lib/attention';
 import { COPY, isRiskyAsk } from '../../lib/attention-copy';
-import { useT } from '../../i18n';
+import { t, useT } from '../../i18n';
 import { RiskGlyph } from '../cockpit/InboxCard';
 import type { BridgeClient } from '../../lib/bridge-types';
 import { PROMPT_KINDS, QUESTION_KINDS, isOpen, subjectOf, visibleQueue } from '../../lib/needs-you-queue';
@@ -123,7 +123,7 @@ export function NeedsYouList({
 
   const byId = new Map(questions.map((q) => [q.id, q]));
   return (
-    <section aria-label="Needs you" className="ph-queue" data-testid="needs-you-queue">
+    <section aria-label={t('r21.sw.needsYou')} className="ph-queue" data-testid="needs-you-queue">
       {queue.map((item) => {
         if (onOpenCard && isRiskyAsk(item)) return <RiskyAskRow key={item.id} item={item} onOpen={onOpenCard} />;
         if (PROMPT_KINDS.includes(item.kind)) {

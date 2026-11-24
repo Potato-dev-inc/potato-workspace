@@ -1,6 +1,7 @@
 // "{name} wants to remember" on the companion home (SPEC-1028 section 6): the notes the companion proposed and the
 // person has not decided yet. Keep / Don't keep need the `answer` cap; without it the notes are only read.
 import type { PendingDecision, PendingItem } from '../../lib/companion';
+import { t } from '../../i18n';
 
 export function CompanionPending({
   name,
@@ -24,11 +25,11 @@ export function CompanionPending({
       <ul className="ph-group">
         {items.map((item) => (
           <li key={item.id} className="ph-comp-pending">
-            {item.kind === 'skill' && <p className="ph-comp-skill-kind">New skill</p>}
+            {item.kind === 'skill' && <p className="ph-comp-skill-kind">{t('r21.sw.newSkill')}</p>}
             <p className="ph-comp-text">{item.text}</p>
             {item.flagged && <p className="ph-comp-flag">{item.flagged}</p>}
             {/* A skill is approved on the computer, where all of its steps can be read. */}
-            {item.kind === 'skill' && <p className="ph-comp-flag">Look at it on the computer to approve it.</p>}
+            {item.kind === 'skill' && <p className="ph-comp-flag">{t('r21.sw.lookAtItOn')}</p>}
             {canAnswer && item.kind !== 'skill' && (
               <div className="ph-comp-pending-btns">
                 <button

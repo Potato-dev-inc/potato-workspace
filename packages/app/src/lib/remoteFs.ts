@@ -95,7 +95,7 @@ const ERR_KEYS = {
 export function farErrorText(err: { message: string; code?: string }, name: string): string {
   const reason = err.code?.startsWith('SSH_FS_') ? err.code.slice('SSH_FS_'.length) : '';
   const key = (ERR_KEYS as Record<string, (typeof ERR_KEYS)[keyof typeof ERR_KEYS]>)[reason];
-  return key ? t(key, { name }) : err.message;
+  return key ? t(key, { name }) : errorSentence(err);
 }
 
 /**

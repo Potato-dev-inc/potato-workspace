@@ -23,3 +23,13 @@ describe('the pane dock does not resize the terminal', () => {
     expect(rule('.cockpit .ck-dock')).toMatch(/background:\s*var\(--bg\)/);
   });
 });
+
+describe('the header keeps the project chip readable', () => {
+  it('the name gives way at 45% and the project chip keeps 8 characters (never "work-…")', () => {
+    expect(rule('.cockpit .ck-pane .ck-pane-id .ck-title')).toMatch(/max-width:\s*45%/);
+    const chip = rule('.cockpit .ck-pane .ck-pane-id .ck-sub-inline.ck-pane-project');
+    expect(chip).toMatch(/flex:\s*1 1 8ch/);
+    expect(chip).toMatch(/min-width:\s*8ch/);
+    expect(rule('.cockpit .ck-pane .ck-pane-head > .ck-pane-id.ck-pane-id')).toMatch(/min-width:\s*14rem/);
+  });
+});

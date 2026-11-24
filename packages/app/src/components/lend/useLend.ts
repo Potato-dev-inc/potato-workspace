@@ -2,13 +2,15 @@ import { useCallback, useEffect, useState } from 'react';
 import { lendApi, type LendApi, type LendState } from '../../lib/lend';
 
 /** How often the state is read again when no change event came (the relay can be slow). */
-const REFRESH_MS = 20_000;
+const REFRESH_MS = 15_000;
 /** How often "time left" is redrawn. */
 const TICK_MS = 15_000;
 
 export interface LendHandle {
   /** Null until the first answer, when Share an agent is off, or when the backend has no such command. */
   state: LendState | null;
+  /** The same state even while Lending is off: a lend that ended is still news (its Inbox row shows whatever the switch says). */
+  any?: LendState | null;
   /** The Labs switch, as the backend reports it. Most lend screens draw nothing while it is false; the borrow entry and the Lend page say which switch it is instead. */
   enabled: boolean;
   /** A state answer arrived (even "off"): the switch can be shown as On or Off, not guessed. */
@@ -51,13 +53,17 @@ export function useLend(api: LendApi = lendApi): LendHandle {
       .then((u) => (disposed ? u() : (off = u)))
       .catch(() => {});
     const poll = window.setInterval(refresh, REFRESH_MS);
+    // Coming back to the window: look now (a lend may have ended while it was away).
+    const onVisible = () => document.visibilityState === 'visible' && refresh();
+    document.addEventListener('visibilitychange', onVisible);
     const tick = window.setInterval(() => setNow(Date.now()), TICK_MS);
     return () => {
       disposed = true;
       off?.();
       window.clearInterval(poll);
+      document.removeEventListener('visibilitychange', onVisible);
       window.clearInterval(tick);
     };
   }, [api, refresh]);
-  return { state: state?.enabled ? state : null, enabled: state?.enabled === true, known, now, refresh };
+  return { state: state?.enabled ? state : null, any: state, enabled: state?.enabled === true, known, now, refresh };
 }

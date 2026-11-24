@@ -20,8 +20,10 @@ import { AwayDigest } from './components/cockpit/AwayDigest';
 import { Inbox } from './components/cockpit/Inbox';
 import { PaneView } from './components/cockpit/PaneView';
 import { requestPaneAction } from './lib/pane-actions';
+import { useFarHosts } from './lib/host/useFarHosts';
 import { Palette, type PaletteMode } from './components/cockpit/Palette';
-import { NeedsYouContext, useNeedsYouSource } from './hooks/useNeedsYou';
+import { JumpOutCard } from './components/cockpit/JumpOutCard';
+import { FarNeedsContext, NeedsYouContext, useNeedsYouSource, type FarNeeds } from './hooks/useNeedsYou';
 import { useTeam } from './components/cockpit/team/useTeam';
 import { unclaimedRed } from './lib/team';
 import { useMissions } from './lib/missions';
@@ -36,6 +38,8 @@ import type { WhereProps } from './components/devices/NewAgentWhere';
 import { remoteId, type Device } from './lib/devices';
 import { ConnectedBanner } from './components/devices/ConnectedBanner';
 import { FarPane } from './components/devices/FarPane';
+import { FarGone } from './components/devices/FarGone';
+import { useFarRowGone } from './components/devices/useFarRowGone';
 import { OPEN_REMOTE_EVENT } from './lib/moveChat';
 import { focusDeviceGroup } from './lib/openDevice';
 import { useDeviceGroups, type RemoteRow } from './components/devices/useDeviceGroups';
@@ -104,7 +108,8 @@ import { useYesterdaySnapshot } from './components/cockpit/useYesterdaySnapshot'
 import { useCompanions } from './hooks/useCompanions';
 import { tauriCompanionTransport } from './lib/companion';
 
-import { cockpitApi } from './lib/cockpit-api';
+import { checkpointsApiFor, cockpitApi } from './lib/cockpit-api';
+import { isFarKey, placeKey } from './lib/host/placeKey';
 import { useTabWindowRestore } from './lib/tab-windows';
 
 import { CompanionPage } from './components/cockpit/companion/CompanionPage';
@@ -132,6 +137,9 @@ import { ErrorBoundary } from './components/common/ErrorBoundary';
 import './styles/cockpit.css';
 import './styles/chips.css';
 import './styles/night.css';
+import { farChatRows } from './lib/host/farChats';
+import { farAgentName } from './lib/host/farCockpit';
+import { FarInstallHost } from './components/devices/FarInstallHost';
 import { registerNewAgentOpener } from './lib/newAgentRequest';
 import { registerSettingsOpener } from './lib/openSettingsAt';
 import { SpacesPage } from './components/spaces/SpacesPage';
@@ -146,7 +154,10 @@ import { CockpitJoinLink } from './components/team-page/CockpitJoinLink';
 import { PassTaskHost } from './components/team-page/PassTaskHost';
 import { useTeamPresenceReport } from './components/team-page/useTeamPresenceReport';
 import { sidebarCount } from './components/team-page/team-page-model';
-import { useLendToasts } from './components/lend/Borrowed';
+import { useRestoreLastChat } from './hooks/useRestoreLastChat';
+import { useLendEndedNotice, useLendToasts } from './components/lend/Borrowed';
+import { useKeepLentFar } from './components/lend/useKeepLentFar';
+import { usageFarOf } from './components/lend/LentChip';
 import { useOpenedStandbyPanes, useStandbyFeed } from './lib/standbyHelpers';
 import { rootPaneId } from './components/cockpit/helpers-bar-model';
 import { AddHelperPopover } from './components/cockpit/AddHelperPopover';
@@ -196,13 +207,15 @@ export default function CockpitApp() {
   const todayOn = useTimelineEnabled();
   // Devices (Labs): the other PCs' groups in the sidebar, and the chat or terminal of one of them in the main area.
   const deviceGroups = useDeviceGroups();
-  // Connect > Devices > Open: that PC's section in the sidebar, unfolded and scrolled to. false: it has no section yet (its own sheet opens).
+  const farHosts = useFarHosts(deviceGroups.view?.devices ?? []);
+  // Connect > Devices > Open: that PC's section in the sidebar is unfolded and scrolled to, and false is answered so the PC's own sheet opens too:
+  // the unfolding alone showed nothing when the section was already open, so Open always has a visible result.
   const openPcInSidebar = (node: string): boolean => {
-    if (!deviceGroups.groups.some((g) => g.device.node === node)) return false;
-    focusDeviceGroup(node);
-    return true;
+    if (deviceGroups.groups.some((g) => g.device.node === node)) focusDeviceGroup(node);
+    return false;
   };
   const [remoteRow, setRemoteRow] = useState<RemoteRow | null>(null);
+  const farRowEnded = useFarRowGone(deviceGroups, remoteRow);
   const where: WhereProps | undefined = deviceGroups.enabled
     ? {
         view: deviceGroups.view,
@@ -235,6 +248,8 @@ export default function CockpitApp() {
   // The project the New agent page starts with (from a project's "+"); null: the page picks its own.
   const [newAgentProject, setNewAgentProject] = useState<{ path: string; name: string; node?: string } | null>(null);
   const [view, setView] = useState<MainView>(() => homeView(c.spawn !== null, c.selectedId));
+  const watchNode = view === 'device' ? (remoteRow?.node ?? null) : null;
+  useEffect(() => deviceGroups.watch(watchNode), [watchNode]); // eslint-disable-line react-hooks/exhaustive-deps
   // A new selection or spawn state (a pane closing, an agent starting, a digest opening a pane)
   // returns to the resting view. Done while rendering, so no frame shows a stale view.
   const [seen, setSeen] = useState({ spawn: c.spawn, selectedId: c.selectedId, chatStarting: c.chatStarting !== null });
@@ -265,6 +280,11 @@ export default function CockpitApp() {
   const [ratio, setRatio] = useState(SPLIT_DEFAULT_RATIO);
   const width = useWindowWidth();
   const t = useT();
+  // The window title names what is open ("Inbox — Potato Workspace"), so a window list and a screen reader tell the windows apart.
+  const pageName = view === 'inbox' ? t('sidebar.inbox') : view === 'settings' ? t('sidebar.settings') : view === 'connect' ? t('connect.title') : view === 'newagent' ? t('sidebar.newAgent') : view === 'scores' ? t('sidebar.scores') : view === 'plans' ? t('r21.plans.title') : view === 'routines' ? t('sidebar.routines') : view === 'spaces' ? t('sidebar.spaces') : view === 'doctor' ? t('r21.doc.title') : view === 'review' ? t('sidebar.review') : view === 'today' ? t('sidebar.today') : view === 'pane' && c.selectedId ? ((p) => (p ? paneHeading(p.info, c.names.get(c.selectedId!) ?? p.info.agent_type).primary : c.names.get(c.selectedId!)))(c.registry.panes.get(c.selectedId)) : undefined;
+  useEffect(() => {
+    document.title = pageName ? `${pageName} — Potato Workspace` : 'Potato Workspace';
+  }, [pageName]);
   const focusMode = useFocusMode();
   const layout = useLayout();
   // The chats the keys and the split view step through: no minion runs and no standby chats, except one the person opened.
@@ -305,6 +325,8 @@ export default function CockpitApp() {
   const settings = useInlineSettings<MainView>({ mode: c.mode, view, setView, home: homeView(c.spawn !== null, c.selectedId), openWindow: c.openSettings });
   // Pane whose last turn the person is being asked to undo (opened from the palette).
   const [undoPane, setUndoPane] = useState<string | null>(null);
+  const undoHost = undoPane && isFarKey(undoPane) ? farHosts.find((h) => h.place.kind === 'pc' && undoPane.startsWith(placeKey(h.place, ''))) : undefined;
+  const undoApi = useMemo(() => (undoHost ? checkpointsApiFor(undoHost) : cockpitApi), [undoHost]);
   // Pane whose "What broke the tests?" sheet is open (from History or the palette).
   const [whatBrokePane, setWhatBrokePane] = useState<string | null>(null);
   const loop = useLoopSignals();
@@ -524,7 +546,10 @@ export default function CockpitApp() {
       nav.select(id);
       return;
     }
-    if (id === c.selectedId) return;
+    if (id === c.selectedId || id === split) {
+      c.notify(t('split.alreadyOpen'));
+      return;
+    }
     setView('pane');
     setSplit(id);
     setSide('left');
@@ -870,6 +895,10 @@ export default function CockpitApp() {
   const lend = useLend();
   const lendRequests = useMemo(() => (lend.state?.requests_in ?? []).filter((r) => r.state === 'open'), [lend.state]);
   useLendToasts(lend, c.notify);
+  useLendEndedNotice(lend, c.notify);
+  // "Use my own agents": a far chat on my lend keeps it rolling.
+  // The far chats are keys of their own (`dev:<node>:<id>`), listed by the PC groups, not by this PC's registry.
+  useKeepLentFar(lend, useMemo(() => [...c.registry.paneList.map((p) => p.info.id), ...deviceGroups.groups.flatMap((g) => g.rows.map((r) => r.key))], [c.registry.paneList, deviceGroups.groups]));
   // The Team page: what I am doing is told to the team backend (only while Team is on), and the sidebar row counts what waits for me.
   const selectedProject = projectOfCwd(c.selectedId ? c.registry.panes.get(c.selectedId)?.info.cwd : null);
   useTeamPresenceReport(!!team.state?.active, {
@@ -881,7 +910,22 @@ export default function CockpitApp() {
   });
   const teamWaiting = useMemo(() => sidebarCount(null, lend.state) + (team.state?.cards.filter((x) => x.state === 'new' && (x.event.kind === 'please_review' || x.event.kind === 'review_requested')).length ?? 0), [lend.state, team.state]);
   const assistPanes = useMemo(() => c.registry.paneList.map((p) => ({ id: p.info.id, status: p.status })), [c.registry.paneList]);
-  const needsYou = useNeedsYouSource(c, loop.signals, undefined, missionList.missions, companions.companions ?? undefined, teamRed, lendRequests);
+  const needsYou = useNeedsYouSource(c, loop.signals, undefined, missionList.missions, companions.companions ?? undefined, teamRed, lendRequests, deviceGroups.questions);
+  // Opens a chat of another PC (a search hit, an Inbox card, the palette): false when that PC no longer lists it.
+  const openFarChat = (key: string): boolean => {
+    const row = deviceGroups.groups.flatMap((g) => g.rows).find((r) => r.key === key);
+    if (!row) return false;
+    setRemoteRow(row);
+    setView('device');
+    return true;
+  };
+  useRestoreLastChat({
+    open: view === 'device' ? (remoteRow?.key ?? null) : view === 'pane' ? c.selectedId : null,
+    has: (key) => (key.startsWith('dev:') ? deviceGroups.groups.some((g) => g.device.state === 'online' && g.rows.some((r) => r.key === key)) : c.registry.panes.has(key)),
+    openChat: (key) => (key.startsWith('dev:') ? openFarChat(key) : (c.select(key), true)),
+  });
+  const farChats = useMemo(() => farChatRows(deviceGroups.groups, (type) => c.launchEntries.find((e) => e.type === type)?.label ?? farAgentName(type)), [deviceGroups.groups, c.launchEntries]);
+  const farNeeds = useMemo<FarNeeds>(() => ({ questions: deviceGroups.questions, chatQuestions: deviceGroups.allQuestions, open: openFarChat, answer: deviceGroups.answerQuestion, hide: deviceGroups.hideQuestion }), [deviceGroups.questions, deviceGroups.allQuestions, deviceGroups.groups, deviceGroups.answerQuestion, deviceGroups.hideQuestion]); // eslint-disable-line react-hooks/exhaustive-deps
   useNeedsProblemFeed(needsYou, {
     nameOf: (id) => c.names.get(id) ?? c.registry.panes.get(id)?.info.agent_type ?? id,
     agentIdOf: (id) => c.registry.panes.get(id)?.info.agent_type ?? null,
@@ -945,16 +989,29 @@ export default function CockpitApp() {
   return (
     <LoopGuardContext.Provider value={loop}>
     <NeedsYouContext.Provider value={needsYou}>
+    <FarNeedsContext.Provider value={farNeeds}>
     <LastTurnContext.Provider value={away.lastTurn}>
     <LiveStatusContext.Provider value={live.status}>
     <div
       className="cockpit"
       {...themeProps}
       data-side-strip={layout.strip ? '' : undefined}
+      data-settings-open={view === 'settings' ? '' : undefined}
       data-focus-mode={focusMode ? '' : undefined}
       style={{ ['--ck-side-w' as string]: `${layout.sidePx}px` } as CSSProperties}
       onClickCapture={onClickCapture}
     >
+      {/* First Tab stop: jumps past the sidebar's ~50 stops to the main area. */}
+      <a
+        className="ck-skip"
+        href="#ck-main"
+        onClick={(e) => {
+          e.preventDefault();
+          document.getElementById('ck-main')?.focus();
+        }}
+      >
+        {t('r11.skipToContent')}
+      </a>
       {!focusMode && (
         <ResizeHandle
           className="ck-resize--side"
@@ -1031,7 +1088,7 @@ export default function CockpitApp() {
           requestPaneAction(id, action);
         }}
       />
-      <main className="ck-main">
+      <main className="ck-main" id="ck-main" tabIndex={-1}>
         <ConnectedBanner view={deviceGroups.view} onDone={deviceGroups.refresh} />
         <EndedAgentsLine ended={session.ended} onReopen={session.reopen} onDismiss={session.dismiss} />
         <AddHelperPopover front={frontForHelper} homeLabel={(id) => {
@@ -1119,19 +1176,34 @@ export default function CockpitApp() {
           </ErrorBoundary>
         ) : view === 'device' && remoteRow && deviceGroups.enabled && deviceGroups.view?.devices.find((d) => d.node === remoteRow.node) ? (
           <ErrorBoundary where="Device pane" resetKeys={[remoteRow.key]}>
+            {farRowEnded && !remoteRow.chat ? (
+              <FarGone
+                device={deviceGroups.view!.devices.find((d) => d.node === remoteRow.node)!}
+                chat={remoteRow.chat}
+                onClose={() => (deviceGroups.forget?.(remoteRow.key), deviceGroups.refresh(), setRemoteRow(null), setView(homeView(c.spawn !== null, c.selectedId)))}
+              />
+            ) : (
             <FarPane
               key={remoteRow.key}
-              device={deviceGroups.view!.devices.find((d) => d.node === remoteRow.node)!}
+              device={deviceGroups.groups.find((g) => g.device.node === remoteRow.node)?.device ?? deviceGroups.view!.devices.find((d) => d.node === remoteRow.node)!}
               row={deviceGroups.groups.flatMap((g) => g.rows).find((r) => r.key === remoteRow.key) ?? remoteRow}
               rows={deviceGroups.groups.find((g) => g.device.node === remoteRow.node)?.rows ?? [remoteRow]}
               c={c}
               openRow={(key) => {
                 const next = deviceGroups.groups.flatMap((g) => g.rows).find((r) => r.key === key);
                 if (next) setRemoteRow(next);
+                // A chat just started on that PC (its list has not caught up): open it by its key, as a start from New agent does.
+                else if (key.startsWith(`dev:${remoteRow.node}:`)) {
+                  deviceGroups.refresh();
+                  setRemoteRow({ ...remoteRow, key, paneId: key.slice(`dev:${remoteRow.node}:`.length), title: '', agent: '', status: 'idle', cwd: '', project: '', chat: true });
+                }
               }}
+              ended={farRowEnded}
               onRetry={deviceGroups.refresh}
+              onClosed={() => (deviceGroups.forget?.(remoteRow.key), deviceGroups.refresh(), setRemoteRow(null), setView(homeView(c.spawn !== null, c.selectedId)))}
               extras={{ onWhatBroke: setWhatBrokePane, onSeeDay: todayOn ? () => setView('today') : undefined, handoff }}
             />
+            )}
           </ErrorBoundary>
         ) : c.chatStarting ? (
           // Before the pane views, so the skeleton shows over the inbox or the pane that was open.
@@ -1218,12 +1290,18 @@ export default function CockpitApp() {
             {t('pane.focusExit')}
           </button>
         )}
+        {/* The update notice lands here, in the flow under the page, so it never covers the Files tree, Settings or the box. */}
+        <div className="ck-update-slot" />
       </main>
       <DragLayer />
       {paletteOpen && (
         <Palette
           key={paletteMode}
           c={nav}
+          farHosts={farHosts}
+          farSelected={view === 'device' && remoteRow?.chat ? remoteRow.key : null}
+          openFar={openFarChat}
+          farChats={farChats}
           initialMode={paletteMode}
           onClose={() => setPaletteOpen(false)}
           onOpenDoctor={() => setView('doctor')}
@@ -1283,6 +1361,8 @@ export default function CockpitApp() {
       {undoPane && (
         <UndoSheet
           paneId={undoPane}
+          // A chat of another PC is undone on that PC (its own checkpoints); any other on this one.
+          api={undoApi}
           sharedWith={panesSharingFolder(c.registry.paneList, c.names, undoPane)}
           notify={c.notify}
           onClose={() => setUndoPane(null)}
@@ -1336,8 +1416,8 @@ export default function CockpitApp() {
         onNudge={(id) => void tauri.writeInput(id, NUDGE_TEXT, true)}
       />
       <UsageBar
-        // A session that runs on another PC: that PC's usage and limits, tagged with its name (never this PC's numbers).
-        far={view === 'device' && remoteRow && deviceGroups.enabled ? { node: remoteRow.node, name: deviceGroups.view?.devices.find((d) => d.node === remoteRow.node)?.name ?? '' } : null}
+        // A session that runs on another PC: that PC's usage and limits, tagged with its name (never this PC's numbers). A chat on my own lent sign-in (Use my own agents) is the exception: its numbers are this PC's.
+        far={usageFarOf(view === 'device' && remoteRow && deviceGroups.enabled ? { node: remoteRow.node, name: deviceGroups.view?.devices.find((d) => d.node === remoteRow.node)?.name ?? '' } : null, lend, remoteRow?.key)}
         working={c.registry.paneList.filter((p) => p.status === 'running' && !needsYou.some((n) => n.paneId === p.info.id)).length}
         needsYou={needsYou.length}
         trailing={
@@ -1356,6 +1436,18 @@ export default function CockpitApp() {
       />
       <UndoBar />
       <HandOverSheet notify={c.notify} />
+      <FarInstallHost />
+      <JumpOutCard
+        c={c}
+        view={view}
+        shown={view === 'pane' ? shownNow : []}
+        farOpen={view === 'device' && remoteRow?.chat ? { node: remoteRow.node, paneId: remoteRow.paneId } : null}
+        onOpenInbox={() => {
+          nav.select(null);
+          setView('inbox');
+          setInboxVisit((n) => n + 1);
+        }}
+      />
       <div className="ck-toasts" aria-live="polite">
         {c.toasts.map((t) => (
           <div className="ck-toast" key={t.id}>
@@ -1371,6 +1463,7 @@ export default function CockpitApp() {
     </div>
     </LiveStatusContext.Provider>
     </LastTurnContext.Provider>
+    </FarNeedsContext.Provider>
     </NeedsYouContext.Provider>
     </LoopGuardContext.Provider>
   );

@@ -2,6 +2,7 @@
 // The editor is the one the person chose (Settings > General > My editor), else the first one found. The backend only
 // starts an editor program it found itself, with a file inside the pane's project folder.
 import { useCallback } from 'react';
+import { useHost } from '../../lib/host/context';
 import { useT } from '../../i18n';
 import { errorSentence } from '../../lib/sayError';
 import { editorApi, getMyEditor, setMyEditor, useMyEditor, type EditorApi } from '../../lib/my-editor';
@@ -53,8 +54,10 @@ export function EditorMenuItems({
   api?: EditorApi;
 }) {
   const t = useT();
+  const far = useHost().place.kind !== 'local';
   const { editors, mine } = useMyEditor(api);
-  if (editors === null) return null;
+  // The editors are this PC's programs: a file on another PC cannot be opened in them.
+  if (far || editors === null) return null;
   if (editors.length === 0) {
     return (
       <button type="button" role="menuitem" className="ck-menu-item" disabled title={t('editor.none')}>

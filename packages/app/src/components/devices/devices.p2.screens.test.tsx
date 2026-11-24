@@ -11,6 +11,7 @@ import { click, pickOption, settle, type as typeInto } from '../settings/test-ut
 import { ConnectedBanner } from './ConnectedBanner';
 import { DevicesPage } from './DevicesPage';
 import { RemoteTerminal } from './RemoteTerminal';
+import { rowOf } from './useDeviceGroups';
 
 vi.mock('../../terminal', () => ({
   // A far terminal is the real viewport; xterm itself needs a browser, so these screens draw it with a stub session.
@@ -112,6 +113,26 @@ describe('the remote view: states and notices', () => {
   });
 });
 
+describe('Hand off of a terminal agent on another PC', () => {
+  it('the terminal has a Hand off button, and the walk it starts calls the far PC and never this one', async () => {
+    const fake = new DevicesFake({ enabled: true, devices: [MAC_MINI], panes: { [NODE_MAC]: MAC_PANES } });
+    fake.farLevels[NODE_MAC] = 'full';
+    const start = vi.fn();
+    const handoff = { status: null, busy: false, mode: 'new_agent' as const, allowed: () => true, start, dismiss: () => {} };
+    const row = rowOf(NODE_MAC, { id: 'p2', agent: 'claude', title: 'Terminal', status: 'idle', project: 'pabc', folder: 'site', chat: false });
+    await act(async () => root.render(<RemoteTerminal device={fake.view.devices[0]!} row={row} rows={[row]} openRow={() => {}} handoff={handoff} api={fake} />));
+    await settle(8);
+    const button = q<HTMLButtonElement>('[data-testid="pane-handoff"]')!;
+    expect(button.disabled).toBe(false);
+    await click(button);
+    expect(start).toHaveBeenCalledTimes(1);
+    expect(start.mock.calls[0]![0]).toBe(`dev:${NODE_MAC}:p2`);
+    // The deps it was given reach the far PC, never this one.
+    await start.mock.calls[0]![1].startTerminal('claude', 'pabc').catch(() => undefined);
+    expect(fake.requests.some((r) => r.path === '/pclink/agents/start' && (r.body as { lane?: string }).lane === 'terminal')).toBe(true);
+  });
+});
+
 describe('the live terminal', () => {
   const live = async (fake: DevicesFake) => {
     await act(async () => root.render(<RemoteTerminal device={fake.view.devices[0]!} row={{ paneId: 'p2', chat: false, title: 'Terminal' }} api={fake} />));
@@ -128,6 +149,43 @@ describe('the live terminal', () => {
     await act(async () => root.unmount());
     root = createRoot(host);
     expect(fake.subscribed.has(NODE_MAC)).toBe(false);
+  });
+});
+
+describe('closing a far terminal', () => {
+  it('Close in the header ends it on the far PC, and the sidebar menu asks the same', async () => {
+    const fake = new DevicesFake({ enabled: true, devices: [MAC_MINI], panes: { [NODE_MAC]: MAC_PANES } });
+    fake.farLevels[NODE_MAC] = 'full';
+    const closed = vi.fn();
+    await act(async () => root.render(<RemoteTerminal device={fake.view.devices[0]!} row={{ paneId: 'p2', key: 'dev:m:p2', chat: false, title: 'Terminal' }} api={fake} onClosed={closed} />));
+    await settle(8);
+    await click(q('[data-testid="remote-close"]'));
+    await settle(4);
+    expect(fake.farKilled).toEqual(['p2']);
+    expect(closed).toHaveBeenCalledTimes(1);
+    // The row menu's Close reaches the open terminal as a pane action.
+    await act(async () => root.unmount());
+    root = createRoot(host);
+    await act(async () => root.render(<RemoteTerminal device={fake.view.devices[0]!} row={{ paneId: 'p2', key: 'dev:m:p2', chat: false, title: 'Terminal' }} api={fake} onClosed={closed} />));
+    await settle(8);
+    (await import('../../lib/pane-actions')).requestPaneAction('dev:m:p2', 'close');
+    await settle(4);
+    expect(fake.farKilled).toEqual(['p2', 'p2']);
+  });
+});
+
+describe('a far terminal whose far PC lost it', () => {
+  it('Close still leaves the screen when the far PC answers unknown pane', async () => {
+    const fake = new DevicesFake({ enabled: true, devices: [MAC_MINI], panes: { [NODE_MAC]: MAC_PANES } });
+    fake.farLevels[NODE_MAC] = 'full';
+    const closed = vi.fn();
+    await act(async () => root.render(<RemoteTerminal device={fake.view.devices[0]!} row={{ paneId: 'gone', key: 'dev:m:gone', chat: false, title: 'Terminal' }} api={fake} onClosed={closed} />));
+    await settle(8);
+    const kill = vi.spyOn(fake, 'request').mockRejectedValue(new Error('unknown pane: gone; pane_id must be a full pane id'));
+    await click(q('[data-testid="remote-close"]'));
+    await settle(4);
+    expect(kill).toHaveBeenCalled();
+    expect(closed).toHaveBeenCalledTimes(1);
   });
 });
 
@@ -301,6 +359,10 @@ describe('the far side: Connected banner', () => {
   it('draws nothing when nobody is connected, the device has no rights, or Labs is off', async () => {
     const fake = new DevicesFake({ enabled: true, devices: [{ ...MAC_MINI, lets_run: true, connected: false }, { ...MAC_MINI, node: 'b2'.repeat(32), lets_run: false, connected: true }] });
     await act(async () => root.render(<ConnectedBanner view={fake.view} api={fake} />));
+    expect(host.innerHTML).toBe('');
+    // A stream the dead PC left open is not "using this PC": the live link state decides.
+    const dead = new DevicesFake({ enabled: true, devices: [{ ...MAC_MINI, lets_run: true, level: 'full', connected: true, state: 'offline' }] });
+    await act(async () => root.render(<ConnectedBanner view={dead.view} api={dead} />));
     expect(host.innerHTML).toBe('');
     const off = new DevicesFake({ enabled: false, devices: [{ ...MAC_MINI, lets_run: true, connected: true }] });
     await act(async () => root.render(<ConnectedBanner view={off.view} api={off} />));

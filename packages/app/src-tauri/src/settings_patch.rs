@@ -14,7 +14,6 @@
 use parking_lot::Mutex;
 use serde_json::{json, Map, Value};
 use std::path::{Path, PathBuf};
-use std::sync::atomic::{AtomicU64, Ordering};
 use tauri::{AppHandle, Emitter};
 
 pub const SETTINGS_FILE: &str = "settings.json";
@@ -30,7 +29,6 @@ pub const SECRET_KEYS: &[&str] = &["anthropic_api_key", "openai_api_key", "openr
 
 /// One patch at a time: read-merge-write is not safe to interleave.
 static PATCH_LOCK: Mutex<()> = Mutex::new(());
-static TMP_COUNTER: AtomicU64 = AtomicU64::new(0);
 
 /// RFC 7386 JSON merge patch. Objects merge key by key, `null` removes a key, anything else
 /// (strings, numbers, arrays) replaces the old value.
@@ -80,24 +78,7 @@ pub fn merge_into_file(file: &Value, patch: &Map<String, Value>) -> Value {
     out
 }
 
-/// Write `bytes` to `path` so a reader sees the old file or the new one, never half of one:
-/// write a sibling temp file, then rename it over the target.
-pub fn write_atomic(path: &Path, bytes: &[u8]) -> std::io::Result<()> {
-    if let Some(dir) = path.parent() {
-        std::fs::create_dir_all(dir)?;
-    }
-    let tmp = tmp_path(path);
-    if let Err(e) = std::fs::write(&tmp, bytes).and_then(|()| std::fs::rename(&tmp, path)) {
-        let _ = std::fs::remove_file(&tmp);
-        return Err(e);
-    }
-    Ok(())
-}
-
-fn tmp_path(path: &Path) -> PathBuf {
-    let name = path.file_name().map(|n| n.to_string_lossy().into_owned()).unwrap_or_else(|| SETTINGS_FILE.into());
-    path.with_file_name(format!("{name}.{}-{}.tmp", std::process::id(), TMP_COUNTER.fetch_add(1, Ordering::Relaxed)))
-}
+pub use pm_core::write_atomic::write_atomic;
 
 fn read_file_value(path: &Path) -> Value {
     std::fs::read_to_string(path).ok().and_then(|t| serde_json::from_str::<Value>(&t).ok()).unwrap_or_else(|| json!({}))

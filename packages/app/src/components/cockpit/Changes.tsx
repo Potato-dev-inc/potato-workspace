@@ -3,7 +3,7 @@ import { t } from '../../i18n';
 import { showUndo } from '../../lib/undo-bar';
 import { markStep } from '../../lib/getting-started';
 import { cockpitApi, type ChangeBlame, type WorktreeDiff, type WorktreeItem } from '../../lib/cockpit-api';
-import { lineKind, plural, splitPatch, statusMark } from './diff';
+import { lineKind, splitPatch, statusMark } from './diff';
 import { blameLine } from './blame-line';
 import { secondOpinionApi, type SecondOpinionApi } from '../../lib/second-opinion';
 import { dragSourceProps } from '../dnd/dragSourceProps';
@@ -16,6 +16,7 @@ import { EditorMenuItems } from '../files/OpenInEditor';
 import { CreatePrSheet } from './CreatePrSheet';
 import { PrBlock } from './PrBlock';
 import { agentLabel, useAgentRegistry } from '../../lib/agentRegistry';
+import { useWorktreeApi } from './usePaneWorktree';
 import { shipApi, type PrRef, type ShipApi } from '../../lib/ship-api';
 import { setupLine } from '../../lib/ship-model';
 import { branchKeepWarning, branchLineage, type BranchView } from '../../lib/branch-from';
@@ -46,19 +47,19 @@ export function copyHeadline(copyLabel: string | undefined, base: string): strin
 export function plainMergeError(raw: string): { text: string; title?: string } {
   if (/ORIGIN_DIRTY_OVERLAP/.test(raw)) {
     const files = /\(([^()]*)\)\s*$/.exec(raw.trim())?.[1];
-    const sentence = 'Your project has unsaved changes to the same files. Save or undo them first.';
+    const sentence = t('r10.changes.err.dirty');
     return { text: files ? `${sentence} (${files})` : sentence, title: raw };
   }
   if (/MERGE_CONFLICT/.test(raw)) {
     const files = /\(([^()]*)\)\s*$/.exec(raw.trim())?.[1];
-    const sentence = 'Some files changed in both places, so nothing was merged. Your project is unchanged and the copy is safe.';
+    const sentence = t('r10.changes.err.conflict');
     return { text: files ? `${sentence} (${files})` : sentence, title: raw };
   }
   if (/ORIGIN_DETACHED/.test(raw)) {
-    return { text: "Your project isn't on a branch. Switch to a branch, then merge.", title: raw };
+    return { text: t('r10.changes.err.detached'), title: raw };
   }
   if (/ORIGIN_MERGE_IN_PROGRESS/.test(raw)) {
-    return { text: 'Your project is in the middle of a merge. Finish or cancel it first.', title: raw };
+    return { text: t('r10.changes.err.inMerge'), title: raw };
   }
   return { text: raw };
 }
@@ -70,7 +71,7 @@ export function plainMergeError(raw: string): { text: string; title?: string } {
 export function Changes({
   paneId,
   status,
-  api = cockpitApi,
+  api: givenApi,
   reviewApi = secondOpinionApi,
   secondOpinion,
   turnReview,
@@ -103,6 +104,9 @@ export function Changes({
   /** "All files": the project's files (a test double can stand in). */
   listFiles?: (paneId: string, query: string, limit?: number) => Promise<ProjectFileHit[]>;
 }) {
+  // The copy of the place this screen shows (a chat on another PC: that PC's copy, over the link); a test double or another surface passes its own.
+  const own = useWorktreeApi(paneId);
+  const api: ChangesApi = givenApi ?? own;
   const [item, setItem] = useState<WorktreeItem | null>(null);
   const [diff, setDiff] = useState<WorktreeDiff | null>(null);
   const [open, setOpen] = useState<string | null>(null);
@@ -254,7 +258,7 @@ export function Changes({
     setError(null);
     setItem(null);
     setDiff(null);
-    setNotice('Discarded the separate copy.');
+    setNotice(t('r10.changes.discarded'));
     showUndo({
       text: t('undo.copyDiscarded', { name: agentName }),
       failText: t('undo.commitFailed'),
@@ -286,7 +290,7 @@ export function Changes({
         setNotice(`Merged into ${out.into}.`);
         setItem(null);
       } else {
-        setNotice('Nothing to merge: the agent changed no files.');
+        setNotice(t('r10.changes.nothing'));
       }
       setSheet(null);
     } catch (err) {
@@ -299,17 +303,17 @@ export function Changes({
   };
 
   return (
-    <section className="ck-changes" aria-label="Changes">
+    <section className="ck-changes" aria-label={t('r10.changes.title')}>
       <div className="ck-changes-head">
-        <h2 className="ck-section">Changes</h2>
-        <span className="ck-changes-state">{working ? 'Working' : 'Not merged yet'}</span>
+        <h2 className="ck-section">{t('r10.changes.title')}</h2>
+        <span className="ck-changes-state">{working ? t('state.working') : t('r10.changes.notMerged')}</span>
       </div>
       <p className="ck-changes-meta">
         {copyHeadline(copyLabel, item.base)}
         {total && (
           <>
             {' · '}
-            {plural(total.files_changed, 'file')}
+            {t('r10.changes.files', { count: total.files_changed })}
             {' · '}
             <span className="ck-num ck-add">+{total.additions}</span> <span className="ck-num ck-del">−{total.deletions}</span>
           </>
@@ -318,18 +322,18 @@ export function Changes({
 
       {!copyLabel && (
         <details className="ck-details ck-changes-details">
-          <summary>Details</summary>
+          <summary>{t('changes.details')}</summary>
           <dl className="ck-facts ck-facts--details">
             <div className="ck-facts-row">
-              <dt>Branch</dt>
+              <dt>{t('changes.branch')}</dt>
               <dd className="ck-mono">{item.branch}</dd>
             </div>
             <div className="ck-facts-row">
-              <dt>Based on</dt>
+              <dt>{t('changes.basedOn')}</dt>
               <dd className="ck-mono">{item.base}</dd>
             </div>
             <div className="ck-facts-row">
-              <dt>Folder</dt>
+              <dt>{t('changes.folder')}</dt>
               <dd className="ck-mono">{item.path}</dd>
             </div>
           </dl>
@@ -343,7 +347,7 @@ export function Changes({
           </p>
           {setup.status === 'failed' && setup.steps.some((st) => st.tail) && (
             <details className="ck-pr-details">
-              <summary>Last lines of the output</summary>
+              <summary>{t('r10.changes.lastLines')}</summary>
               <pre className="ck-pr-command">{setup.steps.find((st) => !st.ok)?.tail}</pre>
             </details>
           )}
@@ -370,8 +374,8 @@ export function Changes({
           value={view}
           onChange={setView}
           options={[
-            { id: 'changes' as const, label: 'Changes', badge: total?.files_changed },
-            { id: 'all' as const, label: 'All files' },
+            { id: 'changes' as const, label: t('r10.changes.title'), badge: total?.files_changed },
+            { id: 'all' as const, label: t('r10.changes.allFiles') },
           ]}
         />
         {total && view === 'changes' && (
@@ -393,10 +397,10 @@ export function Changes({
               </li>
             );
           })}
-          {allFiles !== null && allFiles.length === 0 && <li className="ck-sub ck-pad">No files to show.</li>}
+          {allFiles !== null && allFiles.length === 0 && <li className="ck-sub ck-pad">{t('r21.sw.noFilesToShow')}</li>}
         </ul>
       )}
-      {view === 'changes' && diff && files.length === 0 && <p className="ck-sub">No file changes yet.</p>}
+      {view === 'changes' && diff && files.length === 0 && <p className="ck-sub">{t('r21.sw.noFileChangesYet')}</p>}
       <ul className="ck-changes-files" hidden={view !== 'changes'}>
         {files.map((f) => {
           const lines = bodies.get(f.path);
@@ -439,7 +443,7 @@ export function Changes({
                   )}
                 </span>
                 {(notes?.get(f.path)?.length ?? 0) > 0 && (
-                  <span className="ck-changes-notes">{plural(notes?.get(f.path)?.length ?? 0, 'note')}</span>
+                  <span className="ck-changes-notes">{t('r10.changes.notes', { count: notes?.get(f.path)?.length ?? 0 })}</span>
                 )}
               </button>
               {isOpen && reviewDone?.start ? (
@@ -449,7 +453,7 @@ export function Changes({
                   findings={notes?.get(f.path) ?? []}
                   agentLabel={reviewDone.start.authorLabel}
                   onSend={(file, line, text) => sendToAuthor(paneId, file, line, text, reviewApi).then(() => undefined)}
-                  emptyText={diff?.patch_truncated ? 'Diff too large to show here.' : 'No textual changes.'}
+                  emptyText={diff?.patch_truncated ? t('r10.changes.tooLarge') : t('r10.changes.noText')}
                 />
               ) : (
                 isOpen && (
@@ -462,7 +466,7 @@ export function Changes({
                       ))
                     ) : (
                       <span className="ck-diff-line ck-diff-ctx">
-                        {diff?.patch_truncated ? 'Diff too large to show here.' : 'No textual changes.'}
+                        {diff?.patch_truncated ? t('r10.changes.tooLarge') : t('r10.changes.noText')}
                       </span>
                     )}
                   </pre>
@@ -494,30 +498,30 @@ export function Changes({
           type="button"
           className={`ck-btn ${concerns || setupFailed ? 'ck-btn--secondary' : 'ck-btn--primary'}`}
           disabled={working || busy || item.state === 'missing'}
-          title={working ? 'The agent is still working' : undefined}
+          title={working ? t('r10.changes.stillWorking') : undefined}
           onClick={() => setSheet('merge')}
         >
-          {concerns ? 'Merge anyway' : 'Merge'}
+          {concerns ? t('r10.changes.mergeAnyway') : t('r10.changes.merge')}
         </button>
         <button
           type="button"
           className="ck-btn ck-btn--secondary"
           disabled={working || busy || item.state === 'missing'}
-          title={working ? 'The agent is still working' : undefined}
+          title={working ? t('r10.changes.stillWorking') : undefined}
           onClick={() => setPrSheet(true)}
         >
-          {item.pr ? 'Update PR' : 'Create PR'}
+          {item.pr ? t('r10.changes.updatePr') : t('r10.changes.createPr')}
         </button>
         <button
           type="button"
           className="ck-btn ck-btn--secondary"
           disabled={working || busy}
-          title={working ? 'The agent is still working' : undefined}
+          title={working ? t('r10.changes.stillWorking') : undefined}
           onClick={discardWithUndo}
         >
-          Discard
+          {t('r10.changes.discard')}
         </button>
-        {setupFailed && <span className="ck-changes-hint">Setup failed, checks didn't run.</span>}
+        {setupFailed && <span className="ck-changes-hint">{t('r10.changes.setupFailed')}</span>}
       </div>
       )}
 
@@ -531,7 +535,7 @@ export function Changes({
             setPrSheet(false);
             setItem({ ...item, pr: { ...pr, checks: undefined } });
             setPrRound((r) => r + 1);
-            setNotice(updated ? 'Pushed the new commits to the pull request.' : `Draft pull request #${pr.number} created.`);
+            setNotice(updated ? t('r10.changes.pushed') : t('r10.changes.prCreated', { number: pr.number }));
           }}
         />
       )}
@@ -539,18 +543,18 @@ export function Changes({
       {sheet && (
         <Sheet labelledBy="ck-wt-t" onClose={busy ? undefined : () => setSheet(null)}>
             <h2 className="ck-section" id="ck-wt-t">
-              {`Merge into ${item.base}?`}
+              {t('r10.changes.mergeInto', { base: item.base })}
             </h2>
             <p className="ck-sub">
-              {`Brings ${plural(total?.files_changed ?? 0, 'changed file')} from this separate copy into ${item.base} and closes ${agentName}. If anything conflicts, nothing is merged.`}
+              {t('r10.changes.mergeBody', { count: total?.files_changed ?? 0, base: item.base, agent: agentName })}
             </p>
             {keepWarning && <p className="ck-sub ck-changes-keep-warning">{keepWarning}</p>}
             <div className="ck-sheet-actions">
               <button type="button" className="ck-btn ck-btn--secondary" autoFocus disabled={busy} onClick={() => setSheet(null)}>
-                Cancel
+                {t('r10.cancel')}
               </button>
               <button type="button" className="ck-btn ck-btn--primary" disabled={busy} onClick={() => void merge()}>
-                Merge
+                {t('r10.changes.merge')}
               </button>
             </div>
         </Sheet>

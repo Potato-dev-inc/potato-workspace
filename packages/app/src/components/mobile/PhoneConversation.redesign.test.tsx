@@ -61,7 +61,7 @@ describe('PhoneConversation redesign (chat part)', () => {
   it('says the thought line in Chinese for zh-TW', () => {
     setLanguagePref('zh-TW', false);
     render(THINK);
-    expect(host.querySelector('[data-testid="thinking-block"] button')?.textContent).toBe('思考了 4s');
+    expect(host.querySelector('[data-testid="thinking-block"] button')?.textContent).toBe('思考了 4 秒');
   });
 
   it('keeps a live thought folded too: "Thinking…" on one line', () => {

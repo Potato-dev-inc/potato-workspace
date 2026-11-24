@@ -19,7 +19,7 @@ use serde_json::Value;
 const AGENT: &str = "fake_codex";
 
 /// Codex's update menu, a start-up notice its profile closes with a skip key (not in strict mode).
-const UPDATE_MENU: &str = include_str!("../src/tui/codex/fixtures/update_prompt_live.txt");
+const UPDATE_MENU: &str = include_str!("../crates/pm-core/src/tui/codex/fixtures/update_prompt_live.txt");
 
 const V1: &str = "agent = \"codex\"\nversion = \"1.0.0\"\nversion_output = \"fake-codex 1.0.0\"\n";
 const V2_SAME_SCREENS: &str = "agent = \"codex\"\nversion = \"2.0.0\"\nversion_output = \"fake-codex 2.0.0\"\n";

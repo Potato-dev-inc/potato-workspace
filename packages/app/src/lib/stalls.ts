@@ -1,7 +1,7 @@
 // Helpers with no progress for N minutes ("Stuck?"). The backend samples the helper panes and says when one is stuck
 // (`pane-stall`); this keeps the answer per pane for the rows and the chat, and sends the three buttons.
 import { invoke } from '@tauri-apps/api/core';
-import { listen } from '@tauri-apps/api/event';
+import { listen } from './events';
 import { useEffect, useSyncExternalStore } from 'react';
 
 let current: ReadonlyMap<string, number> = new Map();

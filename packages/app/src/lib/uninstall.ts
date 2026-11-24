@@ -1,7 +1,7 @@
 // Settings > Danger zone: the commands behind "Reset settings" and "Uninstall everything" (Rust: uninstall::commands).
 // The block takes an `UninstallApi`, so tests pass a fake and nothing real is ever called from a test.
 import { invoke } from '@tauri-apps/api/core';
-import { listen } from '@tauri-apps/api/event';
+import { listen } from './events';
 
 export interface UninstallItem {
   label: string;

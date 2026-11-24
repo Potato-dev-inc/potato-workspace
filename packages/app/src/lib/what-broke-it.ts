@@ -5,7 +5,8 @@
 // `Limits`, `DeclaredView` and `SuggestionView` are snake_case (as the spec writes them); the other views
 // are camelCase. Tauri maps the Rust argument names to camelCase (`pane_id` is `paneId`).
 import { invoke } from '@tauri-apps/api/core';
-import { listen, type UnlistenFn } from '@tauri-apps/api/event';
+import { type UnlistenFn } from '@tauri-apps/api/event';
+import { listen } from './events';
 import type { FileChange } from './cockpit-api';
 
 /** Test limits (Rust `Limits`). The backend clamps them: runs 1..=30, minutes 1..=60. */

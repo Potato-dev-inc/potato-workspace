@@ -4,7 +4,7 @@
 // (Summary, Normal, Verbose) is in the header. The agent's text is Markdown when it comes from the session file;
 // text read off the terminal is shown as it is.
 import { loadDesktopDeviceNames } from '../../lib/deviceNames.desktop';
-import { t } from '../../i18n';
+import { t, useT } from '../../i18n';
 import { sentFromLines, useDeviceNames } from '../../lib/deviceNames';
 import { Fragment, memo, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type KeyboardEvent, type ReactNode } from 'react';
 import { createPortal } from 'react-dom';
@@ -15,7 +15,7 @@ import '../../styles/cockpit-chat.css';
 import { ActivityLine } from './ActivityLine';
 import { AttachmentChips } from './AttachmentChips';
 import { segmentSteps } from './chatActivity';
-import { formatDuration } from './chatFormat';
+import { endingText, formatDuration } from './chatFormat';
 import { useChatViewMode, type ChatViewMode } from './chatViewMode';
 import { hideResultBlock } from '../../lib/phone-result';
 import { ChatMarkdown } from './ChatMarkdown';
@@ -53,6 +53,7 @@ import { hasPrice, turnPrices, type TurnPrice } from '../../lib/turnPrice';
 import { TurnEndingButtons, type EndingActions } from './TurnEndingButtons';
 import { ViewModeToggle } from './ViewModeToggle';
 import { MessageRail } from './MessageRail';
+import { isHandoffPrompt } from '../../lib/handoffPrompt';
 import { useHost } from '../../lib/host/context';
 import { buildRailEntries } from './messageRailModel';
 
@@ -140,7 +141,6 @@ export function lastBranchableId(turns: readonly ChatTurn[]): string | null {
 /** How long a jump waits for its message to load before it is dropped. */
 const JUMP_WAIT_MS = 10_000;
 
-const SUMMARY_NOTE = 'Summary: your messages, final answers and activity lines.';
 
 const TextStep = memo(function TextStep({ step, markdown, mode, actions }: { step: Extract<TurnStep, { kind: 'text' }>; markdown: boolean; mode: ChatViewMode; actions?: { onRetry?: () => Promise<string | null> } }) {
   const bodyRef = useRef<HTMLDivElement>(null);
@@ -162,9 +162,10 @@ const TextStep = memo(function TextStep({ step, markdown, mode, actions }: { ste
 });
 
 function TurnEndDivider({ turn, branch, endings }: { turn: ChatTurn; branch?: TurnBranch; endings?: EndingActions }) {
+  const t = useT();
   const parts: string[] = [];
-  if (turn.outcome === 'interrupted' || turn.outcome === 'failed') parts.push(turn.outcome);
-  if (turn.durationMs !== null) parts.push(`Worked for ${formatDuration(turn.durationMs)}`);
+  if (turn.outcome === 'interrupted' || turn.outcome === 'failed') parts.push(t(turn.outcome === 'failed' ? 'chat.turn.failed' : 'chat.turn.interrupted'));
+  if (turn.durationMs !== null) parts.push(t('chat.turn.workedFor', { time: formatDuration(turn.durationMs) }));
   const ending = turn.ending;
   return (
     <div className="flex items-center gap-2 py-0.5 text-[10px] text-pm-muted ck-chat-end" data-ending={ending?.reason}>
@@ -172,7 +173,7 @@ function TurnEndDivider({ turn, branch, endings }: { turn: ChatTurn; branch?: Tu
       {/* A chat that says how its turns ended has one line for it; the others keep "Worked for". */}
       {ending ? (
         <span className="ck-chat-end-text ck-chat-ending" data-testid="turn-ending">
-          {ending.text}
+          {endingText(ending.text)}
           {endings && <TurnEndingButtons ending={ending} actions={endings} />}
         </span>
       ) : (
@@ -181,7 +182,7 @@ function TurnEndDivider({ turn, branch, endings }: { turn: ChatTurn; branch?: Tu
       <span className="h-px flex-1 bg-pm-border ck-chat-rule" />
       {branch && (
         <button type="button" className={`ck-chat-branch-btn${branch.always ? ' is-always' : ''}`} onClick={branch.onBranch}>
-          Branch
+          {t('chat.turn.branch')}
         </button>
       )}
     </div>
@@ -213,12 +214,21 @@ const TurnView = memo(function TurnView({ turn, fromScreen, markdown, mode, canB
     <section className={`space-y-1.5 ck-chat-turn${live ? '' : ' is-done'}`} data-turn-id={turn.id}>
       {turn.user && (
         <div className="flex flex-col items-end gap-1.5" data-rail-id={turn.user.id}>
-          {turn.user.attachments && turn.user.attachments.length > 0 && <AttachmentChips attachments={turn.user.attachments} className="ck-chat-user-files" />}
+          {turn.user.attachments && turn.user.attachments.length > 0 && <AttachmentChips attachments={turn.user.attachments} className="ck-chat-user-files" paneId={paneId} />}
           {card?.kind === 'workflow' && <WorkflowCard split={card.split} />}
           {card?.kind === 'markup' && <MarkupCard split={card.split} />}
           {(card ? cardRequest(card) : turn.user.text).trim() !== '' && (
             <div className="max-w-[85%] whitespace-pre-wrap break-words rounded bg-pm-raised px-2 py-1 text-pm-text ck-chat-bubble">
-              {card ? cardRequest(card) : turn.user.text}
+              {!card && isHandoffPrompt(turn.user.text) ? (
+                <details data-testid="handoff-instructions">
+                  <summary className="cursor-pointer">
+                    {t('r14.handoff.instructions')}: {turn.user.text.split(/\r?\n/)[0]}
+                  </summary>
+                  {turn.user.text}
+                </details>
+              ) : (
+                card ? cardRequest(card) : turn.user.text
+              )}
             </div>
           )}
           {sentFrom && (
@@ -293,6 +303,8 @@ export function SessionChatView({ state, reason, waitingFor, ready, source, turn
   }, [paneId, plan]);
   // The same rule for `Branch`.
   const showBranch = !!canBranch && !!onBranch && !readOnly;
+  // The buttons go on the newest turn that has a message of its own: a far chat can end with a line (a late tool, a note) that starts no turn of its own, and Retry must not vanish behind it.
+  const endingsTurnId = useMemo(() => [...turns].reverse().find((x) => x.user)?.id ?? turns[turns.length - 1]?.id, [turns]);
   const newestBranchable = useMemo(() => (showBranch ? lastBranchableId(turns) : null), [showBranch, turns]);
   const placedHelpers = useStable(useMemo(() => placeHelpers(turns, helpers ?? []), [turns, helpers]));
   // The first message of a chat the app started from a workflow is shown as one card (see lib/workflowCard.ts).
@@ -447,7 +459,7 @@ export function SessionChatView({ state, reason, waitingFor, ready, source, turn
               {SCREEN_CHAT_NOTE}
             </span>
           )}
-          {mode === 'summary' && <span className="block ck-chat-mode-note">{SUMMARY_NOTE}</span>}
+          {mode === 'summary' && <span className="block ck-chat-mode-note">{t('chat.summaryNote')}</span>}
         </p>
       )}
       {banner}
@@ -456,8 +468,18 @@ export function SessionChatView({ state, reason, waitingFor, ready, source, turn
       <div ref={scrollRef} onScroll={onScroll} className="min-h-0 min-w-0 flex-1 space-y-3 overflow-y-auto px-2 py-2 ck-chat-body">
         {state === 'unavailable' && (
           <div className="ck-empty ck-chat-empty">
-            <h2 className="ck-section text-xs font-semibold text-pm-text">Chat unavailable</h2>
-            <p className="ck-sub text-pm-muted">{reason ?? 'Chat is not available for this pane.'}</p>
+            {host.ended ? (
+              // A far chat that ended while its PC was off: say so here too (the banner above has Close), never "unavailable".
+              <>
+                <h2 className="ck-section text-xs font-semibold text-pm-text" data-testid="chat-ended">{t('r21fn.ended.title')}</h2>
+                <p className="ck-sub text-pm-muted">{t('devices.remote.goneChat', { name: (host.place as { name?: string }).name ?? '' })}</p>
+              </>
+            ) : (
+              <>
+                <h2 className="ck-section text-xs font-semibold text-pm-text">{t('r21.sw.chatUnavailable')}</h2>
+                <p className="ck-sub text-pm-muted">{reason ?? 'Chat is not available for this pane.'}</p>
+              </>
+            )}
           </div>
         )}
         {state !== 'unavailable' && earlier && <EarlierRow earlier={earlier} onPress={noteWhere} />}
@@ -465,7 +487,7 @@ export function SessionChatView({ state, reason, waitingFor, ready, source, turn
         {state !== 'unavailable' && turns.length === 0 && (
           <div className="ck-chat-waiting">
             <p className="ck-sub text-pm-muted ck-chat-waiting-line">
-              {fromScreen ? 'Waiting for a message on the terminal…' : source === 'acp' && ready ? t('chat.readyIdle') : source === 'api' || source === 'acp' ? "Waiting for the agent's session…" : "Waiting for the agent's session file…"}
+              {state === 'loading' ? t('chat.loadingChat') : fromScreen ? 'Waiting for a message on the terminal…' : source === 'acp' && ready ? t('chat.readyIdle') : source === 'api' || source === 'acp' ? "Waiting for the agent's session…" : "Waiting for the agent's session file…"}
             </p>
             {waitingFor && (
               <p className="mt-0.5 break-words text-[11px] text-pm-muted opacity-70 ck-chat-waiting-for">{waitingFor}</p>
@@ -490,7 +512,7 @@ export function SessionChatView({ state, reason, waitingFor, ready, source, turn
               onBranch={stableBranch}
               helpers={placedHelpers.get(turn.id)}
               onOpenPane={onOpenPane ? stableOpenPane : undefined}
-              endings={endings && turn.id === turns[turns.length - 1]?.id ? endings : undefined}
+              endings={endings && turn.id === endingsTurnId ? endings : undefined}
             />
             </Fragment>
           ))}

@@ -17,6 +17,7 @@ import { subscribeBridgeEventsHandle, type BridgeEventsHandle, type BridgeLinkSt
 import { DEFAULT_PUBLIC_SETTINGS, type PublicSettings } from './lib/bridge-settings';
 import { ngrokRequestHeaders } from './lib/bridge-ngrok';
 import { mergeBridgeHeaders } from './lib/mobile-pairing-auth';
+import { loadMobilePairingCredentials } from './lib/mobile-pairing';
 import { LS_BRIDGE_URL, resolveBridgeBaseUrl } from './lib/bridge-url';
 import { agentLabel, fallbackListing, listingFromBody, type AgentRegistryListing, type LaunchEntry } from './lib/agentRegistry';
 import { ALL_TAB, companionTab, isCompanionPane, isCompanionTab, orderPanes, phoneLaunchEntries, tabLabels, tabOfPane } from './lib/mobile-agent-tabs';
@@ -150,6 +151,15 @@ function readActiveTab(): string {
     return localStorage.getItem(LS_ACTIVE_TAB) || ALL_TAB;
   } catch {
     return ALL_TAB;
+  }
+}
+
+/** No pairing and no saved address on this phone: it was never paired. */
+function neverPaired(): boolean {
+  try {
+    return loadMobilePairingCredentials() === null && !localStorage.getItem(LS_BRIDGE_URL);
+  } catch {
+    return false;
   }
 }
 
@@ -965,7 +975,7 @@ export default function PwaApp() {
               : undefined
           }
         />
-        <PhoneLinkLine kind={phoneLink.kind} recovered={phoneLink.recovered} onPairAgain={() => setEditingUrl(true)} onRetry={() => resyncRef.current()} />
+        <PhoneLinkLine kind={phoneLink.kind} recovered={phoneLink.recovered} unpaired={neverPaired()} onPairAgain={() => setEditingUrl(true)} onRetry={() => resyncRef.current()} />
         {active !== ALL_TAB && stuck.get(active) && <StuckNote signal={stuck.get(active)!} />}
         {active !== ALL_TAB && previews[active]?.[0] && <PreviewNote preview={previews[active][0]} />}
         <main

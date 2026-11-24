@@ -75,6 +75,16 @@ describe('StartupCheckLine', () => {
     expect(host.querySelector('[data-testid="startup-check"]')).toBeNull();
   });
 
+  it('the update-address note clears itself after about 8 seconds', async () => {
+    await start(deps({ updateReachable: async () => false }));
+    await run(4100);
+    expect(host.querySelector('[data-check="update"]')).not.toBeNull();
+    await run(7000);
+    expect(host.querySelector('[data-check="update"]')).not.toBeNull();
+    await run(1500);
+    expect(host.querySelector('[data-check="update"]')).toBeNull();
+  });
+
   it('a check that fails by itself never shows an error', async () => {
     await start(
       deps({

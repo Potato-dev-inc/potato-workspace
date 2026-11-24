@@ -1,4 +1,5 @@
 // @vitest-environment jsdom
+import { resetEventHub } from './events';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 const invoke = vi.fn();
@@ -40,6 +41,7 @@ const view = (patch: Partial<HandoverView> = {}): HandoverView => ({
 });
 
 beforeEach(() => {
+  resetEventHub();
   invoke.mockReset();
   listen.mockReset();
   (window as unknown as Record<string, unknown>).__TAURI_INTERNALS__ = {};
@@ -126,12 +128,14 @@ describe('keepGoingLineage', () => {
 describe('onKeepGoingChanged', () => {
   it('listens to the keep-going changed event and hands over the pane ids', async () => {
     const unlisten = vi.fn();
+    let fire: (e: { payload: unknown }) => void = () => {};
     listen.mockImplementationOnce(async (_name: string, handler: (e: { payload: unknown }) => void) => {
-      handler({ payload: { paneIds: ['pane-a', 'pane-b'] } });
+      fire = handler;
       return unlisten;
     });
     const cb = vi.fn();
     const off = await onKeepGoingChanged(cb);
+    fire({ payload: { paneIds: ['pane-a', 'pane-b'] } });
     expect(listen).toHaveBeenCalledWith(KEEP_GOING_CHANGED_EVENT, expect.any(Function));
     expect(KEEP_GOING_CHANGED_EVENT).toBe('keep-going://changed');
     expect(cb).toHaveBeenCalledWith({ paneIds: ['pane-a', 'pane-b'] });

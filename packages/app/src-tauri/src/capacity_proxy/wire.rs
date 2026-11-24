@@ -33,16 +33,7 @@ pub const MAX_OFFERS: usize = 20;
 /// Largest sealed item accepted (a relay envelope is at most 24 KiB).
 const MAX_ITEM_BYTES: usize = 16 * 1024;
 
-/// Where the lending PC can be reached on the PC link.
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
-pub struct NodeHint {
-    /// Node id, 64 hex chars.
-    pub id: String,
-    #[serde(default)]
-    pub relay: String,
-    #[serde(default)]
-    pub lan: Vec<String>,
-}
+pub use pm_core::capacity_proxy::NodeHint;
 
 /// What a lender offers ONE asker: words and numbers only (no token, no path, no email). The asker picks one and names its
 /// `profile_id` in its request.
@@ -101,7 +92,14 @@ pub enum Body {
     /// The lender took it back (only from the device that issued the grant).
     Revoke { grant_id: String, #[serde(default)] reason: String },
     /// The borrower gave it back (only from the device the grant was for).
-    Return { grant_id: String },
+    /// `reason` is only ever `NOT_HELD` (the answer to a `Check`); empty for a normal give-back.
+    Return { grant_id: String, #[serde(default)] reason: String },
+    /// The lender asks "do you still hold this grant?" (Lending tab opened, or every few minutes). A borrower that holds it says
+    /// nothing; one that does not answers `Return` with the reason `NOT_HELD`. An older build drops it as a bad item.
+    Check { grant_id: String },
+    /// "Use my own agents": the lender keeps a lend rolling while its far chat lives. The new end is `not_after_ms` on the
+    /// lender's clock (read like a `Grant`'s). Taken only from the device that issued the grant; an older build drops it.
+    Extend { grant_id: String, not_after_ms: u64 },
     Ack { of: String },
     /// Team page ping: "are you there?" The answer is a `Pong` with the same nonce, so the sender can time the round
     /// trip through the relay. Answered whether or not Lend is on (`ping`); an older build drops it as a bad item.

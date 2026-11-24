@@ -4,6 +4,8 @@ import { teamApi, type PresenceReport, type TeamApi } from '../../lib/team';
 /** How often the backend is told what I am doing (it also beats to the team about once a minute). */
 export const REPORT_EVERY_MS = 30_000;
 /** No pointer or key for this long: away. */
+/** A change waits this long for the next one before it is reported. */
+export const CHANGE_SETTLE_MS = 1000;
 export const AWAY_AFTER_MS = 5 * 60_000;
 
 export interface PresenceFacts {
@@ -52,8 +54,15 @@ export function useTeamPresenceReport(active: boolean, facts: PresenceFacts, api
     return () => window.clearInterval(timer);
   }, [active]);
 
-  // A change (another chat, a new title, an agent starts or waits) is told at once.
+  // A change (another chat, a new title, an agent starts or waits) is told a moment later, so a run of quick chat switches sends one report.
+  const first = useRef(true);
   useEffect(() => {
-    send.current();
+    if (first.current) {
+      first.current = false;
+      send.current();
+      return;
+    }
+    const timer = window.setTimeout(() => send.current(), CHANGE_SETTLE_MS);
+    return () => window.clearTimeout(timer);
   }, [active, facts.projectPath, facts.projectName, facts.title, facts.running, facts.waiting]);
 }

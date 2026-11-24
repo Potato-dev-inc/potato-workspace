@@ -2,7 +2,8 @@
 // asks the person before an agent reads the failed log, and asks again before anything is pushed.
 // Desktop only. Rust structs keep their snake_case names here; the watch and fix views are camelCase.
 import { invoke } from '@tauri-apps/api/core';
-import { listen, type UnlistenFn } from '@tauri-apps/api/event';
+import { listen } from './events';
+import type { UnlistenFn } from '@tauri-apps/api/event';
 
 /** Labs > Red to Green settings (Rust `ci_fix::model::Settings`). The backend clamps every number to its cap. */
 export interface CiFixSettings {

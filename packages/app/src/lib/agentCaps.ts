@@ -2,7 +2,7 @@
 // `agent_caps_get` / `agent_caps_list` commands, and the pure rules the chips follow.
 // Nothing here names an agent. A chip is a pure function of the capability: the screen never upgrades it.
 import { invoke } from '@tauri-apps/api/core';
-import { listen } from '@tauri-apps/api/event';
+import { listen } from './events';
 import { CHIPS, type AgentCaps, type Cap, type ChipKey, type Tri } from './addAgent';
 
 export { CHIPS, sourceText } from './addAgent';

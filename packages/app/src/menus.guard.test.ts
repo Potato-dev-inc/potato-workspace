@@ -19,6 +19,8 @@ const ALLOW: Record<string, string> = {
     'Lives inside the pet window, which is sized to the pet. A top-layer menu would need room outside that window, and the pet window cannot be moved by the layer.',
   'components/askbar/AskBar.tsx':
     'The ask bar is its own small window, resized by api.resize(menuOpen) to fit its content. A top-layer menu would be drawn outside that window.',
+  'components/devices/RemoteFolderSheet.tsx':
+    'The folder picker is a sheet: its project, drive and folder lists are inline steps inside the sheet, not pop-ups, so there is nothing to float.',
   'components/cockpit/newagent/HomeCards.tsx':
     'The "add a card" list opens inline in the page, under its row, with a Close row. It is an expanding list, not a pop-up, so it is not floated.',
 };

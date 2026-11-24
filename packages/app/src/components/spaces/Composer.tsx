@@ -1,6 +1,7 @@
 import { useState, type KeyboardEvent } from 'react';
 import { open as pickFile } from '@tauri-apps/plugin-dialog';
 import { MAX_TEXT_CHARS, type SpaceMessage } from '../../lib/spaces';
+import { t } from '../../i18n';
 
 /** The counter shows from this size on (90% of the cap). */
 export const COUNT_FROM_CHARS = 3600;
@@ -59,7 +60,7 @@ export function Composer({ channelName, replyTo, onCancelReply, onSend, disabled
       {replyTo && (
         <div className="ck-spaces-composer-reply">
           <span>Replying to {replyTo.authorName}</span>
-          <button type="button" className="ck-spaces-link" onClick={onCancelReply}>Cancel reply</button>
+          <button type="button" className="ck-spaces-link" onClick={onCancelReply}>{t('r21.sw.cancelReply')}</button>
         </div>
       )}
       <textarea aria-label={`Message #${channelName}`} placeholder={`Message #${channelName}`} rows={1}
@@ -71,7 +72,7 @@ export function Composer({ channelName, replyTo, onCancelReply, onSend, disabled
       {error && <p className="ck-spaces-hint is-error" role="alert">{error}</p>}
       {onAttach && (
         <button type="button" className="ck-spaces-btn ck-spaces-attach" disabled={disabled || busy}
-          onClick={() => void attach()}>Attach file</button>
+          onClick={() => void attach()}>{t('r21.sw.attachFile')}</button>
       )}
       <button type="button" className="ck-spaces-btn is-primary" disabled={disabled || busy || tooLong || text.trim() === ''}
         onClick={() => void send()}>Send</button>

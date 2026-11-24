@@ -11,6 +11,7 @@ import { chipValueName, configChips, isTerminalChatLane, startTerminalChat, taur
 import { sendPaneMessage } from './paneOutbox';
 import { startChatSession } from '../components/cockpit/newagent/start';
 import { t } from '../i18n';
+import { HANDOFF_PROMPT_START } from './handoffPrompt';
 
 export const HANDOFF_FILE = 'HANDOFF.md';
 
@@ -26,12 +27,12 @@ What you saw in THIS conversation about the person's working style. For example:
 When the file is saved, reply with one line saying so, and do nothing else.`;
 
 export const quickWritePrompt = (path: string): string =>
-  `Please write a handoff for the next agent to this exact file: ${path}
+  `${HANDOFF_PROMPT_START} to this exact file: ${path}
 Create the folder if it is missing. Use no other file name, and do not touch ${HANDOFF_FILE}. ${WRITE_PARTS}`;
 
 /** Quick handoff: what the agent is asked. HANDOFF.md in the project root; an existing one is updated. */
 export const fileWritePrompt = (): string =>
-  `Please write a handoff for the next agent in a file named ${HANDOFF_FILE} in the root of this project folder. If ${HANDOFF_FILE} already exists, update it instead of starting over. ${WRITE_PARTS}`;
+  `${HANDOFF_PROMPT_START} in a file named ${HANDOFF_FILE} in the root of this project folder. If ${HANDOFF_FILE} already exists, update it instead of starting over. ${WRITE_PARTS}`;
 
 /** Quick step 3: the first message of the new agent. It reads the file, takes it in, and says only "Ready". */
 export const quickStartPrompt = (path: string): string =>
@@ -121,7 +122,8 @@ export interface HandoffDeps {
 export type HandoffStatus =
   | { kind: 'writing'; text: string }
   | { kind: 'opening'; text: string }
-  | { kind: 'done'; text: string; newPaneId: string }
+  /** `path`: where the handoff note is now (the app's data folder, or the project when it could not be moved). */
+  | { kind: 'done'; text: string; newPaneId: string; path?: string }
   /** Quick handoff finished: HANDOFF.md is saved ("Open file" opens it). */
   | { kind: 'saved'; text: string; paneId: string }
   | { kind: 'failed'; text: string };
@@ -136,7 +138,7 @@ export async function probeBusy(paneId: string, deps: Pick<HandoffDeps, 'pane' |
   if (pane.lane === 'acp') {
     const state = await deps.chatState(paneId).catch(() => null);
     if (!state || state.closed) return null;
-    if (state.status === 'waiting_input' || state.permissions.length > 0) return 'waiting';
+    if (state.status === 'waiting_input' || (state.permissions?.length ?? 0) > 0) return 'waiting';
     return state.turnInFlight ? 'busy' : 'idle';
   }
   if (pane.status === 'error') return null;
@@ -144,21 +146,29 @@ export async function probeBusy(paneId: string, deps: Pick<HandoffDeps, 'pane' |
   return pane.status === 'running' ? 'busy' : 'idle';
 }
 
-export type TurnEnd = 'done' | 'gone' | 'waiting' | 'never_started' | 'timeout';
+export type TurnEnd = 'done' | 'gone' | 'never_started' | 'timeout';
 
 /**
  * Waits for the turn that was just sent to start and then end. A turn that never shows as busy within
  * `HANDOFF_START_TIMEOUT_MS` is `never_started`; one still busy after `HANDOFF_TURN_TIMEOUT_MS` is `timeout`.
  */
-export async function waitForTurnEnd(paneId: string, deps: Pick<HandoffDeps, 'pane' | 'chatState' | 'sleep' | 'now'>): Promise<TurnEnd> {
+export async function waitForTurnEnd(paneId: string, deps: Pick<HandoffDeps, 'pane' | 'chatState' | 'sleep' | 'now'>, onWaiting?: (waiting: boolean) => void): Promise<TurnEnd> {
   const begun = deps.now();
   let sawBusy = false;
+  let asked = false;
   for (;;) {
     const busy = await probeBusy(paneId, deps);
     if (busy === null) return 'gone';
-    if (busy === 'waiting') return 'waiting';
-    if (busy === 'busy') sawBusy = true;
-    else if (sawBusy) return 'done';
+    // The agent asks the person (a permission card for the handoff file itself): keep waiting, the answer lets the turn finish.
+    if (busy === 'waiting') {
+      if (!asked) onWaiting?.(true);
+      asked = true;
+      sawBusy = true;
+    } else if (busy === 'busy') {
+      if (asked) onWaiting?.(false);
+      asked = false;
+      sawBusy = true;
+    } else if (sawBusy) return 'done';
     const waited = deps.now() - begun;
     if (!sawBusy && waited > HANDOFF_START_TIMEOUT_MS) return 'never_started';
     if (waited > HANDOFF_TURN_TIMEOUT_MS) return 'timeout';
@@ -232,9 +242,8 @@ async function runFile(paneId: string, pane: HandoffPane, deps: HandoffDeps, rep
   } catch (error) {
     return fail(`Could not ask the agent to write the handoff: ${errText(error)}`);
   }
-  const end = await waitForTurnEnd(paneId, deps);
+  const end = await waitForTurnEnd(paneId, deps, (asking) => report({ kind: 'writing', text: asking ? t('r14.handoff.answerFirst') : t('state.handoff.writing') }));
   if (end === 'gone') return fail('The pane was closed before the handoff was written.');
-  if (end === 'waiting') return fail('The agent stopped to ask you something. Answer it, then try again.');
   if (end === 'never_started') return fail("The agent didn't start on the handoff. Try again when it is ready.");
   if (end === 'timeout') return fail('The agent took too long to write the handoff.');
 
@@ -289,9 +298,8 @@ async function runNewAgent(paneId: string, pane: HandoffPane, deps: HandoffDeps,
     return fail(`Could not ask the agent to write the handoff: ${errText(error)}`);
   }
 
-  const end = await waitForTurnEnd(paneId, deps);
+  const end = await waitForTurnEnd(paneId, deps, (asking) => report({ kind: 'writing', text: asking ? t('r14.handoff.answerFirst') : t('state.handoff.writing') }));
   if (end === 'gone') return fail('The pane was closed before the handoff was written.');
-  if (end === 'waiting') return fail('The agent stopped to ask you something. Answer it, then try again.');
   if (end === 'never_started') return fail("The agent didn't start on the handoff. Try again when it is ready.");
   if (end === 'timeout') return fail('The agent took too long to write the handoff.');
 
@@ -338,19 +346,20 @@ async function runNewAgent(paneId: string, pane: HandoffPane, deps: HandoffDeps,
   // Wait for its one-word reply, then take the file out of the project.
   report({ kind: 'opening', text: 'Waiting for the new agent to get ready…' });
   const opened = `Opened ${deps.titleOf(newId) ?? 'a new agent'}${note}`;
-  const replied = await waitForTurnEnd(newId, deps);
-  const finish = (text: string): HandoffStatus => {
-    const done: HandoffStatus = { kind: 'done', newPaneId: newId, text };
+  const replied = await waitForTurnEnd(newId, deps, (asking) => report({ kind: 'opening', text: asking ? t('r14.handoff.answerFirst') : 'Waiting for the new agent to get ready…' }));
+  const finish = (text: string, where: string = path): HandoffStatus => {
+    const done: HandoffStatus = { kind: 'done', newPaneId: newId, text, path: where };
     report(done);
     return done;
   };
   if (replied !== 'done') return finish(`${opened}. It did not finish reading, so the handoff file stays at ${path}`);
+  let archived = path;
   try {
-    await deps.quick.archive(paneId, stamp);
+    archived = (await deps.quick.archive(paneId, stamp)) || path;
   } catch (error) {
     return finish(`${opened}. The handoff file could not be moved (${errText(error)}). It is at ${path}`);
   }
-  return finish(opened);
+  return finish(opened, archived);
 }
 
 /** The real calls. `cockpit` supplies what only the window knows. */

@@ -115,7 +115,7 @@ describe('handoff to new agent (terminal pane)', () => {
     // The file is moved only after the new agent has been messaged and its turn is over.
     expect(mocked(deps.quick.archive).mock.invocationCallOrder[0]).toBeGreaterThan(mocked(deps.send).mock.invocationCallOrder[1]);
     expect(seen.map((s) => s.kind)).toEqual(['writing', 'opening', 'opening', 'done']);
-    expect(final).toEqual({ kind: 'done', newPaneId: 'n1', text: `Opened Agent X two. ${MODEL_UNKNOWN_NOTE}` });
+    expect(final).toEqual({ kind: 'done', newPaneId: 'n1', text: `Opened Agent X two. ${MODEL_UNKNOWN_NOTE}`, path: 'D:/data/handoffs/shop-1/handoff-20261111-0930.md' });
   });
 
   it('does not use HANDOFF.md or the old prompts', async () => {

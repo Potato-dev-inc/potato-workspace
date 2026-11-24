@@ -20,8 +20,8 @@ export function canChat(view: AcpLaneView | null | undefined, agentId: string): 
 
 /**
  * Splits a list of agents into the ones to offer and how many were left out because they only run in a terminal.
- * A shell is always kept in the offer (and not counted: it is not an agent). Without a lane view (not read
- * yet, or Chat is off) nothing is hidden: the list is shown as it is.
+ * A plain shell is never offered (this runs only while "Show terminals" is off: no shell, no terminal-only action). Without a lane
+ * view (not read yet, or Chat is off) no agent is hidden.
  */
 export function offeredAgents<T extends { type: string; shell?: boolean; disabled?: boolean }>(entries: readonly T[], view: AcpLaneView | null | undefined): { offered: T[]; needTerminals: number } {
   return splitByChat(entries, !view || !view.labs_enabled ? null : chatAgentIds(view));
@@ -29,10 +29,9 @@ export function offeredAgents<T extends { type: string; shell?: boolean; disable
 
 /** `offeredAgents` over a set of ids that can chat (null: not known, nothing is hidden). */
 export function splitByChat<T extends { type: string; shell?: boolean; disabled?: boolean }>(entries: readonly T[], ids: ReadonlySet<string> | null): { offered: T[]; needTerminals: number } {
-  // A plain shell (PowerShell, bash, cmd) is always offered: "Show terminals" hides agent terminals, not a shell.
   const agents = entries.filter((e) => !e.shell);
-  if (!ids) return { offered: [...entries], needTerminals: 0 };
-  const offered = entries.filter((e) => e.shell || ids.has(e.type.toLowerCase()));
+  if (!ids) return { offered: agents, needTerminals: 0 };
+  const offered = agents.filter((e) => ids.has(e.type.toLowerCase()));
   // An agent that cannot open a pane at all (headless only) is not one that "needs a terminal".
   return { offered, needTerminals: agents.filter((e) => !e.disabled && !ids.has(e.type.toLowerCase())).length };
 }

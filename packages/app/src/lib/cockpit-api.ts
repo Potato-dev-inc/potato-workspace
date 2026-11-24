@@ -1,7 +1,10 @@
 // Typed wrappers for exactly the commands and events in docs/design/cockpit-contract.md.
 import { invoke } from '@tauri-apps/api/core';
-import { listen, type UnlistenFn } from '@tauri-apps/api/event';
+import { type UnlistenFn } from '@tauri-apps/api/event';
+import { listen } from './events';
 import type { UserGesture } from './user-gesture';
+import type { Host } from './host/host';
+import { forHost } from './host/hostApi';
 import type { SwitchStyle } from './mode-switch/model';
 import { SWITCH_EVENT, type BeginSpec, type ModeSwitchPlan, type SwitchEvent } from './mode-switch/protocol';
 import type { PackageList } from './package-check';
@@ -130,6 +133,8 @@ export interface Checkpoint {
   files: number;
   added: number;
   deleted: number;
+  /** On a "Before undo" row: the save point the files were put back to. */
+  restoredTo?: string;
 }
 
 export interface CheckpointList {
@@ -152,6 +157,8 @@ export interface RestoreReport {
   written: number;
   removed: number;
   failed: string[];
+  /** Every file the restore changed (project-relative); a far PC that does not send it leaves this out. */
+  paths?: string[];
 }
 
 export interface CheckpointsApi {
@@ -160,6 +167,34 @@ export interface CheckpointsApi {
   checkpointRestore: (paneId: string, id: string) => Promise<RestoreReport>;
   checkpointUndoLast: (paneId: string) => Promise<RestoreReport>;
 }
+
+/** The checkpoint calls of a place: this PC's `cockpitApi`, or the same four calls on another PC (`pclink/calls_files.rs`). */
+export const checkpointsApiFor = (host: Host): CheckpointsApi =>
+  forHost<CheckpointsApi>(host, cockpitApi, (h) => ({
+    checkpointsList: (paneId) => h.invoke<CheckpointList>('checkpoints_list', { paneId }),
+    checkpointDiff: (paneId, id) => h.invoke<FileChange[]>('checkpoint_diff', { paneId, id }),
+    checkpointRestore: (paneId, id) => h.invoke<RestoreReport>('checkpoint_restore', { paneId, id }),
+    checkpointUndoLast: (paneId) => h.invoke<RestoreReport>('checkpoint_undo_last', { paneId }),
+  }));
+
+/** The calls that read and settle the separate copy a chat works on. */
+export type WorktreeApi = Pick<typeof cockpitApi, 'paneWorktree' | 'worktreeDiff' | 'worktreeMerge' | 'worktreeDiscard'>;
+
+/**
+ * The copy calls of the chat `paneId` at a place: this PC's `cockpitApi`, or the same four calls on another PC (`pclink/calls_files.rs`). The far PC
+ * finds the copy from the chat and takes only that copy's handle; the project path of a copy never travels back to it.
+ */
+export const worktreeApiFor = (host: Host, paneId: string): WorktreeApi =>
+  forHost<WorktreeApi>(host, cockpitApi, (h) => ({
+    // A chat that is not on a copy comes back as nothing (`{}` on the link): only a copy with a handle is one.
+    paneWorktree: async (id) => {
+      const found = await h.invoke<WorktreeItem | null>('pane_worktree', { paneId: id });
+      return found && found.handle ? found : null;
+    },
+    worktreeDiff: (_project, handle, path) => h.invoke<WorktreeDiff>('worktree_diff', { paneId, handle, path: path ?? null }),
+    worktreeMerge: (_project, handle) => h.invoke<WorktreeMergeOutcome>('worktree_merge', { paneId, handle }),
+    worktreeDiscard: (_project, handle) => h.invoke<void>('worktree_discard', { paneId, handle }),
+  }));
 
 export interface TurnFileStats {
   count: number;

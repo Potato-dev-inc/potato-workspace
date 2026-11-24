@@ -333,9 +333,9 @@ fn the_spawn_hook_syncs_every_registered_agents_file_in_the_cwd() {
 /// The hook must stay wired into both spawn paths (a pane and a headless run).
 #[test]
 fn spawn_paths_call_the_hook() {
-    let pane = include_str!("../pty/registry/spawn.rs");
+    let pane = include_str!("../../crates/pm-core/src/pty/registry/spawn.rs");
     let headless = include_str!("../agent_runs/headless/process.rs");
-    assert!(pane.contains("crate::one_brain::sync_on_spawn(&cwd)"));
+    assert!(pane.contains("one_brain_sync_on_spawn(&cwd)"));
     assert!(headless.contains("crate::one_brain::sync_on_spawn(&project)"));
 }
 

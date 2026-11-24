@@ -1,4 +1,5 @@
 // @vitest-environment jsdom
+import { resetEventHub } from './events';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 const invoke = vi.fn();
@@ -66,6 +67,7 @@ function setDesktop(on: boolean): void {
 
 describe('ci-fix commands (desktop shell)', () => {
   beforeEach(() => {
+    resetEventHub();
     invoke.mockReset();
     invoke.mockResolvedValue(undefined);
     listen.mockReset();
@@ -121,6 +123,7 @@ describe('ci-fix commands (desktop shell)', () => {
 
 describe('onCiFixChanged', () => {
   beforeEach(() => {
+    resetEventHub();
     invoke.mockReset();
     listen.mockReset();
   });
@@ -141,7 +144,8 @@ describe('onCiFixChanged', () => {
     const handler = listen.mock.calls[0][1] as () => void;
     handler();
     expect(cb).toHaveBeenCalledTimes(1);
-    expect(stop).toBe(unlisten);
+    stop();
+    expect(unlisten).toHaveBeenCalledTimes(1);
   });
 
   it('does nothing outside the desktop shell', async () => {

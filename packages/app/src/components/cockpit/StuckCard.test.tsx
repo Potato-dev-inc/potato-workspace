@@ -45,7 +45,7 @@ const cockpit = (over: Record<string, unknown> = {}) =>
   ({
     registry: {
       paneList: [{ status: 'idle', info: { id: 'p1', agent_type: 'claude', cwd: 'C:\\w\\app' } }],
-      panes: new Map([['p1', {}]]),
+      panes: new Map([['p1', { status: 'idle', info: { id: 'p1', agent_type: 'claude', cwd: 'C:\w\app' } }]]),
       initialReady: true,
     },
     prompts: {},

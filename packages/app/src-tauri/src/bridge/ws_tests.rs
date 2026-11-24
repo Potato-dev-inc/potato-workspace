@@ -58,7 +58,7 @@ fn ping_is_answered_with_the_same_t() {
 
 /// A pane whose screen shows a real Claude bash approval dialog.
 fn claude_pane_showing_a_dialog(id: &str) -> Arc<Mutex<PaneRegistry>> {
-    const DIALOG: &str = include_str!("../tui/claude/fixtures/bash_simple_4_options_2_1_299.txt");
+    const DIALOG: &str = include_str!("../../crates/pm-core/src/tui/claude/fixtures/bash_simple_4_options_2_1_299.txt");
     let mut registry = PaneRegistry::new();
     let mut pane = PaneRegistry::test_pane_stub(id);
     pane.info.agent_type = "claude".into();

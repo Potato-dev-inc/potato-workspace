@@ -15,8 +15,10 @@ pub fn derive(facts: &Facts) -> Vec<Derived> {
     let known: HashSet<&str> = facts.panes.iter().map(|p| p.id.as_str()).collect();
     let since = |pane_id: &str| facts.status_since.get(pane_id).copied();
 
+    // A local chat's permission is a question card (kind acp_permission) AND leaves its pane at waiting_input: one thing, so the card counts and the pane row does not (the same rule as the front end's derive).
+    let asking: HashSet<&str> = facts.questions.iter().filter(|q| q.kind.as_deref() == Some("acp_permission")).filter_map(|q| q.pane_id.as_deref()).collect();
     for pane in &facts.panes {
-        if pane.status == "waiting_input" {
+        if pane.status == "waiting_input" && !asking.contains(pane.id.as_str()) {
             let risk = facts
                 .prompts
                 .get(&pane.id)

@@ -54,17 +54,7 @@ pub struct HostWriteResult {
     pub backup: Option<PathBuf>,
 }
 
-pub const PLACEHOLDERS: &[&str] = &["command", "args", "env"];
-
-/// Dotted key path split into non-empty segments.
-pub fn key_segments(key_path: &str) -> Result<Vec<&str>, String> {
-    let segs: Vec<&str> = key_path.split('.').collect();
-    let ok = |s: &&str| !s.is_empty() && s.chars().all(|c| c.is_ascii_alphanumeric() || c == '_' || c == '-');
-    if !segs.iter().all(ok) {
-        return Err(format!("key_path {key_path:?} must be dotted segments of [A-Za-z0-9_-]"));
-    }
-    Ok(segs)
-}
+pub use pm_core::mcp_install::key_segments;
 
 /// `~`-expand `config_path` and enforce HST-3: no `..`, and the result stays under `home` or `project`.
 pub fn resolve_config_path(config_path: &str, home: &Path, project: Option<&Path>) -> Result<PathBuf, String> {

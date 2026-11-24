@@ -27,9 +27,11 @@ export interface EnvironmentProps {
   onPair?: () => void;
   /** This place cannot answer the Remote control commands yet: the same switch is drawn, off and disabled, with this one reason. */
   blocked?: string | null;
+  /** The chat is on another PC: Remote control is that PC's own switch for its phones, so no row is drawn here (this PC would only show its own default). */
+  far?: boolean;
 }
 
-export function EnvironmentSection({ paneId, cwd, runsOn, branch, copy, onOpenFolder, onOpenCopy, api = tauriRemoteApi, onPair, blocked = null }: EnvironmentProps) {
+export function EnvironmentSection({ paneId, cwd, runsOn, branch, copy, onOpenFolder, onOpenCopy, api = tauriRemoteApi, onPair, blocked = null, far = false }: EnvironmentProps) {
   const t = useT();
   const [rule, setRule] = useState<PaneRemote | null>(null);
   const [phones, setPhones] = useState<number | null>(null);
@@ -41,6 +43,7 @@ export function EnvironmentSection({ paneId, cwd, runsOn, branch, copy, onOpenFo
     let live = true;
     setRule(null);
     setPhones(null);
+    if (far && !blocked) return undefined;
     if (blocked) {
       setRule({ remote: false, level: 'full' });
       setPhones(1);
@@ -51,7 +54,7 @@ export function EnvironmentSection({ paneId, cwd, runsOn, branch, copy, onOpenFo
     return () => {
       live = false;
     };
-  }, [api, paneId, blocked]);
+  }, [api, paneId, blocked, far]);
 
   const change = useCallback(
     (next: { remote?: boolean; level?: PaneRemoteLevel }) => {

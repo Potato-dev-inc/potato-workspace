@@ -84,6 +84,33 @@ export function TeamPage({
   const counts = tabCounts(state, config, lend.state, waitingCount(tasks.view), shelf.state?.waiting ?? 0);
   // The header's Invite, and the "Invite a teammate" button in the People and Shelf empty blocks: one action.
   const openInvite = () => void inviteSlot({ api, show: setInvite, openSetup: () => setTab('setup') });
+  // This PC was taken off the team: no member list or invite to act on; one line says so, with Leave (clears the team here) and the facts behind it.
+  const removed = state.removed === true || config.why?.removed === true;
+  if (removed) {
+    const why = config.why;
+    return (
+      <div className="tpg" data-testid="team-page" data-removed="true">
+        <header className="tpg-head">
+          <div className="tpg-head-main">
+            <h1 className="tpg-title">{config.teamName || t('teamHub.title.fallback')}</h1>
+          </div>
+        </header>
+        <div className="tpg-removed" role="alert" data-testid="team-removed">
+          <p>{t('teamPage.removed')}</p>
+          <button type="button" className="ck-btn ck-btn--secondary" data-testid="team-removed-leave" onClick={() => void api.leave().catch(() => undefined).finally(onRefresh)}>
+            {t('teamPage.leave')}
+          </button>
+        </div>
+        <details className="tpg-why" data-testid="team-why">
+          <summary>{t('teamPage.whyTitle')}</summary>
+          <p className="tpg-sub">
+            {t('teamPage.whyRemoved')}{' '}
+            {why && t('teamPage.why', { saved: t(why.teamSaved ? 'teamPage.why.yes' : 'teamPage.why.no'), roster: t(why.onRoster ? 'teamPage.why.yes' : 'teamPage.why.no'), check: t(why.lastCheck === null ? 'teamPage.why.ok' : why.lastCheck === 'refused_by_relay' ? 'teamPage.why.refused' : 'teamPage.why.failed') })}
+          </p>
+        </details>
+      </div>
+    );
+  }
 
   return (
     <div className="tpg" data-testid="team-page">

@@ -47,7 +47,7 @@ pub fn point_open_preview(
 }
 
 /// The Point box's state: picks, the "To:" list, the default pane and the notice.
-#[tauri::command]
+#[tauri::command(async)]
 pub fn point_state(app: AppHandle, _state: State<'_, AppState>) -> PointState {
     window::current_state(&app)
 }
@@ -180,17 +180,18 @@ pub(crate) trait SendHost: Send + Sync {
 
 /// The live outbox (`pane_outbox::global`).
 pub(crate) struct LiveOutbox {
+    #[allow(dead_code)]
     pub(crate) app: AppHandle,
     pub(crate) registry: Arc<Mutex<PaneRegistry>>,
 }
 
 impl SendHost for LiveOutbox {
     fn send(&self, pane_id: &str, text: &str, attachments: &[ChatAttachment]) -> Result<OutboxMessage, String> {
-        pane_outbox::global(&self.registry, &self.app).send_with(pane_id, text, attachments)
+        pane_outbox::global(&self.registry).send_with(pane_id, text, attachments)
     }
 
     fn list(&self, pane_id: &str) -> Vec<OutboxMessage> {
-        pane_outbox::global(&self.registry, &self.app).list(pane_id)
+        pane_outbox::global(&self.registry).list(pane_id)
     }
 }
 

@@ -14,7 +14,9 @@
 
 pub mod assets;
 pub mod custom;
-pub mod host;
+pub use pm_core::agent_pack::host;
+#[cfg(test)]
+pub use host::{skills_host_from_toml, SkillsHostTable};
 pub mod plan;
 pub mod record;
 pub mod service;
@@ -24,7 +26,6 @@ mod custom_tests;
 #[cfg(test)]
 mod tests;
 
-pub use host::{skills_host_from_toml, SkillsHostTable};
 
 /// Marker line every pack file carries, so an update can tell "ours" from a file the user wrote.
 pub const MARKER_PREFIX: &str = "potato-workspace-pack:";

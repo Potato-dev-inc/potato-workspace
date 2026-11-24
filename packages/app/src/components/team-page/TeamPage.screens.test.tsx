@@ -94,6 +94,19 @@ const click = async (text: string) => {
   await act(async () => {});
 };
 
+describe('Team page: this PC was removed', () => {
+  it('shows the removed line with Leave and Why, and no member list or tabs', async () => {
+    const team = teamFake({ state: { removed: true, error: 'removed' } });
+    await show(team, lendFake(null).api);
+    expect(host.querySelector('[data-testid="team-removed"]')?.textContent).toContain('You were removed. Leave to clear.');
+    expect(host.querySelector('[data-testid="team-why"] summary')?.textContent).toBe('Why am I seeing this?');
+    expect(host.querySelector('.tpg-person')).toBeNull();
+    expect(host.querySelector('[data-testid="tab-people"]')).toBeNull();
+    await act(async () => host.querySelector<HTMLButtonElement>('[data-testid="team-removed-leave"]')!.click());
+    expect(team.calls.some((c) => c.startsWith('leave'))).toBe(true);
+  });
+});
+
 describe('Team page: header and People', () => {
   it('shows the team name, link words, counts, the six tabs and every person with a word beside the dot', async () => {
     const team = teamFake({ state: { presence: [pres('m-maya', { project: 'potato-workspace', title: 'Fix the sheet', running: 2 }), pres('m-sam', { state: 'away', sinceMs: NOW - 12 * 60_000 })] } });

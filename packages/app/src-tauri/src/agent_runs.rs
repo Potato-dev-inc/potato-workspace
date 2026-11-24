@@ -1,12 +1,12 @@
 //! Durable handles and bounded transcript support for MCP agent runs.
 
-pub(crate) mod approval_policy;
+pub use pm_core::agent_runs::approval_policy;
 mod answer_guard;
 pub(crate) mod auto_approve;
 mod capabilities;
-pub(crate) mod checks;
-pub(crate) mod completion;
-pub(crate) mod delivery;
+pub use pm_core::agent_runs::checks;
+pub use pm_core::agent_runs::completion;
+pub use pm_core::agent_runs::delivery;
 pub(crate) mod headless;
 pub(crate) mod helper_login;
 mod messaging;
@@ -18,15 +18,13 @@ pub(crate) mod pane_api;
 pub(crate) mod persist;
 pub(crate) mod quick;
 pub(crate) mod stall;
-pub(crate) mod structured;
-pub(crate) mod tree_proof;
-#[cfg(test)]
-mod tree_proof_tests;
-pub mod readiness;
+pub use pm_core::agent_runs::structured;
+pub use pm_core::agent_runs::tree_proof;
+pub use pm_core::agent_runs::readiness;
 mod recovery;
 mod routes;
 mod runtime;
-pub mod transcript;
+pub use pm_core::agent_runs::transcript;
 
 #[cfg(test)]
 mod cursor_capture_tests;
@@ -61,7 +59,7 @@ pub(crate) use runtime::{convert_to_fallback, start_fallback_headless};
 pub use runtime::{record_user_task, run_agent, supervise_existing, AgentRunRequest, AgentRunView};
 pub(crate) use runtime::{cancel_agent, send_agent};
 pub(crate) use runtime::RunReceipt;
-pub(crate) use runtime::guarantees;
+pub use pm_core::agent_runs::guarantees;
 pub(crate) use runtime::timing::RunTiming;
 pub use capabilities::{read_only_run_table, read_only_supported, read_only_supported_for, read_only_unsupported_message, read_only_cannot_note, task_required_error};
 

@@ -49,9 +49,17 @@ export const shortcutsApi = {
   },
 };
 
+/** The backend's "<combo> is already used…" line with the keys as this computer names them (Ctrl on Windows, ⌘ on a Mac) in the app's language. */
+export function shortcutTaken(text: string): string {
+  const m = /^(\S+) is already used by another app or by Windows\. Pick another combination\.$/.exec(text);
+  if (!m) return text;
+  const combo = formatKey(m[1].replace(/^(?:CommandOrControl|CmdOrCtrl)\b/, 'Mod'), isMacPlatform());
+  return t('r13ui.shortcutTaken', { combo });
+}
+
 function errorText(e: unknown): string {
-  if (typeof e === 'string') return e;
-  return e instanceof Error ? e.message : t('shortcuts.couldNot');
+  if (typeof e === 'string') return shortcutTaken(e);
+  return e instanceof Error ? shortcutTaken(e.message) : t('shortcuts.couldNot');
 }
 
 type Phase = { kind: 'idle' } | { kind: 'recording' } | { kind: 'confirm'; binding: string; warnings: BindingProblem[] };
@@ -197,7 +205,7 @@ function ShortcutRow({ entry, env }: { entry: ShortcutEntry; env: SettingsEnv })
           </div>
         )}
         {error && <Note role="alert">{error}</Note>}
-        {!error && note && <Note role="status">{note}</Note>}
+        {!error && note && <Note role="status">{shortcutTaken(note)}</Note>}
       </div>
     </SettingRow>
   );

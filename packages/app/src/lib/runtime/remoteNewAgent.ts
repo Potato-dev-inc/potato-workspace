@@ -10,6 +10,9 @@ import { t } from '../../i18n';
 import { PcLinkError, type PcLinkClient, type PcNewAgentOptions } from './pclink';
 import type { GitState } from '../ship-api';
 import type { StartRequest } from '../../components/cockpit/newagent/model';
+import { LEND_MINE, type RemoteLend } from '../host/ownAgents';
+import { placeKey } from '../host/placeKey';
+import type { FarPlan } from '../../components/cockpit/newagent/useFarPlan';
 
 /** The plain shells ("New terminal"): never an agent, so never a chat or a first message. */
 const SHELLS = ['cmd', 'powershell', 'bash'];
@@ -32,6 +35,8 @@ export interface RemoteNewAgent {
   onStart: (request: StartRequest) => Promise<string>;
   /** Warms the far chat program for this agent and folder (the phone does the same once both are picked). */
   warm: (agentId: string, folder: string) => void;
+  /** What a plain start of this agent there will run on (its own sign-in, or the lend this PC made). Null: that PC does not say. */
+  plan: (agentId: string) => Promise<FarPlan | null>;
 }
 
 export interface RemoteDeps {
@@ -44,6 +49,10 @@ export interface RemoteDeps {
   onStarted: (paneId: string, chat: boolean) => void;
   /** One plain line for the person (the model could not be set). */
   notify?: (text: string) => void;
+  /** "Use my own agents": how a lent chat is made and told about (absent: the choice is not offered). */
+  lend?: RemoteLend;
+  /** The name of an agent, for the sentences (`Claude`). */
+  agentName?: (agentId: string) => string;
 }
 
 /** Start, warm-up and the terminals flag for one loaded far PC. Pure: tests build it from a fake client. */
@@ -69,12 +78,25 @@ export function buildRemoteNewAgent(options: PcNewAgentOptions, deps: RemoteDeps
       deps.onStarted(shell, false);
       return shell;
     }
-    const key = `${req.agentId}|${project}|${req.runAs}`;
+    // "Use my own agents": the lend is made first (this PC's own click), then the far chat starts on `lend:<grant>`.
+    let grant: string | null = null;
+    if (req.accountId === LEND_MINE) {
+      if (!deps.lend) throw new Error(t('newAgent.remote.noAnswer', { name }));
+      const agentName = deps.agentName?.(req.agentId) ?? req.agentId;
+      if ((await deps.lend.ensureInstalled(req.agentId)) === 'cancelled') throw new Error(t('myAgents.installFirst', { agent: agentName, name }));
+      grant = await deps.lend.mint(req.agentId, agentName);
+    }
+    const copy = req.runAs === 'chat' && req.isolated === true && !grant;
+    const key = `${req.agentId}|${project}|${req.runAs}|${copy ? 'copy' : ''}|${grant ?? ''}`;
     let paneId: string;
     if (started && started.key === key) paneId = started.paneId;
     else {
       try {
-        paneId = (await client.startAgent({ agent: req.agentId, project, lane: req.runAs === 'chat' ? 'chat' : 'terminal' })).pane_id;
+        // "Work on a copy" is the far PC's own call row (`acp_chat_start`, with `separateCopy`): a far PC without it answers 404, so a chat is never
+        // started in the project itself when a copy was asked for. No account goes with it: the far PC uses its own sign-in.
+        paneId = copy
+          ? (await client.call<{ pane_id: string }>('acp_chat_start', { agentId: req.agentId, folder: project, explicit: true, separateCopy: true })).pane_id
+          : (await client.startAgent({ agent: req.agentId, project, lane: req.runAs === 'chat' ? 'chat' : 'terminal', ...(grant ? { account: `lend:${grant}` } : {}) })).pane_id;
       } catch (error) {
         if (error instanceof PcLinkError && error.status === 403) throw new Error(t('newAgent.remote.watchOnly', { name }));
         // The far PC answered but refused (400, 404, 500 ...): say what it said. No answer at all is "didn't answer".
@@ -82,6 +104,7 @@ export function buildRemoteNewAgent(options: PcNewAgentOptions, deps: RemoteDeps
         throw new Error(why ? t('newAgent.remote.refused', { name, why }) : t('newAgent.remote.noAnswer', { name }));
       }
       started = { key, paneId };
+      if (grant) deps.lend?.started(grant, placeKey({ kind: 'pc', node: deps.node, name }, paneId));
       // The model goes in before the first message, by the far chat's own setting name (read from its model list).
       if (req.model && req.runAs === 'chat') {
         let ok = false;
@@ -117,10 +140,20 @@ export function buildRemoteNewAgent(options: PcNewAgentOptions, deps: RemoteDeps
     terminals: options.terminals !== false,
     onStart,
     warm,
+    plan: async (agentId) => {
+      try {
+        return (await client.call<FarPlan | null>('own_borrow_plan', { agentId })) ?? null;
+      } catch {
+        return null;
+      }
+    },
   };
 }
 
 export type RemoteStatus = 'loading' | 'failed' | 'ready';
+
+/** While the page is open the far PC's "Show terminals" is read again this often (and when this window gets focus): it can be turned on there meanwhile. */
+export const REMOTE_TERMINALS_POLL_MS = 10_000;
 
 /**
  * Reads the far PC's start-up facts once (and again on `retry`) and builds Start and warm-up from them. While it loads, or when it
@@ -153,6 +186,28 @@ export function useRemoteNewAgent(deps: RemoteDeps | null): { remote: RemoteNewA
       live = false;
     };
   }, [client, node, tries, forward]);
+  // The far PC's "Show terminals" switch can change while the page is open: the Terminal | Chat choice follows it.
+  const ready = state.status === 'ready' && state.node === node;
+  useEffect(() => {
+    if (!client || !node || !ready) return undefined;
+    let live = true;
+    const check = () =>
+      client.agentOptions().then(
+        (options) => {
+          const d = latest.current;
+          if (!live || !d) return;
+          setState((s) => (s.node === node && s.remote && s.remote.terminals !== (options.terminals !== false) ? { node, status: 'ready', remote: buildRemoteNewAgent(options, forward(d)) } : s));
+        },
+        () => undefined,
+      );
+    const timer = setInterval(check, REMOTE_TERMINALS_POLL_MS);
+    window.addEventListener('focus', check);
+    return () => {
+      live = false;
+      clearInterval(timer);
+      window.removeEventListener('focus', check);
+    };
+  }, [client, node, ready, forward]);
   const retry = useCallback(() => setTries((n) => n + 1), []);
   const current = state.node === node ? state : { node, status: 'loading' as RemoteStatus, remote: null };
   const stub = useMemo(() => (deps ? buildRemoteNewAgent({ agents: [], projects: [] }, forward(deps)) : null), [client, node, forward]); // eslint-disable-line react-hooks/exhaustive-deps

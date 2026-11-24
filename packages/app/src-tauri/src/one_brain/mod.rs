@@ -38,14 +38,7 @@ pub struct Target {
     pub agents: Vec<String>,
 }
 
-/// A path that stays inside the project: relative, no `..`, no drive, no leading slash.
-pub fn relative_path_ok(path: &str) -> bool {
-    let p = path.trim();
-    if p.is_empty() || p.starts_with('/') || p.starts_with('\\') || p.contains(':') {
-        return false;
-    }
-    p.split(['/', '\\']).all(|part| !part.is_empty() && part != "." && part != "..")
-}
+pub use pm_core::one_brain::relative_path_ok;
 
 /// Every declared file across `profiles`; profiles declaring the same path share one target.
 pub fn targets_from(profiles: &[Arc<dyn TuiProfile>]) -> Vec<Target> {

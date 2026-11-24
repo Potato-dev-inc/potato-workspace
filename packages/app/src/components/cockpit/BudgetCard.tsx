@@ -20,7 +20,8 @@ export function BudgetCard({
   paneName?: string;
   now: number;
   onAnswer: (answer: QuestionAnswer) => void;
-  onDismiss: () => void;
+  /** Absent: no Dismiss button (the jump-out card). */
+  onDismiss?: () => void;
   onOpenPane?: () => void;
 }) {
   const t = useT();
@@ -54,11 +55,11 @@ export function BudgetCard({
           <CardButton tone="plain" role="open" onClick={onOpenPane}>
             {t('inboxCards.open')}
           </CardButton>
-        ) : (
+        ) : onDismiss ? (
           <CardButton tone="plain" role="dismiss" onClick={onDismiss}>
             {t('inboxCards.dismiss')}
           </CardButton>
-        )
+        ) : null
       }
     />
   );

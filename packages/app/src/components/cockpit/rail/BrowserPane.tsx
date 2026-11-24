@@ -24,6 +24,7 @@ import {
 } from '../../../lib/dock-browser';
 import { useMarkupEnabled } from '../../../lib/markup/labs';
 import { useBrowserFreeze } from './useBrowserFreeze';
+import { pageZoom } from '../../common/Floating';
 
 const Icon = ({ d }: { d: string }) => (
   <svg viewBox="0 0 16 16" aria-hidden="true">
@@ -55,6 +56,8 @@ export function BrowserPane({ paneId }: { paneId: string }) {
     let raf = 0;
     const tick = () => {
       const r = el.getBoundingClientRect();
+      // Corner notes (toasts, the update notice) sit left of the page: the native page paints over anything under it.
+      document.documentElement.style.setProperty('--dock-inset', `${Math.max(0, window.innerWidth - r.left) / pageZoom()}px`);
       reportBrowserRect(paneId, { x: Math.round(r.left), y: Math.round(r.top), width: Math.round(r.width), height: Math.round(r.height) });
       raf = requestAnimationFrame(tick);
     };
@@ -62,6 +65,7 @@ export function BrowserPane({ paneId }: { paneId: string }) {
     return () => {
       cancelAnimationFrame(raf);
       reportBrowserRect(paneId, null);
+      document.documentElement.style.removeProperty('--dock-inset');
     };
   }, [paneId]);
 
@@ -106,7 +110,7 @@ export function BrowserPane({ paneId }: { paneId: string }) {
     const typed = address.trim();
     if (typed) void dockNav('go', typed);
   };
-  const nameOf = (tab: DockTab) => tab.title || (tab.url ? hostOf(tab.url) : t('dock.newTabName'));
+  const nameOf = (tab: DockTab) => (tab.title === 'Browser' ? t('dock.browser') : tab.title) || (tab.url ? hostOf(tab.url) : t('dock.newTabName'));
 
   return (
     <div className="tk-view tk-browser" data-testid="dock-browser">

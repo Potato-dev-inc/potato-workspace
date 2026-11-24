@@ -3,8 +3,10 @@
 // No folder path, pane id or chat text: the backend never sends them (`scores`). No ranking, no stars, no overall score.
 import { errorSentence } from '../../lib/sayError';
 import { useEffect, useState } from 'react';
+import { t, useT } from '../../i18n';
+import { backendText } from '../../lib/backendWords';
 import {
-  AHEAD_TITLE,
+  aheadTitle,
   SCORE_WINDOWS,
   brokeTestsText,
   detailLine,
@@ -27,31 +29,19 @@ type Scope = 'project' | 'all';
 
 /** The table columns after the agent name. Captions are the one-line explanations under each header. */
 const COLUMNS = [
-  { id: 'turns', label: 'Turns', caption: 'Prompts you sent' },
-  { id: 'endedOk', label: 'Ended OK', caption: 'No crash or API error. This is reliability, not code quality.' },
-  { id: 'checksGreen', label: 'Checks green', caption: 'Only runs that had checks.' },
-  { id: 'merged', label: 'Merged', caption: 'Separate copies you kept, out of kept + thrown away.' },
-  { id: 'undone', label: 'Undone', caption: 'Turns you undid with Undo. Fewer is better.' },
-  { id: 'perMerged', label: 'Per merged change', caption: 'Typical turns and working time. Needs 3 merged.' },
-  { id: 'askedYou', label: 'Asked you', caption: 'Turns where you had to answer. Depends on your permission settings, so it is not a score.' },
+  { id: 'turns', label: 'r21.sc.turns', caption: 'r21.sc.turnsCap' },
+  { id: 'endedOk', label: 'r21.sc.endedOk', caption: 'r21.sc.endedOkCap' },
+  { id: 'checksGreen', label: 'r21.sc.checks', caption: 'r21.sc.checksCap' },
+  { id: 'merged', label: 'r21.sc.merged', caption: 'r21.sc.mergedCap' },
+  { id: 'undone', label: 'r21.sc.undone', caption: 'r21.sc.undoneCap' },
+  { id: 'perMerged', label: 'r21.sc.perMerged', caption: 'r21.sc.perMergedCap' },
+  { id: 'askedYou', label: 'r21.sc.asked', caption: 'r21.sc.askedCap' },
 ] as const;
 
 /** Read by the "How to read this" list: one short line per column that needs explaining. */
-const HOW_TO_READ = [
-  'Ended OK: the turn did not crash or hit an API error. It says nothing about the code.',
-  'Checks green: runs that had checks, and all of them passed. Checks only count when a run starts with them.',
-  'Merged: separate copies you kept, out of the copies you kept or threw away. Copies still waiting are not counted.',
-  'Undone: turns that changed files and that you later undid with Undo. Fewer is better.',
-  'Per merged change: typical turns and working time of merged runs. Shown from 3 merged runs.',
-  'Asked you: turns where you had to answer a prompt. It depends on your permission settings, so it is not ranked.',
-];
+const HOW_TO_READ = ['r21.sc.how1', 'r21.sc.how2', 'r21.sc.how3', 'r21.sc.how4', 'r21.sc.how5', 'r21.sc.how6'] as const;
 
-const HOW_TO_READ_END = [
-  'Merged is your choice. It is not proof the code is right.',
-  'Different tasks are not equal. A hard task makes an agent look worse.',
-  'New versions of an agent change its numbers; this shows your past.',
-  'Agents never see this page.',
-];
+const HOW_TO_READ_END = ['r21.sc.end1', 'r21.sc.end2', 'r21.sc.end3', 'r21.sc.end4'] as const;
 
 function cls(...names: (string | false | null | undefined)[]): string | undefined {
   const out = names.filter(Boolean).join(' ');
@@ -73,10 +63,10 @@ function RateCell({ rate, ahead, minSample }: { rate: ScoreRate; ahead: boolean;
     <td className={cls('is-num', rate.sample === 'early' && 'is-early')}>
       {rateText(rate)}
       {pct !== null && <span className="ck-scores-pct">{pct}</span>}
-      {rate.sample === 'early' && <span className="ck-scores-tag">early</span>}
+      {rate.sample === 'early' && <span className="ck-scores-tag">{t('r9.sc.early')}</span>}
       {ahead && (
-        <span className="ck-scores-ahead" title={AHEAD_TITLE}>
-          ahead
+        <span className="ck-scores-ahead" title={aheadTitle()}>
+          {t('r21.sc.ahead')}
         </span>
       )}
     </td>
@@ -90,7 +80,7 @@ function ScoreTableRow({ row, minSample }: { row: ScoreRow; minSample: number })
   const name = (
     <th scope="row">
       <span className="ck-scores-agent">{row.agentLabel}</span>
-      <span className="ck-scores-account">{row.accountLabel}</span>
+      <span className="ck-scores-account">{backendText(row.accountLabel)}</span>
       {detail !== '' && <span className="ck-scores-detail">{detail}</span>}
       {broke !== null && <span className="ck-scores-broke">{broke}</span>}
     </th>
@@ -113,7 +103,7 @@ function ScoreTableRow({ row, minSample }: { row: ScoreRow; minSample: number })
       <RateCell rate={row.merged} ahead={ahead.has('merged')} minSample={minSample} />
       <RateCell rate={row.undone} ahead={ahead.has('undone')} minSample={minSample} />
       {perMerged === null ? (
-        <td className="is-num is-none" title="Needs 3 merged runs.">
+        <td className="is-num is-none" title={t('r9.sc.needs3')}>
           -
         </td>
       ) : (
@@ -134,6 +124,7 @@ export function AgentScores({
   project?: { path: string; name: string } | null;
   onClose: () => void;
 }) {
+  useT();
   const [scope, setScope] = useState<Scope>(project ? 'project' : 'all');
   const [projectKey, setProjectKey] = useState<string | undefined>(project?.path);
   const [days, setDays] = useState<number | null>(90);
@@ -163,16 +154,16 @@ export function AgentScores({
     <div className="ck-scores">
       <header className="ck-memory-head">
         <div>
-          <h1 className="ck-title">Scores on your code</h1>
-          <p className="ck-sub">Which agent works best here, from your own history.</p>
+          <h1 className="ck-title">{t('r9.sc.title')}</h1>
+          <p className="ck-sub">{t('r9.sc.sub')}</p>
         </div>
         <button type="button" className="ck-btn ck-btn--plain" onClick={onClose}>
-          Close
+          {t('r9.sc.close')}
         </button>
       </header>
 
       <div className="ck-scores-controls">
-        <div className="ck-scores-scope" role="group" aria-label="Scope">
+        <div className="ck-scores-scope" role="group" aria-label={t('r9.sc.scope')}>
           <button
             type="button"
             aria-pressed={scope === 'project'}
@@ -180,7 +171,7 @@ export function AgentScores({
             disabled={!project}
             onClick={() => setScope('project')}
           >
-            {projectName ? `This project: ${projectName}` : 'This project'}
+            {projectName ? t('r9.sc.thisProjectNamed', { name: projectName }) : t('r9.sc.thisProject')}
           </button>
           <button
             type="button"
@@ -188,15 +179,15 @@ export function AgentScores({
             className={cls(scope === 'all' && 'is-on')}
             onClick={() => setScope('all')}
           >
-            All projects
+            {t('r9.sc.all')}
           </button>
         </div>
 
-        <div className="ck-scores-scope" role="group" aria-label="Filters">
+        <div className="ck-scores-scope" role="group" aria-label={t('r9.sc.filters')}>
           {scope === 'project' && projects.length > 0 && (
             <select
               className="ck-scores-select"
-              aria-label="Project"
+              aria-label={t('r9.sc.project')}
               value={report?.project?.id ?? ''}
               onChange={(e) => setProjectKey(e.target.value)}
             >
@@ -209,7 +200,7 @@ export function AgentScores({
           )}
           <select
             className="ck-scores-select"
-            aria-label="Window"
+            aria-label={t('r9.sc.window')}
             value={days === null ? 'all' : String(days)}
             onChange={(e) => setDays(e.target.value === 'all' ? null : Number(e.target.value))}
           >
@@ -228,10 +219,10 @@ export function AgentScores({
         </p>
       )}
 
-      {report === null && error === null && <p className="ck-scores-empty">Loading</p>}
+      {report === null && error === null && <p className="ck-scores-empty">{t('r9.sc.loading')}</p>}
 
       {report !== null && report.rows.length === 0 && (
-        <p className="ck-scores-empty">No turns here yet. Run an agent in this project, then come back.</p>
+        <p className="ck-scores-empty">{t('r9.sc.none')}</p>
       )}
 
       {report !== null && report.rows.length > 0 && (
@@ -240,12 +231,12 @@ export function AgentScores({
             <table className="ck-scores-table">
               <thead>
                 <tr>
-                  <th scope="col">Agent</th>
+                  <th scope="col">{t('r9.sc.agent')}</th>
                   {COLUMNS.map((c) => (
                     <th key={c.id} scope="col" className="is-num" aria-describedby={`ck-scores-cap-${c.id}`}>
-                      {c.label}
+                      {t(c.label)}
                       <span className="ck-scores-caption" id={`ck-scores-cap-${c.id}`}>
-                        {c.caption}
+                        {t(c.caption)}
                       </span>
                     </th>
                   ))}
@@ -258,18 +249,18 @@ export function AgentScores({
               </tbody>
             </table>
           </div>
-          {enoughCount === 1 && <p className="ck-scores-empty">Only one agent has enough runs here, so nothing can be compared yet.</p>}
+          {enoughCount === 1 && <p className="ck-scores-empty">{t('r9.sc.one')}</p>}
         </>
       )}
 
       <details className="ck-scores-how">
-        <summary>How to read this</summary>
+        <summary>{t('r9.sc.how')}</summary>
         <ul>
           {HOW_TO_READ.map((line) => (
-            <li key={line}>{line}</li>
+            <li key={line}>{t(line)}</li>
           ))}
           {HOW_TO_READ_END.map((line) => (
-            <li key={line}>{line}</li>
+            <li key={line}>{t(line)}</li>
           ))}
         </ul>
       </details>
@@ -277,7 +268,7 @@ export function AgentScores({
       {report !== null && report.notes.length > 0 && (
         <ul className="ck-scores-notes">
           {report.notes.map((note) => (
-            <li key={note}>{note}</li>
+            <li key={note}>{backendText(note)}</li>
           ))}
         </ul>
       )}

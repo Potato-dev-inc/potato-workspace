@@ -25,12 +25,15 @@ import {
 import {
   DOCK_MAX,
   DOCK_MIN,
+  dockShown,
   moveSplit,
   resetDockWidth,
   saveWidths,
   setDockSplit,
   setDockWidth,
+  useLayout,
   usePanelWidths,
+  useWindowInnerWidth,
 } from '../../../lib/panel-widths';
 import type { PaneUsage } from '../../../lib/pane-usage';
 import type { JobsApi } from '../../../lib/pane-jobs';
@@ -85,7 +88,10 @@ const GLYPH: Record<DockSlot, string> = {
 export function TaskColumn({ paneId, agentName, agentType, rows, owners, usage, onOpenPane, onStopHelper, onStopJob, jobsApi, workflow = null, onOpenWorkflowHelper, onOpenWorkflowBig }: TaskColumnProps) {
   const t = useT();
   const state = useTaskView(paneId);
-  const { dock, split } = usePanelWidths();
+  const { dock: chosenDock, split } = usePanelWidths();
+  const layout = useLayout();
+  const winW = useWindowInnerWidth();
+  const dock = dockShown(chosenDock, winW, layout.sidePx, layout.railPx);
   const browserOn = useDockBrowserEnabled();
   // One ref per slot, so a splitter can measure the two panes beside it.
   const refs = useMemo<Record<DockSlot, RefObject<HTMLDivElement>>>(() => ({ view: createRef<HTMLDivElement>(), workflow: createRef<HTMLDivElement>(), terminal: createRef<HTMLDivElement>(), browser: createRef<HTMLDivElement>() }), []);
@@ -216,7 +222,7 @@ export function TaskColumn({ paneId, agentName, agentType, rows, owners, usage, 
           className="ck-resize--rail ck-resize--dock"
           grow="left"
           value={dock}
-          min={DOCK_MIN}
+          min={Math.min(DOCK_MIN, dock)}
           max={DOCK_MAX}
           label={t('dock.resize')}
           title={t('dock.resizeTip')}

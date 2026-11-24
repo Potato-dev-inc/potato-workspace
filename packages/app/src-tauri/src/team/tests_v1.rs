@@ -1019,6 +1019,7 @@ fn phone_team_routes_follow_device_caps_and_refuse_agents() {
         link: Some("live"),
         link_detail: None,
         error: None,
+        removed: false,
         missing: 0,
         drafts: vec![],
         cards: vec![],

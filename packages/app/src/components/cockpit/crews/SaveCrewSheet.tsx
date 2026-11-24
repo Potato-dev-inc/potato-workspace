@@ -99,7 +99,7 @@ export function SaveCrewSheet({
         {initial ? 'Copy this crew' : 'Save this team'}
       </h2>
       {initial ? (
-        <p className="ck-sub">Edit the copy, then save it to My crews. The starter itself does not change.</p>
+        <p className="ck-sub">{t('r21.sw.editTheCopyThen')}</p>
       ) : (
         <p className="ck-sub">
           Saves each agent, its first task and who started whom. The folder becomes <code>{'{folder}'}</code>, so you can start this crew in any folder. Secrets
@@ -107,12 +107,12 @@ export function SaveCrewSheet({
         </p>
       )}
 
-      {!crew && !error && <p className="ck-sub">Reading the team…</p>}
+      {!crew && !error && <p className="ck-sub">{t('r21.sw.readingTheTeam')}</p>}
 
       {crew && (
         <>
           <label className="ck-pr-field">
-            <span>Crew name</span>
+            <span>{t('r21.sw.crewName')}</span>
             <input
               ref={nameRef}
               className="ck-pr-input"
@@ -120,7 +120,7 @@ export function SaveCrewSheet({
               maxLength={MAX_CREW_NAME}
               onChange={(e) => edit({ ...crew, name: e.target.value })}
               disabled={busy}
-              aria-label="Crew name"
+              aria-label={t('r21.sw.crewName')}
             />
           </label>
           <ul className="ck-crew-roles">

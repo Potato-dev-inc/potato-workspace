@@ -2,6 +2,7 @@ import { useId, useMemo, useState } from 'react';
 import { Sheet } from '../cockpit/Sheet';
 import { joinStateText, type SpaceJoining } from '../../lib/spaces';
 import '../../styles/cockpit-spaces.css';
+import { t } from '../../i18n';
 
 export interface JoinSheetProps {
   joining: SpaceJoining | null;
@@ -47,17 +48,17 @@ export function JoinSheet({ joining, error, onJoin, onCancel, onOpenSpace }: Joi
   const statusIsError = !(joining?.state === 'waiting' || joining?.state === 'connecting');
   return (
     <Sheet labelledBy={titleId} role="dialog" onClose={() => onCancel(joining?.space ?? null)} className="ck-spaces-sheet">
-      <h2 id={titleId} className="ck-spaces-sheet-title">Join a space</h2>
+      <h2 id={titleId} className="ck-spaces-sheet-title">{t('r21.sw.joinASpace')}</h2>
       <label className="ck-spaces-field">
-        <span>Invite link</span>
+        <span>{t('r21.sw.inviteLink')}</span>
         <input value={link} placeholder="pms1:…" disabled={busy} onChange={(e) => setLink(e.target.value)} />
-        <small className="ck-spaces-hint">Paste the link you got.</small>
+        <small className="ck-spaces-hint">{t('r21.sw.pasteTheLinkYou')}</small>
       </label>
       {link.trim() !== '' && !linkOk && (
         <p className="ck-spaces-hint is-error">That doesn't look like a Spaces invite link.</p>
       )}
       <label className="ck-spaces-field">
-        <span>Invite words</span>
+        <span>{t('r21.sw.inviteWords')}</span>
         <textarea
           rows={2}
           value={words}

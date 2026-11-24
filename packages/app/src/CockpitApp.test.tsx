@@ -112,7 +112,7 @@ vi.mock('./components/timeline/TodayPage', async () => {
 const opened = vi.hoisted(() => ({ result: undefined as boolean | void }));
 const dev = vi.hoisted(() => ({ view: null as null | { enabled: boolean; devices: unknown[] }, groups: [] as unknown[] }));
 vi.mock('./components/devices/useDeviceGroups', () => ({
-  useDeviceGroups: () => ({ view: dev.view, enabled: dev.view?.enabled === true, groups: dev.groups, refresh: () => {} }),
+  useDeviceGroups: () => ({ view: dev.view, enabled: dev.view?.enabled === true, groups: dev.groups, questions: [], answerQuestion: async () => {}, hideQuestion: () => {}, refresh: () => {}, watch: () => {} }),
 }));
 
 vi.mock('./hooks/useCockpit', async () => {
@@ -726,7 +726,8 @@ describe('CockpitApp main view precedence', () => {
     dev.groups = [{ device: { node: 'n1', name: 'Mac', state: 'online' }, rows: [] }];
     await act(async () => root.render(createElement(CockpitApp)));
     clickButton('Open PC n1');
-    expect(opened.result).toBe(true);
+    // The section is unfolded AND the PC's own sheet opens (false), so Open never shows nothing.
+    expect(opened.result).toBe(false);
     expect(heard).toEqual(['n1']);
     off();
   });

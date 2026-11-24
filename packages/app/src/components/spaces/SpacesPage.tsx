@@ -30,6 +30,7 @@ import { Sheet } from '../cockpit/Sheet';
 import { ConfirmSheet } from './ConfirmSheet';
 import { MemberMenu } from './MemberMenu';
 import { MessageMenu } from './MessageMenu';
+import { t } from '../../i18n';
 
 export const OWNER_CANT_LEAVE = "You own this space. Owners can't leave in this version.";
 
@@ -86,13 +87,13 @@ export function SpacesPage() {
       {view && view.spaces.length === 0 && !joiningOpen ? (
         <section className="ck-spaces-empty">
           <h1 className="ck-title">Spaces</h1>
-          <p className="ck-sub">Chat with friends in small groups, computer to computer. No server keeps your messages.</p>
+          <p className="ck-sub">{t('r21.sw.chatWithFriendsIn')}</p>
           <div className="ck-spaces-actions">
             <button type="button" className="ck-spaces-btn" onClick={onNew}>
               New space
             </button>
             <button type="button" className="ck-spaces-btn" onClick={() => setJoiningOpen(true)}>
-              Join a space
+              {t('r21.sw.joinASpace')}
             </button>
           </div>
         </section>
@@ -112,14 +113,14 @@ export function SpacesPage() {
               </p>
             )}
             {!detail ? (
-              <p className="ck-sub">Pick a space on the left.</p>
+              <p className="ck-sub">{t('r21.sw.pickASpaceOn')}</p>
             ) : (
               <header className="ck-spaces-head">
                 <h1 className="ck-title">{detail.name}</h1>
                 {!detail.anyoneOnline && (
-                  <span className="ck-spaces-note">No one else is online right now. New messages wait until someone is.</span>
+                  <span className="ck-spaces-note">{t('r21.sw.noOneElseIs')}</span>
                 )}
-                {detail.relayed && <span className="ck-spaces-note">Connected through a relay. Messages stay encrypted.</span>}
+                {detail.relayed && <span className="ck-spaces-note">{t('r21.sw.connectedThroughARelay')}</span>}
                 <button type="button" className="ck-spaces-btn ck-spaces-people-toggle" onClick={() => setPeopleOpen((o) => !o)}>
                   People
                 </button>
@@ -272,7 +273,7 @@ export function SpacesPage() {
             />{' '}
             Show when I'm online
           </label>
-          <p className="ck-spaces-note">This applies to all spaces on this computer. When it is off, others see you as offline.</p>
+          <p className="ck-spaces-note">{t('r21.sw.thisAppliesToAll')}</p>
           <div className="ck-spaces-actions">
             <button type="button" className="ck-spaces-btn" onClick={() => setInfoOpen(false)}>
               Close

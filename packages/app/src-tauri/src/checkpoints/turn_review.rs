@@ -66,7 +66,7 @@ pub fn turn_review(project: &Path, pane: &str) -> Result<Option<TurnReview>, Che
     }
     let items = list_in(&shadow, pane)?;
     let Some((before, after)) = latest_turn(&items) else { return Ok(None) };
-    if before.tree == after.tree {
+    if before.tree == after.tree || is_undone(&items, before, after) {
         return Ok(None);
     }
     let changes = changes_between(&shadow, &before.tree, &after.tree)?;
@@ -87,8 +87,35 @@ pub fn turn_review(project: &Path, pane: &str) -> Result<Option<TurnReview>, Che
 /// "after" taken earlier). `items` are oldest first.
 fn latest_turn(items: &[Checkpoint]) -> Option<(&Checkpoint, &Checkpoint)> {
     let at = items.iter().rposition(|c| c.kind == "after")?;
-    let before = items[..at].iter().rev().find(|c| c.kind == "before" || c.kind == "after")?;
-    Some((before, &items[at]))
+    let after = &items[at];
+    // A turn can leave several "after" points (the agent's status flickers to idle mid-turn): the turn started at its
+    // own "before", not at the earlier "after" of the same turn, or the files made before that flicker would be lost.
+    let (mut first_same, mut prev) = (None, None);
+    for c in items[..at].iter().rev().filter(|c| c.kind == "before" || c.kind == "after") {
+        if c.turn == after.turn {
+            first_same = Some(c);
+        } else {
+            prev = Some(c);
+            break;
+        }
+    }
+    let before = match first_same {
+        Some(c) if c.kind == "before" => c,
+        _ => prev.or(first_same)?,
+    };
+    Some((before, after))
+}
+
+/// Whether the files were put back to (or before) the start of the newest turn by "Undo last turn" or a restore:
+/// the turn then has nothing left to review. A Put back's safety point carries no target, so it never counts.
+fn is_undone(items: &[Checkpoint], before: &Checkpoint, after: &Checkpoint) -> bool {
+    let id = |c: &Checkpoint| c.id.parse::<u64>().unwrap_or(0);
+    items
+        .iter()
+        .rev()
+        .take_while(|c| id(c) > id(after))
+        .find(|c| c.kind == "undo" && !c.restored_to.is_empty())
+        .is_some_and(|c| c.restored_to.parse::<u64>().is_ok_and(|to| to <= id(before)))
 }
 
 /// The content ids of `paths` in `tree`.

@@ -2,7 +2,8 @@
 // src-tauri/src/companion/model.rs in camelCase. Desktop talks to Tauri commands, the phone to the bridge routes;
 // the same split as paneOutbox.ts / paneOutbox-bridge.ts. Nothing here draws: the UI reads these values.
 import { invoke } from '@tauri-apps/api/core';
-import { listen, type UnlistenFn } from '@tauri-apps/api/event';
+import { listen } from './events';
+import type { UnlistenFn } from '@tauri-apps/api/event';
 import type { BridgeClient } from './bridge-types';
 import { bridgeRefusalText } from './paneOutbox-bridge';
 

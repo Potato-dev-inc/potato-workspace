@@ -126,7 +126,7 @@ mod tests {
         }
 
         fn clean(&self) -> Clean {
-            Clean { text: Box::new(|raw| clean_line(raw, &RedactContext::default(), None)) }
+            Clean { text: Box::new(|raw| clean_line(raw, &RedactContext::default(), None)), path: None }
         }
     }
 

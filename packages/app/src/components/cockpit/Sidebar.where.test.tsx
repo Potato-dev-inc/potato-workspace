@@ -123,7 +123,8 @@ describe('New agent: Where', () => {
     await click(q(`[data-testid="where-${NODE_MAC}"]`));
     await settle(4);
     expect(onOpenNewAgent).toHaveBeenCalledTimes(1);
-    expect(JSON.parse(window.localStorage.getItem('pm.newAgent.where') ?? '{}')).toEqual({ '': NODE_MAC });
+    // A paired device is handed over in memory only: never written to browser storage, so it is not remembered across launches.
+    expect(JSON.parse(window.localStorage.getItem('pm.newAgent.where') ?? '{}')).toEqual({});
     // Nothing of the page is squeezed into the popup.
     expect(q('[data-testid="where-body"]')).toBeNull();
     expect(q('.ck-na')).toBeNull();

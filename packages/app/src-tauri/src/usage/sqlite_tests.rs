@@ -6,7 +6,7 @@ use rusqlite::Connection;
 use std::path::PathBuf;
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
-const OPENCODE_TOML: &str = include_str!("../tui/opencode/usage.toml");
+const OPENCODE_TOML: &str = include_str!("../../crates/pm-core/src/tui/opencode/usage.toml");
 
 /// 2026-11-13 12:00 UTC.
 fn now() -> SystemTime {

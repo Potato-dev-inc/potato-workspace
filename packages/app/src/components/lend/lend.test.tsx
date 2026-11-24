@@ -152,10 +152,26 @@ describe('Ask to borrow', () => {
   });
 
   it('lists my recent asks next to the button', async () => {
-    const api = createFakeLendApi({ requests_out: [{ ...REQUEST_MAYA, direction: 'out', state: 'accepted' }] });
+    const api = createFakeLendApi({ requests_out: [{ ...REQUEST_MAYA, direction: 'out', state: 'accepted' }], grants: [{ ...GRANT_IN, peer_member_id: REQUEST_MAYA.member_id }] });
     await act(async () => root.render(<RequestUsage api={api} team={team} />));
     await settle(4);
     expect(host.querySelector('[aria-label="What you asked for"]')!.textContent).toContain('Ready');
+  });
+
+  it('does not keep a "Ready" ask past ten minutes (the borrow shows itself)', async () => {
+    const api = createFakeLendApi({ requests_out: [{ ...REQUEST_MAYA, direction: 'out', state: 'accepted', at_ms: Date.now() - 20 * 60_000 }] });
+    await act(async () => root.render(<RequestUsage api={api} team={team} />));
+    await settle(4);
+    expect(host.querySelector('[aria-label="What you asked for"]')).toBeNull();
+  });
+
+  it('names my own other PC by its device, never "Teammate"', async () => {
+    const api = createFakeLendApi({ requests_out: [{ ...REQUEST_MAYA, direction: 'out', state: 'open', member_name: '', device_name: 'Office-PC' }] });
+    await act(async () => root.render(<RequestUsage api={api} team={team} />));
+    await settle(4);
+    const text = host.querySelector('[aria-label="What you asked for"]')!.textContent ?? '';
+    expect(text).toContain('Office-PC');
+    expect(text).not.toContain('Teammate');
   });
 
   it('with lending off here, the entry stays and says which switch is off on this PC', async () => {
@@ -404,13 +420,13 @@ describe('Time-left chip', () => {
     expect(el()!.dataset.problem).toBe('true');
     expect(el()!.title).toBe("The lender's sign-in expired. Ask them to sign in again.");
     await click(el());
-    expect(host.querySelector('[data-testid="lend-problem"]')!.textContent).toBe("The lender's sign-in expired. Ask them to sign in again.");
+    expect(document.querySelector('[data-testid="lend-problem"]')!.textContent).toBe("The lender's sign-in expired. Ask them to sign in again.");
   });
 
   it('says in the details that the agent may show a billing note but the lender pays', async () => {
     await chip(50 * 60_000);
     await click(el());
-    const note = host.querySelector('[data-testid="lend-billing-note"]')!.textContent!;
+    const note = document.querySelector('[data-testid="lend-billing-note"]')!.textContent!;
     expect(note).toContain('may show a billing note');
     expect(note).toContain("charged to Leo's plan");
   });
@@ -418,11 +434,11 @@ describe('Time-left chip', () => {
   it('opens its details, and Give back now ends the lend', async () => {
     const api = await chip(50 * 60_000);
     await click(el());
-    expect(host.querySelector('.lend-pop')!.textContent).toContain("Claude · Work account on Leo's PC (borrowed)");
+    expect(document.querySelector('.lend-pop')!.textContent).toContain("Claude · Work account on Leo's PC (borrowed)");
     // The details say what was used (requests and tokens).
-    expect(host.querySelector('[data-testid="lend-usage"]')!.textContent).toBe('Used so far: 3 requests');
-    expect(host.querySelector('[data-testid="lend-problem"]')).toBeNull();
-    await click(buttonByText(host, 'Give back now'));
+    expect(document.querySelector('[data-testid="lend-usage"]')!.textContent).toBe('Used so far: 3 requests');
+    expect(document.querySelector('[data-testid="lend-problem"]')).toBeNull();
+    await click(buttonByText(document.body, 'Give back now'));
     await settle(3);
     expect(api.calls).toContain('giveBack("grant-in-2")');
     expect(el()).toBeNull();

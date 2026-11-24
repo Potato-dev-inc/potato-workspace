@@ -302,12 +302,11 @@ pub fn app_panes() -> Arc<SigninPanes> {
 /// The real pane host: the pane registry of the app.
 pub struct AppPorts {
     pub registry: Arc<parking_lot::Mutex<crate::pty::PaneRegistry>>,
-    pub app: tauri::AppHandle,
 }
 
 impl Ports for AppPorts {
     fn spawn(&self, args: SpawnPaneArgs) -> Result<String, String> {
-        crate::pty::registry_spawn_pane(&self.registry, &self.app, args)
+        crate::pty::registry_spawn_pane(&self.registry, args)
     }
     fn kill(&self, pane_id: &str) {
         let _ = crate::pty::registry_kill_pane(&self.registry, pane_id);

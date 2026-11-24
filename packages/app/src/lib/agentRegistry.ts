@@ -2,7 +2,7 @@
 // `GET /agents/types`), cached, with the compiled code agents as the offline fallback.
 import { useEffect, useState } from 'react';
 import { invoke } from '@tauri-apps/api/core';
-import { listen } from '@tauri-apps/api/event';
+import { listen } from './events';
 import { listLaunchPresets, presetFor, type AgentType } from '@potato-workspace/shared';
 
 export type AgentKind = 'cli' | 'native_protocol' | 'shell' | 'unknown';

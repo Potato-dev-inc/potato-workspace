@@ -3,7 +3,7 @@ import type { EnglishKey } from '../en';
 
 export const account: Partial<Record<EnglishKey, string>> = {
   'account.title': '你的 Potato 帳號',
-  'account.blurb': '登入一次，你的裝置就能互相找到。帳號只記得你的名字和裝置清單，不會存放你的代理登入、金鑰、對話或檔案。',
+  'account.blurb': '登入一次，你的裝置就能互相找到。帳號只記得你的名字和裝置清單，不會存放你的 AI 助理登入、金鑰、對話或檔案。',
   'account.notReady': '帳號服務還沒設定好。',
   'account.signIn': '登入 Potato',
   'account.waiting': '請在瀏覽器完成登入。',
@@ -41,7 +41,7 @@ export const account: Partial<Record<EnglishKey, string>> = {
   'account.pcs.offline': '離線',
   'account.pcs.paired': '已配對',
   'account.pcs.pairedOffline': '已配對 · 離線',
-  'account.pcs.notAllowed': '已配對。那台電腦還沒有讓這台電腦執行代理。',
+  'account.pcs.notAllowed': '已配對。那台電腦還沒有讓這台電腦執行 AI 助理。',
   'account.pcs.first': '第一次：你要輸入六個數字',
   'account.pcs.allowThere': '請先在那台電腦上允許：勾選「讓我的其他電腦開啟這台電腦」。',
   'account.pcs.conflict': '你的帳號上有兩筆資料指向這台電腦。請登出舊的那一筆（看一下加入日期）。',

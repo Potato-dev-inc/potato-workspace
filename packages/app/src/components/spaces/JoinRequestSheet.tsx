@@ -2,6 +2,7 @@ import { useId } from 'react';
 import { Sheet } from '../cockpit/Sheet';
 import type { SpaceJoinRequest } from '../../lib/spaces';
 import '../../styles/cockpit-spaces.css';
+import { t } from '../../i18n';
 
 export interface JoinRequestSheetProps {
   request: SpaceJoinRequest | null;
@@ -16,7 +17,7 @@ export function JoinRequestSheet({ request, onAnswer }: JoinRequestSheetProps) {
   return (
     <Sheet labelledBy={titleId} onClose={no} className="ck-spaces-sheet">
       <h2 id={titleId} className="ck-spaces-sheet-title">{request.name} wants to join {request.spaceName}</h2>
-      <p className="ck-spaces-sheet-body">They used your invite and typed the right words.</p>
+      <p className="ck-spaces-sheet-body">{t('r21.sw.theyUsedYourInvite')}</p>
       <p className="ck-spaces-note">Their computer: {request.short}</p>
       <p className="ck-spaces-hint">
         Only let in people you know. They will be able to read this space's recent messages.

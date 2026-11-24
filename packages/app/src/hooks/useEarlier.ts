@@ -17,6 +17,15 @@ export interface EarlierState {
   show: () => void;
 }
 
+/** The chat stays open this long before the PC is asked whether there is more. */
+export const EARLIER_PROBE_MS = 500;
+/** Tests only: the wait above, so a screen test need not sit through it. */
+export const earlierTuning = { probeMs: EARLIER_PROBE_MS };
+/** "Is there more before this first message", by chat and first message: it only changes when the chat grows at the front. */
+const knownMore = new Map<string, boolean>();
+/** Tests only. */
+export const forgetKnownMore = (): void => knownMore.clear();
+
 export const NO_EARLIER: EarlierState = { more: false, busy: false, failed: false, version: 0, show: () => undefined };
 
 export interface UseEarlierOptions {
@@ -65,18 +74,33 @@ export function useEarlier({ key, ready, supported, items, setItems, fetchPage }
     setVersion(0);
   }, [key]);
 
-  // Is there anything before the first message held? Asked once for each first message (limit 0: only the answer).
+  // Is there anything before the first message held? Asked once for each first message (limit 0: only the answer), after the chat has
+  // stayed open a moment (a run of quick chat switches asks nothing), and a chat seen before answers from memory.
   useEffect(() => {
     if (!enabled || !anchor || knownFor.current === anchor || busyRef.current) return;
-    knownFor.current = anchor;
     const ask = fetchRef.current;
     if (!ask) return;
-    ask(anchor, 0).then(
-      (page) => {
-        if (live.current && knownFor.current === anchor) setMore(Boolean(page && page.more));
-      },
-      () => undefined,
-    );
+    const asked = `${key}|${anchor}`;
+    const kept = knownMore.get(asked);
+    if (kept !== undefined) {
+      knownFor.current = anchor;
+      setMore(kept);
+      return;
+    }
+    const timer = setTimeout(() => {
+      if (busyRef.current) return;
+      knownFor.current = anchor;
+      ask(anchor, 0).then(
+        (page) => {
+          const more = Boolean(page && page.more);
+          knownMore.set(asked, more);
+          if (knownMore.size > 100) knownMore.delete(knownMore.keys().next().value as string);
+          if (live.current && knownFor.current === anchor) setMore(more);
+        },
+        () => undefined,
+      );
+    }, earlierTuning.probeMs);
+    return () => clearTimeout(timer);
   }, [enabled, anchor, key]);
 
   const show = useCallback(() => {

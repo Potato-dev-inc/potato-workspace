@@ -90,8 +90,10 @@ export function deriveNeedsYou(input: AttentionInput): NeedsYouItem[] {
   const items: NeedsYouItem[] = [];
   const known = new Set(input.panes.map((p) => p.id));
 
+  // A local chat's permission is a question card (kind acp_permission) AND leaves its pane at waiting_input: one thing, so the richer card counts and the generic pane row does not.
+  const asking = new Set((input.questions ?? []).filter((q) => q.kind === 'acp_permission' && q.pane_id).map((q) => q.pane_id));
   for (const pane of input.panes) {
-    if (pane.status === 'waiting_input') {
+    if (pane.status === 'waiting_input' && !asking.has(pane.id)) {
       const level = input.prompts?.[pane.id]?.risk?.level;
       items.push({
         id: `approval:${pane.id}`,
@@ -151,7 +153,9 @@ const PANE_STATE_PRECEDENCE: Partial<Record<NeedsYouKind, number>> = { approval:
  */
 export function blockingItems(items: ReadonlyArray<NeedsYouItem>): NeedsYouItem[] {
   const seen = new Set<string>();
-  const unique = items.filter((i) => isBlockingKind(i.kind) && !seen.has(i.id) && seen.add(i.id));
+  const approved = new Set(items.filter((i) => i.kind === 'approval' && i.paneId).map((i) => i.paneId));
+  // A pane stopped at a permission prompt that also has a question from the same agent is one thing waiting (the prompt), not two.
+  const unique = items.filter((i) => isBlockingKind(i.kind) && !(i.kind === 'question' && i.paneId && approved.has(i.paneId)) && !seen.has(i.id) && seen.add(i.id));
   const best = new Map<string, number>();
   for (const item of unique) {
     const rank = PANE_STATE_PRECEDENCE[item.kind];

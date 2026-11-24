@@ -332,7 +332,7 @@ impl Sender for LiveSender {
     /// startup notice with the agent's own keys first and waits behind a question. Raw keys + Enter would answer
     /// whatever menu is on screen.
     fn pane_input(&self, pane_id: &str, text: &str) -> Result<(), String> {
-        crate::pane_outbox::global(&self.registry, &self.app).send(pane_id, text).map(|_| ())
+        crate::pane_outbox::global(&self.registry).send(pane_id, text).map(|_| ())
     }
 }
 

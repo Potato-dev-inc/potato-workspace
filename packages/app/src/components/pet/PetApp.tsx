@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { listen } from '@tauri-apps/api/event';
+import { listen } from '../../lib/events';
 import { useAttention } from '../../hooks/useAttention';
 import { useAgentRegistry } from '../../lib/agentRegistry';
 import { useCompanions } from '../../hooks/useCompanions';

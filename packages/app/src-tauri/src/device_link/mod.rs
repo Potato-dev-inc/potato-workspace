@@ -19,18 +19,20 @@
 //! list, the client (`client.rs`) and the open inbound links (`serve.rs::Live`).
 
 pub mod account_dir;
-pub mod activity;
+pub use pm_core::device_link::activity;
 pub mod app;
 pub mod client;
-pub mod files;
+pub use pm_core::device_link::files;
 pub mod far_http;
+pub mod far_preview;
 pub mod pclink;
 pub mod pcdoor;
+pub mod redial;
 pub mod files_client;
-pub mod route;
-pub mod serve;
-pub mod web;
-pub mod wire;
+pub use pm_core::device_link::route;
+pub use pm_core::device_link::serve;
+pub use pm_core::device_link::web;
+pub use pm_core::device_link::wire;
 
 #[cfg(test)]
 mod account_tests;
@@ -269,6 +271,36 @@ pub fn caps_of(level: RemoteLevel) -> Caps {
     }
 }
 
+/// May a lend item (`POST /lend/item`) from this paired PC in? The per-PC "Borrow my agent sign-ins" right, or a PC of the person's own
+/// account (the account marker) while Share an agent is on here: for an own PC the click on the lender is the consent, so no switch is
+/// needed. The lend service still refuses an item that answers nothing (`on_own_item`/`apply`), and any other account is refused here.
+pub(crate) fn lend_item_allowed(lend_right: bool, account_marked: bool, lend_on: bool) -> bool {
+    lend_right || (account_marked && lend_on)
+}
+
+/// Is this paired PC one of the person's own? Paired through the account (the marker), or paired by hand and still listed in the
+/// signed-in account: the list's node record is signed by the device key (`usable`), so it counts the same.
+fn is_own_pc(trust: &TrustList, acct: Option<&Arc<AccountDir>>, n: &NodeId) -> bool {
+    if trust.account_marked(n) {
+        return true;
+    }
+    trust.is_trusted(n)
+        && acct.and_then(|a| a.list_rows().ok().flatten()).is_some_and(|rows| rows.iter().any(|r| !r.is_this && account_dir::usable(r).is_some_and(|(id, _)| id == *n)))
+}
+
+#[cfg(test)]
+mod lend_item_door_tests {
+    use super::lend_item_allowed;
+
+    #[test]
+    fn an_own_pc_gets_in_by_the_click_alone_and_another_account_does_not() {
+        assert!(lend_item_allowed(false, true, true), "same account, no switch: let in");
+        assert!(!lend_item_allowed(false, false, true), "paired but another account, no switch: refused");
+        assert!(!lend_item_allowed(false, true, false), "Share an agent is off on this PC: refused");
+        assert!(lend_item_allowed(true, false, false), "the per-PC right still works as before");
+    }
+}
+
 fn pclink_now_ms() -> u64 {
     std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).map(|d| d.as_millis() as u64).unwrap_or(0)
 }
@@ -371,11 +403,11 @@ impl DeviceLink {
                 },
                 marked_of: {
                     let trust = trust.clone();
-                    Arc::new(move |node: &str| node_of(node).is_ok_and(|n| trust.account_marked(&n)))
+                    Arc::new(move |node: &str| node_of(node).is_ok_and(|n| trust.own_pc(&n)))
                 },
                 lend_ok: {
-                    let (trust, enabled) = (trust.clone(), enabled.clone());
-                    Arc::new(move |node: &str| enabled.load(Ordering::SeqCst) && node_of(node).is_ok_and(|n| trust.lend_allowed(&n)))
+                    let (trust, enabled, acct) = (trust.clone(), enabled.clone(), acct.clone());
+                    Arc::new(move |node: &str| enabled.load(Ordering::SeqCst) && node_of(node).is_ok_and(|n| lend_item_allowed(trust.lend_allowed(&n), is_own_pc(&trust, acct.as_ref(), &n), crate::capacity_proxy::enabled())))
                 },
                 now_ms: Arc::new(|| std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).map(|d| d.as_millis() as u64).unwrap_or(0)),
             }),
@@ -473,6 +505,25 @@ impl DeviceLink {
             move || {
                 if let Some(me) = weak.upgrade() {
                     me.changed();
+                }
+            }
+        }));
+        // A PC that keeps failing to dial is looked up on the account again (its saved address may be stale for good), and each failure
+        // leaves a plain line in its device activity.
+        me.client.set_refresher(Arc::new({
+            let weak = weak.clone();
+            move |node: &NodeId| {
+                let me = weak.upgrade()?;
+                let rows = me.acct.as_ref()?.fresh_rows().ok().flatten()?;
+                rows.into_iter().find(|r| !r.is_this && account_dir::usable(r).is_some_and(|(n, _)| n == *node)).and_then(|r| r.relay)
+            }
+        }));
+        me.client.set_dial_log(Arc::new({
+            let weak = weak.clone();
+            move |node: &NodeId, kind: Kind| {
+                if let Some(me) = weak.upgrade() {
+                    let name = me.trust.get(node).map(|d| d.name).unwrap_or_default();
+                    me.activity.record((me.now_secs)(), &node.to_hex(), &name, Dir::Out, kind);
                 }
             }
         }));
@@ -578,8 +629,10 @@ impl DeviceLink {
         if !self.enabled() {
             return Err(OFF.into());
         }
+        tracing::info!("device link: starting");
         self.sync_relay().await;
         self.p2p.want(capability::AGENTS_REMOTE).await.map_err(|e| e.to_string())?;
+        tracing::info!("device link: listening, now the account");
         self.sync_account().await;
         // Files is a second protocol name on the same endpoint; it needs no extra switch of its own to be listening, because every
         // device's own `files` switch is checked at the door.
@@ -650,7 +703,8 @@ impl DeviceLink {
         if on {
             for d in self.trust.list() {
                 let level = self.trust.remote_level(&d.node);
-                let lend = self.trust.lend_allowed(&d.node);
+                // Every linked PC may reach the lend door; the door itself (`lend_item_allowed`: the per-PC right, or an own-account PC while Share an agent is on) decides.
+                let lend = self.trust.lend_allowed(&d.node) || level.is_some();
                 if level.is_some() || lend {
                     // What the person switched on, and nothing else: a device that may only borrow holds `lend` alone.
                     let base = level.map(caps_of).unwrap_or_else(Caps::none);
@@ -807,11 +861,13 @@ impl DeviceLink {
     pub async fn sync_account(self: &Arc<Self>) {
         let Some(dir) = self.acct.clone() else { return };
         if !(dir.is_open() && self.enabled()) {
+            tracing::info!(open = dir.is_open(), enabled = self.enabled(), "account: not publishing this PC");
             return;
         }
         // Signed out: the door shuts (and stays shut until the person signs in again).
         let port = dir.port().clone();
         if !tokio::task::spawn_blocking(move || port.signed_in()).await.unwrap_or(false) {
+            tracing::info!("account: not signed in, the door stays shut");
             self.trust.set_account_pairing_open(false);
             if let Some(h) = self.account_task.lock().unwrap_or_else(|p| p.into_inner()).take() {
                 h.abort();
@@ -855,13 +911,24 @@ impl DeviceLink {
         if !dir.is_open() {
             return;
         }
-        let Ok(identity) = DeviceIdentity::load(&self.keys) else { return };
+        let identity = match DeviceIdentity::load(&self.keys) {
+            Ok(i) => i,
+            Err(e) => {
+                tracing::warn!(error = %e, "account: this PC could not read its link identity to publish it");
+                return;
+            }
+        };
         let (node, binding) = (identity.id().to_hex(), account_dir::binding_text(&identity.binding()));
         let relay = if self.p2p.relays_allowed() { self.p2p.home_relay_within(Duration::from_secs(3)).await } else { None };
         let relay = relay.and_then(|r| crate::account::directory::valid_relay_hint(&r));
         let port = dir.port().clone();
         let done = tokio::task::spawn_blocking(move || port.publish(&node, &binding, relay.as_deref())).await;
-        dir.set_published(matches!(done, Ok(Ok(()))));
+        if let Ok(Err(sentence)) = &done {
+            tracing::warn!(%sentence, "account: this PC could not publish its link id");
+        }
+        let ok = matches!(done, Ok(Ok(())));
+        tracing::info!(ok, "account: published this PC's link id");
+        dir.set_published(ok);
     }
 
     fn start_account_task(self: &Arc<Self>) {
@@ -1400,9 +1467,45 @@ impl DeviceLink {
         self.trust.list().iter().map(|d| (d.node.to_hex(), observe_identity(&d.node.to_hex(), &d.name))).collect()
     }
 
+    /// Whether `node` is a PC signed in to this account (the account marker), not only a paired one.
+    pub fn own_account_pc(&self, node: &str) -> bool {
+        self.enabled() && node_of(node).is_ok_and(|n| is_own_pc(&self.trust, self.acct.as_ref(), &n))
+    }
+
     /// This PC's own name on the link.
     pub fn self_name(&self) -> String {
         self.name.clone()
+    }
+
+    /// Pairing over SSH (the one-button setup): this PC's ids as the one JSON line `potato-host pair --stdio` reads. Public ids only.
+    pub fn ssh_pair_line(&self) -> Result<String, String> {
+        self.require_on()?;
+        let id = DeviceIdentity::load(&self.keys).map_err(|e| e.to_string())?;
+        let hex = |b: &[u8]| b.iter().map(|x| format!("{x:02x}")).collect::<String>();
+        Ok(serde_json::json!({ "node": id.id().to_hex(), "device_pub": hex(&id.binding().device_pub), "name": self.name }).to_string())
+    }
+
+    /// Trusts a machine the person just set up over SSH, with every right off: what it may do here stays the person's choice (it gets
+    /// none unless they switch one on). SSH already proved both ends, so no number is compared. Idempotent for the same key.
+    pub fn ssh_trust_host(&self, node: &str, device_pub: &str, name: &str) -> Result<(), String> {
+        self.require_on()?;
+        let id = node_of(node)?;
+        let key: [u8; 32] = (device_pub.len() == 64 && device_pub.is_ascii())
+            .then(|| {
+                let mut out = [0u8; 32];
+                for (i, o) in out.iter_mut().enumerate() {
+                    *o = u8::from_str_radix(&device_pub[i * 2..i * 2 + 2], 16).ok()?;
+                }
+                Some(out)
+            })
+            .flatten()
+            .ok_or("The machine's key is not valid.")?;
+        let name = crate::p2p::trust::clean_name(name);
+        let name = if name.is_empty() { "SSH machine".to_string() } else { name };
+        // The same machine again is fine; the same node with another key is refused by the trust list.
+        self.trust.add(id, key, &name, (self.now_secs)()).map_err(|_| "This machine's key changed since it was paired. Remove it in Connect first.".to_string())?;
+        self.rights_changed();
+        Ok(())
     }
 
     /// Lets (or stops letting) a device ask to borrow this PC's agent sign-ins. Independent of the run switch. Nothing is copied: a

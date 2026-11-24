@@ -133,6 +133,7 @@ mod tests {
             kind: kind.into(),
             label: String::new(),
             note: String::new(),
+            restored_to: String::new(),
             at_ms,
             files: 0,
             added: 0,

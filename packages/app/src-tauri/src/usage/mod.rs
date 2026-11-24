@@ -13,7 +13,7 @@
 pub mod oauth;
 pub mod readers;
 pub mod room;
-pub mod source;
+pub use pm_core::usage::source;
 pub mod sqlite;
 #[cfg(test)]
 mod oauth_tests;
@@ -501,12 +501,19 @@ pub struct OwnSignIn {
     pub why: Option<String>,
 }
 
+fn lacks_login_file(agent: &AgentUsage, login: &Login) -> bool {
+    let (Some(scheme), Some(home)) = (&agent.scheme, &login.home) else { return false };
+    !cfg!(target_os = "macos") && !matches!(agent.source.reader, Reader::StatusJson { .. }) && !scheme.credential_files.is_empty() && !scheme.credential_files.iter().any(|f| home.join(f).is_file())
+}
+
 pub fn own_sign_ins(agents: &[AgentUsage], env: &dyn Fn(&str) -> Option<String>, home: Option<&Path>, probe: &dyn Probe) -> Vec<OwnSignIn> {
     agents
         .iter()
         .map(|agent| {
             let login = main_login(agent, env, home);
             let (state, why) = match sign_in(agent, &login, probe) {
+                // Other files in the folder but no login file: off macOS (which keeps it in the keychain) that is signed out, not "can't tell".
+                Signed::Unknown if lacks_login_file(agent, &login) => ("signed_out", None),
                 Signed::In => ("signed_in", None),
                 Signed::Out => ("signed_out", None),
                 // An expired status answer still means a login exists; the usage row says it ran out.

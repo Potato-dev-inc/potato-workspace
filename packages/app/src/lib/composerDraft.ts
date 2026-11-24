@@ -70,10 +70,42 @@ function readAll(now: number): DraftMap {
   return keepFresh(map, now);
 }
 
+// Sent-message guard (a tombstone per pane). A box can be left while its send is still going; its closing flush, a slow
+// timer or the PC's copy of the draft would then put the sent words back. While a send is open, and for 2 s after it
+// succeeded, a write or a read of that same text is ignored. A refused send removes the tombstone.
+/** After a successful send, the same text is ignored for this long. */
+export const SENT_GUARD_MS = 2000;
+const tombstones = new Map<string, { text: string; at: number; open: boolean }>();
+
+/** Whether `text` is the message this pane is sending now or sent a moment ago. */
+export function wasJustSent(paneId: string, text: string, now = Date.now()): boolean {
+  const t = tombstones.get(paneId);
+  const words = text.trim();
+  return !!t && words !== '' && words === t.text && (t.open || now - t.at < SENT_GUARD_MS);
+}
+
+/** A send of `text` starts: from now its words are not a draft. */
+export function beginSend(paneId: string, text: string): void {
+  tombstones.set(paneId, { text: text.trim(), at: Date.now(), open: true });
+}
+
+/** The send ended. Sent: the draft goes. Refused: the words are a draft again (kept if the box was left meanwhile). */
+export function endSend(paneId: string, sent: boolean, text = '', attachments: readonly ChatAttachment[] = []): void {
+  if (sent) {
+    const t = tombstones.get(paneId);
+    if (t) Object.assign(t, { at: Date.now(), open: false });
+    clearDraft(paneId);
+    return;
+  }
+  tombstones.delete(paneId);
+  if (readDraft(paneId) === '') writeDraft(paneId, text, Date.now(), attachments);
+}
+
 /** The unsent text for this pane, or '' when there is none (or storage cannot be read). */
 export function readDraft(paneId: string, now = Date.now()): string {
   try {
-    return readAll(now)[paneId]?.text ?? '';
+    const text = readAll(now)[paneId]?.text ?? '';
+    return wasJustSent(paneId, text, now) ? '' : text;
   } catch {
     return '';
   }
@@ -83,6 +115,7 @@ export function readDraft(paneId: string, now = Date.now()): string {
 export function readDraftState(paneId: string, now = Date.now()): { text: string; attachments: ChatAttachment[] } {
   try {
     const entry = readAll(now)[paneId];
+    if (entry && wasJustSent(paneId, entry.text, now)) return { text: '', attachments: [] };
     return entry ? { text: entry.text, attachments: attachmentsOf(entry) } : { text: '', attachments: [] };
   } catch {
     return { text: '', attachments: [] };
@@ -94,6 +127,7 @@ export function readDraftState(paneId: string, now = Date.now()): { text: string
  * the pane's draft.
  */
 export function writeDraft(paneId: string, text: string, now = Date.now(), attachments: readonly ChatAttachment[] = []): void {
+  if (wasJustSent(paneId, text, now)) return;
   try {
     const map = readAll(now);
     const empty = text.trim() === '' && attachments.length === 0;
@@ -198,4 +232,10 @@ export function useComposerDraft(paneId: string | null): ComposerDraft | null {
 
   // A draft from another pane (left over from before a switch) is never returned.
   return draft && draft.paneId === paneId ? draft : null;
+}
+
+/** Whether the pane has a message (or files) written in its box and not sent. */
+export function hasUnsentWork(paneId: string): boolean {
+  const d = readDraftState(paneId);
+  return d.text.trim() !== '' || d.attachments.length > 0;
 }

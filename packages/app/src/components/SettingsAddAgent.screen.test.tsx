@@ -9,10 +9,11 @@ import { mockAddAgentApi } from '../lib/addAgent.mocks';
 import { agentsRows } from './settings/sections/AgentsSection';
 import { buttonByText, click, hasText, settle } from './settings/test-utils';
 import { AddAgent } from './settings/blocks/AddAgent';
+import { addableAgents } from './settings/blocks/AddAgentFound';
 
 const FOUND: FoundAgent[] = [
-  { id: 'claude', displayName: 'Claude', version: '1.0.0' } as FoundAgent,
-  { id: 'codex', displayName: 'Codex', version: '0.9.0' } as FoundAgent,
+  { id: 'kimi', displayName: 'Claude', path: 'C:/bin/kimi.exe', version: '1.0.0' } as FoundAgent,
+  { id: 'qwen', displayName: 'Codex', path: 'C:/bin/qwen.cmd', version: '0.9.0' } as FoundAgent,
 ];
 const WORDS = 'Or type a name, or paste its install command.';
 
@@ -56,5 +57,13 @@ describe('Add an agent on the Agents page', () => {
     await mountWith([]);
     expect(nameBox()).toBeNull();
     expect(buttonByText(host, 'Advanced')).toBeTruthy();
+  });
+});
+
+describe('what the Add list shows', () => {
+  const a = (id: string, path: string): FoundAgent => ({ id, displayName: id, path, kind: 'catalog', version: null });
+  it('hides agents that are already added, and shows one row per program', () => {
+    const list = [a('claude', 'C:/b/claude.exe'), a('copilot', 'C:/b/copilot.exe'), a('github_copilot', 'C:/b/copilot.cmd'), a('qwen', 'C:/b/qwen.exe')];
+    expect(addableAgents(list, new Set(['claude'])).map((f) => f.id)).toEqual(['copilot', 'qwen']);
   });
 });

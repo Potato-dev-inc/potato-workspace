@@ -3,6 +3,7 @@ import { useState } from 'react';
 import { githubUrl, isRedBanner, redBannerText, type TeamApi, type TeamCard, type TeamState } from '../../../lib/team';
 import { tauri } from '../../../lib/tauri';
 import { CardButton, InboxCard } from '../InboxCard';
+import { t, useT } from '../../../i18n';
 
 const errText = (err: unknown): string => (errorSentence(err));
 
@@ -14,11 +15,12 @@ const errText = (err: unknown): string => (errorSentence(err));
  * lands, or I dismiss it. Everything here came from GitHub through my own `gh`: plain text only.
  */
 export function RedBanners({ state, api, now, onDone }: { state: TeamState | null; api: TeamApi; now: number; onDone: () => void }) {
+  useT();
   if (!state?.enabled) return null;
   const red = state.cards.filter(isRedBanner);
   if (red.length === 0) return null;
   return (
-    <ul className="ib-list" aria-label="Red branches">
+    <ul className="ib-list" aria-label={t('r11.t.red')}>
       {red.map((card) => (
         <li key={card.id}>
           <RedBanner card={card} api={api} now={now} onDone={onDone} />
@@ -29,6 +31,7 @@ export function RedBanners({ state, api, now, onDone }: { state: TeamState | nul
 }
 
 function RedBanner({ card, api, now, onDone }: { card: TeamCard; api: TeamApi; now: number; onDone: () => void }) {
+  useT();
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const claim = card.claim ?? null;
@@ -66,24 +69,24 @@ function RedBanner({ card, api, now, onDone }: { card: TeamCard; api: TeamApi; n
         <>
           {!claim && (
             <CardButton tone="secondary" role="answer" disabled={busy} onClick={() => void run(() => api.claimCi(card.id, true))}>
-              Claim it
+              {t('r11.t.claim')}
             </CardButton>
           )}
           {claim?.mine && (
             <CardButton tone="secondary" role="answer" disabled={busy} onClick={() => void run(() => api.claimCi(card.id, false))}>
-              Release
+              {t('r11.t.release')}
             </CardButton>
           )}
           {url && (
             <CardButton tone="plain" role="open" onClick={() => void tauri.openExternalUrl(url)}>
-              Open on GitHub
+              {t('r11.t.github')}
             </CardButton>
           )}
         </>
       }
       more={
         <CardButton tone="plain" role="dismiss" disabled={busy} onClick={() => void run(() => api.dismissCard(card.id))}>
-          Dismiss
+          {t('r11.n.dismiss')}
         </CardButton>
       }
     />

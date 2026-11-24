@@ -116,7 +116,7 @@ impl Host for LiveHost {
     }
 
     fn send_to_pane(&self, pane_id: &str, text: &str) -> Result<(), String> {
-        crate::pane_outbox::global(&self.registry, &self.app).send(pane_id, text).map(|_| ())
+        crate::pane_outbox::global(&self.registry).send(pane_id, text).map(|_| ())
     }
 
     fn companions(&self) -> Vec<CompanionLine> {

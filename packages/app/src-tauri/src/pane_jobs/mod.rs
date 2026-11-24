@@ -13,7 +13,7 @@
 //! process now and must have the start time the job was listed with, so a reused pid is refused
 //! (`select::authorize_stop`). Never by image name, never by port.
 
-mod chat_commands;
+pub(crate) mod chat_commands;
 mod commands;
 mod select;
 mod sys;

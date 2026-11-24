@@ -33,16 +33,7 @@ pub fn allowed(setting: bool, chat_on: bool) -> bool {
 /// The agents a chat can start for right now, as `(id, label)`: Chat is on, the agent has a chat way to run (its own or the
 /// person's overlay), it is not switched off and its add-on is installed.
 pub fn chat_agents() -> Vec<(String, String)> {
-    if !crate::acp::chat_enabled() {
-        return Vec::new();
-    }
-    let overlay = crate::acp::overlay::OverlayStore::in_app_data();
-    let mut all = crate::acp::config::builtin_agents();
-    all.extend(crate::acp::overlay::overlay_agents(&overlay));
-    all.into_iter()
-        .filter(|cfg| !cfg.disabled && !crate::acp::install::is_missing(cfg, &crate::acp::config::RealHost))
-        .map(|cfg| (cfg.id, cfg.label))
-        .collect()
+    pm_core::device_link::pclink::engine_services::chat_agents()
 }
 
 /// Whether `agent` is one of `chat_agents` (any case).

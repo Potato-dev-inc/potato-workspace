@@ -75,6 +75,11 @@ describe('My phone: the giant code', () => {
     await settle(8);
     expect(q('[data-testid="connect-add-phone-sheet"] canvas[data-testid="connect-qr"]')).not.toBeNull();
     expect(made()).toBeGreaterThanOrEqual(2);
+    // Esc closes the sheet and focus goes back to the Add a phone button.
+    await act(async () => void document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true })));
+    await act(async () => { await new Promise((r) => setTimeout(r, 60)); });
+    expect(q('[data-testid="connect-add-phone-sheet"]')).toBeNull();
+    expect(document.activeElement).toBe(q('[data-testid="connect-add-phone"]'));
   });
 
   it('no code is made while another tab is open (the Devices tab is not on screen)', async () => {

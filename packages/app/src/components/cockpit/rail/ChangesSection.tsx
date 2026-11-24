@@ -1,19 +1,21 @@
 // Changes: what the agent changed in this chat. A totals row, the four most changed files, "Done means" as one row,
 // and one line of buttons. A file whose only change is line endings shows that in words and is left out of the totals.
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { cockpitApi, type WorktreeItem } from '../../../lib/cockpit-api';
 import { errorCode, errorSentence } from '../../../lib/sayError';
 import { plainMergeError } from '../Changes';
 import { useT } from '../../../i18n';
+import { useHost } from '../../../lib/host/context';
 import { openFileTab } from '../../../lib/file-tabs';
 import type { OutputFile } from '../../../lib/sessionChatModel';
-import { keepFile, stateOf, useReviewMarks, useTurnReview, type ReviewFile } from '../../../lib/turn-review';
+import { dropStaleDecisions, isPutBack, keepFile, stateOf, useReviewMarks, useTurnReview, type ReviewFile } from '../../../lib/turn-review';
 import { dragSourceProps } from '../../dnd/dragSourceProps';
 import { DoneList } from '../DoneList';
+import { useWorktreeApi } from '../usePaneWorktree';
 import { ThenSheet } from '../routines/ThenSheet';
 import { FileGlyph } from './FileGlyph';
 import { RailSection } from './RailSection';
-import { baseName, relativeTo, withCommas, writtenFiles } from './railFormat';
+import { baseName, insideProject, relativeTo, withCommas, writtenFiles } from './railFormat';
 
 const SHOWN = 4;
 
@@ -55,7 +57,8 @@ export function changeRows(review: readonly (ReviewFile & { lineEndingsOnly?: bo
   if (review.length > 0) {
     return review.map((f) => ({ path: f.path, status: f.status, added: f.added, deleted: f.deleted, lineEndingsOnly: f.lineEndingsOnly === true }));
   }
-  return writtenFiles(outputs).map((f) => ({ path: f.path, status: 'M', added: 0, deleted: 0, lineEndingsOnly: false }));
+  // The chat's write events cannot say whether a file is new or edited: no letter until the review knows.
+  return writtenFiles(outputs).map((f) => ({ path: f.path, status: '', added: 0, deleted: 0, lineEndingsOnly: false }));
 }
 
 export function Numbers({ added, deleted }: { added: number; deleted: number }) {
@@ -78,7 +81,8 @@ export function ChangesSection({
   onOpenChanges,
   onNotify,
   worktree = null,
-  mergeApi = cockpitApi,
+  mergeApi: givenMerge,
+  turnKey = '',
 }: {
   paneId: string;
   status: string;
@@ -93,16 +97,24 @@ export function ChangesSection({
   /** The chat works on a copy: Keep all merges the copy into the project. Null: the chat works in the project itself. */
   worktree?: WorktreeItem | null;
   mergeApi?: Pick<typeof cockpitApi, 'worktreeMerge'>;
+  /** Changes when the chat's turns do (a count, the last turn's end). A far chat's status is only sampled, so a short turn can pass with the status unchanged: the review is read again on this too. */
+  turnKey?: string;
 }) {
   const t = useT();
-  const { load } = useTurnReview(paneId, status);
+  const local = useHost().place.kind === 'local';
+  const ownApi = useWorktreeApi(paneId);
+  const mergeApi: Pick<typeof cockpitApi, 'worktreeMerge'> = givenMerge ?? ownApi;
+  const { load } = useTurnReview(paneId, `${status}|${turnKey}`, undefined, status !== 'running');
   useReviewMarks();
   const [thenOpen, setThenOpen] = useState(false);
   const [asking, setAsking] = useState(false);
   const [busy, setBusy] = useState(false);
   const [keepError, setKeepError] = useState<string | null>(null);
-  const reviewFiles = load.state === 'ready' ? load.review.files : [];
-  const rows = changeRows(reviewFiles, outputs);
+  const turnFiles = load.state === 'ready' ? load.review.files : [];
+  useEffect(() => dropStaleDecisions(paneId, turnFiles), [paneId, turnFiles]);
+  // A file put back is no longer a change (its Undo brings it back); the chat's write events still name it, so they are filtered too.
+  const reviewFiles = turnFiles.filter((f) => stateOf(paneId, f).decision !== 'back');
+  const rows = changeRows(reviewFiles, outputs.filter((o) => (!local || insideProject(cwd, o.path)) && !isPutBack(paneId, relativeTo(cwd, o.path), o.at ?? null)));
   const totals = changeTotals(rows);
   const top = topChanges(rows).slice(0, SHOWN);
   const empty = rows.length === 0;
@@ -157,7 +169,7 @@ export function ChangesSection({
               onClick={() => (onOpenChanges ? onOpenChanges() : openFileTab(paneId, relativeTo(cwd, row.path)))}
               {...dragSourceProps({ kind: 'file', id: row.path, label: baseName(row.path), meta: { abs: row.path } })}
             >
-              <span className={`rp-mk is-${row.status.toLowerCase()}`}>{row.status.charAt(0)}</span>
+              {row.status && <span className={`rp-mk is-${row.status.toLowerCase()}`}>{row.status.charAt(0)}</span>}
               <FileGlyph name={row.path} />
               <span className="rp-name">{baseName(row.path)}</span>
               {row.lineEndingsOnly ? <span className="rp-v is-dim rp-small">{t('rail.chg.lineEndings')}</span> : <Numbers added={row.added} deleted={row.deleted} />}

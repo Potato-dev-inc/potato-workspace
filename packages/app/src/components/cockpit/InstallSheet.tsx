@@ -4,6 +4,7 @@
 import { useState } from 'react';
 import { sourceLine, type InstallPlan } from '../../lib/agent-install';
 import { Sheet } from './Sheet';
+import { t } from '../../i18n';
 
 export function InstallSheet({
   plan,
@@ -59,13 +60,13 @@ export function InstallSheet({
           {plan.label} needs {step.label} first. This is step 1 of {plan.steps.length}.
         </p>
       )}
-      <p className="ck-sub">Potato Workspace will run this in a window you can watch:</p>
+      <p className="ck-sub">{t('r21.sw.potatoWorkspaceWillRun')}</p>
       <code className="ck-doctor-cmd" data-testid="install-command">
         {step.command}
       </code>
       <p className="ck-sub">{sourceLine(step)}</p>
       {step.method === 'winget' && (
-        <p className="ck-sub">Windows may ask if the installer can make changes. That is expected.</p>
+        <p className="ck-sub">{t('r21.sw.windowsMayAskIf')}</p>
       )}
       {step.note && <p className="ck-sub">{step.note}</p>}
       {later.length > 0 && (

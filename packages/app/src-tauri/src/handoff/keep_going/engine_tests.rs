@@ -361,7 +361,7 @@ impl Env for TestEnv<'_> {
 // ---- the limit on screen --------------------------------------------------------------------------
 
 fn limit_screen() -> String {
-    let path = Path::new(env!("CARGO_MANIFEST_DIR")).join("src/tui/claude/fixtures/limits/2.1.300/usage_session_window.txt");
+    let path = Path::new(env!("CARGO_MANIFEST_DIR")).join("crates/pm-core/src/tui/claude/fixtures/limits/2.1.300/usage_session_window.txt");
     let raw = std::fs::read_to_string(path).unwrap();
     let cols: u16 = raw.lines().find_map(|l| l.strip_prefix("#! cols: ")).and_then(|c| c.trim().parse().ok()).unwrap_or(120);
     let body: Vec<&str> = raw.lines().filter(|l| !l.starts_with("#! ")).collect();

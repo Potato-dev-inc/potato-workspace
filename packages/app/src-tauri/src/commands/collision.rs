@@ -22,7 +22,7 @@ fn valid_id(id: &str) -> bool {
 }
 
 /// `collision_list`: the last snapshot, newest first, hidden alerts left out. Never waits for a look.
-#[tauri::command]
+#[tauri::command(async)]
 pub fn collision_list() -> Vec<AlertView> {
     live::views()
 }

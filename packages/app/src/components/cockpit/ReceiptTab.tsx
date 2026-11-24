@@ -2,6 +2,16 @@ import type { ReactNode } from 'react';
 import type { PaneRunInfo, TurnSummary } from '../../lib/cockpit-api';
 import { LastTurn } from './LastTurn';
 import { receiptSummary, type CopyTotals } from './receipt-view';
+import { t } from '../../i18n';
+
+export function NoTurnsYet({ agentName }: { agentName: string }) {
+  return (
+    <div className="ck-empty">
+      <h2 className="ck-section">{t('r21.sw.noTurnsYet')}</h2>
+      <p className="ck-sub">The receipt appears when {agentName} finishes its first turn.</p>
+    </div>
+  );
+}
 
 /**
  * The Receipt tab: what was checked, what the last turn did, a few facts, and the rest under
@@ -16,6 +26,7 @@ export function ReceiptTab({
   agentName,
   secondOpinion,
   review,
+  reviewFiles,
 }: {
   /** `undefined` while loading, `null` for a pane with no run. */
   info: PaneRunInfo | null | undefined;
@@ -29,11 +40,13 @@ export function ReceiptTab({
   secondOpinion: ReactNode;
   /** Review the last turn file by file; shown here when the pane has no Changes tab of its own. */
   review?: ReactNode;
+  /** How many files that review lists. */
+  reviewFiles?: number | null;
 }) {
   if (error) {
     return (
       <div className="ck-empty">
-        <h2 className="ck-section">Receipt unavailable</h2>
+        <h2 className="ck-section">{t('r21.sw.receiptUnavailable')}</h2>
         <p className="ck-sub">{error}</p>
       </div>
     );
@@ -42,14 +55,10 @@ export function ReceiptTab({
 
   const receipt = info?.receipt ?? null;
   const hasReceipt = receipt !== null;
-  if (!lastTurn && !hasReceipt) {
-    return (
-      <div className="ck-empty">
-        <h2 className="ck-section">No turns yet</h2>
-        <p className="ck-sub">The receipt appears when {agentName} finishes its first turn.</p>
-      </div>
-    );
-  }
+  // No turn summary and no run receipt on this PC: the review decides (a chat on another PC has neither here, but its checkpoints do);
+  // it draws "No turns yet" itself when there is nothing to review.
+  // The review sits in the same padded column as the receipt, so its right end ("0 of 1 looked at") is not flush with the panel edge.
+  if (!lastTurn && !hasReceipt) return review ? <div className="ck-receipt">{review}</div> : <NoTurnsYet agentName={agentName} />;
 
   const summary = hasReceipt ? receiptSummary(receipt, copy, now) : null;
   return (
@@ -61,7 +70,7 @@ export function ReceiptTab({
             <p className="ck-rc-line">{summary.checks}</p>
           </section>
         )}
-        {lastTurn && <LastTurn summary={lastTurn} now={now} />}
+        {lastTurn && <LastTurn summary={lastTurn} now={now} reviewFiles={reviewFiles} />}
         {review}
         {summary && summary.facts.length > 0 && (
           <dl className="ck-facts" aria-label="Facts">
@@ -84,7 +93,7 @@ export function ReceiptTab({
                 </div>
               ))}
               <div className="ck-facts-row">
-                <dt>Run ID</dt>
+                <dt>{t('r21.sw.runId')}</dt>
                 <dd className="ck-mono">{info.handle}</dd>
               </div>
             </dl>

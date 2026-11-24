@@ -1,5 +1,6 @@
 // One companion in the sidebar, above Inbox: the Potato face (its pose follows the mood), its name and one live line
 // ("Watching 3 agents", "Codex needs you", "Sleepy"). With no companion yet, one quiet line asks the person to make one.
+import { useEffect, useState } from 'react';
 import type { CompanionView } from '../../../lib/companion';
 import type { Mood } from '../../../lib/companionMood';
 import { useT } from '../../../i18n';
@@ -60,9 +61,25 @@ export function NewCompanionRow({ onNew }: { onNew: () => void }) {
 /** One quiet line at the bottom of the sidebar while the person has no companion. */
 export function MakeCompanionRow({ onMake }: { onMake: () => void }) {
   const t = useT();
+  // The setup sheet can take a few seconds to open on a busy window: the line answers the press at once.
+  const [opening, setOpening] = useState(false);
+  useEffect(() => {
+    if (!opening) return undefined;
+    const id = window.setTimeout(() => setOpening(false), 6000);
+    return () => window.clearTimeout(id);
+  }, [opening]);
   return (
-    <button type="button" className="ck-companion-make" onClick={onMake}>
-      {t('companion.makeQuiet')}
+    <button
+      type="button"
+      className="ck-companion-make"
+      disabled={opening}
+      aria-busy={opening || undefined}
+      onClick={() => {
+        setOpening(true);
+        onMake();
+      }}
+    >
+      {opening ? t('companion.opening') : t('companion.makeQuiet')}
     </button>
   );
 }

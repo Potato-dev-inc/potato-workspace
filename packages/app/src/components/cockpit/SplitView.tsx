@@ -3,13 +3,18 @@
 // The side with focus is full strength; the others are dimmed.
 // The session rail on the right follows the focused side. Each side has its own message box (SessionChatPanel).
 import { ErrorBoundary } from '../common/ErrorBoundary';
-import { useEffect, useRef, useState, type CSSProperties, type ReactNode, type RefObject } from 'react';
+import { useEffect, useMemo, useRef, useState, type CSSProperties, type ReactNode, type RefObject } from 'react';
 import { twoTypesWording, useT } from '../../i18n';
 import { useStandbyHelpers } from '../../lib/standbyHelpers';
 import { readyMinionCount } from './standby-rows';
 import type { CockpitApi } from '../../hooks/useCockpit';
 import { SessionChatPanel, type ScreenAsk } from '../chat/SessionChatPanel';
 import { composerBlock } from '../../lib/paneOutbox';
+import { ACP_LANE, acpChatApi, quietStrip, runStrip } from '../../lib/acpChat';
+import { useHost } from '../../lib/host/context';
+import { useAcpChatState } from '../../hooks/useAcpChatState';
+import { useAcpStop } from '../../hooks/useAcpStop';
+import { AcpConfigChips } from '../chat/AcpConfigChips';
 import { useAgentRegistry } from '../../lib/agentRegistry';
 import { useLoopGuard } from '../../lib/loop-guard';
 import { helperOfLabel } from '../../lib/pane-helpers';
@@ -17,6 +22,7 @@ import { bindingHint } from '../../lib/shortcuts';
 import { setFocusMode } from '../../lib/focus-mode';
 import '../../styles/cockpit-split.css';
 import { DockedCards } from './DockedCards';
+import { AcpChatDock } from '../chat/AcpChatDock';
 import { DotSpinner } from './DotSpinner';
 import { SplitDivider } from './SplitDivider';
 import { HelperQuestions, helperQuestionIds } from './HelperQuestions';
@@ -293,6 +299,12 @@ function SplitSideView({
   const listing = useAgentRegistry();
   const { signals } = useLoopGuard();
   const [dockIx, setDockIx] = useState(0);
+  // A chat session keeps its settings chips (mode, model, effort) and Stop in a split, as in the single view.
+  const host = useHost();
+  const acp = useMemo(() => acpChatApi(host), [host]);
+  const isAcp = pane?.info.lane === ACP_LANE;
+  const acpState = useAcpChatState(paneId, isAcp, acp);
+  const acpStop = useAcpStop(paneId, !!acpState?.turnInFlight, acp);
   if (!pane) return <div className="ck-split-side" />;
 
   const { info } = pane;
@@ -316,13 +328,14 @@ function SplitSideView({
     waiting,
     idle: pane.status === 'idle',
     running: pane.status === 'running',
-    covered: asking,
+    covered: asking || isAcp,
     fallbackText: prompt?.summary || prompt?.risk?.headline,
     onOpenTerminal: () => openAlone(),
   };
   const chatDock =
-    dockNow || helperAsks.length > 0 ? (
+    dockNow || helperAsks.length > 0 || isAcp ? (
       <>
+        {isAcp && <AcpChatDock c={c} paneId={paneId} paneName={name} api={acp} stopper={acpStop} />}
         <HelperQuestions c={c} ids={helperAsks} />
         {dockNow && <DockedCards c={c} paneId={paneId} dock={dock} dockNow={dockNow} onMore={() => setDockIx((i) => i + 1)} />}
       </>
@@ -361,7 +374,7 @@ function SplitSideView({
             <IconClose />
           </button>
         ) : side === 'right' && (
-          <button type="button" className="ck-icon-btn" aria-label="Close split view" title={`Close split view${bindingHint('split')}`} onClick={onClose}>
+          <button type="button" className="ck-icon-btn" aria-label={t('r9.split.close')} title={`${t('r9.split.close')}${bindingHint('split')}`} onClick={onClose}>
             <IconClose />
           </button>
         )}
@@ -371,7 +384,16 @@ function SplitSideView({
           paneId={paneId}
           dock={chatDock ?? undefined}
           screenAsk={screenAsk}
-          reply={{ blockedReason: composerBlock(pane, !chatAllowed) }}
+          reply={{
+            blockedReason: composerBlock(pane, !chatAllowed, isAcp),
+            running: isAcp ? !!acpState?.turnInFlight : undefined,
+            onStop: isAcp ? acpStop.stop : undefined,
+            status: isAcp && !quietStrip(acpState, acpStop.asked) ? runStrip(acpState, acpStop.asked) : null,
+            onInterrupt: isAcp ? () => void acp.cancel(paneId).catch(() => undefined) : undefined,
+          }}
+          composerTop={isAcp ? <AcpConfigChips paneId={paneId} state={acpState} api={acp} /> : undefined}
+          slashCommands={isAcp ? acpState?.commands : undefined}
+          slashAgent={isAcp ? (acpState?.agent || info.agent_type) : undefined}
           emptyNote={chatAllowed ? undefined : 'A plain shell has no chat. Open it alone to use its terminal.'}
           onOpenPane={(id) => c.select(id)}
         />

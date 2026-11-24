@@ -10,8 +10,8 @@ use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::Arc;
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
-const CLAUDE_TOML: &str = include_str!("../tui/claude/usage.toml");
-const ANSWER: &str = include_str!("../tui/claude/fixtures/usage/oauth-usage-synthetic.json");
+const CLAUDE_TOML: &str = include_str!("../../crates/pm-core/src/tui/claude/usage.toml");
+const ANSWER: &str = include_str!("../../crates/pm-core/src/tui/claude/fixtures/usage/oauth-usage-synthetic.json");
 const TOKEN: &str = "sk-SYNTHETIC-token-0123456789";
 
 /// One canned reply per request, in order. Returns the URL and each request's header block.

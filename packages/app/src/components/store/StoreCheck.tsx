@@ -5,6 +5,7 @@ import { useEffect, useRef, useState } from 'react';
 import type { ProgressEvent, StepId } from '../../lib/agentWizard';
 import { DotSpinner } from '../cockpit/DotSpinner';
 import { Sheet } from '../cockpit/Sheet';
+import { t } from '../../i18n';
 
 /** What a finished check reports. Numbers, a version and plain sentences only: no screens, no answers. */
 export type StoreCheckResult =
@@ -143,14 +144,14 @@ export function StoreCheck({ id, label, installedVersion, runCheck, onOpenAgent,
             Potato Workspace starts {label} in its own pane, in a new temporary folder kept apart from your projects. It reads
             the answers from the screen.
           </p>
-          <p className="ck-sub">What will run:</p>
+          <p className="ck-sub">{t('r21.sw.whatWillRun')}</p>
           <ul className="ck-sub" data-testid="store-check-runs">
             <li>
               {label}, {installedVersion ? `version ${installedVersion}` : 'the program found on this PC'}.
             </li>
-            <li>A few short test messages, and the answers on the screen.</li>
-            <li>Only trust and allow-once questions are answered, and only in that pane.</li>
-            <li>No file is kept, and nothing is added or approved.</li>
+            <li>{t('r21.sw.aFewShortTest')}</li>
+            <li>{t('r21.sw.onlyTrustAndAllow')}</li>
+            <li>{t('r21.sw.noFileIsKept')}</li>
           </ul>
           <p className="ck-sub" data-testid="store-check-cost">
             A check uses real agent turns from your own plan. It uses about 4 small messages on your own account.
@@ -173,7 +174,7 @@ export function StoreCheck({ id, label, installedVersion, runCheck, onOpenAgent,
             {result.passed} of {result.total} checks passed on version {result.version}.
           </p>
           {result.note && <p className="ck-sub">{result.note}</p>}
-          <p className="ck-sub">Nothing was added or approved.</p>
+          <p className="ck-sub">{t('r21.sw.nothingWasAddedOr')}</p>
         </>
       )}
       {result?.status === 'sign_in' && (
@@ -182,7 +183,7 @@ export function StoreCheck({ id, label, installedVersion, runCheck, onOpenAgent,
         </p>
       )}
       {result?.status === 'stopped' && <p className="ck-sub">{result.message}</p>}
-      {view.phase === 'cancelled' && <p className="ck-sub">Check stopped. Nothing was added or approved.</p>}
+      {view.phase === 'cancelled' && <p className="ck-sub">{t('r21.sw.checkStoppedNothingWas')}</p>}
       {view.phase === 'error' && <p className="ck-sub ck-doctor-error">{view.message}</p>}
 
       <div className="ck-sheet-actions">

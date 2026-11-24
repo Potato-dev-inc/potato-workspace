@@ -76,6 +76,10 @@ pub struct TeamConfig {
     /// Project folders that are shared as "here" only, whatever the level.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub share_exclude: Vec<String>,
+    /// This PC joined or created a team at some time (kept when the team is left). "You're no longer on this team" is only ever
+    /// said on a PC that was.
+    #[serde(default)]
+    pub was_on_team: bool,
 }
 
 impl Default for TeamConfig {
@@ -95,6 +99,7 @@ impl Default for TeamConfig {
             join: None,
             share_level: super::presence::ShareLevel::default(),
             share_exclude: Vec::new(),
+            was_on_team: false,
         }
     }
 }
@@ -159,4 +164,19 @@ pub fn save(path: &Path, config: &TeamConfig) -> Result<(), String> {
     let tmp = path.with_extension("json.tmp");
     std::fs::write(&tmp, json).map_err(|e| e.to_string())?;
     std::fs::rename(&tmp, path).map_err(|e| e.to_string())
+}
+
+#[cfg(test)]
+mod was_on_team_tests {
+    use super::*;
+
+    #[test]
+    fn the_marker_is_off_for_a_file_without_it_and_kept_when_saved() {
+        let old: TeamConfig = serde_json::from_str(r#"{ "enabled": true }"#).unwrap();
+        assert!(!old.was_on_team, "a PC that never joined is never told it was removed");
+        let mut joined = old;
+        joined.was_on_team = true;
+        let back: TeamConfig = serde_json::from_slice(&serde_json::to_vec(&joined).unwrap()).unwrap();
+        assert!(back.was_on_team);
+    }
 }

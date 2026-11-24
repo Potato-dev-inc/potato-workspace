@@ -32,7 +32,7 @@ pub fn eligible(prompt: &Value) -> bool {
 }
 
 /// Looks at what `pane_id` shows and answers it when the rules above allow. True when a key was pressed.
-pub fn try_answer(registry: &Arc<Mutex<PaneRegistry>>, app: &tauri::AppHandle, pane_id: &str) -> bool {
+pub fn try_answer(registry: &Arc<Mutex<PaneRegistry>>, pane_id: &str) -> bool {
     let (agent_type, cwd) = {
         let reg = registry.lock();
         let Some(pane) = reg.panes.get(pane_id) else { return false };
@@ -49,10 +49,10 @@ pub fn try_answer(registry: &Arc<Mutex<PaneRegistry>>, app: &tauri::AppHandle, p
     let Ok(reply) = adapter.prompt_reply(&prompt, "allow_once", false) else { return false };
     let Some(keys) = reply.key.or(reply.text) else { return false };
     let prompt_id = prompt.get("prompt_id").and_then(Value::as_str).unwrap_or_default().to_string();
-    let sent = super::answers::answer_once(pane_id, &prompt_id, "allow_once", super::answers::now_ms(), || {
-        crate::pty::registry::write_input(registry, app, pane_id, &keys, true, false, None, crate::pty::WriteOrigin::Answer)
+    let sent = pm_core::pane_prompt::answers::answer_once(pane_id, &prompt_id, "allow_once", pm_core::pane_prompt::answers::now_ms(), || {
+        crate::pty::registry::write_input(registry, pane_id, &keys, true, false, None, crate::pty::WriteOrigin::Answer)
     });
-    if !matches!(sent, Ok(super::answers::Slot::Sent(()))) {
+    if !matches!(sent, Ok(pm_core::pane_prompt::answers::Slot::Sent(()))) {
         return false;
     }
     let mut detail = serde_json::json!({ "event": "auto_allowed", "pane_id": pane_id, "agent": agent_type, "kind": prompt.get("kind") });

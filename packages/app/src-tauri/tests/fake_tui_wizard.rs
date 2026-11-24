@@ -15,7 +15,7 @@ use std::collections::HashSet;
 use std::time::{Duration, Instant};
 
 /// The recorded draft a stand-in drafter answers with. `@@COMMAND@@` is the program the person typed.
-const DRAFT: &str = include_str!("../src/tui/declarative/wizard/tests/drafts/visible_nimbus.toml");
+const DRAFT: &str = include_str!("../crates/pm-core/src/tui/declarative/wizard/tests/drafts/visible_nimbus.toml");
 
 const SCRIPT: &str = r#"
 agent = "nimbus"

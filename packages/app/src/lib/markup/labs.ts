@@ -1,6 +1,6 @@
 // Is the mark-up bar's Labs switch on? (Settings, or a development build.) Off until the app answers.
 import { useEffect, useState } from 'react';
-import { listen } from '@tauri-apps/api/event';
+import { listen } from '../events';
 import { loadSettings } from '../settings';
 
 export const MARKUP_LABS_KEY = 'markup_bar_enabled' as const;

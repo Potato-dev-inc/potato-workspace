@@ -1,6 +1,6 @@
 // Over SSH for the harness and the tests (dev only): example machines and checks, the mocked `ssh_*` commands, and `SshFake`,
 // an `SshApi` that keeps its own small state. No real SSH host is ever contacted.
-import type { SshApi, SshCheck, SshHost, SshParts } from '../lib/ssh';
+import type { SshApi, SshCheck, SshHost, SshParts, SshSetup, SshSetupProgress } from '../lib/ssh';
 
 export const BUILD_BOX: SshHost = {
   id: 'ssh-1',
@@ -53,6 +53,9 @@ export function sshMock(s: SshScenario | undefined, cmd: string, args: Record<st
       return { handled: true, value: s?.check ?? CHECK_OK };
     case 'ssh_add':
       return { handled: true, value: { ...BUILD_BOX, name: String(args.name || 'Build box') } };
+    case 'ssh_setup':
+    case 'ssh_update':
+      return { handled: true, value: { ok: true, alreadyCurrent: false, failure: null } };
     case 'ssh_remove':
       return { handled: true, value: true };
     case 'ssh_open':
@@ -71,7 +74,7 @@ export function sshMock(s: SshScenario | undefined, cmd: string, args: Record<st
 }
 
 export interface SshCall {
-  method: 'check' | 'add' | 'checkSaved' | 'remove' | 'open' | 'chat';
+  method: 'check' | 'add' | 'checkSaved' | 'remove' | 'open' | 'chat' | 'setup' | 'update';
   args: unknown[];
 }
 
@@ -82,6 +85,10 @@ export class SshFake implements SshApi {
   calls: SshCall[] = [];
   opened: { id: string; agent: string; folder?: string }[] = [];
   chats: { id: string; agent: string; folder: string }[] = [];
+  /** What the next setup or update answers, and the progress it reports first. */
+  setupResult: SshSetup = { ok: true, alreadyCurrent: false, failure: null };
+  setupProgress: SshSetupProgress[] = [];
+  private watchers: ((p: SshSetupProgress) => void)[] = [];
   /** When set, the next chat start fails with this sentence. */
   chatError: string | null = null;
   constructor(opts: { hosts?: SshHost[]; check?: SshCheck } = {}) {
@@ -125,6 +132,24 @@ export class SshFake implements SshApi {
     this.calls.push({ method: 'open', args: [id, agent, folder] });
     this.opened.push({ id, agent, ...(folder ? { folder } : {}) });
     return `ssh-pane-${this.opened.length}`;
+  }
+  private async finish(method: 'setup' | 'update', id: string) {
+    this.calls.push({ method, args: [id] });
+    for (const p of this.setupProgress) this.watchers.forEach((w) => w({ ...p, id }));
+    if (this.setupResult.ok) this.hostList = this.hostList.map((h) => (h.id === id ? { ...h, setUp: true } : h));
+    return this.setupResult;
+  }
+  setup(id: string) {
+    return this.finish('setup', id);
+  }
+  update(id: string) {
+    return this.finish('update', id);
+  }
+  async watchSetup(cb: (p: SshSetupProgress) => void) {
+    this.watchers.push(cb);
+    return () => {
+      this.watchers = this.watchers.filter((w) => w !== cb);
+    };
   }
   async chat(id: string, agent: string, folder: string) {
     this.calls.push({ method: 'chat', args: [id, agent, folder] });

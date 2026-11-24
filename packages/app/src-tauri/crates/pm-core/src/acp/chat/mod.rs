@@ -1,0 +1,1768 @@
+//! The chat of an ACP session (A2): what the agent says becomes `ChatItem`s that the desktop chat, the phone and
+//! `GET /panes/{id}/chat?since=` read exactly as they read any other chat; what the agent asks becomes a card the
+//! person answers; Stop becomes `session/cancel`.
+//!
+//! ```text
+//!   AcpSession --events--> AcpChat::on_event
+//!                            |-- Mapper (mapper.rs)  events -> items --> Feed (session_chat::pushed) --> Watchers --> views
+//!                            |-- cards (cards.rs)    permission wait --> question card --> answer --> answer_permission
+//!                            `-- status              snapshot --> the pane's PaneStatus (VirtualPaneHandles) + host events
+//! ```
+//!
+//! * **A pane with no PTY.** `start` puts a virtual pane (`pty::registry::virtual_pane`) in the registry so the pane
+//!   list, `wait_agents` and the phone know the session by its id; its status is the session snapshot's. Input that
+//!   reaches the pane as terminal input is routed here (`terminal_input`): Ctrl+C and Esc stop the turn, a line of
+//!   text is a message. A message from the Chat tab goes through the pane outbox (`pane_outbox`), which waits for the
+//!   session to be ready, so "queue it while the agent works" is the outbox's own queue; steering is tried first
+//!   when the agent takes it (`AcpChat::steer`).
+//! * **Nothing is answered for the person.** Every `session/request_permission` becomes a card with the agent's real
+//!   options (`cards.rs`). The agent waits with no timeout; the card may be raised again if it runs out of time
+//!   (`reconcile_cards`) and survives a reloaded view or a reconnecting phone because the question store and the
+//!   session snapshot both keep it. Stop answers every open question "cancelled" (the session does that).
+//! * **Generic.** Nothing here names an agent; the agent is an `AgentConfig`.
+//!
+//! The Labs switch and the per-agent choice gate `start_gated`; `start` itself does not look at them (tests start
+//! fake agents).
+
+pub mod api;
+pub mod cards;
+pub mod choice;
+pub mod default_model;
+pub mod drive;
+pub mod earlier;
+pub mod ending;
+pub mod helper_answers;
+pub mod images;
+pub mod mapper;
+pub mod start;
+pub mod trial;
+pub use start::start_failure_sentence;
+pub mod read_only;
+pub mod rules;
+pub mod receipt;
+pub mod right_size;
+pub mod spin_off;
+pub use spin_off::pane_can_message_parent;
+
+#[cfg(test)]
+mod golden_tests;
+#[cfg(test)]
+mod rules_tests;
+
+use crate::attach::ChatAttachment;
+use std::collections::{BTreeMap, BTreeSet, HashMap};
+use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
+use std::sync::Arc;
+use std::time::Instant;
+
+use once_cell::sync::Lazy;
+use parking_lot::Mutex;
+use serde_json::{json, Value};
+
+use super::conversations::Conversations;
+use super::error::AcpError;
+use super::journal::Journal;
+use super::session::{AcpSession, AnswerSource, PromptEndReason, Resolution, SessionEvent, SteerOutcome};
+use super::state::{PermissionWait, Phase, Snapshot};
+use super::writers::Writer;
+use crate::pty::registry::VirtualPaneHandles;
+use crate::pty::status::PaneStatus;
+use crate::questions::{self, Question, QuestionState, ACP_KIND_PERMISSION};
+use crate::session_chat::{Feed, PushedChanges, PushedPos, PushedSource};
+use cards::Card;
+use mapper::Mapper;
+
+pub use start::{restore_panes, start, start_gated, StartDeps, StartError, StartRequest};
+pub use choice::{Applied, ChoiceError};
+
+/// `PaneInfo.lane` of a chat session.
+pub const LANE: &str = "acp";
+/// Said when raw terminal input reaches a pane that has no terminal.
+pub const NOT_A_TERMINAL: &str = "NOT_A_TERMINAL: this pane is a chat session, not a terminal. Send a message instead (send_message to steer the turn, followup_task for the next one).";
+
+/// True when `pane_id` is a chat session's pane (it has no terminal behind it).
+pub fn is_chat_pane(registry: &parking_lot::Mutex<crate::pty::PaneRegistry>, pane_id: &str) -> bool {
+    registry.lock().panes.get(pane_id).is_some_and(|pane| pane.info.lane.as_deref() == Some(LANE))
+}
+
+/// The error for a terminal call (screen, buffer, keys, resize, raw input) on a chat session's pane: a typed code and the
+/// way to do what the caller wanted. Same words on every surface that can reach such a pane.
+pub fn not_a_terminal_error(pane_id: &str) -> crate::operation_error::OperationError {
+    let mut error = crate::operation_error::OperationError::new(
+        "NOT_A_TERMINAL",
+        format!("Pane {pane_id} is a chat session, not a terminal: it has no screen, buffer or keys."),
+        false,
+    );
+    error.context = serde_json::json!({
+        "pane_id": pane_id,
+        "lane": LANE,
+        "fix": "This pane is a chat; use send_message (steer the turn) or followup_task (next turn). Read it with inspect_agent or agent_transcript.",
+    });
+    error
+}
+const WAITING: &str = "Starting the chat. Nothing to show yet.";
+/// The notice (and the strip text) for a turn the app did not see end. The view offers "Continue" next to it.
+pub const INTERRUPTED: &str = "The app closed during this turn.";
+
+/// What the app does for a chat session beyond keeping its items: the pane's status events, the state the windows
+/// show, and telling the windows that questions changed. The live app implements it with Tauri events and the
+/// event log (`commands/acp_chat.rs`); tests record or ignore.
+pub trait ChatHost: Send + Sync + 'static {
+    /// The pane's status changed (`pty://status` and the event log).
+    fn status_changed(&self, _pane_id: &str, _status: PaneStatus) {}
+    /// The session's state changed (phase, queue, what waits on the person): the windows re-read it.
+    fn state_changed(&self, _pane_id: &str, _state: &Value) {}
+    /// A question card was raised or taken down (the windows and phones re-read the list; a push may go out).
+    fn questions_changed(&self, _raised: Option<&Question>) {}
+    /// The set of panes changed (a chat pane was added).
+    fn panes_changed(&self) {}
+}
+
+/// A host that does nothing.
+pub struct QuietHost;
+impl ChatHost for QuietHost {}
+
+/// Why a message could not be sent now.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum SendError {
+    /// A turn runs (or the session is starting): wait for it.
+    Busy,
+    /// The chat was closed.
+    Gone,
+    /// Refused; the sentence says why.
+    Refused(String),
+}
+
+/// Why an agent's answer to a permission question was refused.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum AgentAnswerError {
+    /// The person has not let agents answer in this chat (the default).
+    NotAllowed,
+    /// The question is not open (answered, withdrawn, or never existed).
+    NoSuchQuestion,
+    /// The choice is not one the agent offered; these are the ones it did.
+    BadChoice(Vec<String>),
+    /// The chat was closed.
+    Closed,
+    /// The person lets the agent that started a helper answer only the safe questions; this one is for the person (the words say why).
+    NeedsPerson(String),
+    Failed(String),
+}
+
+/// How a message went in.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Sent {
+    /// A new turn started.
+    Started,
+    /// The turn that runs took it (steering).
+    Steered,
+}
+
+/// Whether the session can take a message now (the pane outbox asks).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Readiness {
+    Ready,
+    /// A turn runs, a question waits, or the session is starting.
+    Busy,
+    /// The chat was closed.
+    Gone,
+}
+
+pub struct AcpChat {
+    pane_id: String,
+    agent_id: String,
+    label: String,
+    session: Arc<AcpSession>,
+    pub feed: Arc<Feed>,
+    mapper: Mutex<Mapper>,
+    host: Arc<dyn ChatHost>,
+    handles: Mutex<Option<VirtualPaneHandles>>,
+    cards: Mutex<BTreeMap<u64, Card>>,
+    /// Tool kinds the person said "don't ask again" for in this chat. In memory only, for the life of the chat.
+    auto_allow: Mutex<BTreeSet<String>>,
+    /// Asks answered by that rule, by ask number (with the tool's title), until the session reports them closed.
+    auto_asks: Mutex<BTreeMap<u64, Option<String>>>,
+    /// What the person sent, until the turn it starts is reported (the user item is made from it).
+    pending_user: Mutex<Option<(String, Vec<ChatAttachment>)>>,
+    /// The message the agent refused because it needs a sign-in, kept to send again once the person has signed in.
+    sign_in_held: Mutex<Option<(String, Vec<ChatAttachment>)>>,
+    closed: AtomicBool,
+    /// One `send` at a time: a second message while the first is still bringing the adapter up is `Busy` at once, so
+    /// it can neither replace the first message's text in the chat nor take it away when it fails.
+    send_gate: Mutex<()>,
+    /// How long a card lives before it is raised again (a day; a test makes it short).
+    card_timeout_s: AtomicU64,
+    /// The saved conversation behind this pane (its id is the pane's id): hand-over to a terminal and restart
+    /// resume. `None` for a session that exists only for the life of the app (some tests).
+    conversations: Option<Conversations>,
+    /// The person let agents (the one that started this chat through the MCP tools, or any other) answer this
+    /// chat's permission questions. Off by default and off again after a restart: only the person turns it on.
+    agent_answering: AtomicBool,
+    /// Force yes, the rules told to the agent, and the lines for asks a rule answered (`rules.rs`).
+    rules: rules::ChatRules,
+    /// A restored chat is being brought back by a viewer that asked to read it (so it starts once).
+    waking: AtomicBool,
+    /// The MCP session of the agent that started this chat through the agent tools, if an agent did. Such an agent
+    /// may steer, answer (when allowed), stop and close it; no other agent may. `None`: the person started it.
+    started_by: Mutex<Option<String>>,
+    /// The pane this chat is nested under as a helper (the sidebar link). An agent running in that very pane may steer
+    /// the chat too, so a chat the person dragged under an agent can be driven by it (`surface::owned`). In memory;
+    /// put back from the saved link when chats are restored.
+    nested_under: Mutex<Option<String>>,
+    /// `{lane_used, lane_reason}` of the `run_agent` that started this chat; also saved with its conversation.
+    lane_note: Mutex<Option<serde_json::Value>>,
+    /// What the agent that started this chat made it (`minion` / `spin_off`, or One type's `helper`) and why; the reply says it.
+    started: Mutex<Option<crate::agent_run_mode::StartedRecord>>,
+    /// This chat was taken from the warm (ready-made) chats instead of started fresh; the receipt says so.
+    warm_claimed: AtomicBool,
+    /// The run said `keep_pane: false` (or the person's setting says close when done): the pane closes when its task is done.
+    close_when_done: AtomicBool,
+    /// The standby seat this chat is the own chat of (`standby::seat_panes`); the tools' answers say a standby took the task.
+    seat: Mutex<Option<String>>,
+    /// What the `run_agent` that started this chat asked for and how its turns were checked (`receipt.rs`).
+    run_meta: Mutex<receipt::RunMeta>,
+    /// The append-only journal of this chat (`journal.rs`): every item is written as it arrives. `None` without a saved conversation.
+    journal: Option<Journal>,
+    /// The app closed during a turn (found in the journal at start); cleared when a new turn starts. The view offers "Continue".
+    interrupted: AtomicBool,
+    /// What the last model/reasoning request could not give exactly (the tool's reply reports them).
+    choice_warnings: Mutex<Vec<String>>,
+    /// The last permission prompt this chat had, and why it ended (reported by the tools).
+    last_prompt_end: Mutex<Option<EndedPrompt>>,
+    /// The device that sent the message about to go in (`None`: this PC), put on the person's message when it shows.
+    next_from: Mutex<Option<String>>,
+    /// Words that go to the agent in front of the next message only (who wrote a note from another agent); not shown.
+    wire_prefix: Mutex<Option<String>>,
+    /// Notes from another agent that wait for the end of the turn (`spin_off.rs`).
+    notes: Mutex<std::collections::VecDeque<spin_off::Note>>,
+    /// The sender of each message that came from another device, by item id, so a message stays marked when it is
+    /// shown again.
+    from_by_id: Mutex<HashMap<String, String>>,
+    /// Who is driving: this PC, or another device that sends or types here (`drive.rs`).
+    drive: Mutex<drive::Drive>,
+    /// The latest turn's length and the right-size suggestion that waits (`right_size.rs`).
+    right_size: right_size::Slot,
+    /// A test sets the "agents may answer their minions" switch for this chat only (the real one is read on other threads).
+    #[cfg(any(test, feature = "test-util"))]
+    pub switch_for_test: Mutex<Option<bool>>,
+}
+
+pub const TOOK_BACK_SENTENCE: &str = "This PC took this chat back. Tap Take over to send.";
+
+/// A permission prompt that is no longer open.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct EndedPrompt {
+    pub prompt_id: String,
+    pub ask_id: u64,
+    pub reason: &'static str,
+    pub at_ms: u64,
+}
+
+static CHATS: Lazy<Mutex<HashMap<String, Arc<AcpChat>>>> = Lazy::new(|| Mutex::new(HashMap::new()));
+
+/// The chat session of a pane, if the pane is one.
+pub fn get(pane_id: &str) -> Option<Arc<AcpChat>> {
+    CHATS.lock().get(pane_id).cloned()
+}
+
+/// A path no folder can have (it holds a NUL). Commands that read a pane's folder on THIS PC get it for a chat that runs on another
+/// computer, so they fail instead of reading a same-named local folder.
+pub const NOT_ON_THIS_PC: &str = "\0not-on-this-pc";
+
+/// Every chat that runs on an SSH machine: `(pane id, saved host id, the name shown for it)`.
+pub fn remote_panes() -> Vec<(String, String, String)> {
+    CHATS.lock().iter().filter_map(|(id, chat)| chat.remote_host().map(|h| (id.clone(), h.id.clone(), h.name.clone()))).collect()
+}
+
+/// The panes a phone, a paired device or an agent (MCP) may be SHOWN: every pane except a chat that runs on another computer, which is
+/// the app window's alone. The remote ids are read before the registry is locked (no lock is held while the other is taken).
+pub fn external_panes(registry: &std::sync::Arc<parking_lot::Mutex<crate::pty::PaneRegistry>>) -> Vec<crate::pty::PaneInfo> {
+    // `PaneRegistry::list` leaves remote chats out by default; this name stays for the callers that say so on purpose.
+    registry.lock().list()
+}
+
+/// Set at the first chat on another computer; until then `is_remote_pane` is a single atomic read (it is asked on hot paths).
+static REMOTE_IDS: Lazy<parking_lot::RwLock<BTreeSet<String>>> = Lazy::new(|| parking_lot::RwLock::new(BTreeSet::new()));
+
+/// Noted BEFORE the pane is registered, and never forgotten (pane ids are random uuids): a closed remote chat's cards and messages stay
+/// the window's alone. A lock-free-ish read set (no chat or registry lock is taken), so it is safe to ask from inside any lock.
+pub fn note_remote_started(pane_id: &str) {
+    REMOTE_IDS.write().insert(pane_id.to_string());
+}
+
+/// Marks `pane_id` as a chat on another computer (tests of the consumers that must leave such a pane out).
+#[cfg(any(test, feature = "test-util"))]
+pub fn mark_remote_for_tests(pane_id: &str) {
+    note_remote_started(pane_id);
+}
+
+/// Every id of a chat on another computer, from the ONE set `is_remote_pane` reads (the router's prefix check uses it).
+pub fn remote_pane_ids() -> Vec<String> {
+    REMOTE_IDS.read().iter().cloned().collect()
+}
+
+/// The pane ids a caller may resolve a reference (full id or prefix) against: the remote ones never, so a remote id cannot match, be a
+/// candidate in an ambiguity list or be named in an error.
+pub fn resolvable_pane_ids(ids: impl IntoIterator<Item = String>) -> Vec<String> {
+    ids.into_iter().filter(|id| !is_remote_pane(id)).collect()
+}
+
+/// The plain sentence every refusal of a chat on another computer uses (bridge, phone, PC link, questions, MCP).
+pub const REMOTE_PANE_REFUSED: &str = "This agent runs on another computer and can only be used from the app window.";
+
+/// THE shared check (the DEFAULT of `PaneRegistry::list`, `questions::Store::list_pending`/`answer`/`dismiss` and the outbox is built on it). A chat that runs on another computer over SSH is the app window's alone: every route, stream, event hook and list
+/// that a phone, another PC or an agent can reach asks this (or `external_panes`) before it shows or touches a pane. The app window's
+/// own Tauri commands do not ask it. `ssh::guard_tests` lists the files that must.
+pub fn is_remote_pane(pane_id: &str) -> bool {
+    // `dev:<node>:<id>` is how this app's screen keys a chat of another PC (`lib/host/placeKey.ts`). It is never a pane of this PC: a stray call
+    // that carries one must fail, not fall back to this PC's default project.
+    pane_id.starts_with("dev:") || REMOTE_IDS.read().contains(pane_id)
+}
+
+/// `(403, { code: "REMOTE_PANE", error })`, the same answer everywhere.
+pub fn remote_refusal() -> (u16, Value) {
+    (403, json!({ "code": "REMOTE_PANE", "error": REMOTE_PANE_REFUSED }))
+}
+
+/// Whether `handle` names a chat session (its handle is the pane's id).
+pub fn is_chat_handle(handle: &str) -> bool {
+    CHATS.lock().contains_key(handle.trim())
+}
+
+/// Every open chat session.
+pub fn all() -> Vec<Arc<AcpChat>> {
+    CHATS.lock().values().cloned().collect()
+}
+
+/// Closes every chat session (the Labs switch went off: it is also the kill switch). Their panes stay listed, idle.
+pub fn close_all() {
+    close_these(all());
+}
+
+/// Chat was removed for `agent`: every open chat of it stops (the adapter and its tree, open cards taken down). A chat
+/// that a terminal pane holds is left alone. The panes stay listed, idle and closed, until the person closes them.
+/// Returns how many stopped.
+pub fn close_agent(agent: &str) -> usize {
+    let chats: Vec<Arc<AcpChat>> = all().into_iter().filter(|c| c.agent_id().eq_ignore_ascii_case(agent.trim()) && !c.is_closed() && !c.held_by_terminal()).collect();
+    let count = chats.len();
+    close_these(chats);
+    count
+}
+
+pub fn close_these(chats: Vec<Arc<AcpChat>>) {
+    for chat in chats {
+        chat.close();
+    }
+}
+
+static APP_SHUTTING_DOWN: std::sync::atomic::AtomicBool = std::sync::atomic::AtomicBool::new(false);
+
+/// The app is about to end (quit, or an update install) and will kill every pane: from now on a closing chat pane only
+/// stops its session; its record keeps its state, so the next start brings the conversation back. Set right before the
+/// panes are killed. A person closing a chat is unaffected only while this is not set. Quitting never unsets it (the
+/// process ends); an update install that failed does ([`cancel_app_shutdown`]), because then the app keeps running.
+pub fn begin_app_shutdown() {
+    APP_SHUTTING_DOWN.store(true, Ordering::SeqCst);
+}
+
+/// The app is not ending after all (the update installer could not start): closing a chat is the person's doing again,
+/// not the app ending, until the next [`begin_app_shutdown`].
+pub fn cancel_app_shutdown() {
+    APP_SHUTTING_DOWN.store(false, Ordering::SeqCst);
+}
+
+/// True once the app is ending (see [`begin_app_shutdown`]): panes then go because the app ends, not because a person closed them.
+pub fn app_is_shutting_down() -> bool {
+    APP_SHUTTING_DOWN.load(Ordering::SeqCst)
+}
+
+/// The pane was closed (the registry took it): its session stops.
+pub fn on_pane_closed(pane_id: &str) {
+    on_pane_gone(pane_id, APP_SHUTTING_DOWN.load(Ordering::SeqCst));
+}
+
+/// `app_ending`: the pane goes because the app ends, not because a person closed it.
+pub fn on_pane_gone(pane_id: &str, app_ending: bool) {
+    crate::standby::seat_panes::forget(pane_id);
+    let chat = CHATS.lock().remove(pane_id);
+    if let Some(chat) = chat {
+        // Closing the pane ends the conversation (the confirm sheet says so); its record stays, as closed. When the app
+        // ends the record is left as it is, to be restored at the next start.
+        let conversations = chat.conversations.clone();
+        chat.retire();
+        if app_ending {
+            return;
+        }
+        // A copy the chat never changed goes with it; one with changes stays for the person to keep or throw away.
+        if let Some(link) = conversations.as_ref().and_then(|c| c.copy_of(pane_id)) {
+            if crate::hooks::get().chat_copy_release_if_pristine(&link) {
+                if let Some(c) = &conversations {
+                    c.set_copy(pane_id, None);
+                }
+            }
+        }
+        if let Some(conversations) = conversations {
+            let _ = conversations.close(pane_id);
+        }
+    }
+}
+
+/// The conversation `conversation` is about to be brought back with a replay of everything the agent has in its own
+/// session (it came back from a terminal): the chat of its pane starts over from that replay, so what was said in
+/// the terminal is in it.
+pub fn history_will_be_replayed(conversation: &str) {
+    if let Some(chat) = get(conversation) {
+        chat.start_over();
+    }
+}
+
+/// A question card was answered or dismissed: when it is a permission card of a chat session, the answer goes to the
+/// agent. Called by the question store after the lock is released.
+pub fn on_question_resolved(question: &Question) {
+    if question.kind.as_deref() != Some(ACP_KIND_PERMISSION) {
+        return;
+    }
+    let Some(chat) = question.pane_id.as_deref().and_then(get) else { return };
+    chat.card_resolved(question);
+}
+
+/// A second answer arrived for a card that was answered already (another window, the phone): the chat says so.
+pub fn on_question_already_answered(question: &Question) {
+    if question.kind.as_deref() != Some(ACP_KIND_PERMISSION) {
+        return;
+    }
+    let Some(chat) = question.pane_id.as_deref().and_then(get) else { return };
+    chat.side_line(&format!("answered:{}", question.id), ALREADY_ANSWERED);
+}
+
+const ALREADY_ANSWERED: &str = "Already answered.";
+const STILL_WORKING: &str = "Still working on the last message. Wait, or press Stop.";
+
+/// Terminal input that reached a chat pane. `None`: the pane is not a chat session (write to its terminal).
+/// Ctrl+C and Esc stop the turn; a line of text is a message (a new turn, or steering); other keys are refused.
+pub fn terminal_input(pane_id: &str, text: &str, append_newline: bool) -> Option<Result<(), String>> {
+    let chat = get(pane_id)?;
+    Some(chat.handle_terminal_input(text, append_newline))
+}
+
+fn now_iso() -> String {
+    chrono::Utc::now().to_rfc3339_opts(chrono::SecondsFormat::Millis, true)
+}
+
+fn control_only(text: &str) -> bool {
+    !text.is_empty() && text.chars().all(|c| c.is_control())
+}
+
+impl AcpChat {
+    pub fn build(pane_id: &str, label: &str, session: Arc<AcpSession>, host: Arc<dyn ChatHost>, conversations: Option<Conversations>) -> Arc<AcpChat> {
+        let journal = conversations.as_ref().map(|c| Journal::at(c.journal_path(pane_id)));
+        let mapper = Mapper::for_config(session.config());
+        let chat = Arc::new(AcpChat {
+            pane_id: pane_id.to_string(),
+            agent_id: session.agent_id().to_string(),
+            label: label.to_string(),
+            session,
+            feed: Arc::new(Feed::new()),
+            mapper: Mutex::new(mapper),
+            host,
+            handles: Mutex::new(None),
+            cards: Mutex::new(BTreeMap::new()),
+            auto_allow: Mutex::new(BTreeSet::new()),
+            auto_asks: Mutex::new(BTreeMap::new()),
+            pending_user: Mutex::new(None),
+            sign_in_held: Mutex::new(None),
+            closed: AtomicBool::new(false),
+            send_gate: Mutex::new(()),
+            card_timeout_s: AtomicU64::new(cards::CARD_TIMEOUT_S),
+            conversations,
+            agent_answering: AtomicBool::new(false),
+            #[cfg(any(test, feature = "test-util"))]
+            switch_for_test: Mutex::new(None),
+            rules: rules::ChatRules::default(),
+            waking: AtomicBool::new(false),
+            started_by: Mutex::new(None),
+            nested_under: Mutex::new(None),
+            lane_note: Mutex::new(None),
+            started: Mutex::new(None),
+            warm_claimed: AtomicBool::new(false),
+            close_when_done: AtomicBool::new(false),
+            seat: Mutex::new(None),
+            run_meta: Mutex::new(receipt::RunMeta::default()),
+            journal,
+            interrupted: AtomicBool::new(false),
+            choice_warnings: Mutex::new(Vec::new()),
+            last_prompt_end: Mutex::new(None),
+            next_from: Mutex::new(None),
+            wire_prefix: Mutex::new(None),
+            notes: Mutex::new(std::collections::VecDeque::new()),
+            from_by_id: Mutex::new(HashMap::new()),
+            drive: Mutex::new(drive::Drive::default()),
+            right_size: right_size::Slot::default(),
+        });
+        chat.restore_from_journal();
+        chat
+    }
+
+    /// A terminal pane has the conversation (hand-over).
+    fn held_by_terminal(&self) -> bool {
+        self.conversations.as_ref().is_some_and(|c| matches!(c.writer(&self.pane_id), Some(Writer::Terminal { .. })))
+    }
+
+    pub fn pane_id(&self) -> &str {
+        &self.pane_id
+    }
+
+    pub fn agent_id(&self) -> &str {
+        &self.agent_id
+    }
+
+    pub fn label(&self) -> &str {
+        &self.label
+    }
+
+    /// The MCP session that started this chat, if an agent did.
+    pub fn started_by(&self) -> Option<String> {
+        self.started_by.lock().clone()
+    }
+
+    pub fn set_started_by(&self, session: Option<&str>) {
+        *self.started_by.lock() = session.map(str::to_string);
+    }
+
+    /// The pane this chat is nested under, if any (see the field).
+    pub fn nested_under(&self) -> Option<String> {
+        self.nested_under.lock().clone()
+    }
+
+    pub fn set_nested_under(&self, parent: Option<&str>) {
+        *self.nested_under.lock() = parent.map(str::to_string);
+    }
+
+    /// The person moved this chat under another agent (or back to a main agent): kept with the conversation, so a
+    /// restart brings it back. The agent that started it keeps its own control.
+    pub fn adopt_under(&self, parent: Option<&str>) {
+        self.set_nested_under(parent);
+        if let Some(conversations) = &self.conversations {
+            conversations.update(&self.pane_id, |r| r.parent_pane_id = parent.map(str::to_string));
+        }
+    }
+
+    /// Saves the helper-of link (the starting agent's session and the pane the chat is nested under) with the
+    /// conversation, so a restart brings it back.
+    pub fn persist_link(&self, started_by: Option<&str>, parent: Option<&str>) {
+        let Some(conversations) = &self.conversations else { return };
+        self.set_nested_under(parent);
+        conversations.update(&self.pane_id, |r| {
+            r.started_by = started_by.map(str::to_string);
+            r.parent_pane_id = parent.map(str::to_string);
+        });
+    }
+
+    /// Remembers (and saves) what the starting agent made this chat. Only Two types sets `started_as`; One type's
+    /// `helper` stays in memory (the reply says it) and nothing is written.
+    pub fn set_started(&self, started: crate::agent_run_mode::StartedRecord) {
+        if let (Some(conversations), Some(kind)) = (&self.conversations, started.started_as.clone()) {
+            let reason = started.as_reason.clone();
+            conversations.update(&self.pane_id, |r| {
+                r.started_as = Some(kind);
+                r.as_reason = Some(reason);
+            });
+        }
+        *self.started.lock() = Some(started);
+    }
+
+    /// An agent started this chat as a minion (Two types mode): its permission asks go to that agent first.
+    pub fn is_minion(&self) -> bool {
+        self.started.lock().as_ref().and_then(|s| s.started_as.as_deref()) == Some("minion")
+    }
+
+    /// The words a rule or the minion route reads for an ask: its title (else the tool call's), the command and the files.
+    fn ask_words(&self, wait: &PermissionWait) -> String {
+        let title = wait.title.clone().or_else(|| wait.tool_call_id.as_deref().and_then(|id| self.mapper.lock().tool_title(id))).unwrap_or_default();
+        [title, wait.command.clone().unwrap_or_default(), wait.paths.join(" ")].join(" ")
+    }
+
+    fn answers_on(&self) -> bool {
+        #[cfg(any(test, feature = "test-util"))]
+        if let Some(on) = *self.switch_for_test.lock() {
+            return on;
+        }
+        helper_answers::enabled()
+    }
+
+    /// Where a minion's ask goes (`None`: this chat is not a minion, the usual card applies).
+    fn minion_route(&self, wait: &PermissionWait) -> Option<helper_answers::MinionAsk> {
+        self.is_minion().then(|| helper_answers::minion_route(&self.ask_words(wait), wait.tool_kind.as_deref().unwrap_or(""), self.session.cwd(), self.answers_on()))
+    }
+
+    /// The asks of this minion that only its agent answers: `(ask_id, since_ms)`, for the wake-up note.
+    pub fn quiet_asks(&self) -> Vec<(u64, u64)> {
+        if self.is_closed() || !self.is_minion() {
+            return Vec::new();
+        }
+        let snapshot = self.session.snapshot();
+        snapshot.permission_waits.iter().filter(|w| self.minion_route(w) == Some(helper_answers::MinionAsk::Agent)).map(|w| (w.ask_id, w.since_ms)).collect()
+    }
+
+    /// The status the person's views see. A minion that waits only on its agent reads as working: no "needs you", no
+    /// Inbox line, no prompt. The agent sees the real state through the run tools.
+    fn person_status(&self, snapshot: &Snapshot) -> PaneStatus {
+        let status = snapshot.pane_status();
+        let only_agent = |w: &PermissionWait| !matches!(self.minion_route(w), Some(helper_answers::MinionAsk::Person(_)) | None);
+        if status == PaneStatus::WaitingInput && self.is_minion() && !snapshot.permission_waits.is_empty() && snapshot.permission_waits.iter().all(only_agent) {
+            return PaneStatus::Running;
+        }
+        status
+    }
+
+    pub fn started(&self) -> Option<crate::agent_run_mode::StartedRecord> {
+        self.started.lock().clone()
+    }
+
+    /// Restores what a saved record said (a chat restarted with the app).
+    pub fn restore_started(&self, kind: Option<&str>, reason: Option<&str>) {
+        let Some(kind) = kind.and_then(crate::agent_run_mode::StartedAs::parse) else { return };
+        *self.started.lock() = Some(crate::agent_run_mode::StartedRecord {
+            as_used: kind.as_str().into(),
+            as_reason: reason.unwrap_or("restored").into(),
+            started_as: Some(kind.as_str().into()),
+            ..Default::default()
+        });
+    }
+
+    /// Remembers (and saves) which lane `run_agent` chose for this chat and why.
+    pub fn set_lane_note(&self, note: serde_json::Value) {
+        *self.lane_note.lock() = Some(note.clone());
+        if let Some(conversations) = &self.conversations {
+            conversations.update(&self.pane_id, |r| r.lane_note = Some(note));
+        }
+    }
+
+    /// Marks this chat as taken from the warm chats (so the receipt's `standby_used` says so).
+    pub fn set_close_when_done(&self, close: bool) {
+        self.close_when_done.store(close, Ordering::SeqCst);
+    }
+
+    pub fn close_when_done(&self) -> bool {
+        self.close_when_done.load(Ordering::SeqCst)
+    }
+
+    pub fn set_warm_claimed(&self, claimed: bool) {
+        self.warm_claimed.store(claimed, Ordering::SeqCst);
+    }
+
+    pub fn warm_claimed(&self) -> bool {
+        self.warm_claimed.load(Ordering::SeqCst)
+    }
+
+    /// This chat is standby seat `helper_id`'s own chat.
+    pub fn set_seat(&self, helper_id: Option<&str>) {
+        *self.seat.lock() = helper_id.map(str::to_string);
+    }
+
+    /// The standby seat this chat belongs to.
+    pub fn seat(&self) -> Option<String> {
+        self.seat.lock().clone()
+    }
+
+    pub fn lane_note(&self) -> Option<serde_json::Value> {
+        self.lane_note.lock().clone()
+    }
+
+    /// Warnings from the last model/reasoning request (shown in the tools' reply).
+    pub fn choice_warnings(&self) -> Vec<String> {
+        self.choice_warnings.lock().clone()
+    }
+
+    pub fn set_choice_warnings(&self, warnings: Vec<String>) {
+        *self.choice_warnings.lock() = warnings;
+    }
+
+    /// The last prompt that ended, if any (its id, why, and when).
+    pub fn last_prompt_end(&self) -> Option<EndedPrompt> {
+        self.last_prompt_end.lock().clone()
+    }
+
+    /// Apply the model and reasoning a caller asked for, before any message is sent. A request the
+    /// agent cannot honour is an error; nothing is quietly run on a different model.
+    pub fn apply_choices(&self, model: Option<&str>, reasoning: Option<&str>) -> Result<Applied, ChoiceError> {
+        choice::apply(self, model, reasoning)
+    }
+
+    /// This chat's agent runs on another computer over SSH.
+    pub fn is_remote(&self) -> bool {
+        self.session.remote_host().is_some()
+    }
+
+    pub fn remote_host(&self) -> Option<&crate::ssh::model::SshHost> {
+        self.session.remote_host()
+    }
+
+    /// `(machine, folder on it)` of a chat that runs on an SSH machine; the screen never picks either.
+    pub fn remote_place(&self) -> Option<(crate::ssh::model::SshHost, String)> {
+        Some((self.session.remote_host()?.clone(), self.session.remote_folder()?.to_string()))
+    }
+
+    pub fn session(&self) -> &Arc<AcpSession> {
+        &self.session
+    }
+
+    /// The items so far (what the pane's chat shows).
+    pub fn items(&self) -> Vec<crate::session_chat::ChatItem> {
+        self.feed.all()
+    }
+
+    /// The last `n` items (Background tasks reads a chat's recent commands every few seconds).
+    pub fn recent_items(&self, n: usize) -> Vec<crate::session_chat::ChatItem> {
+        self.feed.last(n)
+    }
+
+    /// How many items the chat shows: cheap enough for a wait to notice a reply that is still streaming in.
+    pub fn item_count(&self) -> usize {
+        self.feed.len()
+    }
+
+    pub fn is_closed(&self) -> bool {
+        self.closed.load(Ordering::SeqCst)
+    }
+
+    #[cfg(any(test, feature = "test-util"))]
+    pub fn set_card_timeout(&self, secs: u64) {
+        self.card_timeout_s.store(secs, Ordering::SeqCst);
+    }
+
+    /// Connects the session's events to this chat. Called once, before the session starts.
+    fn attach(self: &Arc<Self>) {
+        let weak = Arc::downgrade(self);
+        self.session.add_sink(Arc::new(move |event| {
+            if let Some(chat) = weak.upgrade() {
+                chat.on_event(event);
+            }
+        }));
+    }
+
+    /// The pane's status handles: the pane is in the registry now.
+    pub fn set_handles(&self, handles: VirtualPaneHandles) {
+        *self.handles.lock() = Some(handles);
+        self.apply_status(&self.session.snapshot());
+    }
+
+    /// Says once, as a quiet note in the chat, that Potato Workspace's own tools could not be handed to this session.
+    pub fn note_workspace_tools(&self) {
+        let Some(text) = crate::acp::config::workspace_tools_gap(self.session.config()) else { return };
+        let id = "n:tools_missing";
+        if self.feed.get(id).is_some() {
+            return;
+        }
+        self.push(vec![crate::session_chat::ChatItem::Notice { id: id.into(), at: Some(now_iso()), notice_kind: "tools_missing".into(), text, url: None }]);
+    }
+
+    /// A page the agent made (an artifact) as a card in the chat: one quiet notice, written to the journal like any item.
+    pub fn note_artifact(&self, item: crate::session_chat::ChatItem) {
+        self.push(vec![item]);
+    }
+
+    fn push(&self, items: Vec<crate::session_chat::ChatItem>) {
+        for mut item in items {
+            self.stamp_sender(&mut item);
+            if let Some(journal) = &self.journal {
+                journal.append(&item);
+            }
+            self.feed.upsert(item);
+        }
+        if let Some(handles) = self.handles.lock().as_ref() {
+            *handles.last_output.lock() = Instant::now();
+        }
+    }
+
+    /// Puts the sender on the person's message the first time it shows. A replayed message (`hu...`) is not a new one.
+    fn stamp_sender(&self, item: &mut crate::session_chat::ChatItem) {
+        let crate::session_chat::ChatItem::User { id, from, .. } = item else { return };
+        if from.is_some() {
+            return;
+        }
+        // Looked up first and the lock let go: the branch below takes the same lock.
+        let known = self.from_by_id.lock().get(id.as_str()).cloned();
+        if let Some(known) = known {
+            *from = Some(known);
+        } else if id.starts_with('u') {
+            if let Some(sender) = self.next_from.lock().take() {
+                self.from_by_id.lock().insert(id.clone(), sender.clone());
+                *from = Some(sender);
+            }
+        }
+    }
+
+    /// Who sends the message that goes in next (`None`: this PC). Call it right before the send; it also moves the
+    /// driver (a device that sends drives; this PC sending means this PC drives).
+    pub fn note_sender(&self, from: Option<&str>) {
+        *self.next_from.lock() = from.map(str::to_string);
+        self.drive.lock().sent(from, Instant::now());
+        self.host.state_changed(&self.pane_id, &self.state());
+    }
+
+    /// The message is refused when this PC took the chat back and the sender has not taken it over.
+    pub fn refuses_sender(&self, from: Option<&str>) -> Option<&'static str> {
+        self.drive.lock().refuses(from, Instant::now()).then_some(TOOK_BACK_SENTENCE)
+    }
+
+    /// A device says it is typing here. `Err`: this PC took the chat back.
+    pub fn device_typing(&self, from: &str) -> Result<(), &'static str> {
+        if !self.drive.lock().typing(from, Instant::now()) {
+            return Err(TOOK_BACK_SENTENCE);
+        }
+        self.host.state_changed(&self.pane_id, &self.state());
+        Ok(())
+    }
+
+    /// "Take back" on this PC. The device that drove, or `None` when nobody else was driving.
+    pub fn take_back(&self) -> Option<String> {
+        let taken = self.drive.lock().take_back(Instant::now());
+        if taken.is_some() {
+            self.host.state_changed(&self.pane_id, &self.state());
+        }
+        taken
+    }
+
+    /// "Take over" from a device that was locked out.
+    pub fn device_claims(&self, from: &str) {
+        self.drive.lock().claim(from, Instant::now());
+        self.host.state_changed(&self.pane_id, &self.state());
+    }
+
+    /// Fills the chat from its journal (an earlier run of the app). A turn the journal shows as started and never ended
+    /// is closed here: its open tool calls are settled, it ends as interrupted, and a notice says "The app closed during
+    /// this turn." (the view then offers "Continue", which is the person's click). Only reads the journal; it never
+    /// deletes or shortens it.
+    fn restore_from_journal(&self) {
+        let Some(journal) = &self.journal else { return };
+        let mut items = journal.load_or_previous().items;
+        if items.is_empty() {
+            return;
+        }
+        let at = now_iso();
+        let mut added = Vec::new();
+        let open_turn = items.iter().fold(None, |open: Option<u64>, item| match item {
+            crate::session_chat::ChatItem::User { id, .. } => match id.strip_prefix('u').and_then(|n| n.parse::<u64>().ok()) {
+                Some(n) => Some(n),
+                None => open,
+            },
+            crate::session_chat::ChatItem::TurnEnd { .. } => None,
+            _ => open,
+        });
+        if let Some(turn) = open_turn {
+            use crate::session_chat::{ChatItem, TurnOutcome};
+            let resulted: std::collections::HashSet<String> =
+                items.iter().filter_map(|i| if let ChatItem::ToolResult { call_id, .. } = i { Some(call_id.clone()) } else { None }).collect();
+            for item in &items {
+                if let ChatItem::ToolCall { call_id, .. } = item {
+                    if !resulted.contains(call_id) {
+                        added.push(ChatItem::ToolResult { id: format!("r:{call_id}"), at: Some(at.clone()), call_id: call_id.clone(), ok: false, output: "Stopped before it finished.".into() });
+                    }
+                }
+            }
+            added.push(ChatItem::TurnEnd { id: format!("end:{turn}"), at: Some(at.clone()), outcome: TurnOutcome::Interrupted, duration_ms: None });
+            added.push(ChatItem::Notice { id: format!("n:interrupted:{turn}"), at: Some(at), notice_kind: "interrupted".into(), text: INTERRUPTED.to_string(), url: None });
+        }
+        for item in &items {
+            self.feed.upsert(item.clone());
+        }
+        for item in &added {
+            journal.append(item);
+            self.feed.upsert(item.clone());
+        }
+        items.extend(added);
+        self.mapper.lock().resume_after(&items);
+        // Still waiting for "Continue" if the last interruption notice stands after the person's last message.
+        let last_notice = items.iter().rposition(|i| i.id().starts_with("n:interrupted:"));
+        let last_user = items.iter().rposition(|i| matches!(i, crate::session_chat::ChatItem::User { id, .. } if id.strip_prefix('u').is_some_and(|n| n.parse::<u64>().is_ok())));
+        self.interrupted.store(last_notice.is_some_and(|n| last_user.is_none_or(|u| n > u)), Ordering::SeqCst);
+    }
+
+    // ---- events ------------------------------------------------------------------------------------------
+
+    fn on_event(&self, event: &SessionEvent) {
+        let now = Instant::now();
+        let at = now_iso();
+        match event {
+            SessionEvent::Snapshot(snapshot) => {
+                if !snapshot.config_options.is_empty() {
+                    let items = self.mapper.lock().observe_config_options(&snapshot.config_options, &at);
+                    self.push(items);
+                }
+                self.apply_status(snapshot);
+                self.host.state_changed(&self.pane_id, &self.state());
+            }
+            SessionEvent::TurnStarted { turn } => {
+                self.interrupted.store(false, Ordering::SeqCst);
+                let (text, attachments) = self.pending_user.lock().take().unwrap_or_default();
+                crate::project_budget::note_turn_started(&self.project());
+                self.right_size.started(text.chars().count());
+                let mut mapper = self.mapper.lock();
+                let items = mapper.turn_started_with(*turn, Some(text.as_str()), &attachments, now, &at);
+                self.push(items);
+            }
+            SessionEvent::PermissionRequested(wait) => {
+                {
+                    let mut mapper = self.mapper.lock();
+                    let title = wait.title.clone().or_else(|| wait.tool_call_id.as_deref().and_then(|id| mapper.tool_title(id))).unwrap_or_else(|| "a tool".to_string());
+                    let items = mapper.permission_notice(wait.ask_id, format!("Waiting for your answer: {title}"), &at);
+                    self.push(items);
+                }
+                self.reconcile_cards();
+            }
+            SessionEvent::PermissionResolved { ask_id, how, reason } => self.on_resolved(*ask_id, how, *reason, &at),
+            SessionEvent::PermissionRefused { reason } => {
+                let mut mapper = self.mapper.lock();
+                let items = mapper.permission_refused(reason, &at);
+                self.push(items);
+            }
+            other => {
+                if matches!(other, SessionEvent::Update { replay: false, .. } | SessionEvent::UpdateUnparsed { replay: false, .. }) {
+                    if let Some(ms) = self.right_size.first_reply() {
+                        tracing::info!("startup_first_reply ms={ms} pane={}", self.pane_id);
+                    }
+                }
+                let mut mapper = self.mapper.lock();
+                let items = mapper.on_event(other, now, &at);
+                // Before the items go out, so a screen that reads the project budget when the turn ends sees it counted.
+                let look = matches!(other, SessionEvent::TurnEnded(_)).then(|| mapper.last_turn_look());
+                drop(mapper);
+                let ended = look.is_some();
+                if let Some(look) = look {
+                    self.after_turn(look);
+                }
+                self.push(items);
+                if ended {
+                    self.flush_notes_soon();
+                    // A task the person handed to another agent: tell whoever is owed, once its run really ended.
+                    crate::hooks::get().handover_turn_ended_soon(&self.pane_id);
+                }
+            }
+        }
+    }
+
+    /// A turn ended: its minutes count against the project's day, and a model that did not fit the task may be named.
+    fn after_turn(&self, (files, reason): (usize, Option<ending::EndReason>)) {
+        let (ms, prompt_chars) = self.right_size.ended();
+        crate::project_budget::note_turn_ended(&self.project(), ms);
+        let on = default_model::settings().get(right_size::SETTING).and_then(Value::as_bool).unwrap_or(true);
+        let Some(reason) = reason.filter(|_| on) else { return };
+        let choices = choice::model_choices(self);
+        let Some(current) = choice::in_use(self).0 else { return };
+        let name = choices.iter().find(|(value, _)| *value == current).map(|(_, name)| name.clone()).unwrap_or_else(|| current.clone());
+        let facts = right_size::Facts { prompt_chars, files, duration_ms: ms, reason };
+        if let Some(suggestion) = right_size::suggest(&facts, (&current, &name), &choices) {
+            self.right_size.offer(suggestion, &crate::project_budget::today());
+        }
+    }
+
+    /// The sentence for a project that has used up its day, or `None` while it may start turns.
+    fn project_budget_block(&self) -> Option<String> {
+        let status = crate::project_budget::status(&self.project(), crate::project_budget::plan_percent_of(&self.agent_id));
+        crate::project_budget::sentence(&status)
+    }
+
+    /// Where the project stands today, for the banner (`None` when it has no limits).
+    pub fn project_budget_status(&self) -> Option<crate::project_budget::Status> {
+        let status = crate::project_budget::status(&self.project(), crate::project_budget::plan_percent_of(&self.agent_id));
+        status.limits.any().then_some(status)
+    }
+
+    /// "Raise" on the project budget banner.
+    pub fn project_budget_raise(&self) -> Option<crate::project_budget::Status> {
+        crate::project_budget::raise(&self.project(), crate::project_budget::plan_percent_of(&self.agent_id));
+        self.project_budget_status()
+    }
+
+    /// The waiting right-size line, if there is one.
+    pub fn right_size_pending(&self) -> Option<right_size::Suggestion> {
+        self.right_size.pending()
+    }
+
+    pub fn right_size_dismiss(&self) {
+        self.right_size.dismiss();
+    }
+
+    fn apply_status(&self, snapshot: &Snapshot) {
+        let status = self.person_status(snapshot);
+        let changed = {
+            let handles = self.handles.lock();
+            let Some(handles) = handles.as_ref() else { return };
+            let mut current = handles.status.lock();
+            let changed = *current != status;
+            *current = status;
+            changed
+        };
+        if changed {
+            self.host.status_changed(&self.pane_id, status);
+        }
+    }
+
+    // ---- permission cards --------------------------------------------------------------------------------
+
+    /// Makes sure every open question of the agent has a card the person can answer, and raises a new one for a
+    /// card that ran out of time or is gone. Cheap when there is nothing open.
+    pub fn reconcile_cards(&self) {
+        let waits = self.session.pending_permissions();
+        if waits.is_empty() {
+            return;
+        }
+        let now = questions::now_ms();
+        let mut raised: Vec<Question> = Vec::new();
+        // Asks the person's "don't ask again" answers: sent after the lock is let go.
+        let mut automatic: Vec<(u64, String)> = Vec::new();
+        // Asks no card could be made for: answered "no" after the lock is let go.
+        let mut unshowable: Vec<u64> = Vec::new();
+        // A minion's asks refused because the switch is off: answered "no" after the lock is let go.
+        let mut refused: Vec<u64> = Vec::new();
+        // Questions of a minion's ordinary asks: made quiet (only its agent sees them) after the lock is let go.
+        let mut quiet: Vec<String> = Vec::new();
+        // Asks a fence or Force yes answered (`rules.rs`): sent after the lock is let go.
+        let mut ruled: Vec<rules::Ruled> = Vec::new();
+        {
+            let mut cards = self.cards.lock();
+            for wait in &waits {
+                let needed = match cards.get(&wait.ask_id) {
+                    None => true,
+                    Some(card) if card.resolved => false,
+                    // Pending, answered and dismissed cards are on their way; only a card that timed out or was
+                    // forgotten by the store is raised again.
+                    Some(card) => !questions::store().get(&card.question_id, now).is_some_and(|q| q.state != QuestionState::TimedOut),
+                };
+                if !needed {
+                    continue;
+                }
+                let (title, kind, paths, mapped_command) = {
+                    let mapper = self.mapper.lock();
+                    let call_id = wait.tool_call_id.as_deref();
+                    let title = wait.title.clone().or_else(|| call_id.and_then(|id| mapper.tool_title(id)));
+                    let brief = call_id.and_then(|id| mapper.tool_brief(id));
+                    let command = call_id.and_then(|id| mapper.tool_command(id));
+                    (title, wait.tool_kind.clone().or_else(|| brief.as_ref().map(|b| b.0.clone())), brief.map(|b| b.1).unwrap_or_default(), command)
+                };
+                if !cards.contains_key(&wait.ask_id) {
+                    if let Some(decision) = self.rule_for(wait, kind.as_deref(), title.as_deref(), &paths, mapped_command.as_deref()) {
+                        let fresh = !matches!(decision, rules::Ruled::Already);
+                        if fresh {
+                            ruled.push(decision);
+                        }
+                        continue;
+                    }
+                    let rule = kind.as_deref().is_some_and(|k| cards::auto_allowable(k) && self.auto_allow.lock().contains(k));
+                    if let (true, Some(option)) = (rule, cards::allow_option(&wait.options)) {
+                        let first = self.auto_asks.lock().insert(wait.ask_id, title.clone()).is_none();
+                        if first {
+                            automatic.push((wait.ask_id, option.id.clone()));
+                        }
+                        continue;
+                    }
+                }
+                let route = self.minion_route(wait);
+                if route == Some(helper_answers::MinionAsk::Refuse) {
+                    refused.push(wait.ask_id);
+                    continue;
+                }
+                let (mut new, options) = cards::new_question(&self.pane_id, &self.label, wait, title.as_deref(), kind.as_deref(), &paths);
+                if matches!(route, Some(helper_answers::MinionAsk::Person(_))) {
+                    new.question = cards::minion_question(&self.label, title.as_deref());
+                }
+                if let Some(line) = self.take_left_line(wait.ask_id) {
+                    new.context = Some(format!("{}\n{line}", new.context.unwrap_or_default()));
+                }
+                new.timeout_s = Some(self.card_timeout_s.load(Ordering::SeqCst));
+                let made = match questions::store().create(new, now) {
+                    Ok(question) => Some((question, options)),
+                    Err(error) => {
+                        // Never leave the agent waiting with nothing on screen: try the plain Allow / Deny card.
+                        tracing::warn!(pane = %self.pane_id, code = error.code, message = %error.message, "acp chat: the permission card was refused, raising the plain one");
+                        let (plain, plain_options) = cards::fallback_question(&self.pane_id, &self.label, wait, title.as_deref());
+                        let mut plain = plain;
+                        plain.timeout_s = Some(self.card_timeout_s.load(Ordering::SeqCst));
+                        match questions::store().create(plain, now) {
+                            Ok(question) => Some((question, plain_options)),
+                            Err(error) => {
+                                tracing::warn!(pane = %self.pane_id, code = error.code, "acp chat: no card could be raised, the agent is told no");
+                                None
+                            }
+                        }
+                    }
+                };
+                match made {
+                    Some((question, options)) => {
+                        let only_agent = route == Some(helper_answers::MinionAsk::Agent);
+                        cards.insert(wait.ask_id, Card { question_id: question.id.clone(), options, title: title.clone(), resolved: false, quiet: only_agent });
+                        if only_agent {
+                            quiet.push(question.id.clone());
+                        } else {
+                            raised.push(question);
+                        }
+                    }
+                    None if !cards.contains_key(&wait.ask_id) => unshowable.push(wait.ask_id),
+                    None => {}
+                }
+            }
+        }
+        // A question nobody can see is answered "cancelled" (no), with a line in the chat saying so.
+        for ask_id in unshowable {
+            if self.session.cancel_permission(ask_id).is_ok() {
+                let at = now_iso();
+                let mut mapper = self.mapper.lock();
+                let items = mapper.permission_refused("the app could not show the question, so the agent was told no", &at);
+                self.push(items);
+            }
+        }
+        for id in &quiet {
+            questions::store().set_quiet(id, true);
+        }
+        for ask_id in refused {
+            if self.session.cancel_permission(ask_id).is_ok() {
+                let at = now_iso();
+                let mut mapper = self.mapper.lock();
+                let items = mapper.permission_refused(helper_answers::REFUSED_NOTE, &at);
+                self.push(items);
+            }
+        }
+        for decision in ruled {
+            self.send_ruled(decision);
+        }
+        for (ask_id, option_id) in automatic {
+            if self.session.answer_permission(ask_id, &option_id, AnswerSource::Person).is_err() {
+                // The agent no longer waits for it (or the answer did not go): the next look decides again.
+                self.auto_asks.lock().remove(&ask_id);
+            }
+        }
+        for question in &raised {
+            crate::hooks::get().question_notify(question);
+            self.host.questions_changed(Some(question));
+        }
+    }
+
+    /// The person answered or dismissed a card: the choice goes back to the agent.
+    /// What a choice on a permission card stands for in the agent's own words (`allow_once`, `allow_always`, `reject_once` ...).
+    /// `None`: no such card or choice (the caller then treats it as an approval).
+    pub fn card_choice_kind(&self, question_id: &str, choice_id: &str) -> Option<String> {
+        let cards = self.cards.lock();
+        let card = cards.values().find(|card| card.question_id == question_id)?;
+        card.option_for_choice(choice_id).map(|o| o.kind.clone())
+    }
+
+    fn card_resolved(&self, question: &Question) {
+        enum Send {
+            Option(u64, String),
+            CancelAsk(u64),
+            Cancel,
+            Nothing,
+        }
+        let plan = {
+            let mut cards = self.cards.lock();
+            let Some((ask_id, card)) = cards.iter_mut().find(|(_, card)| card.question_id == question.id) else { return };
+            if card.resolved {
+                return;
+            }
+            let ask_id = *ask_id;
+            match question.state {
+                QuestionState::Answered => {
+                    let choice = question.answer.as_ref().and_then(|a| a.choice_id.as_deref());
+                    let option_id = choice.and_then(|id| card.option_for_choice(id)).map(|o| o.option_id.clone());
+                    match option_id {
+                        Some(option_id) if option_id.is_empty() => {
+                            card.resolved = true;
+                            Send::CancelAsk(ask_id)
+                        }
+                        Some(option_id) => {
+                            card.resolved = true;
+                            Send::Option(ask_id, option_id)
+                        }
+                        None => Send::Nothing,
+                    }
+                }
+                // Dismissed: the person said no. Never "yes", never silence.
+                QuestionState::Cancelled => {
+                    card.resolved = true;
+                    match card.rejection().map(|o| o.option_id.clone()) {
+                        Some(option_id) if option_id.is_empty() => Send::CancelAsk(ask_id),
+                        Some(option_id) => Send::Option(ask_id, option_id),
+                        None => Send::Cancel,
+                    }
+                }
+                QuestionState::Pending | QuestionState::TimedOut => Send::Nothing,
+            }
+        };
+        let by = match question.answer.as_ref().map(|a| a.answered_by.as_str()) {
+            Some("agent") => AnswerSource::Agent,
+            _ => AnswerSource::Person,
+        };
+        let result = match plan {
+            Send::Option(ask_id, option_id) => self.session.answer_permission(ask_id, &option_id, by),
+            Send::CancelAsk(ask_id) => self.session.cancel_permission(ask_id),
+            Send::Cancel => self.session.cancel().map(|_| ()),
+            Send::Nothing => Ok(()),
+        };
+        match result {
+            Ok(()) | Err(AcpError::NoSuchAsk) => {}
+            Err(error) => tracing::warn!(pane = %self.pane_id, %error, "acp chat: the answer did not reach the agent"),
+        }
+    }
+
+    /// The session closed one of its questions (answered, cancelled, or the agent went away): the chat says how,
+    /// and a card still on screen is taken down.
+    fn on_resolved(&self, ask_id: u64, how: &Resolution, reason: PromptEndReason, at: &str) {
+        let card = self.cards.lock().remove(&ask_id);
+        let name_of = |option_id: &str| {
+            card.as_ref()
+                .and_then(|c| c.options.iter().find(|o| o.option_id == option_id).map(|o| o.name.clone()))
+                .unwrap_or_else(|| option_id.to_string())
+        };
+        let automatic = self.auto_asks.lock().remove(&ask_id);
+        let kind_of = |option_id: &str| card.as_ref().and_then(|c| c.options.iter().find(|o| o.option_id == option_id).map(|o| o.kind.clone())).unwrap_or_default();
+        let text = match how {
+            Resolution::Selected(_) if automatic.is_some() => {
+                let title = automatic.as_ref().and_then(|t| t.as_deref()).map(str::trim).filter(|t| !t.is_empty());
+                format!("{}{}", cards::AUTO_ALLOWED, title.map(|t| format!(" · {t}")).unwrap_or_default())
+            }
+            Resolution::Selected(option_id) => cards::verdict_text(&kind_of(option_id), &name_of(option_id), card.as_ref().and_then(|c| c.title.as_deref())),
+            Resolution::Cancelled => "Cancelled.".to_string(),
+            Resolution::AgentGone => match reason {
+                PromptEndReason::TurnEnded => "The turn ended before the answer; the question went away.".to_string(),
+                _ => "The agent stopped asking.".to_string(),
+            },
+        };
+        // An ask a fence or Force yes answered says so in its own words.
+        let text = self.take_rule_line(ask_id).unwrap_or(text);
+        let prompt_id = card.as_ref().map(|c| c.question_id.clone()).unwrap_or_else(|| ask_id.to_string());
+        *self.last_prompt_end.lock() = Some(EndedPrompt { prompt_id, ask_id, reason: reason.as_str(), at_ms: questions::now_ms() });
+        {
+            let mut mapper = self.mapper.lock();
+            let items = mapper.permission_notice(ask_id, text, at);
+            self.push(items);
+        }
+        if let Some(card) = card {
+            // Answered through the card: it is resolved already. Any other way: take it down (the hook finds no card).
+            if !card.resolved {
+                if matches!(how, Resolution::AgentGone) {
+                    // The agent is gone (crash, hang, closed): nobody is waiting for this answer any more.
+                    questions::store().expire(&card.question_id, questions::now_ms());
+                } else {
+                    let _ = questions::store().dismiss_including_remote(&card.question_id, questions::now_ms());
+                }
+            }
+            self.host.questions_changed(None);
+        }
+    }
+
+    // ---- sending, steering, stopping ---------------------------------------------------------------------
+
+    /// Whether the session can take a message now.
+    pub fn readiness(&self) -> Readiness {
+        if self.is_closed() {
+            return Readiness::Gone;
+        }
+        let snapshot = self.session.snapshot();
+        match snapshot.phase {
+            Phase::Idle | Phase::Dormant => Readiness::Ready,
+            Phase::Exited => match snapshot.exit.as_ref().map(|e| e.kind) {
+                Some(super::state::ExitKind::Closed) => Readiness::Gone,
+                // The next message brings the adapter back.
+                _ => Readiness::Ready,
+            },
+            Phase::Starting | Phase::Resuming | Phase::Working | Phase::NeedsInput | Phase::Cancelling => Readiness::Busy,
+        }
+    }
+
+    /// Whether the agent takes text while it works.
+    pub fn can_steer(&self) -> bool {
+        self.session.caps().is_some_and(|caps| caps.steering)
+    }
+
+    /// Starts a turn with `text`. `Busy` while a turn runs.
+    pub fn send(&self, text: &str) -> Result<Sent, SendError> {
+        self.send_with(text, &[])
+    }
+
+    /// `send` with files and pictures: the text may be empty when there are any. They go in as content blocks
+    /// (`attach::blocks`), by what the agent says it takes.
+    pub fn send_with(&self, text: &str, attachments: &[ChatAttachment]) -> Result<Sent, SendError> {
+        let sent = self.send_quiet(text, attachments);
+        if matches!(sent, Err(SendError::Busy)) {
+            self.side_line("busy", STILL_WORKING);
+        }
+        sent
+    }
+
+    /// `send_with` for callers that queue or steer a message that finds the chat busy: no line in the chat.
+    pub fn send_quiet(&self, text: &str, attachments: &[ChatAttachment]) -> Result<Sent, SendError> {
+        let text = text.trim();
+        if text.is_empty() && attachments.is_empty() {
+            return Err(SendError::Refused("Write a message first.".into()));
+        }
+        if self.is_closed() {
+            return Err(SendError::Gone);
+        }
+        // The project used up what it may use today: this turn does not start (a running one is never touched).
+        if let Some(sentence) = self.project_budget_block() {
+            self.side_line("project-budget", &sentence);
+            return Err(SendError::Refused(sentence));
+        }
+        let Some(_gate) = self.send_gate.try_lock() else { return Err(SendError::Busy) };
+        self.begin_read_only_look();
+        self.begin_result_facts();
+        *self.pending_user.lock() = Some((text.to_string(), attachments.to_vec()));
+        let wire = self.wire_text(text);
+        match self.session.prompt_message(&wire, attachments) {
+            Ok(_) => {
+                crate::startup_timing::mark_end(&self.pane_id, "chat_prompt_sent");
+                self.sign_in_held.lock().take();
+                // A standby the person opened is theirs ("With you") while this turn runs.
+                crate::acp::warm::note_person_send(&self.pane_id);
+                Ok(Sent::Started)
+            }
+            Err(error) => {
+                self.pending_user.lock().take();
+                self.rules_not_told();
+                if needs_sign_in(&error) {
+                    // The sign-in card shows; the text waits for "I'm signed in — try again".
+                    *self.sign_in_held.lock() = Some((text.to_string(), attachments.to_vec()));
+                    self.host.state_changed(&self.pane_id, &self.state());
+                }
+                Err(send_error(&error))
+            }
+        }
+    }
+
+    /// One grey line in the chat for something the person did that could not be acted on.
+    fn side_line(&self, id: &str, text: &str) {
+        let at = now_iso();
+        let items = self.mapper.lock().side_notice(id, text, &at);
+        self.push(items);
+    }
+
+    /// "Restart chat": brings the adapter back after it stopped (a crash, a hang, a start that failed). The
+    /// conversation resumes in the same chat. Blocks until the adapter answers or fails.
+    pub fn restart(&self) -> Result<(), AcpError> {
+        if self.is_closed() {
+            return Err(AcpError::SessionClosed);
+        }
+        self.session.ensure_running().map(|_| ())
+    }
+
+    /// Whether the agent refused to work until the person signs in (the sign-in card is shown).
+    pub fn sign_in_needed(&self) -> bool {
+        self.sign_in_held.lock().is_some()
+    }
+
+    /// The words of the message that waits for a sign-in (at most 2000 characters), so the card can say what is kept and
+    /// offer it to another agent. `None` when nothing waits.
+    pub fn sign_in_text(&self) -> Option<String> {
+        self.sign_in_held.lock().as_ref().map(|(text, _)| text.chars().take(2000).collect())
+    }
+
+    /// "I'm signed in — try again": sends the message that was refused for want of a sign-in. If the agent still wants
+    /// a sign-in the card stays.
+    pub fn retry_after_sign_in(&self) -> Result<Sent, SendError> {
+        let held = self.sign_in_held.lock().take();
+        let Some((text, attachments)) = held else { return Err(SendError::Refused("Nothing is waiting to be sent.".into())) };
+        let result = self.send_with(&text, &attachments);
+        if result.is_err() && !self.sign_in_needed() {
+            // Another reason it did not go: keep the text so the person can try again.
+            *self.sign_in_held.lock() = Some((text, attachments));
+        }
+        self.host.state_changed(&self.pane_id, &self.state());
+        result
+    }
+
+    /// Sends `text` into the turn that runs, when the agent takes that. `None`: it does not (or no turn runs); the
+    /// caller queues the text instead. The text shows in the chat as the person's message.
+    pub fn steer(&self, text: &str) -> Option<Result<(), String>> {
+        self.steer_with(text, &[])
+    }
+
+    /// `steer` with files and pictures.
+    pub fn steer_with(&self, text: &str, attachments: &[ChatAttachment]) -> Option<Result<(), String>> {
+        let text = text.trim();
+        if (text.is_empty() && attachments.is_empty()) || self.is_closed() || !self.can_steer() || self.readiness() != Readiness::Busy {
+            return None;
+        }
+        if !self.session.snapshot().turn_in_flight() {
+            return None;
+        }
+        match self.session.steer_message(text, attachments) {
+            Ok(SteerOutcome::Injected) => {
+                let mut mapper = self.mapper.lock();
+                let items = mapper.steered_with(text, attachments, &now_iso());
+                self.push(items);
+                Some(Ok(()))
+            }
+            // The turn ended meanwhile: the text waits for the next one, like any queued message.
+            Ok(SteerOutcome::PromptRequired) => None,
+            Err(AcpError::Unsupported(_)) => None,
+            Err(error) => Some(Err(format!("The agent did not take the message: {error}"))),
+        }
+    }
+
+    /// "Keep waiting" on a quiet agent: the quiet window starts again. False when no turn runs.
+    pub fn keep_waiting(&self) -> bool {
+        let waiting = self.session.keep_waiting();
+        if waiting {
+            self.host.state_changed(&self.pane_id, &self.state());
+        }
+        waiting
+    }
+
+    /// Stops the turn that runs. True when there was one. The state says "stopping" until the agent ends it.
+    pub fn cancel(&self) -> Result<bool, AcpError> {
+        let stopped = self.session.cancel()?;
+        if stopped {
+            self.host.state_changed(&self.pane_id, &self.state());
+        }
+        Ok(stopped)
+    }
+
+    fn handle_terminal_input(&self, text: &str, append_newline: bool) -> Result<(), String> {
+        match text {
+            // Ctrl+C (the stop buttons, the panic stop, `interrupt_agent`) and Esc.
+            "\u{3}" | "\u{1b}" => {
+                self.cancel().map(|_| ()).map_err(|e| e.to_string())
+            }
+            "" if append_newline => Ok(()),
+            t if control_only(t) => Err(NOT_A_TERMINAL.to_string()),
+            t if append_newline => match self.send_quiet(t, &[]) {
+                Ok(_) => Ok(()),
+                Err(SendError::Busy) => match self.steer(t) {
+                    Some(result) => result,
+                    None => Err("The agent is working. Try again when the turn ends.".to_string()),
+                },
+                Err(SendError::Gone) => Err("The chat was closed.".to_string()),
+                Err(SendError::Refused(why)) => Err(why),
+            },
+            _ => Err(NOT_A_TERMINAL.to_string()),
+        }
+    }
+
+    /// Stops the session for good: the adapter and everything under it, and the open cards. The conversation stays
+    /// readable (the pane stays listed, idle) until the pane itself is closed (`retire`).
+    pub fn close(&self) {
+        if self.closed.swap(true, Ordering::SeqCst) {
+            return;
+        }
+        crate::agent_runs::tree_proof::forget(&self.pane_id);
+        crate::agent_runs::structured::forget(&self.pane_id);
+        crate::hooks::get().handover_forget(&self.pane_id);
+        // Cards still open are taken down without an answer: nobody is waiting any more.
+        let open: Vec<Card> = std::mem::take(&mut *self.cards.lock()).into_values().collect();
+        for card in &open {
+            if !card.resolved {
+                // The session is going away: the card expires. It is never an answer, and never a "yes".
+                questions::store().expire(&card.question_id, questions::now_ms());
+            }
+        }
+        self.session.close();
+        if let Some(journal) = &self.journal {
+            journal.flush();
+        }
+        match &self.conversations {
+            Some(conversations) => conversations.forget_session(self.session.key()),
+            None => {
+                super::supervisor::global().remove(self.session.key());
+            }
+        }
+        if let Some(handles) = self.handles.lock().as_ref() {
+            *handles.exited.lock() = true;
+        }
+        if !open.is_empty() {
+            self.host.questions_changed(None);
+        }
+    }
+
+    /// The pane is gone: the session stops, the chat's readers end, and nothing finds it by pane id any more.
+    pub fn retire(&self) {
+        self.close();
+        self.feed.close();
+        crate::session_chat::pushed::unregister(&self.pane_id);
+        CHATS.lock().remove(&self.pane_id);
+    }
+
+    // ---- restart, settings, agents ------------------------------------------------------------------------
+
+    /// The chat starts over: what it shows is about to be rebuilt from a replay of the agent's own session.
+    fn start_over(&self) {
+        if let Some(journal) = &self.journal {
+            journal.reset();
+        }
+        self.interrupted.store(false, Ordering::SeqCst);
+        self.feed.clear();
+        *self.mapper.lock() = Mapper::for_config(self.session.config());
+        self.pending_user.lock().take();
+    }
+
+    /// A viewer asked to read a chat that was brought back after a restart and has nothing to show yet: the
+    /// adapter starts in the background and loads the conversation (the replay fills the chat). Once per chat; a
+    /// failure is a notice in the chat, and the next message tries again.
+    fn wake_for_reader(&self) {
+        let Some(conversations) = &self.conversations else { return };
+        if self.is_closed() || !self.feed.is_empty() || self.session.held_by().is_some() {
+            return;
+        }
+        if self.session.snapshot().phase != Phase::Dormant {
+            return;
+        }
+        if !conversations.record(&self.pane_id).is_some_and(|r| r.session_id.is_some()) {
+            return;
+        }
+        if self.waking.swap(true, Ordering::SeqCst) {
+            return;
+        }
+        let session = self.session.clone();
+        std::thread::spawn(move || {
+            let _ = session.ensure_running();
+        });
+    }
+
+    /// The person is about to type in a chat whose adapter is not running (it came back after a restart): start it in
+    /// the background so its slash commands are there by the time they type "/". No message is sent. Once per chat.
+    pub fn warm(&self) {
+        if self.is_closed() || self.session.held_by().is_some() || self.session.snapshot().phase != Phase::Dormant {
+            return;
+        }
+        let Some(conversations) = &self.conversations else { return };
+        if !conversations.record(&self.pane_id).is_some_and(|r| r.session_id.is_some()) {
+            return;
+        }
+        if self.waking.swap(true, Ordering::SeqCst) {
+            return;
+        }
+        let session = self.session.clone();
+        std::thread::spawn(move || {
+            let _ = session.ensure_running();
+        });
+    }
+
+    /// Changes a setting the agent offers (model, mode, effort) with `session/set_config_option`. The value must be
+    /// one the agent lists for that option. Never typed into the chat as a command.
+    pub fn set_config(&self, option_id: &str, value: &str) -> Result<(), AcpError> {
+        let offered = self.session.snapshot().config_options.iter().any(|option| {
+            option.get("id").and_then(Value::as_str) == Some(option_id)
+                && option.get("options").and_then(Value::as_array).is_some_and(|list| list.iter().any(|v| v.get("value").and_then(Value::as_str) == Some(value)))
+        });
+        if !offered {
+            return Err(AcpError::BadOption(format!("{option_id}={value}")));
+        }
+        self.session.set_config_option(option_id, Value::String(value.to_string()))?;
+        self.host.state_changed(&self.pane_id, &self.state());
+        Ok(())
+    }
+
+    /// The tool kinds this chat no longer asks about, sorted.
+    pub fn auto_allowed_kinds(&self) -> Vec<String> {
+        self.auto_allow.lock().iter().cloned().collect()
+    }
+
+    /// The person's "Don't ask again in this chat" for one kind of tool call (on), or "turn back on" (off). Only kinds
+    /// `cards::auto_allowable` names can be set. Nothing is saved: it ends with the chat.
+    pub fn set_auto_allow(&self, kind: &str, on: bool) -> Result<(), String> {
+        if on && !cards::auto_allowable(kind) {
+            return Err(format!("INVALID_ARGUMENT: asks about \"{kind}\" always need your answer"));
+        }
+        let changed = if on { self.auto_allow.lock().insert(kind.to_string()) } else { self.auto_allow.lock().remove(kind) };
+        if changed {
+            crate::audit::record(
+                crate::audit::Kind::Approval,
+                crate::audit::Who::Desktop,
+                if on { "You stopped being asked about one kind of action in a chat session" } else { "You turned asking back on for one kind of action in a chat session" },
+                json!({ "pane_id": self.pane_id, "kind": kind, "on": on }),
+            );
+            self.host.state_changed(&self.pane_id, &self.state());
+            if on {
+                self.reconcile_cards();
+            }
+        }
+        Ok(())
+    }
+
+    /// Whether agents may answer this chat's permission questions.
+    pub fn agent_answering(&self) -> bool {
+        self.agent_answering.load(Ordering::SeqCst)
+    }
+
+    /// The person's switch. Only the app's own window reaches this (a Tauri command); no bridge route does.
+    pub fn set_agent_answering(&self, allowed: bool) {
+        if self.agent_answering.swap(allowed, Ordering::SeqCst) != allowed {
+            crate::audit::record(
+                crate::audit::Kind::Approval,
+                crate::audit::Who::Desktop,
+                if allowed { "You let agents answer permission questions in a chat session" } else { "You stopped agents answering permission questions in a chat session" },
+                json!({ "pane_id": self.pane_id, "allowed": allowed }),
+            );
+            self.host.state_changed(&self.pane_id, &self.state());
+        }
+    }
+
+    /// An agent answers a permission question of this chat with one of the agent's own options, only when the
+    /// person allowed it (`set_agent_answering`). `prompt` is the card's question id (or the ask number) and `choice`
+    /// one of the offered option ids. The answer goes through the question store exactly like the person's, so the
+    /// card closes, the audit line is written and the choice reaches the agent. Returns the option's name.
+    pub fn answer_for_agent(&self, prompt: &str, choice: &str, who: crate::audit::Who) -> Result<String, AgentAnswerError> {
+        if self.is_closed() {
+            return Err(AgentAnswerError::Closed);
+        }
+        // The person's switch for this chat answers everything. Without it, the agent that started a helper may answer the safe
+        // questions when the setting is on (`helper_answers`).
+        let person_allowed = self.agent_answering();
+        if !person_allowed && !(self.answers_on() && self.started_by().is_some()) {
+            return Err(AgentAnswerError::NotAllowed);
+        }
+        self.reconcile_cards();
+        let (question_id, option, ask_id) = {
+            let cards = self.cards.lock();
+            let found = cards.iter().find(|(ask_id, card)| !card.resolved && (card.question_id == prompt || ask_id.to_string() == prompt));
+            let Some((ask_id, card)) = found else { return Err(AgentAnswerError::NoSuchQuestion) };
+            let Some(option) = card.options.iter().find(|o| o.choice_id == choice || o.option_id == choice) else {
+                return Err(AgentAnswerError::BadChoice(card.options.iter().map(|o| o.option_id.clone()).collect()));
+            };
+            (card.question_id.clone(), option.clone(), *ask_id)
+        };
+        if !person_allowed {
+            let snapshot = self.session.snapshot();
+            if let Some(wait) = snapshot.permission_waits.iter().find(|w| w.ask_id == ask_id) {
+                let words = self.ask_words(wait);
+                if let Some(why) = helper_answers::needs_person(&words, wait.tool_kind.as_deref().unwrap_or(""), &option.kind, self.session.cwd()) {
+                    return Err(AgentAnswerError::NeedsPerson(why));
+                }
+            }
+        }
+        let resolution = questions::store().answer(&question_id, Some(&option.choice_id), None, "agent", questions::now_ms()).map_err(|e| AgentAnswerError::Failed(format!("{}: {}", e.code, e.message)))?;
+        if !resolution.accepted {
+            return Err(AgentAnswerError::NoSuchQuestion);
+        }
+        crate::audit::record(
+            crate::audit::Kind::Approval,
+            who,
+            &format!("An agent answered a question in a chat session ({}): {}", self.label, option.name),
+            json!({ "pane_id": self.pane_id, "prompt_id": question_id, "choice": option.option_id }),
+        );
+        Ok(option.name)
+    }
+
+    // ---- state -------------------------------------------------------------------------------------------
+
+    /// The session as a viewer needs it: phase, "stopping", what waits on the person, the settings the agent
+    /// exposes. Raises a card for a question that has none.
+    pub fn state(&self) -> Value {
+        let snapshot = self.session.snapshot();
+        let person_allowed = self.agent_answering();
+        let helper_may = self.answers_on() && self.started_by().is_some();
+        let cwd = self.session.cwd().to_path_buf();
+        let cards = self.cards.lock();
+        let permissions: Vec<Value> = snapshot
+            .permission_waits
+            .iter()
+            .map(|wait| {
+                let card = cards.get(&wait.ask_id);
+                // Which options the agent that started this chat may pick (`helper_answers`), and why not the others.
+                let words = self.ask_words(wait);
+                let agent_options: Vec<Value> = card
+                    .map(|c| c.options.iter().filter(|o| person_allowed || (helper_may && helper_answers::needs_person(&words, wait.tool_kind.as_deref().unwrap_or(""), &o.kind, &cwd).is_none())).map(|o| json!(o.choice_id)).collect())
+                    .unwrap_or_default();
+                let agent_why = (helper_may && !person_allowed).then(|| card.and_then(|c| c.options.iter().find(|o| o.kind == "allow_once").and_then(|o| helper_answers::needs_person(&words, wait.tool_kind.as_deref().unwrap_or(""), &o.kind, &cwd)))).flatten();
+                json!({
+                    "agentOptions": agent_options,
+                    // A minion's ask: `agent` (only its agent answers) or `person` (a risky one, docked in the parent's chat).
+                    "audience": card.filter(|_| self.is_minion()).map(|c| if c.quiet { "agent" } else { "person" }),
+                    "agentWhy": agent_why,
+                    "askId": wait.ask_id,
+                    "title": wait.title,
+                    "toolKind": wait.tool_kind,
+                    "questionId": card.map(|c| c.question_id.clone()),
+                    "options": card.map(|c| c.options.iter().map(|o| json!({ "id": o.choice_id, "name": o.name, "kind": o.kind })).collect::<Vec<_>>()),
+                    "sinceMs": wait.since_ms,
+                })
+            })
+            .collect();
+        drop(cards);
+        let in_terminal = self.conversations.as_ref().and_then(|c| match c.writer(&self.pane_id) {
+            Some(Writer::Terminal { pane_id }) => Some(json!({ "paneId": pane_id })),
+            _ => None,
+        });
+        let copy = self.conversations.as_ref().and_then(|c| c.copy_of(&self.pane_id));
+        let mut state = json!({
+            "lane": LANE,
+            "agent": self.agent_id,
+            "label": self.label,
+            "phase": serde_json::to_value(snapshot.phase).unwrap_or(Value::Null),
+            "status": self.person_status(&snapshot).as_str(),
+            "turnInFlight": snapshot.turn_in_flight(),
+            // What it is doing right now: the newest tool that has not ended ("Run command dir"). A short live line for the lists.
+            "doing": (snapshot.phase == Phase::Working).then(|| snapshot.running_tools.iter().rev().map(|t| t.title.trim()).find(|t| !t.is_empty()).map(|t| t.chars().take(120).collect::<String>())).flatten(),
+            "stopping": snapshot.phase == Phase::Cancelling,
+            "quietSecs": snapshot.quiet_secs,
+            "canSteer": self.can_steer(),
+            "turn": snapshot.turn,
+            "epoch": snapshot.epoch,
+            "revision": snapshot.revision,
+            "title": snapshot.title,
+            "usage": snapshot.usage.map(|u| json!({ "used": u.used, "size": u.size })),
+            "commands": snapshot.commands.iter().map(|c| json!({ "name": c.name, "description": c.description, "hint": c.hint })).collect::<Vec<_>>(),
+            "configOptions": snapshot.config_options,
+            "modes": snapshot.modes,
+            "historyLost": snapshot.history_lost.as_ref().map(|h| json!({ "reason": h.reason })),
+            "permissions": permissions,
+            "exit": snapshot.exit.as_ref().map(|e| json!({ "kind": serde_json::to_value(e.kind).unwrap_or(Value::Null), "code": e.code, "reason": e.reason })),
+            "closed": self.is_closed(),
+            "conversation": self.conversations.as_ref().map(|_| self.pane_id.clone()),
+            "inTerminal": in_terminal,
+            "agentAnswering": self.agent_answering(),
+            "forceYes": self.force_yes(),
+            "fences": self.fences().len(),
+            "autoAllow": self.auto_allowed_kinds(),
+            "interruptedTurn": self.interrupted.load(Ordering::SeqCst),
+            "signIn": { "needed": self.sign_in_needed(), "hint": self.session.config().addon.signin_hint, "text": self.sign_in_text() },
+        });
+        // Only a chat that works on a copy says so (the keep / throw-away buttons are drawn from it).
+        if let Some(copy) = copy {
+            state["copy"] = json!({ "kind": copy.kind });
+        }
+        // Only a chat that another device drives (or that this PC took back) says so.
+        let drive = self.drive.lock().view(Instant::now(), &|id| if id == crate::device_identity::LOCAL_ID { crate::device_identity::local_name() } else { crate::device_identity::name_or(id, "Another device") });
+        if !drive.is_null() {
+            state["drive"] = drive;
+        }
+        state
+    }
+}
+
+impl PushedSource for AcpChat {
+    fn changes(&self, known: Option<PushedPos>) -> Option<PushedChanges> {
+        if self.feed.is_closed() {
+            return None;
+        }
+        // A reader that asks is a viewer that may have missed a card (a reloaded view, a phone that came back).
+        self.reconcile_cards();
+        self.wake_for_reader();
+        Some(self.feed.changes_since(known))
+    }
+
+    fn waiting(&self) -> String {
+        WAITING.to_string()
+    }
+
+    fn state(&self) -> Option<Value> {
+        Some(AcpChat::state(self))
+    }
+}
+
+/// The agent wants the person to sign in first (its `authMethods` with nothing signed in, or its auth error).
+fn needs_sign_in(error: &AcpError) -> bool {
+    matches!(error, AcpError::AuthRequired { .. } | AcpError::Rpc { code: crate::acp::error::RPC_AUTH_REQUIRED, .. })
+}
+
+fn send_error(error: &AcpError) -> SendError {
+    match error {
+        AcpError::Busy => SendError::Busy,
+        AcpError::SessionClosed => SendError::Gone,
+        AcpError::AuthRequired { .. } => SendError::Refused("The agent needs you to sign in.".into()),
+        AcpError::Rpc { code: -32000, .. } => SendError::Refused("The agent needs you to sign in.".into()),
+        AcpError::HistoryLost => SendError::Refused("The earlier conversation could not be brought back. Send again to start a new one.".into()),
+        AcpError::Held(_) => SendError::Refused("This conversation is open in a terminal. Go back to the chat first.".into()),
+        other => SendError::Refused(format!("The message was not sent: {other}")),
+    }
+}

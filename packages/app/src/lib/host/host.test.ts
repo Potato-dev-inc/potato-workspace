@@ -8,6 +8,7 @@ vi.mock('@tauri-apps/api/event', () => ({ listen: vi.fn(async () => () => {}) })
 import { acpChatApi } from '../acpChat';
 import { DevicesFake, MAC_MINI, MAC_PANES, NODE_MAC } from '../../dev/devices-fixtures';
 import { makePcLinkClient } from '../runtime/pclink';
+import { sayError } from '../sayError';
 import { farHost } from './far';
 import { localHost } from './local';
 import { placeKey } from './placeKey';
@@ -51,6 +52,21 @@ describe('Host seam', () => {
     expect(request.mock.calls.map((c) => c[3])).toEqual([{ paneId: 'p1', on: true }, { paneId: 'p1', on: true, hold: true }]);
     request.mockResolvedValue({ status: 409, body: { code: 'NEEDS_HOLD', error: 'Allow it on that PC itself.' } } as never);
     await expect(host.invoke('acp_chat_set_force_yes', { paneId: 'p1', on: true })).rejects.toThrow('Allow it on that PC itself.');
+  });
+
+  it('a far refusal keeps its code (a file conflict is still told apart) and a reply with no sentence never shows the raw request', async () => {
+    const f = new DevicesFake({ enabled: true, devices: [MAC_MINI], panes: { [NODE_MAC]: MAC_PANES } });
+    f.farLevels[NODE_MAC] = 'full';
+    const request = vi.spyOn(f, 'request');
+    const host = farHost(makePcLinkClient(NODE_MAC, f), f, { name: 'Mac mini' });
+    request.mockResolvedValue({ status: 400, body: { code: 'FILES_CONFLICT', error: 'That file changed on the disk.' } } as never);
+    const conflict = await host.invoke('files_write', { paneId: 'p1' }).catch((e: unknown) => e);
+    expect(sayError(conflict).details).toContain('Code: FILES_CONFLICT');
+    expect(sayError(conflict).text).toBe('That file changed on the disk.');
+    request.mockResolvedValue({ status: 502, body: {} } as never);
+    await expect(host.invoke('files_write', { paneId: 'p1' })).rejects.toThrow('Could not reach that PC.');
+    request.mockResolvedValue({ status: 404, body: { code: 'UNKNOWN_ROUTE', error: 'not found' } } as never);
+    await expect(host.invoke('files_write', { paneId: 'p1' })).rejects.toThrow('Not on Mac mini yet.');
   });
 
   it('the message box and the feed ride the call rows and the app frames: send, then the items frame under the pane key', async () => {
@@ -98,8 +114,8 @@ describe('Host seam', () => {
     const request = vi.spyOn(f, 'request');
     const host = farHost(makePcLinkClient(NODE_MAC, f), f, { name: 'Mac mini' });
     expect(host.can!('acp_chat_set_config')).toBe(true);
-    expect(host.can!('attachment_prepare')).toBe(false);
-    await expect(host.invoke('attachment_prepare', { paneId: 'p1', paths: [] })).rejects.toThrow('Not on Mac mini yet.');
+    expect(host.can!('handoff_open_file')).toBe(false);
+    await expect(host.invoke('handoff_open_file', { paneId: 'p1' })).rejects.toThrow('Not on Mac mini yet.');
     expect(request).not.toHaveBeenCalled();
     expect(localHost.can).toBeUndefined();
   });

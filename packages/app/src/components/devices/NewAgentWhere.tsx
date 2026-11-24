@@ -22,6 +22,7 @@ import { NewAgentPage, type DevicePicker, type RemoteInfo } from '../cockpit/new
 import type { ProjectChoice } from '../cockpit/NewAgentMenu';
 import { useDeviceProjects } from '../../lib/runtime/deviceProjects';
 import { RemoteFolderSheet } from './RemoteFolderSheet';
+import { lendMine, useMyOwnAgents } from '../../lib/host/ownAgents';
 import { gitStateOf, remotePathOf, useRemoteNewAgent, type RemoteNewAgent, type RemoteStatus } from '../../lib/runtime/remoteNewAgent';
 import { SshPanel, WslPanel } from './PlacePanels';
 import { isLocalPlace, savedPlace, savePlace } from '../../lib/newAgentPlace';
@@ -91,6 +92,8 @@ function friendlyPlace(label: string, sandbox: string): string {
 /** What a picked device hands the page: its sources, and whether they have loaded. */
 export interface RemoteSlot {
   remote: RemoteNewAgent;
+  /** "Use my own agents": this PC's name and the agents of this PC it can lend to the picked PC. Absent: nothing to offer. */
+  mine?: RemoteInfo['mine'];
   /** The far PC lets this PC only watch: the page shows one line instead of Start. */
   agentsOff?: RemoteInfo['agentsOff'];
   status: RemoteStatus;
@@ -222,12 +225,19 @@ export function NewAgentWhere({ where, children, remember, preselect }: { where?
   // New agent for this project opens there again.
   const onStartedRef = useRef(where?.onStarted);
   onStartedRef.current = where?.onStarted;
+  // "Use my own agents": this PC's agents that can be lent for a chat that runs on the picked PC. Not for this PC itself.
+  const myAgents = useMyOwnAgents(!!picked);
+  const myAgentsRef = useRef(myAgents);
+  myAgentsRef.current = myAgents;
+  const lend = useMemo(() => (picked && client ? lendMine({ host: farHost(client, api, { name: picked.name, caps: ALL_CAPS }), node: picked.node, deviceName: picked.name }) : undefined), [client, api, picked?.node, picked?.name]); // eslint-disable-line react-hooks/exhaustive-deps
   const far = useRemoteNewAgent(
     picked && client
       ? {
           client,
           node: picked.node,
           deviceName: picked.name,
+          lend,
+          agentName: (id) => myAgentsRef.current?.find((a) => a.agentId === id)?.label ?? id,
           canControl: () => levelRef.current === 'full',
           notify: (text) => where?.notify?.(text),
           onStarted: (paneId, chat) => {
@@ -271,7 +281,7 @@ export function NewAgentWhere({ where, children, remember, preselect }: { where?
   // The page of a picked PC reads through that PC's host: its agents, folders, models and pins are its own answers.
   const pickedHost = useMemo(() => (picked && client ? farHost(client, api, { name: picked.name, caps: full ? ALL_CAPS : WATCH_CAPS }) : null), [client, api, picked?.name, full]); // eslint-disable-line react-hooks/exhaustive-deps
   const inline = typeof children === 'function';
-  const slot: RemoteSlot | null = picked && far.remote ? { remote: far.remote, agentsOff, status: far.status, blocked: full ? null : t('newAgent.remote.watchOnly', { name: picked.name }) } : null;
+  const slot: RemoteSlot | null = picked && far.remote ? { remote: far.remote, mine: myAgents && where?.view ? { thisName: where.view.name, agents: myAgents } : undefined, agentsOff, status: far.status, blocked: full ? null : t('newAgent.remote.watchOnly', { name: picked.name }) } : null;
   const groupsOf = useDeviceProjects(where?.view ?? null, api, enabled);
   const picker: DevicePicker | null =
     enabled && groupsOf.groups.length > 0
@@ -426,7 +436,7 @@ export function NewAgentWhere({ where, children, remember, preselect }: { where?
                 needs={[]}
                 onStart={slot.remote.onStart}
                 onOpenPane={() => {}}
-                remote={{ deviceName: slot.remote.deviceName, terminals: slot.remote.terminals, blocked: slot.blocked, onWarm: slot.remote.warm, agentsOff }}
+                remote={{ deviceName: slot.remote.deviceName, terminals: slot.remote.terminals, blocked: slot.blocked, copy: !slot.blocked && !agentsOff, onWarm: slot.remote.warm, agentsOff, mine: slot.mine }}
               />
             </div>
           )}

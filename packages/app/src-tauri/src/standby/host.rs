@@ -71,7 +71,6 @@ impl LiveHost {
         crate::pty::hidden::hide(&pane_id);
         match crate::pty::registry_spawn_pane(
             &self.registry,
-            &self.app,
             SpawnPaneArgs {
                 agent_type: key.agent_type.clone(),
                 cwd: Some(cwd.to_string()),

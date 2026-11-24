@@ -10,9 +10,9 @@ use crate::tui::profile_for;
 use std::sync::Arc;
 use std::time::Duration;
 
-const CODEX_UPDATE_MENU: &str = include_str!("../tui/codex/fixtures/update_prompt_live.txt");
-const CODEX_READY: &str = include_str!("../tui/codex/fixtures/standby_ready_live.txt");
-const CLAUDE_TRUST: &str = include_str!("../tui/claude/fixtures/trust_dialog_2_1_299.txt");
+const CODEX_UPDATE_MENU: &str = include_str!("../../crates/pm-core/src/tui/codex/fixtures/update_prompt_live.txt");
+const CODEX_READY: &str = include_str!("../../crates/pm-core/src/tui/codex/fixtures/standby_ready_live.txt");
+const CLAUDE_TRUST: &str = include_str!("../../crates/pm-core/src/tui/claude/fixtures/trust_dialog_2_1_299.txt");
 const UNRECOGNISED: &str = "  Codex 0.171\n\n  Pick a colour theme to continue\n    a) light     b) dark\n";
 const HOST_SHELL: &str = "PS D:\\pm-scratch-canary\\codex>";
 

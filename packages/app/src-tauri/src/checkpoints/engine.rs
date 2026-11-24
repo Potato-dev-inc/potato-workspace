@@ -130,6 +130,9 @@ pub struct Checkpoint {
     pub kind: String,
     pub label: String,
     pub note: String,
+    /// Set on the "Before undo" row of a restore: the id of the save point the files were put back to.
+    #[serde(skip_serializing_if = "String::is_empty")]
+    pub restored_to: String,
     pub at_ms: u64,
     pub files: u32,
     pub added: u32,
@@ -167,6 +170,8 @@ pub struct RestoreReport {
     pub written: u32,
     pub removed: u32,
     pub failed: Vec<String>,
+    /// Every file the restore changed (project-relative), so the screens can stop listing them as the agent's changes.
+    pub paths: Vec<String>,
     /// The safety checkpoint, when this restore really wrote a new one (not when the newest was
     /// already equal). The Today page's journal records it. Not sent to the UI.
     #[serde(skip)]
@@ -403,6 +408,7 @@ fn parse_message(id: String, commit: &str, tree: &str, pane: &str, body: &str) -
         kind: "before".into(),
         label: String::new(),
         note: String::new(),
+        restored_to: String::new(),
         at_ms: 0,
         files: 0,
         added: 0,
@@ -419,6 +425,7 @@ fn parse_message(id: String, commit: &str, tree: &str, pane: &str, body: &str) -
             "pm-turn" => c.turn = v.parse().unwrap_or(0),
             "pm-kind" => c.kind = Kind::parse(v).as_str().into(),
             "pm-note" => c.note = v.into(),
+            "pm-restored" => c.restored_to = v.into(),
             "pm-at" => c.at_ms = v.parse().unwrap_or(0),
             "pm-files" => c.files = v.parse().unwrap_or(0),
             "pm-added" => c.added = v.parse().unwrap_or(0),
@@ -559,16 +566,38 @@ pub(super) fn snapshot_locked(
     limits: &Limits,
     turn_hint: Option<u32>,
 ) -> Result<Snapshot, CheckpointError> {
+    snapshot_locked_for(shadow, pane, kind, note, now_ms, limits, turn_hint, None)
+}
+
+/// `snapshot_locked`; `restored_to` is the save point a restore is about to put the files back to. Such a "Before undo"
+/// row is always written, even when the files equal the newest save point: History then shows the promised row, and the
+/// review knows the turn was undone.
+#[allow(clippy::too_many_arguments)]
+pub(super) fn snapshot_locked_for(
+    shadow: &Shadow,
+    pane: &str,
+    kind: Kind,
+    note: Option<&str>,
+    now_ms: u64,
+    limits: &Limits,
+    turn_hint: Option<u32>,
+    restored_to: Option<&str>,
+) -> Result<Snapshot, CheckpointError> {
     let index = index_path(shadow, pane);
     let big = scan(shadow, &index, limits)?;
     stage_all(shadow, &index, &big)?;
     let tree = shadow.run(&["write-tree"], Some(&index), None, &[])?.text();
     let existing = list_in(shadow, pane)?;
     let newest = existing.last();
-    if newest.is_some_and(|c| c.tree == tree) {
+    if restored_to.is_none() && newest.is_some_and(|c| c.tree == tree) {
         return Ok(Snapshot::Unchanged(newest.cloned()));
     }
-    let prev_tree = newest.map(|c| c.tree.clone()).unwrap_or_else(|| EMPTY_TREE.into());
+    // A "Before undo" row counts what the restore will change: the files that differ from the save point put back.
+    let prev_tree = restored_to
+        .and_then(|target| existing.iter().find(|c| c.id == target))
+        .or(newest)
+        .map(|c| c.tree.clone())
+        .unwrap_or_else(|| EMPTY_TREE.into());
     let rows = numstat(shadow, &prev_tree, &tree)?;
     let files = rows.len() as u32;
     let added = rows.iter().map(|r| r.1).sum::<u32>();
@@ -588,6 +617,10 @@ pub(super) fn snapshot_locked(
     );
     if !note_clean.trim().is_empty() {
         message.push_str(&format!("pm-note: {}\n", note_clean.trim()));
+    }
+    if let Some(target) = restored_to {
+        message.push_str(&format!("pm-restored: {target}
+"));
     }
     message.push_str(&format!("pm-at: {now_ms}\npm-files: {files}\npm-added: {added}\npm-deleted: {deleted}\n"));
     let date = format!("@{} +0000", now_ms / 1000);
@@ -698,7 +731,12 @@ pub fn diff(project: &Path, pane: &str, id: &str) -> Result<Vec<FileChange>, Che
     }
     let items = list_in(&shadow, pane)?;
     let at = find(&items, id)?;
-    let prev = if at == 0 { EMPTY_TREE.to_string() } else { items[at - 1].tree.clone() };
+    let restored = Some(items[at].restored_to.as_str()).filter(|r| !r.is_empty()).and_then(|r| items.iter().find(|c| c.id == r));
+    let prev = match (restored, at) {
+        (Some(target), _) => target.tree.clone(),
+        (None, 0) => EMPTY_TREE.to_string(),
+        (None, _) => items[at - 1].tree.clone(),
+    };
     changes_between(&shadow, &prev, &items[at].tree)
 }
 
@@ -959,7 +997,7 @@ fn restore_series(
     let items = list_in(&shadow, target_key)?;
     let target = items[find(&items, id)?].clone();
     let mut report = RestoreReport::default();
-    let safety = snapshot_locked(&shadow, safety_key, Kind::Undo, None, now_ms, limits, None)?;
+    let safety = snapshot_locked_for(&shadow, safety_key, Kind::Undo, None, now_ms, limits, None, Some(id))?;
     report.safety_id = match &safety {
         Snapshot::Created(c) => Some(c.id.clone()),
         Snapshot::Unchanged(c) => c.as_ref().map(|c| c.id.clone()),
@@ -971,6 +1009,7 @@ fn restore_series(
     // The index now mirrors the disk, so this tree is "what is there now".
     let current = shadow.run(&["write-tree"], Some(&index), None, &[])?.text();
     let rows = name_status(&shadow, &current, &target.tree)?;
+    report.paths = rows.iter().map(|(_, p)| p.clone()).collect();
     let mut to_write: Vec<String> = Vec::new();
     for (status, path) in &rows {
         let Some(rel) = safe_relative(path) else {

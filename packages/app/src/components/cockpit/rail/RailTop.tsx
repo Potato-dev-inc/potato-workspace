@@ -4,19 +4,23 @@
 import { useT } from '../../../i18n';
 import { AgentLogo } from '../../common/AgentLogo';
 
-export type RailState = 'working' | 'needs' | 'done' | 'ready' | 'stopped';
+export type RailState = 'working' | 'needs' | 'done' | 'ready' | 'stopped' | 'away' | 'ended';
 
 /** The pill's state from the pane's status; `fresh` is a chat with no turns yet. */
-export function railState(status: string, fresh: boolean): RailState {
+export function railState(status: string, fresh: boolean, ended = false): RailState {
+  // A far chat that ended while its PC was off: grey "Ended", not a red "Stopped".
+  if (ended) return 'ended';
   if (status === 'running') return 'working';
   if (status === 'waiting_input') return 'needs';
-  if (status === 'error') return 'stopped';
+  if (status === 'error' || status === 'exited') return 'stopped';
+  if (status === 'away') return 'away';
   return fresh ? 'ready' : 'done';
 }
 
 export function RailTop({
   agentType,
   agentName,
+  title,
   tip,
   state,
   helperOf,
@@ -26,6 +30,8 @@ export function RailTop({
 }: {
   agentType: string;
   agentName: string;
+  /** The chat's own name when the person renamed it; shown instead of the agent name. */
+  title?: string;
   /** Model, version and account: shown when the name is hovered. */
   tip?: string;
   state: RailState;
@@ -40,10 +46,10 @@ export function RailTop({
     <>
       <div className="rp-top" data-testid="rail-top">
         <AgentLogo id={agentType} name={agentName} size={16} decorative />
-        <b title={tip}>{agentName}</b>
+        <b title={tip}>{title || agentName}</b>
         <span className={`rp-pill is-${state}`} data-testid="rail-pill">
           {(state === 'working' || state === 'needs') && <span className={`rp-dot is-${state}`} aria-hidden="true" />}
-          {t(`rail.state.${state}` as 'rail.state.working')}
+          {state === 'ended' ? t('r21fn.ended.word') : t(`rail.state.${state}` as 'rail.state.working')}
         </span>
       </div>
       {helperOf && (

@@ -1,0 +1,62 @@
+# Lend through my PC (Labs "lend_enabled", `crate::capacity_proxy`): OpenCode with an Anthropic API key, as data.
+# The key never leaves the lending PC. The borrowing PC's OpenCode sends its Anthropic Messages calls to a local shim, which carries them
+# over the PC link to the lender; the lender adds its own key and forwards them to the ONE upstream below, for the listed pairs only.
+#
+# Why only an Anthropic key: a spec has one upstream and one wire shape, and OpenCode talks to whichever provider the person set up.
+# Anthropic's is the one this app already meters and forwards (the same shape as Claude's), so it is the one OpenCode can be pointed at.
+# Another provider's key, or an OpenCode sign-in (opencode.ai's own gateway), is not lendable yet: the screens show `account_not_yet`.
+#
+# What was run (lend lab, 2026-11-22, OpenCode 2.2.7 on Windows, a fake Anthropic gateway on this machine, never a real key, so "lab"):
+# - real `opencode run --standalone` and real `opencode acp` (initialize, session/new, session/prompt) sent `POST /<secret>/v1/messages?beta=true` to the
+#   gateway with only the placeholder `x-api-key` and answered PONG (the query is not part of the path match). Those runs used the inline config below
+#   with scratch XDG_DATA/CONFIG/CACHE/STATE folders and the service port set by `opencode service set port`. The spec scratches only XDG_CONFIG_HOME.
+# - NOT run: the terminal screen (no TTY in the lab; `acp.toml` marks OpenCode 2.x `chat_only`, so the terminal may not take a typed prompt at all),
+#   a pane started by the app with this env, and two PCs. The real shim and forwarder are exercised by `agents_e2e_tests` (OPENCODE case), with raw HTTP
+#   as the client, not OpenCode.
+# - OpenCode 2.x runs its turns in a background "managed service" on a fixed port (28894), started by the first OpenCode command (it inherited that
+#   command's environment in the run above). Seen: `opencode models` failed with "Managed service port 28894 ... already in use" while another OpenCode's
+#   service ran. A service that is already running has its OWN environment, so a pane's environment cannot reach it. The lend therefore gives the pane
+#   a scratch XDG_CONFIG_HOME whose `opencode/service.json` names another port (28895): the first lent OpenCode starts a service of its own with the
+#   lend's config, and a lent chat and a lent terminal of the SAME lend share it. Limits (shortcuts): two different lends of OpenCode on one PC at once
+#   would meet on that port (own-PC lends are one per PC and agent, so "Use my own agents" does not do it); a service left over from an ended lend
+#   would keep the old shim address (the lab's service stopped by itself when its client closed); every tool the agent runs inherits the scratch
+#   XDG_CONFIG_HOME (git and gh read their own config from it, so they run without the person's config).
+# Whether to offer it at "lab" before it is run on two PCs is the lead's call (PLAN: "not offered until P6.4 proves a spec").
+agent_id = "opencode"
+support = "lab"
+
+shape = "anthropic_messages_sse"
+upstream = "https://api.anthropic.com"
+paths = ["POST /v1/messages", "POST /v1/messages/count_tokens", "GET /v1/models", "GET /v1/models/*"]
+max_body_bytes = 16777216
+
+[auth]
+account_not_yet = "OpenCode signed in with another provider is not supported yet. Only an Anthropic API key can be lent."
+
+# A pasted Anthropic API key (kept in the OS credential store, never in a file).
+[auth.api_key]
+header = "x-api-key"
+scheme = ""
+
+# Terminal. OpenCode reads one inline config (`OPENCODE_CONFIG_CONTENT`) over its own files: the Anthropic provider is pointed at the shim, with the
+# grant's secret as its key, and every other provider is switched off, so the pane can only talk to the shim (plus models.dev for the model
+# list, which carries no credential). The secret lives only in this pane's environment, never in a file. The scratch XDG_CONFIG_HOME also means
+# the borrower's own OpenCode config is not read.
+[hookup]
+set = [
+  { name = "OPENCODE_CONFIG_CONTENT", value = '{"provider":{"anthropic":{"options":{"baseURL":"{base_url}/v1","apiKey":"{secret}"}}},"enabled_providers":["anthropic"],"autoupdate":false,"share":"disabled"}' },
+]
+home_env = "XDG_CONFIG_HOME"
+remove_prefixes = ["OPENCODE_", "ANTHROPIC_"]
+remove = ["ANTHROPIC_API_KEY", "ANTHROPIC_BASE_URL", "ANTHROPIC_AUTH_TOKEN", "ANTHROPIC_MODEL", "ANTHROPIC_CUSTOM_HEADERS"]
+files = [{ path = "opencode/service.json", content = '{"port":28895}' }]
+
+# Chat: `opencode acp`, the same environment (no `authenticate` call: the key is in the config).
+[chat]
+set = [
+  { name = "OPENCODE_CONFIG_CONTENT", value = '{"provider":{"anthropic":{"options":{"baseURL":"{base_url}/v1","apiKey":"{secret}"}}},"enabled_providers":["anthropic"],"autoupdate":false,"share":"disabled"}' },
+]
+home_env = "XDG_CONFIG_HOME"
+remove_prefixes = ["OPENCODE_", "ANTHROPIC_"]
+remove = ["ANTHROPIC_API_KEY", "ANTHROPIC_BASE_URL", "ANTHROPIC_AUTH_TOKEN", "ANTHROPIC_MODEL", "ANTHROPIC_CUSTOM_HEADERS"]
+files = [{ path = "opencode/service.json", content = '{"port":28895}' }]

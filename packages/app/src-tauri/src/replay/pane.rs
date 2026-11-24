@@ -387,7 +387,7 @@ mod tests {
     /// them in this order, which is the cue to update `ReplayPane::output`.
     #[test]
     fn the_status_steps_match_the_pty_reader() {
-        let reader = include_str!("../pty/registry/spawn.rs");
+        let reader = include_str!("../../crates/pm-core/src/pty/registry/spawn.rs");
         let order = ["status::busy_marker(", "status::classify_agent_observation_in(", "status::settle_status_after_resize(", "resize_clock::recently_resized("];
         let mut from = 0;
         for call in order {
@@ -412,8 +412,8 @@ mod tests {
     /// still; the status moves on when the screen does.
     #[test]
     fn a_pane_showing_a_startup_gate_never_reads_idle() {
-        let menu = include_str!("../tui/codex/fixtures/update_prompt_0_164_live.txt");
-        let ready = include_str!("../tui/codex/fixtures/standby_ready_live.txt");
+        let menu = include_str!("../../crates/pm-core/src/tui/codex/fixtures/update_prompt_0_164_live.txt");
+        let ready = include_str!("../../crates/pm-core/src/tui/codex/fixtures/standby_ready_live.txt");
         let mut pane = ReplayPane::new(cast_of("codex", &[(0.2, menu), (300.0, ready)]));
         pane.run_to(Duration::from_secs(1));
         assert_eq!(pane.status(), PaneStatus::WaitingInput);
@@ -427,8 +427,8 @@ mod tests {
 
     #[test]
     fn an_idle_pane_that_a_startup_gate_covers_stops_reading_idle() {
-        let menu = include_str!("../tui/codex/fixtures/update_prompt_0_164_live.txt");
-        let ready = include_str!("../tui/codex/fixtures/standby_ready_live.txt");
+        let menu = include_str!("../../crates/pm-core/src/tui/codex/fixtures/update_prompt_0_164_live.txt");
+        let ready = include_str!("../../crates/pm-core/src/tui/codex/fixtures/standby_ready_live.txt");
         let mut pane = ReplayPane::new(cast_of("codex", &[(0.2, ready), (100.0, menu)]));
         pane.run_to(Duration::from_secs(60));
         assert_eq!(pane.status(), PaneStatus::Idle);

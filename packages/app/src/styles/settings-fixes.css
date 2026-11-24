@@ -18,6 +18,9 @@
 /* ---------- title divider and fade once the page has scrolled ---------- */
 .settings .st-title {
   position: relative;
+  z-index: 4;
+  /* Opaque: rows scrolling up never show through the title. */
+  background: var(--window);
   border-bottom: 1px solid transparent;
 }
 .settings .st-title[data-scrolled='true'] {
@@ -30,7 +33,7 @@
   right: 0;
   top: 100%;
   height: 8px;
-  background: linear-gradient(var(--window), transparent);
+  background: linear-gradient(var(--window), transparent); /* a soft edge under the opaque title */
   opacity: 0;
   pointer-events: none;
   z-index: 3;

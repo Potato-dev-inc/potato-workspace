@@ -1,12 +1,14 @@
 // A file open beside the chat: colour for code, an Edit mode (Save with Ctrl+S, Revert, a notice when the file changed
 // on disk), Markdown as a page, pictures as pictures, and a clear message for files that are too big or not text. The File / Changes switch shows what the agent changed in the same
 // place. Lines picked in either view can be sent to the chat box with "Tell the agent".
+import { markGone } from '../../lib/gone-files';
 import { Suspense, useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { filesApi, fileSize, type FileContent, type FilesApi, type FileStream } from '../../lib/files-api';
+import { filesApiFor, fileSize, OnOtherPc, type FileContent, type FilesApi, type FileStream } from '../../lib/files-api';
 import { pushComposerInsert } from '../../lib/composer-insert';
 import { requestChatTab } from '../../lib/chatTab';
 import { errorSentence } from '../../lib/sayError';
 import { useT } from '../../i18n';
+import { useHost } from '../../lib/host/context';
 import { ChatMarkdown } from '../chat/ChatMarkdown';
 import { SegTabs } from '../cockpit/SegTabs';
 import { PaneMoreMenu, type MoreAction } from '../cockpit/PaneMoreMenu';
@@ -15,6 +17,7 @@ import { extensionOf, isMarkdown } from './languages';
 import { stripHtmlComments } from '../../lib/markdownComments';
 import { opensInOwnApp, richKindOf, type RichKind } from './rich-kind';
 import type { CodeGoTo, CodeSelection } from './CodeEditor';
+import { CopyPathButton } from './CopyPathButton';
 import { FileActions } from './FileActions';
 import { FileDiff } from './FileDiff';
 import { useOpenInEditor } from './OpenInEditor';
@@ -24,6 +27,7 @@ import { TellBar } from './TellBar';
 import { useFileEdit } from './useFileEdit';
 import { isDirty, useDraftKeys } from '../../lib/file-drafts';
 import { tellText } from './tell-text';
+import { lastTurnPatch, turnReviewApiFor } from '../../lib/turn-review';
 import { lazyViewer, ViewerBoundary } from './lazy-viewer';
 import '../../styles/files.css';
 
@@ -48,7 +52,7 @@ export function FileTab({
   path,
   canTell,
   refreshKey = '',
-  api = filesApi,
+  api: given,
   editor,
   goTo,
 }: {
@@ -65,7 +69,11 @@ export function FileTab({
   goTo?: CodeGoTo;
 }) {
   const t = useT();
+  const host = useHost();
+  const api = useMemo(() => given ?? filesApiFor(host), [given, host]);
   const opener = useOpenInEditor(paneId, editor);
+  // My editor opens files of this PC only: a file on another PC cannot be opened there.
+  const here = host.place.kind !== 'pc';
   const [view, setView] = useState<View>('file');
   const rich = richKindOf(path);
   const [content, setContent] = useState<FileContent | null>(null);
@@ -75,10 +83,14 @@ export function FileTab({
   const [asText, setAsText] = useState(false);
   const [selection, setSelection] = useState<CodeSelection | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
-  const openOwnApp = useCallback(
-    () => void api.openDefault(paneId, path).then(() => setNotice(null), (err: unknown) => setNotice(errorSentence(err))),
-    [api, paneId, path],
-  );
+  // A file on another PC cannot be shown in a folder or opened in an app here: the note says so, and offers its path to copy.
+  const [farNote, setFarNote] = useState<{ text: string; path: string } | null>(null);
+  const failed = useCallback((err: unknown) => {
+    const text = errorSentence(err);
+    setNotice(text);
+    setFarNote(err instanceof OnOtherPc ? { text, path: err.path } : null);
+  }, []);
+  const openOwnApp = useCallback(() => void api.openDefault(paneId, path).then(() => setNotice(null), failed), [api, paneId, path, failed]);
   const edit = useFileEdit({ api, paneId, path, content, setContent, onNotice: setNotice });
   const unsaved = isDirty(useDraftKeys(), paneId, path);
   useEffect(() => {
@@ -98,8 +110,9 @@ export function FileTab({
           if (cancelled) return;
           setFile(b);
           setError(null);
+          markGone(paneId, path, false);
         },
-        (err: unknown) => !cancelled && setError(errorSentence(err)),
+        (err: unknown) => !cancelled && (setError(errorSentence(err)), markGone(paneId, path, errorSentence(err) === t('r9.err.fileGone'))),
       );
     } else {
       api.read(paneId, path).then(
@@ -107,8 +120,9 @@ export function FileTab({
           if (cancelled) return;
           setContent(c);
           setError(null);
+          markGone(paneId, path, false);
         },
-        (err: unknown) => !cancelled && setError(errorSentence(err)),
+        (err: unknown) => !cancelled && (setError(errorSentence(err)), markGone(paneId, path, errorSentence(err) === t('r9.err.fileGone'))),
       );
     }
     return () => {
@@ -118,18 +132,26 @@ export function FileTab({
 
   // The way out of a file that cannot be shown: its own program, or the folder.
   const openApp = useCallback(() => {
-    void api.openDefault(paneId, path).then(() => setNotice(null), (err: unknown) => setNotice(errorSentence(err)));
-  }, [api, paneId, path]);
+    void api.openDefault(paneId, path).then(() => setNotice(null), failed);
+  }, [api, paneId, path, failed]);
   const reveal = useCallback(() => {
-    void api.reveal(paneId, path).then(() => setNotice(null), (err: unknown) => setNotice(errorSentence(err)));
-  }, [api, paneId, path]);
+    void api.reveal(paneId, path).then(() => setNotice(null), failed);
+  }, [api, paneId, path, failed]);
   const openLabel = rich === 'docx' ? t('files.openWord') : rich === 'sheet' ? t('files.openExcel') : t('files.openDefault');
   const actions = <FileActions openLabel={openLabel} onOpen={rich ? openApp : undefined} onReveal={reveal} />;
 
   useEffect(() => {
     if (view !== 'changes') return;
     let cancelled = false;
-    api.diff(paneId, path).then(
+    const fromTurn = (p: string) => lastTurnPatch(turnReviewApiFor(host), paneId, path).catch(() => p);
+    api
+      .diff(paneId, path)
+      // No git diff (not a repo, a new file git does not know, or git cannot answer, e.g. for a file that is gone): the turn's own checkpoints say what changed, as the Changes list does.
+      .then(
+        (p) => (p.trim() ? p : fromTurn(p)),
+        (err: unknown) => fromTurn('').then((p) => (p.trim() ? p : Promise.reject(err))),
+      )
+      .then(
       (p) => !cancelled && setPatch(p),
       (err: unknown) => {
         if (cancelled) return;
@@ -140,7 +162,7 @@ export function FileTab({
     return () => {
       cancelled = true;
     };
-  }, [api, paneId, path, view, refreshKey]);
+  }, [api, host, paneId, path, view, refreshKey]);
 
   const send = useCallback(
     (text: string) => {
@@ -243,7 +265,7 @@ export function FileTab({
   const showTextToggle = view === 'file' && !edit.editing && ((isMarkdown(path) || rich === 'html') && content?.kind === 'text' ? true : rich === 'docx' && file?.kind === 'stream');
   const moreActions: MoreAction[] = [];
   if (rich) moreActions.push({ id: 'open-app', label: openLabel, onSelect: openApp });
-  if (!rich || rich === 'html' || extensionOf(path) === 'csv') {
+  if (here && (!rich || rich === 'html' || extensionOf(path) === 'csv')) {
     moreActions.push({
       id: 'open-editor',
       label: opener.name ? t('editor.open', { name: opener.name }) : t('editor.openGeneric'),
@@ -310,7 +332,7 @@ export function FileTab({
             {openLabel}
           </button>
         )}
-        {(!rich || rich === 'html' || extensionOf(path) === 'csv') && fold < 1 && (
+        {here && (!rich || rich === 'html' || extensionOf(path) === 'csv') && fold < 1 && (
         <button
           type="button"
           className="ck-btn ck-btn--plain ck-btn--sm"
@@ -357,6 +379,7 @@ export function FileTab({
       {notice && (
         <p className="ck-file-notice" role="status">
           {notice}
+          {farNote && farNote.text === notice && <CopyPathButton path={farNote.path} onDone={setNotice} />}
         </p>
       )}
     </section>

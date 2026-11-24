@@ -42,6 +42,14 @@ export function visibleRows(
   return rows;
 }
 
+/** How many tree rows are drawn at once; "Show more" adds another step (a 16k-file project is 16k DOM rows otherwise). */
+export const TREE_ROWS_STEP = 2000;
+
+/** The rows to draw: the first `limit` of them. */
+export function capRows<T>(rows: readonly T[], limit: number): T[] {
+  return rows.length > limit ? rows.slice(0, limit) : (rows as T[]);
+}
+
 /** The folder part of a path: "src/a/b.ts" -> "src/a" ("" at the top). */
 export function parentOf(path: string): string {
   const i = path.lastIndexOf('/');

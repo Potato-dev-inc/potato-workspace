@@ -187,7 +187,7 @@ pub fn dispose_explicit_close(
 pub fn stop_worker_control(
     snapshot: &OperationSnapshot,
     registry: &Arc<Mutex<PaneRegistry>>,
-    app: &AppHandle,
+    _app: &AppHandle,
     allow_kill_spawned_pane: bool,
 ) -> Result<(), OperationError> {
     let pane_id = snapshot
@@ -235,7 +235,7 @@ pub fn stop_worker_control(
     } else if snapshot.agent_type != "opencode_native" {
         let sequence = crate::pty::keys::sequence("ctrl+c")
             .map_err(|err| OperationError::new("CANCEL_FAILED", err, false))?;
-        crate::pty::registry_write_input(registry, app, pane_id, &sequence, false, false, None, crate::pty::WriteOrigin::Nudge)
+        crate::pty::registry_write_input(registry, pane_id, &sequence, false, false, None, crate::pty::WriteOrigin::Nudge)
             .map_err(|err| OperationError::new("CANCEL_FAILED", err, true))?;
     }
     Ok(())

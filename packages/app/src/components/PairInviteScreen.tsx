@@ -3,6 +3,7 @@ import { parsePairingInvitePath } from '@potato-workspace/shared';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { LS_BRIDGE_URL } from '../lib/bridge-url';
 import { pairFromInviteCode } from '../lib/mobile-pairing';
+import { t } from '../i18n';
 
 function defaultDeviceName(): string {
   const ua = navigator.userAgent;
@@ -67,7 +68,7 @@ export function PairInviteScreen({ pairingCode, onConnected, onGiveUp }: Props) 
   return (
     <div className="flex flex-col items-center justify-center h-full p-6 gap-4 text-sm text-center">
       <img src="/app-icon.svg" alt="Potato Workspace" className="w-16 h-16 rounded-xl" />
-      <h1 className="text-lg font-semibold">Pairing with desktop</h1>
+      <h1 className="text-lg font-semibold">{t('r21.sw.pairingWithDesktop')}</h1>
       {busy ? (
         <>
           <p className="text-pm-muted text-xs max-w-xs">{stage}</p>

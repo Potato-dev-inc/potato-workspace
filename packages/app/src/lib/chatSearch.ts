@@ -1,6 +1,8 @@
 // Search across all chats (Ctrl+Shift+F). The Rust side (src-tauri/src/chat_index) keeps a redacted index of what
 // was said in every chat that was read; this file is its typed command and the small helpers that draw a hit.
 import { invoke } from '@tauri-apps/api/core';
+import type { Host } from './host/host';
+import { placeKey } from './host/placeKey';
 
 export type ChatHitKind = 'user' | 'assistant' | 'tool';
 
@@ -19,6 +21,8 @@ export interface ChatHit {
   marks: [number, number][];
   /** True for a hit in an old chat the person brought in ("Bring my chats"). It opens the read-only view. */
   imported?: boolean;
+  /** The name of the PC the chat lives on, when it is not this one: the small "where" badge. Absent on this PC. */
+  where?: string;
 }
 
 const isTauri = (): boolean => typeof window !== 'undefined' && '__TAURI_INTERNALS__' in window;
@@ -52,6 +56,28 @@ export interface ChatSearchFacets {
 export async function searchChats(query: string, limit = CHAT_SEARCH_LIMIT, filters?: ChatSearchFilters): Promise<ChatSearchAnswer> {
   if (!isTauri()) return { enabled: true, hits: [] };
   return invoke<ChatSearchAnswer>('chat_search', { query, limit, filters });
+}
+
+/**
+ * This PC's hits and those of the other PCs in one list, newest first, each far one carrying its PC's name and its pane id as this screen
+ * keeps it. A PC that does not answer adds nothing and never fails the search. A far hit is never an imported chat.
+ */
+export async function searchChatsEverywhere(far: readonly Host[], query: string, limit = CHAT_SEARCH_LIMIT, filters?: ChatSearchFilters): Promise<ChatSearchAnswer> {
+  const mine = await searchChats(query, limit, filters);
+  if (far.length === 0) return mine;
+  const theirs = await Promise.all(
+    far.map(async (host) => {
+      try {
+        const answer = await host.invoke<ChatSearchAnswer>('chat_search', { query, limit, filters });
+        const where = host.place.kind === 'pc' ? host.place.name : undefined;
+        return (answer?.hits ?? []).map((hit) => ({ ...hit, paneId: placeKey(host.place, hit.paneId), imported: false, ...(where ? { where } : {}) }));
+      } catch {
+        return [];
+      }
+    }),
+  );
+  const hits = [...mine.hits, ...theirs.flat()].sort((a, b) => b.atMs - a.atMs).slice(0, limit);
+  return { enabled: mine.enabled, hits };
 }
 
 export async function chatSearchFacets(): Promise<ChatSearchFacets> {

@@ -1,4 +1,5 @@
 import type { SpaceSummary } from '../../lib/spaces';
+import { t } from '../../i18n';
 
 export interface SpaceListProps {
   spaces: SpaceSummary[];
@@ -37,7 +38,7 @@ export function SpaceList({ spaces, selected, onSelect, onNew, onJoin }: SpaceLi
           New space
         </button>
         <button type="button" className="ck-spaces-btn" onClick={onJoin}>
-          Join a space
+          {t('r21.sw.joinASpace')}
         </button>
       </div>
     </nav>

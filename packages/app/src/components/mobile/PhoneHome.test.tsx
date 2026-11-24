@@ -124,7 +124,7 @@ describe('phone Inbox part on the Agents screen', () => {
     expect(rows[0].textContent).toContain('12 files');
     expect(rows[0].textContent).toContain('+1,204');
     expect(rows[0].textContent).toContain('2/2 passed');
-    expect(rows[1].textContent).toContain('Answered a question · no changes');
+    expect(rows[1].textContent).toContain('No file changes');
     // The call carries local midnight, not "now".
     const since = (phoneDone.mock.calls[0] as unknown as [number])[0];
     const midnight = new Date();

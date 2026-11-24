@@ -7,6 +7,25 @@ fn src_dir() -> PathBuf {
     Path::new(env!("CARGO_MANIFEST_DIR")).join("src")
 }
 
+/// The engine's sources moved to `pm-core` at the same relative paths: a file is read from the app, else from there.
+fn core_src_dir() -> PathBuf {
+    Path::new(env!("CARGO_MANIFEST_DIR")).join("crates/pm-core/src")
+}
+
+fn read_src(path: PathBuf) -> std::io::Result<String> {
+    match fs::read_to_string(&path) {
+        Ok(text) => Ok(text),
+        Err(first) => match path.strip_prefix(src_dir()) {
+            Ok(rest) => fs::read_to_string(core_src_dir().join(rest)),
+            Err(_) => Err(first),
+        },
+    }
+}
+
+fn rel_in_roots(path: &Path) -> String {
+    path.strip_prefix(src_dir()).or_else(|_| path.strip_prefix(core_src_dir())).unwrap_or(path).to_string_lossy().replace('\\', "/")
+}
+
 /// The non-test sources of `ssh/`.
 fn ssh_sources() -> Vec<(String, String)> {
     let dir = src_dir().join("ssh");
@@ -93,7 +112,7 @@ fn the_bridge_and_the_agent_tools_do_not_know_about_ssh() {
 #[test]
 fn an_ssh_pane_gets_no_login_hook_or_env_of_this_pc() {
     // The spawn skips accounts, hooks, pane MCP and the model bridge for a pane that runs on another machine.
-    let spawn = fs::read_to_string(src_dir().join("pty").join("registry").join("spawn.rs")).unwrap();
+    let spawn = read_src(src_dir().join("pty").join("registry").join("spawn.rs")).unwrap();
     assert!(spawn.contains("let remote = linux.is_some() || ssh.is_some();"));
     assert!(spawn.contains("LaunchEnv::default()"));
 }
@@ -101,12 +120,12 @@ fn an_ssh_pane_gets_no_login_hook_or_env_of_this_pc() {
 #[test]
 fn the_bridge_refuses_a_chat_on_another_computer_before_any_route_runs() {
     // Chats over SSH are the app window's alone: the router checks the request for a remote pane's id before authorization and routing.
-    let router = fs::read_to_string(src_dir().join("bridge").join("router.rs")).unwrap();
+    let router = read_src(src_dir().join("bridge").join("router.rs")).unwrap();
     let guard = router.find("remote_pane_refusal(&crate::acp::chat::remote_pane_ids()").expect("the router calls the guard");
     let authorize = router.find("crate::mcp_sessions::authorize(session, method, &route_path").expect("the router authorizes");
     assert!(guard < authorize, "the remote-pane check comes first");
     // And the pane list a phone or an agent reads leaves remote chats out.
-    let panes = fs::read_to_string(src_dir().join("bridge").join("routes").join("panes.rs")).unwrap();
+    let panes = read_src(src_dir().join("bridge").join("routes").join("panes.rs")).unwrap();
     assert!(panes.contains("crate::acp::chat::external_panes(registry)"));
 }
 
@@ -122,7 +141,7 @@ fn every_pane_list_a_phone_or_an_agent_reads_leaves_remote_chats_out() {
         ("agent_runs/routes/list.rs", "crate::acp::chat::external_panes(registry)"),
         ("bridge/dispatch.rs", "let existing_panes = crate::acp::chat::external_panes(registry);"),
     ] {
-        let text = fs::read_to_string(src_dir().join(file)).unwrap().replace("\r\n", "\n");
+        let text = read_src(src_dir().join(file)).unwrap().replace("\r\n", "\n");
         assert!(text.contains(needle), "{file} must list panes through external_panes: {needle}");
     }
 }
@@ -154,7 +173,7 @@ const MUST_USE_REMOTE_PANE_CHECK: &[&str] = &[
 #[test]
 fn every_bridge_phone_pclink_and_event_file_uses_the_shared_remote_pane_check() {
     for file in MUST_USE_REMOTE_PANE_CHECK {
-        let text = fs::read_to_string(src_dir().join(file)).unwrap_or_else(|e| panic!("{file}: {e}"));
+        let text = read_src(src_dir().join(file)).unwrap_or_else(|e| panic!("{file}: {e}"));
         assert!(
             text.contains("is_remote_pane") || text.contains("external_panes") || text.contains("remote_refusal") || text.contains("remote_pane_refusal"),
             "{file} must ask the shared check (acp::chat::is_remote_pane / external_panes)"
@@ -165,9 +184,9 @@ fn every_bridge_phone_pclink_and_event_file_uses_the_shared_remote_pane_check() 
 #[test]
 fn the_default_accessors_are_the_safe_ones_and_the_window_names_its_own() {
     let crlf = String::from("\r\n");
-    let read = |file: &str| fs::read_to_string(src_dir().join(file)).unwrap().replace(crlf.as_str(), "\n");
+    let read = |file: &str| read_src(src_dir().join(file)).unwrap().replace(crlf.as_str(), "\n");
     let registry = read("pty/registry/mod.rs");
-    assert!(registry.contains("&& !crate::acp::chat::is_remote_pane(&pane.info.id)"));
+    assert!(registry.contains("&& !crate::hooks::get().chat_is_remote_pane(&pane.info.id)"));
     assert!(registry.contains("pub fn list_including_remote("));
     let questions = read("questions/mod.rs");
     for name in ["pub fn list_pending(", "pub fn answer(", "pub fn dismiss("] {
@@ -178,7 +197,7 @@ fn the_default_accessors_are_the_safe_ones_and_the_window_names_its_own() {
     assert!(outbox.contains("pub fn send_including_remote("));
     // Only the app window's own files name an `including_remote` call.
     let windowed = ["commands/panes.rs", "commands/cockpit.rs", "cockpit.rs", "commands/questions.rs", "commands/pane_outbox.rs", "commands/app_update.rs", "tray.rs", "panic.rs", "ambient/mod.rs", "ambient/badge.rs", "attention/mod.rs"];
-    let mut stack = vec![src_dir()];
+    let mut stack = vec![src_dir(), core_src_dir()];
     while let Some(dir) = stack.pop() {
         for entry in fs::read_dir(&dir).unwrap().flatten() {
             let path = entry.path();
@@ -189,7 +208,10 @@ fn the_default_accessors_are_the_safe_ones_and_the_window_names_its_own() {
             if path.extension().map_or(true, |e| e != "rs") {
                 continue;
             }
-            let rel = path.strip_prefix(src_dir()).unwrap().to_string_lossy().replace('\\', "/");
+            let rel = rel_in_roots(&path);
+            if rel.starts_with("pty_app_tests/") {
+                continue; // tests that moved out of the engine
+            }
             let name = path.file_name().unwrap().to_string_lossy().to_string();
             if rel.ends_with("tests.rs") || name.ends_with("_tests.rs") || rel.starts_with("ssh/") || rel == "questions/mod.rs" || rel == "pty/registry/mod.rs" || rel == "pty/registry/virtual_pane.rs" || rel == "pane_outbox/mod.rs" || rel == "acp/chat/mod.rs" || rel == "acp/chat/start.rs" || windowed.contains(&rel.as_str()) {
                 continue;
@@ -202,25 +224,28 @@ fn the_default_accessors_are_the_safe_ones_and_the_window_names_its_own() {
 
 #[test]
 fn the_websocket_refuses_input_and_watch_for_a_remote_pane_and_the_status_hooks_skip_it() {
-    let ws = fs::read_to_string(src_dir().join("bridge").join("ws.rs")).unwrap().replace("
-", "
-");
+    let ws = read_src(src_dir().join("bridge").join("ws.rs")).unwrap().replace(char::from(13), "");
     assert!(ws.matches("is_remote_pane").count() >= 3, "watch, input and write_input each ask");
-    let sse = fs::read_to_string(src_dir().join("bridge").join("sse.rs")).unwrap().replace("
-", "
-");
+    let sse = read_src(src_dir().join("bridge").join("sse.rs")).unwrap().replace(char::from(13), "");
     assert!(sse.contains("is_remote_pane(pane_id) && !matches!(hook, StatusHook::PaneActivity | StatusHook::Ambient)"));
     for push in ["push_pane_status_sse", "push_pane_activity_sse", "push_pane_preview_sse", "push_loop_signal_sse", "push_pane_resize_sse", "push_terminal_sse"] {
         let at = sse.find(&format!("pub fn {push}(")).unwrap_or_else(|| panic!("{push}"));
         assert!(sse[at..].lines().take(14).any(|l| l.contains("is_remote_pane")), "{push} must skip a remote pane");
     }
-    let pc = fs::read_to_string(src_dir().join("device_link").join("pclink").join("app_services.rs")).unwrap().replace("
-", "
-");
-    for handler in ["transcript", "transcript_earlier", "picture", "screen", "outbox", "send", "cancel_message", "interrupt", "set_config", "input", "close"] {
-        let at = pc.find(&format!("    fn {handler}(&self,")).unwrap_or_else(|| panic!("{handler}"));
-        assert!(pc[at..].lines().take(3).any(|l| l.contains("remote_refusal")), "pclink {handler} must refuse a remote pane");
+    // The chat rows are one shared copy (`pm_core::device_link::pclink::engine_services`): each refuses a remote pane in its first lines,
+    // and the app's `AppServices` hands every one of them to it.
+    let engine = read_src(core_src_dir().join("device_link").join("pclink").join("engine_services.rs")).unwrap().replace(char::from(13), "");
+    for handler in ["transcript", "transcript_earlier", "picture", "outbox_list", "send_message", "cancel_message", "interrupt", "set_config_as", "close_session"] {
+        let at = engine.find(&format!("pub fn {handler}(")).unwrap_or_else(|| panic!("{handler}"));
+        assert!(engine[at..].lines().take(3).any(|l| l.contains("remote_refusal")), "pclink {handler} must refuse a remote pane");
     }
+    let pc = read_src(src_dir().join("device_link").join("pclink").join("app_services.rs")).unwrap().replace(char::from(13), "");
+    for (handler, shared) in [("transcript", "transcript"), ("transcript_earlier", "transcript_earlier"), ("picture", "picture"), ("outbox", "outbox_list"), ("send", "send_message"), ("cancel_message", "cancel_message"), ("interrupt", "interrupt"), ("set_config", "set_config_as")] {
+        let at = pc.find(&format!("    fn {handler}(&self,")).unwrap_or_else(|| panic!("{handler}"));
+        assert!(pc[at..].lines().take(3).any(|l| l.contains(&format!("{shared}("))), "pclink {handler} must go through the shared {shared}");
+    }
+    let close_at = pc.find("    fn close(&self,").expect("close");
+    assert!(pc[close_at..].lines().take(3).any(|l| l.contains("remote_refusal")), "pclink close must refuse a remote pane");
 }
 
 /// A raw read of the pane map (`.panes.keys()`, `.iter()`, `.values()`) bypasses the safe `list()`. Such a file must either be on this
@@ -240,7 +265,7 @@ fn no_file_enumerates_the_raw_pane_map_without_the_shared_check_or_an_allow_list
         "switch_anim/glue.rs",
         "crews/follow.rs",
     ];
-    let mut stack = vec![src_dir()];
+    let mut stack = vec![src_dir(), core_src_dir()];
     let mut flagged = Vec::new();
     while let Some(dir) = stack.pop() {
         for entry in fs::read_dir(&dir).unwrap().flatten() {
@@ -253,8 +278,11 @@ fn no_file_enumerates_the_raw_pane_map_without_the_shared_check_or_an_allow_list
             if path.extension().map_or(true, |e| e != "rs") || name.contains("test") {
                 continue;
             }
-            let rel = path.strip_prefix(src_dir()).unwrap().to_string_lossy().replace('\\', "/");
-            if rel.starts_with("ssh/") || ALLOWED.iter().any(|a| rel.starts_with(a)) {
+            let rel = rel_in_roots(&path);
+            if rel.starts_with("pty_app_tests/") {
+                continue; // tests that moved out of the engine
+            }
+            if rel.starts_with("ssh/") || rel.starts_with("pty_app_tests/") || ALLOWED.iter().any(|a| rel.starts_with(a)) {
                 continue;
             }
             let text = fs::read_to_string(&path).unwrap_or_default();
@@ -300,7 +328,7 @@ fn reading_a_remote_project_is_window_only_gated_and_read_only() {
         }
     }
     // Each command checks the Labs switch first, and the screen never names the machine or the folder (only the pane).
-    let cmds = fs::read_to_string(src_dir().join("commands").join("ssh.rs")).unwrap().replace("\r\n", "\n");
+    let cmds = read_src(src_dir().join("commands").join("ssh.rs")).unwrap().replace("\r\n", "\n");
     let body = &cmds[cmds.find("async fn browse_command").expect("browse_command")..];
     assert!(body[..body.find("#[tauri::command]").unwrap()].contains("ssh_chat_gate(ssh_chat_on(app))?"));
     for name in ["ssh_fs_list", "ssh_fs_read", "ssh_git_status"] {
@@ -310,6 +338,30 @@ fn reading_a_remote_project_is_window_only_gated_and_read_only() {
         assert!(cmds[at..].contains("browse_command("), "{name} goes through the gated path");
     }
     // The far script has no writing word, and the browse module never runs a command of this PC.
-    let browse = fs::read_to_string(src_dir().join("ssh").join("browse.rs")).unwrap();
+    let browse = read_src(src_dir().join("ssh").join("browse.rs")).unwrap();
     assert!(!browse.contains("Command::new") && !browse.contains("hidden_command"), "browse.rs starts no process itself; the runner does");
+}
+
+#[test]
+fn the_setup_sends_only_the_fixed_lines_of_install_rs() {
+    let src = read_src(src_dir().join("ssh").join("install.rs")).unwrap().replace("\r\n", "\n");
+    let code: Vec<&str> = code_lines(&src);
+    // No text is built into a remote line: nothing here formats, joins or concatenates a command.
+    for line in &code {
+        for bad in ["format!", "concat!", "push_str", "scp", "sftp"] {
+            assert!(!line.contains(bad), "install.rs builds text: {line}");
+        }
+    }
+    // Every fixed line is a plain /bin/sh call, and none of them names a forward, a download or a root command.
+    let fixed: Vec<&&str> = code.iter().filter(|l| l.starts_with("pub const") && l.contains("r#\"/bin/sh")).collect();
+    assert!(fixed.len() >= 9, "the fixed lines were found");
+    for line in fixed {
+        for bad in ["sudo", "curl", "wget", " -L ", " -R ", " -D ", "ssh "] {
+            assert!(!line.contains(bad), "a fixed line names {bad}: {line}");
+        }
+    }
+    // The argv builder clears forwarding.
+    let command = read_src(src_dir().join("ssh").join("command.rs")).unwrap();
+    let at = command.find("pub fn setup_argv").unwrap();
+    assert!(command[at..at + 700].contains("ClearAllForwardings=yes"));
 }

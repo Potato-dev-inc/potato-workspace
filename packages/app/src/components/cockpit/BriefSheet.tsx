@@ -2,6 +2,7 @@
 // agent was told, nothing more: no folder, no run ids. The text comes from `keepGoingBrief` (already redacted).
 import { useEffect, useId, useRef, useState } from 'react';
 import { Sheet } from './Sheet';
+import { t } from '../../i18n';
 
 /** The size in plain units: bytes under 1 KB, else KB with one decimal (1 KB = 1024 bytes). */
 export function briefSize(text: string): string {
@@ -69,7 +70,7 @@ export function BriefSheet({
           {error}
         </p>
       ) : text === null ? (
-        <p className="ck-sub">Loading the brief…</p>
+        <p className="ck-sub">{t('r21.sw.loadingTheBrief')}</p>
       ) : (
         <pre
           tabIndex={0}

@@ -30,6 +30,8 @@ export const SettingsSchema = z.object({
   confirm_close_running_pane: z.boolean().default(true),
   /** Keep the PC awake (the screen may still turn off) while an agent works, so locking it does not stop the agents (Rust: keep_awake). */
   keep_awake_while_working: z.boolean().default(true),
+  /** A small card jumps out over the work area when an agent is blocked on a question only the Inbox shows (components/cockpit/JumpOutCard). */
+  jump_out_cards_enabled: z.boolean().default(true),
   /** The agent that started a helper may answer its safe questions: allow once and any no; the rest goes to the person (Rust: acp::chat::helper_answers). */
   helper_answers_enabled: z.boolean().default(true),
   /** The "Used" strip at the bottom of the sidebar: plan usage per signed-in agent (Rust: usage). */

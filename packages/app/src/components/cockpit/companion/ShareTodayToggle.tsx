@@ -3,6 +3,7 @@
 // only sends one `update` call; the backend writes the file and tells a running companion once.
 import { useState } from 'react';
 import type { CompanionTransport, CompanionView } from '../../../lib/companion';
+import { t } from '../../../i18n';
 
 export function ShareTodayToggle({
   companionId,
@@ -41,8 +42,8 @@ export function ShareTodayToggle({
       <div className="ck-companion-push">
         <span className="ck-companion-push-text">
           <span>{label}</span>
-          <span className="ck-sub">A short list of what they finished, kept in its folder.</span>
-          <span className="ck-sub">The list is sent to the AI service of this agent.</span>
+          <span className="ck-sub">{t('r21.sw.aShortListOf')}</span>
+          <span className="ck-sub">{t('r21.sw.theListIsSent')}</span>
         </span>
         <button
           type="button"

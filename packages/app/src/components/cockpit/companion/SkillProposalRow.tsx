@@ -3,6 +3,7 @@
 import { useState } from 'react';
 import { SKILL_CAP, type PendingItem } from '../../../lib/companion';
 import { SKILL_TITLE_MAX, formatCount, skillFileChars } from './model';
+import { t } from '../../../i18n';
 
 export function SkillProposalRow({
   item,
@@ -28,19 +29,19 @@ export function SkillProposalRow({
 
   return (
     <li className="ck-companion-pending ck-skill-proposal" data-kind="skill">
-      <span className="ck-skill-kind">New skill</span>
+      <span className="ck-skill-kind">{t('r21.sw.newSkill')}</span>
       {editing ? (
         <>
           <input
             className="ck-companion-input ck-skill-title-input"
-            aria-label="Skill title"
+            aria-label={t('r21.sw.skillTitle')}
             value={title}
             maxLength={SKILL_TITLE_MAX}
             onChange={(e) => setTitle(e.target.value)}
           />
           <textarea
             className="ck-memory-editor ck-companion-editor ck-skill-editor"
-            aria-label="Skill steps"
+            aria-label={t('r21.sw.skillSteps')}
             value={steps}
             onChange={(e) => setSteps(e.target.value)}
             spellCheck={false}
@@ -53,7 +54,7 @@ export function SkillProposalRow({
         <>
           <p className="ck-companion-pending-text ck-skill-title">{item.text}</p>
           <pre className="ck-skill-body">{body}</pre>
-          {tooLong && <p className="ck-sub ck-memory-err">Too long for a skill. Edit it to make it shorter.</p>}
+          {tooLong && <p className="ck-sub ck-memory-err">{t('r21.sw.tooLongForA')}</p>}
         </>
       )}
       {item.flagged && <span className="ck-memory-tag">{item.flagged}</span>}

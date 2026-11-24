@@ -2,6 +2,7 @@
 import type { PaneData } from '../../hooks/usePaneRegistry';
 import type { SpawnStageEvent } from '../../lib/cockpit-api';
 import { t } from '../../i18n';
+import { unit } from '../../lib/unitWords';
 
 export type SpinnerStatus = 'running' | 'waiting_input' | 'idle' | 'error' | 'exited';
 
@@ -27,6 +28,8 @@ export function stateText(status: string): string {
       return t('state.idle');
     case 'error':
       return t('state.error');
+    case 'away':
+      return t('sidebar.away');
     default:
       return t('state.exited');
   }
@@ -53,31 +56,50 @@ export function groupPanes(list: PaneData[], questionPanes?: ReadonlySet<string>
 /** "42s", "5m", "3h 12m". */
 export function formatElapsed(ms: number): string {
   const s = Math.max(0, Math.floor(ms / 1000));
-  if (s < 60) return `${s}s`;
+  if (s < 60) return unit('s', s);
   const m = Math.floor(s / 60);
-  if (m < 60) return `${m}m`;
+  if (m < 60) return unit('m', m);
   const h = Math.floor(m / 60);
   const rem = m % 60;
-  return rem ? `${h}h ${rem}m` : `${h}h`;
+  return rem ? `${unit('h', h)} ${unit('m', rem)}` : unit('h', h);
+}
+
+// A chat's number is given once, the first time we see it, and never changes while the app runs: closing
+// "OpenCode 9" must not relabel "OpenCode 19" (toasts and Inbox rows quote the old name).
+// shortcut: kept in memory only; after a restart the numbers are handed out again oldest first.
+const ordinals = new Map<string, number>();
+const lastOrdinal = new Map<string, number>();
+
+/** Test hook: forget every handed-out number. */
+export function resetPaneOrdinals(): void {
+  ordinals.clear();
+  lastOrdinal.clear();
 }
 
 /** Display name per pane: the agent label, numbered when several panes run the same agent. */
-export function paneNames(list: PaneData[], label: (agentId: string) => string): Map<string, string> {
+export function paneNames(list: PaneData[], label: (agentId: string) => string, stable = true): Map<string, string> {
   // A standby seat's own chat is not another agent: it never takes a number, and never makes the others take one
   // (an orchestrator "Claude" must not become "Claude 1" because its Claude standby started a task).
   const totals = new Map<string, number>();
   for (const p of list) if (!p.info.standby_seat) totals.set(p.info.agent_type, (totals.get(p.info.agent_type) ?? 0) + 1);
-  const seen = new Map<string, number>();
   const names = new Map<string, string>();
+  const fresh = new Map<string, number>();
   for (const p of list) {
     const id = p.info.agent_type;
     if (p.info.standby_seat) {
       names.set(p.info.id, label(id));
       continue;
     }
-    const n = (seen.get(id) ?? 0) + 1;
-    seen.set(id, n);
-    names.set(p.info.id, (totals.get(id) ?? 0) > 1 ? `${label(id)} ${n}` : label(id));
+    // Another PC's list is numbered fresh (its own numbers win in the sidebar anyway), so it keeps no memory here.
+    let n = stable ? ordinals.get(p.info.id) : undefined;
+    if (n === undefined) {
+      n = stable ? (lastOrdinal.get(id) ?? 0) + 1 : (fresh.get(id) ?? 0) + 1;
+      if (stable) {
+        ordinals.set(p.info.id, n);
+        lastOrdinal.set(id, n);
+      } else fresh.set(id, n);
+    }
+    names.set(p.info.id, (totals.get(id) ?? 0) > 1 || n > 1 ? `${label(id)} ${n}` : label(id));
   }
   return names;
 }

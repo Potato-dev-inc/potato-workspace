@@ -2,7 +2,8 @@
 // for the current phrases and the `pty://activity` event for changes (see src-tauri pane_activity.rs).
 import { useEffect, useState } from 'react';
 import { invoke } from '@tauri-apps/api/core';
-import { listen } from '@tauri-apps/api/event';
+import { listen } from './events';
+import { t } from '../i18n';
 
 export type ActivityKind = 'idle' | 'working' | 'waiting' | 'error';
 
@@ -28,7 +29,9 @@ const KIND_FOR_STATUS: Record<string, ActivityKind> = {
 export function activityText(status: string, activity: PaneActivity | undefined): string | null {
   if (!activity || !activity.text) return null;
   const expected = KIND_FOR_STATUS[status];
-  return expected && expected !== activity.kind ? null : activity.text;
+  if (expected && expected !== activity.kind) return null;
+  // The two bare state words are the app's own; any other phrase is the agent's and stays as written.
+  return activity.text === 'Working' ? t('state.working') : activity.text === 'Idle' ? t('state.idle') : activity.text;
 }
 
 const isTauri = (): boolean => typeof window !== 'undefined' && '__TAURI_INTERNALS__' in window;

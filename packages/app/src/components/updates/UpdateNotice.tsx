@@ -1,7 +1,9 @@
-// A quiet notice in a corner: "Update available: 1.0.3" with an Update button. Nothing installs until the button is pressed.
+// A quiet notice, a bar under the page (a corner of the toast column in the simple view): "Update available: 1.0.3" with an Update button. Nothing installs until the button is pressed.
 // The file downloads first ("Downloading 42%"); if an agent is working then, the notice says which ones stop and asks:
 // Restart now, or When agents finish. A failed update says why in a plain sentence and the app keeps running. If the agents
 // were already stopped, it says so and offers to reopen the chats.
+import { useEffect, useLayoutEffect, useState } from 'react';
+import { createPortal } from 'react-dom';
 import { useLanguage, useT } from '../../i18n';
 import { ErrorCard } from '../common/ErrorCard';
 import type { AppUpdateState } from './useAppUpdate';
@@ -80,12 +82,58 @@ function UpdateChoice({ state }: { state: AppUpdateState }) {
   );
 }
 
-export function UpdateNoticeView({ state }: { state: AppUpdateState }) {
+/** Notices the person closed, by phase and version, until the app restarts (in memory only: a newer version asks again). */
+export const dismissedNotices = new Set<string>();
+/** "Update available" closed for a version stays closed across launches (a newer version asks again). */
+const DISMISSED_KEY = 'potato.update.dismissed';
+try {
+  for (const k of JSON.parse(localStorage.getItem(DISMISSED_KEY) ?? '[]') as string[]) dismissedNotices.add(k);
+} catch {
+  /* no storage: closed for this launch only */
+}
+function rememberDismissed() {
+  try {
+    localStorage.setItem(DISMISSED_KEY, JSON.stringify([...dismissedNotices].filter((k) => k.startsWith('available:'))));
+  } catch {
+    /* no storage */
+  }
+}
+/** The phases that may be closed: a note about something, not a download or install that is running. */
+const CLOSABLE = ['available', 'failed', 'error', 'stopped', 'ready'];
+/** A failed check says so for a few seconds, then goes (the next check tries again anyway). */
+const FAILED_SHOWS_MS = 8000;
+
+/** `floating`: the notice sits over the corner of the app (not inside the Settings row). While it does, the page says so, (it lands in the in-flow slot at the bottom of the main column when there is one). */
+export function UpdateNoticeView({ state, floating = true }: { state: AppUpdateState; floating?: boolean }) {
   const t = useT();
   const { phase, offer } = state;
-  if (phase === 'idle' || phase === 'none' || phase === 'checking') return null;
+  const [, again] = useState(0);
+  const key = `${phase}:${offer?.version ?? ''}`;
+  const closed = floating && dismissedNotices.has(key);
+  const shown = !(phase === 'idle' || phase === 'none' || phase === 'checking') && !closed;
+  const close = () => {
+    dismissedNotices.add(key);
+    rememberDismissed();
+    again((n) => n + 1);
+  };
+  useEffect(() => {
+    if (!floating || phase !== 'failed') return undefined;
+    const id = window.setTimeout(close, FAILED_SHOWS_MS);
+    return () => window.clearTimeout(id);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [floating, phase, key]);
+  // One column for every corner note: the notice goes into the toast column when there is one, so the two never overlap.
+  const [column, setColumn] = useState<Element | null>(null);
+  useLayoutEffect(() => setColumn(floating ? (document.querySelector('.ck-update-slot') ?? document.querySelector('.ck-toasts')) : null), [floating, shown]);
+  useEffect(() => {
+    if (!shown || !floating) return;
+    const root = document.documentElement;
+    root.setAttribute('data-update-notice', '');
+    return () => root.removeAttribute('data-update-notice');
+  }, [shown, floating]);
+  if (!shown) return null;
   const busy = state.busyAgents.length > 0;
-  return (
+  const node = (
     <div className="app-update-notice" role="status" data-phase={phase}>
       {phase === 'available' && offer && (
         <>
@@ -135,6 +183,12 @@ export function UpdateNoticeView({ state }: { state: AppUpdateState }) {
           action={offer ? { label: t('overview.update.tryAgain'), onClick: () => void state.update() } : undefined}
         />
       )}
+      {floating && CLOSABLE.includes(phase) && (
+        <button type="button" className="app-update-x" aria-label={t('overview.update.dismiss')} title={t('overview.update.dismiss')} onClick={close}>
+          ×
+        </button>
+      )}
     </div>
   );
+  return column ? createPortal(node, column) : node;
 }

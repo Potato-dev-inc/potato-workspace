@@ -152,6 +152,8 @@ export function usePaneRegistry(host?: Host): PaneRegistryApi {
     let lagTimer: ReturnType<typeof setTimeout> | undefined;
 
     (async () => {
+      // A far PC that is away refuses a listener: what was set up so far must still be undone when this effect is gone (no poll timer left behind).
+      try {
       unsubPanesChanged = await io.onPanesChanged(() => {
         void refresh();
       });
@@ -210,6 +212,9 @@ export function usePaneRegistry(host?: Host): PaneRegistryApi {
         });
       }
 
+      } catch (err) {
+        console.warn('[usePaneRegistry] could not listen', err);
+      }
       if (disposed) {
         unsubLag?.();
         unsubData?.();
@@ -318,7 +323,8 @@ export function usePaneRegistry(host?: Host): PaneRegistryApi {
 
 
   const paneList = useMemo(
-    () => Array.from(panes.values()).sort((a, b) => a.info.created_at - b.info.created_at),
+    // Oldest first; chats made in the same moment (restored together) go by id (byte order, as the far PC sorts its own), so the list is the same after every restart.
+    () => Array.from(panes.values()).sort((a, b) => a.info.created_at - b.info.created_at || (a.info.id < b.info.id ? -1 : a.info.id > b.info.id ? 1 : 0)),
     [panes],
   );
 

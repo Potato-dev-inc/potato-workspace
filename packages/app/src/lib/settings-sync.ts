@@ -3,7 +3,8 @@
 //   - `settings://changed`  another window saved something (Rust emits it from `settings_patch`)
 //   - `settings://show`     the window was brought back (Rust emits it with the tab to open)
 //   - window focus / the page becoming visible again
-import { listen, type UnlistenFn } from '@tauri-apps/api/event';
+import { type UnlistenFn } from '@tauri-apps/api/event';
+import { listen } from './events';
 import { isThemeChoice, type ThemeChoice } from './theme-tone';
 
 export type SettingsRefreshReason = 'changed' | 'show' | 'focus';

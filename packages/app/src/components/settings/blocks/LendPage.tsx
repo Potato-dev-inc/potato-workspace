@@ -18,6 +18,7 @@ import {
   isActiveOut,
   lendApi,
   limitsText,
+  peerLabel,
   problemText,
   usageText,
   type LendApi,
@@ -332,6 +333,11 @@ function ActiveLends({ api, lend }: { api: LendApi; lend: Lend }) {
   const t = useT();
   const state = lend.state!;
   const [error, setError] = useState<string | null>(null);
+  // The tab opened: ask each borrower whether it still holds its lend, so a lend it lost does not stay listed as running.
+  // The answers come back through the lend channel (the list refreshes by itself).
+  useEffect(() => {
+    api.recheckLent?.().catch(() => {});
+  }, [api]);
   const live = state.grants.filter((g) => isActiveOut(g, lend.now) || isActiveIn(g, lend.now));
   const pastOut = pastGrants(state.grants, 'out', lend.now);
   const pastIn = pastGrants(state.grants, 'in', lend.now);
@@ -356,7 +362,7 @@ function ActiveLends({ api, lend }: { api: LendApi; lend: Lend }) {
               <span>{grantLine(g, agentLabel(state, g.agent_id), lend.now)}</span>
               {g.peer_device_name && <small>{g.peer_device_name}</small>}
               {usageText(g) && <small className="lend-usage">{t('lend.usedSoFar', { used: usageText(g) ?? '' })}</small>}
-              {g.direction === 'in' && <small className="lend-note">{borrowedBillingNote(g.peer_name)}</small>}
+              {g.direction === 'in' && <small className="lend-note">{borrowedBillingNote(peerLabel(g))}</small>}
               {problemText(g) && (
                 <small className="lend-problem" role="status">
                   {problemText(g)}
@@ -365,7 +371,7 @@ function ActiveLends({ api, lend }: { api: LendApi; lend: Lend }) {
             </div>
             <TestLink grantId={g.id} api={api} />
             {g.direction === 'out' ? (
-              <TakeBack profile={g.profile_name || agentLabel(state, g.agent_id)} peer={g.peer_name} onConfirm={() => void act(g.id, true)} />
+              <TakeBack profile={g.profile_name || agentLabel(state, g.agent_id)} peer={peerLabel(g)} onConfirm={() => void act(g.id, true)} />
             ) : (
               <button type="button" className="lend-btn is-small" onClick={() => void act(g.id, false)}>
                 {t('lend.giveBack')}
@@ -423,8 +429,8 @@ function PastList({
           <li key={g.id}>
             <div className="lend-who">
               <span className="lend-muted">
-                {agentLabel(state, g.agent_id)} · {g.profile_name || g.peer_name}
-                {g.profile_name && g.peer_name ? ` · ${g.peer_name}` : ''}
+                {agentLabel(state, g.agent_id)} · {g.profile_name || peerLabel(g)}
+                {g.profile_name ? ` · ${peerLabel(g)}` : ''}
               </span>
               <small>{endedWords(g)}</small>
             </div>

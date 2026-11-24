@@ -1,4 +1,7 @@
 import { invoke } from '@tauri-apps/api/core';
+import { t } from '../i18n';
+import { rawText } from './sayError';
+import type { Host } from './host/host';
 
 /** One file the `@` picker can offer. `path` is relative to the project, forward slashes. */
 export interface ProjectFileHit {
@@ -23,6 +26,18 @@ export function searchProjectFiles(paneId: string, query: string, limit: number 
   );
 }
 
+/** The same search on a place: this PC's own, or another PC's folder for that chat (`project_files_search` there). */
+export function searchProjectFilesOn(host: Host): typeof searchProjectFiles {
+  if (host.place.kind === 'local') return searchProjectFiles;
+  const { name } = host.place;
+  return (paneId, query, limit = PROJECT_FILE_LIMIT) =>
+    host.invoke<unknown>('project_files_search', { paneId, query, limit }).then(
+      (reply) => (Array.isArray(reply) ? reply.filter(isHit) : []),
+      // A refusal is the far PC's "Browse and copy files" switch: say that, not a bare "no".
+      (error: unknown) => Promise.reject(error instanceof Error && rawText(error) === t('pclink.notAllowed') ? new Error(t('files.mention.farOff', { name })) : error),
+    );
+}
+
 export interface ProjectFileSearcher {
   /**
    * Starts a search. Resolves to the hits, or to `null` when a newer search (or `cancel`)
@@ -34,14 +49,19 @@ export interface ProjectFileSearcher {
 }
 
 /** Keeps a sequence number so only the newest search may apply its result. */
-export function createProjectFileSearcher(): ProjectFileSearcher {
+export function createProjectFileSearcher(find: typeof searchProjectFiles = searchProjectFiles, onError?: (error: unknown) => void): ProjectFileSearcher {
   let seq = 0;
   return {
     search(paneId, query, limit = PROJECT_FILE_LIMIT) {
       const mine = ++seq;
-      return searchProjectFiles(paneId, query, limit).then(
+      return find(paneId, query, limit).then(
         (hits) => (mine === seq ? hits : null),
-        () => (mine === seq ? [] : null),
+        (error: unknown) => {
+          if (mine !== seq) return null;
+          if (!onError) return [];
+          onError(error);
+          return null;
+        },
       );
     },
     cancel() {

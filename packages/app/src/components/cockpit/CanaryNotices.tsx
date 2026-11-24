@@ -4,6 +4,7 @@
 // everything else, with the calm glyph and no number.
 import { useT } from '../../i18n';
 import { tauriCanaryApi, useCanary, type CanaryApi } from '../../lib/canary';
+import { canaryText } from '../../lib/canaryWords';
 import '../../styles/canary.css';
 import { CardButton, InboxCard } from './InboxCard';
 
@@ -19,7 +20,7 @@ export function CanaryNotices({ api = tauriCanaryApi }: { api?: CanaryApi }) {
             kind="note"
             glyph="notice"
             info
-            title={n.text}
+            title={canaryText(n.text)}
             data={{ 'data-testid': 'canary-notice', 'data-result': n.kind }}
             more={
               <CardButton tone="plain" role="dismiss" onClick={() => void api.dismissNotice(n.id).then(refresh)}>

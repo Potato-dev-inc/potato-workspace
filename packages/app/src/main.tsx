@@ -45,7 +45,9 @@ const isStandaloneWorker =
 const isMobileOrPwa =
   params.has('pwa') ||
   window.matchMedia('(display-mode: standalone)').matches ||
-  /Android|iPhone|iPad/i.test(navigator.userAgent);
+  /Android|iPhone|iPad/i.test(navigator.userAgent) ||
+  // A phone-sized browser page (not the desktop app) gets the phone UI, not the squashed desktop shell.
+  (!isTauriWindow() && window.innerWidth < 600);
 
 type RootComponent = ComponentType;
 

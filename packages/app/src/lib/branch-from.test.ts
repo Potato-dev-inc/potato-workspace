@@ -1,4 +1,5 @@
 // @vitest-environment jsdom
+import { resetEventHub } from './events';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 const invoke = vi.fn();
@@ -39,6 +40,7 @@ const view = (patch: Partial<BranchView> = {}): BranchView => ({
 });
 
 beforeEach(() => {
+  resetEventHub();
   invoke.mockReset();
   listen.mockReset();
   (window as unknown as Record<string, unknown>).__TAURI_INTERNALS__ = {};
@@ -138,11 +140,13 @@ describe('branch changed event', () => {
     const unlisten = vi.fn();
     listen.mockResolvedValueOnce(unlisten);
     const cb = vi.fn();
-    await expect(onBranchChanged(cb)).resolves.toBe(unlisten);
+    const stopped = await onBranchChanged(cb);
     expect(listen).toHaveBeenCalledWith('branch://changed', expect.any(Function));
     const handler = listen.mock.calls[0][1] as (event: { payload: { paneIds: string[] } }) => void;
     handler({ payload: { paneIds: ['pane-a', 'pane-b'] } });
     expect(cb).toHaveBeenCalledWith({ paneIds: ['pane-a', 'pane-b'] });
+    stopped();
+    expect(unlisten).toHaveBeenCalledTimes(1);
   });
 
   it('listens to nothing outside the desktop window', async () => {

@@ -218,7 +218,7 @@ describe('sidebar: other PCs are projects in the one Projects list', () => {
     await flush();
     expect(host.querySelector('[data-testid="session-chat"]')).not.toBeNull();
     expect(host.querySelector('.ph')).toBeNull();
-    expect(fake.requests.some((r) => r.path.startsWith('/pclink/sessions/p1/transcript'))).toBe(true);
+    expect(fake.requests.some((r) => r.path === '/pclink/call/session_chat_open')).toBe(true);
   });
 
   it('says asleep, closed and offline beside the project, each with its exact words, and Try again asks again', async () => {
@@ -295,10 +295,11 @@ describe('sidebar: another PC is projects like This PC', () => {
     expect(minion.closest('.ck-helpers')).not.toBeNull();
     expect(minion.querySelector('[data-testid="row-spinoff-mark"]')).not.toBeNull();
     expect(minion.querySelector('.ck-row-pill--error')).not.toBeNull();
-    // Row actions this PC cannot do on another PC's agent are disabled with a plain reason.
+    // The "···" opens the same row menu as a local row: Open, Rename, Close.
     const more = within('.ck-row-more') as HTMLButtonElement;
-    expect(more.disabled).toBe(true);
-    expect(more.title).toContain('not available');
+    expect(more.disabled).toBe(false);
+    act(() => more.click());
+    expect([...document.querySelectorAll('[role="menu"] [role="menuitem"]')].map((e) => e.textContent)).toEqual(['Open', 'Rename', 'Close']);
   });
 
   it('remembers a folded project and a folded helper group', async () => {

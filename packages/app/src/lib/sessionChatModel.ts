@@ -4,6 +4,7 @@
 // Agent text and tool output are data: the views show them as plain text only.
 
 import type { ChatAttachment } from './attachFiles';
+import { canonPaths } from './samePath';
 
 export type TurnOutcome = 'completed' | 'interrupted' | 'failed';
 
@@ -155,6 +156,8 @@ export interface TurnEnding {
 
 /** The notice kind prefix of a turn's ending line. */
 export const ENDING_PREFIX = 'ending:';
+/** The plain line for an agent whose sign-in variable is missing (`endingText` translates it). */
+export const CODEX_UNSET = "Codex isn't set up on this PC yet";
 
 /** One exchange: what the person typed, then the agent's steps, then how the turn ended (if it did). */
 export interface ChatTurn {
@@ -180,6 +183,8 @@ export interface OutputFile {
   tool: string;
   /** Some call changed it (an edit or write); false when it was only read. */
   wrote: boolean;
+  /** When the last call that changed it ran (null when unknown). */
+  at?: string | null;
 }
 
 export interface GroupedChat {
@@ -294,6 +299,8 @@ export function groupTurns(items: readonly ChatItem[], previous?: GroupedChat | 
   const turns: ChatTurn[] = [];
   const calls = new Map<string, ToolStep>();
   const outputs = new Map<string, OutputFile>();
+  // The calls that write each file: a file counts as written only once one of them has finished well (a write waiting for a permission has not happened).
+  const writers = new Map<string, string[]>();
   const seenLinks = new Set<string>();
   let current: ChatTurn | null = null;
   let model: string | null = null;
@@ -319,6 +326,11 @@ export function groupTurns(items: readonly ChatItem[], previous?: GroupedChat | 
         current = newTurn(item.id, item);
         break;
       case 'assistant':
+        // Codex without its sign-in variable says it as a plain reply: it is the turn's ending (Sign in), not an answer.
+        if (/^\s*Missing environment variable: \S+\s*$/i.test(item.text ?? '')) {
+          turnFor(item.id).ending = { id: item.id, reason: 'signed_out', text: CODEX_UNSET };
+          break;
+        }
         turnFor(item.id).steps.push({ kind: 'text', id: item.id, item });
         // A session item need not name the model (it is on each message); the newest one that does wins.
         model = item.model ?? model;
@@ -328,8 +340,8 @@ export function groupTurns(items: readonly ChatItem[], previous?: GroupedChat | 
         break;
       case 'toolCall': {
         for (const path of Array.isArray(item.paths) ? item.paths : []) {
-          const known = outputs.get(path);
-          outputs.set(path, { path, tool: item.name, wrote: item.writes === true || known?.wrote === true });
+          outputs.set(path, { path, tool: item.name, wrote: false, at: item.writes === true ? item.at : (outputs.get(path)?.at ?? null) });
+          if (item.writes === true) writers.set(path, [...(writers.get(path) ?? []), item.callId]);
         }
         const known = calls.get(item.callId);
         if (known) {
@@ -380,7 +392,9 @@ export function groupTurns(items: readonly ChatItem[], previous?: GroupedChat | 
       case 'notice': {
         if (item.noticeKind.startsWith(ENDING_PREFIX)) {
           const turn = current ?? turns[turns.length - 1] ?? turnFor(item.id);
-          turn.ending = { id: item.id, reason: item.noticeKind.slice(ENDING_PREFIX.length), text: item.text };
+          // A missing sign-in variable ("Missing environment variable: SABLE_API_KEY.") is a setup problem, not a crash: say so and offer Sign in.
+          const unset = /Missing environment variable/i.test(item.text);
+          turn.ending = { id: item.id, reason: unset ? 'signed_out' : item.noticeKind.slice(ENDING_PREFIX.length), text: unset ? CODEX_UNSET : item.text };
           break;
         }
         if (item.noticeKind === 'title') {
@@ -401,7 +415,16 @@ export function groupTurns(items: readonly ChatItem[], previous?: GroupedChat | 
       }
     }
   }
-  return { turns: previous ? reuseTurns(turns, previous.turns) : turns, model, cliVersion, usage, plan, title, outputs: [...outputs.values()] };
+  // One file is one output however the agent spelled its path ("u1.txt" and the full path): the merged row keeps the newest write time.
+  const canon = canonPaths(outputs.keys());
+  const merged = new Map<string, OutputFile>();
+  for (const o of outputs.values()) {
+    const key = canon.get(o.path) ?? o.path;
+    const wrote = (writers.get(o.path) ?? []).some((id) => calls.get(id)?.status === 'ok');
+    const had = merged.get(key);
+    merged.set(key, had ? { ...had, wrote: had.wrote || wrote, tool: o.tool, at: o.at ?? had.at ?? null } : { ...o, path: key, wrote });
+  }
+  return { turns: previous ? reuseTurns(turns, previous.turns) : turns, model, cliVersion, usage, plan, title, outputs: [...merged.values()] };
 }
 
 function samePlan(a: PlanItem[] | null, b: PlanItem[] | null): boolean {

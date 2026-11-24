@@ -48,6 +48,19 @@ describe('Overview cards', () => {
     for (const id of ['agents', 'signed-in', 'updates', 'helpers']) expect(glyph(id)).toBe('✓');
   });
 
+  it('the Signed in card lists every agent the Setup rows say is signed in, also one the accounts list does not name (Cursor)', async () => {
+    await mount(
+      fakeOverviewSources({
+        checks: async () => [
+          { id: 'agent-claude', status: 'ok', sentence: 'Claude is signed in', fix: null },
+          { id: 'agent-codex', status: 'ok', sentence: 'Codex is signed in', fix: null },
+          { id: 'agent-cursor_agent', status: 'ok', sentence: 'Cursor is signed in', fix: null },
+        ],
+      }),
+    );
+    expect(card('signed-in').textContent).toMatch(/Claude, Codex and Cursor/);
+  });
+
   it('says what needs a fix, with the first problem as the sub-line', async () => {
     await mount(
       fakeOverviewSources({

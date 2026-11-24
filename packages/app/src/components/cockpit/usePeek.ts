@@ -86,7 +86,11 @@ export function usePeek(enabled = true): PeekControl {
     };
   }, [open, close]);
 
-  const placeFor = (el: HTMLElement) => peekPosition(el.getBoundingClientRect(), { width: window.innerWidth, height: window.innerHeight });
+  // A row with no layout (not drawn yet after a reload, or hidden) has a 0,0 box: a card placed from it would sit in the window's corner.
+  const placeFor = (el: HTMLElement) => {
+    const box = el.getBoundingClientRect();
+    return box.width === 0 && box.height === 0 ? null : peekPosition(box, { width: window.innerWidth, height: window.innerHeight });
+  };
 
   const rowProps: PeekControl['rowProps'] = (id) => ({
     onMouseEnter: (e) => {
@@ -99,7 +103,8 @@ export function usePeek(enabled = true): PeekControl {
       const row = e.currentTarget;
       delay.current = window.setTimeout(() => {
         delay.current = null;
-        if (overRow.current) setOpen({ id, ...placeFor(row), via: 'pointer' });
+        const at = overRow.current ? placeFor(row) : null;
+        if (at) setOpen({ id, ...at, via: 'pointer' });
       }, PEEK_DELAY_MS);
     },
     onMouseLeave: () => {
@@ -116,7 +121,10 @@ export function usePeek(enabled = true): PeekControl {
       e.preventDefault();
       swallowSpaceUp.current = true;
       if (open?.id === id) close();
-      else setOpen({ id, ...placeFor(e.currentTarget), via: 'key' });
+      else {
+        const at = placeFor(e.currentTarget);
+        if (at) setOpen({ id, ...at, via: 'key' });
+      }
     },
     onKeyUp: (e) => {
       if (e.key === ' ' && swallowSpaceUp.current) {

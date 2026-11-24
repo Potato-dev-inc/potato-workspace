@@ -7,6 +7,8 @@ import { useHeadFold } from './usePaneHeadFold';
 import { rememberSelectedTab } from './session-memory';
 import type { CockpitApi } from '../../hooks/useCockpit';
 import { confirmCloseEnabled, needsCloseConfirm } from '../../lib/close-policy';
+import { hasUnsentWork } from '../../lib/composerDraft';
+import { isFarKey } from '../../lib/host/placeKey';
 import { cockpitApi, type PaneRunInfo, type PaneTranscript, type TurnSummary } from '../../lib/cockpit-api';
 import { projectLabel, projectWithCopy, realFolderPath } from './shell-labels';
 import { useLoopGuard } from '../../lib/loop-guard';
@@ -18,13 +20,14 @@ import '../../styles/cockpit-helpers.css';
 import { TerminalViewport } from '../TerminalViewport';
 import { AgentLogo } from '../common/AgentLogo';
 import { DotSpinner } from './DotSpinner';
-import { mainPreview, openPreview, previewLabel } from '../../lib/pane-preview';
+import { mainPreview, previewLabel } from '../../lib/pane-preview';
+import { openPreviewInBrowserOn, openPreviewOn, useHostPreviews } from '../../lib/host/previews';
 import { pointApi } from '../../lib/point-api';
 import { dockItems, headerStateLine, dockLabel } from './pane-chrome';
 import { twoTypesWording, useT } from '../../i18n';
 import { useStandbyHelpers } from '../../lib/standbyHelpers';
 import { readyMinionCount } from './standby-rows';
-import { IconGlobe, IconRail } from './Icons';
+import { IconFolder, IconGlobe, IconRail } from './Icons';
 import { subscribePaneActions, type PaneAction } from '../../lib/pane-actions';
 import { SessionRail } from './rail/SessionRail';
 import { useRailLayout } from './rail/useRailLayout';
@@ -34,6 +37,7 @@ import { chatHelpers } from '../../lib/chat-helpers';
 import { crewMembers } from '../../lib/crew-chip';
 import { CrewChip } from '../chat/CrewChip';
 import { DockedCards } from './DockedCards';
+import { useSettledStatus } from '../../hooks/useSettledStatus';
 import { HelperQuestions, helperQuestionIds } from './HelperQuestions';
 import { StallNotice } from './StallNotice';
 import { useStall } from '../../lib/stalls';
@@ -45,7 +49,7 @@ import { useCheckIt } from './useCheckIt';
 import { fixRequest, openBrowserWindow } from '../../lib/browser-check';
 import { sendPaneMessage } from '../../lib/paneOutbox';
 import { useChatCopy } from '../../lib/chatCopy';
-import { ReceiptTab } from './ReceiptTab';
+import { NoTurnsYet, ReceiptTab } from './ReceiptTab';
 import { TurnFiles } from './turnfiles/TurnFiles';
 import { useRemotePane } from '../../lib/remotePanes';
 import { useHost } from '../../lib/host/context';
@@ -89,6 +93,12 @@ import { useTerminalConversation } from '../../hooks/useTerminalConversation';
 import '../../styles/cockpit-acp.css';
 import { BudgetChip } from './BudgetChip';
 import { BorrowedChip } from '../lend/Borrowed';
+import { LentChip, lentGrantOf } from '../lend/LentChip';
+import { useLend } from '../lend/useLend';
+import { lentPaneOf } from '../lend/LentChip';
+import { activeLendTo } from '../../lib/lend';
+import { startOnLend } from '../../lib/startOnLend';
+import { pushComposerInsert } from '../../lib/composer-insert';
 import { MissionProgress } from './mission/MissionProgress';
 import { missionOfPane, useMissions } from '../../lib/missions';
 import { agentLabel, useAgentRegistry } from '../../lib/agentRegistry';
@@ -231,6 +241,7 @@ export function PaneView({
   const t = useT();
   // The chat-session calls go to the PC this screen shows: this one, or another through the PC link (`HostProvider`).
   const host = useHost();
+  const hostPreviews = useHostPreviews();
   const ownAcp = useMemo(() => acpChatApi(host), [host]);
   const acp = givenAcp ?? ownAcp;
   // A control whose command the place cannot answer yet is drawn as it always is, disabled, with the place's one plain reason.
@@ -273,7 +284,7 @@ export function PaneView({
     },
     [paneId],
   );
-  const [confirm, setConfirm] = useState(false);
+  const [confirm, setConfirm] = useState<false | 'running' | 'draft'>(false);
   const [renaming, setRenaming] = useState(false);
   const [reflowKey, setReflowKey] = useState(0);
   const getSelectionRef = useRef<(() => string) | null>(null);
@@ -356,7 +367,10 @@ export function PaneView({
   const showTerminals = useShowTerminals();
   const canHandOver = showTerminals && isAcp && !!acpState && !inTerminal && acpState.conversation !== null;
   // "Work on a copy": the chat sits in a copy of its project; Keep the changes / Throw away the copy are its two ways out.
-  const copyKind = isAcp ? (acpState?.copy?.kind ?? null) : null;
+  // While the chat's PC is away its state is not read: the last-known copy kind stays (never a made-up "Off").
+  const lastCopy = useRef<{ id: string; kind: 'git' | 'plain' | null } | null>(null);
+  if (acpState) lastCopy.current = { id: paneId, kind: acpState.copy?.kind ?? null };
+  const copyKind = isAcp ? (acpState ? (acpState.copy?.kind ?? null) : lastCopy.current?.id === paneId ? lastCopy.current.kind : null) : null;
   const chatCopy = useChatCopy(paneId, copyKind !== null, pane?.status ?? '');
   // "Check it": the agent browser looks at this pane's dev server page (Labs). Its card sits in the Chat tab.
   const check = useCheckIt(paneId, mainPreview(c.previews, paneId)?.url ?? null, t('check.failed'));
@@ -464,7 +478,9 @@ export function PaneView({
         return;
       }
       void confirmCloseEnabled().then((on) => {
-        if (needsCloseConfirm(paneStatus, on)) setConfirm(true);
+        // A chat on another PC also asks when a message is written but not sent: that text is lost with the close.
+        if (needsCloseConfirm(paneStatus, on)) setConfirm('running');
+        else if (on && isFarKey(paneId) && hasUnsentWork(paneId)) setConfirm('draft');
         else void c.closePane(paneId);
       });
     }
@@ -481,6 +497,11 @@ export function PaneView({
   const [bell, setBell] = useBellLevel(bellIsHelper ? `helper:${bellAgent}` : bellAgent, bellIsHelper);
   // A helper with no progress for a few minutes (hook order: before the early return).
   const stalledMin = useStall(paneId);
+  const shownStatus = useSettledStatus(pane?.status) ?? '';
+  // A pane of another PC that runs on a lend of my own sign-in (Use my own agents): its chip says so instead of the far PC's account label.
+  const lend = useLend();
+  // What the review under the Receipt lists, so the one-line summary above it says the same.
+  const [reviewFiles, setReviewFiles] = useState<number | null>(null);
 
   if (!pane) {
     return (
@@ -495,8 +516,26 @@ export function PaneView({
   const since = c.statusSince.get(paneId);
   const prompt = c.prompts[paneId];
   const name = c.names.get(paneId) ?? info.agent_type;
+  // A far chat that ended "Probably signed out" while this PC lends that PC the agent: "Switch to the borrowed sign-in" starts it again on the lend.
+  const lendAgent = (acpState?.agent || info.agent_type).toLowerCase();
+  const farLendNode = /^dev:([^:]+):/.exec(paneId)?.[1];
+  const borrowedBy = isAcp && farLendNode && !lentPaneOf(lend, paneId) ? activeLendTo(lend.state?.grants ?? [], lend.now, farLendNode, lendAgent) : undefined;
+  const onUseLend = borrowedBy
+    ? async (kept: string): Promise<string | null> => {
+        try {
+          const id = await startOnLend({ start: acp.start, agent: lendAgent, info: c.registry.panes.get(paneId)?.info, pcName: borrowedBy.peer_device_name });
+          c.select(id);
+          if (kept.trim()) pushComposerInsert(id, kept);
+        } catch (e) {
+          return errorSentence(e);
+        }
+        return null;
+      }
+    : undefined;
   const heading = paneHeading(info, name);
   const projectLine = [heading.secondary, projectWithCopy(info.cwd)].filter(Boolean).join(' · ');
+  // The narrow header's one compact chip: everything the wide chips say (project, account, device), as its tooltip.
+  const where = [projectLine, info.account_label && !lentGrantOf(lend, paneId) ? info.account_label : '', placeTooltip(info.place) || placeLabel(info.place) || ''].filter(Boolean).join('\n');
   // A pane an agent started through Potato Workspace: names its parent and opens it.
   const startedBy = startedByLabel(info);
   const helperOf = helperOfLabel(c.registry.paneList, paneId, (p) => paneHeading(p.info, c.names.get(p.info.id) ?? p.info.agent_type).primary);
@@ -504,21 +543,26 @@ export function PaneView({
   const spunOffClosed = info.started_as === 'spin_off' && !!info.parent_pane_id && !helperOf ? (info.origin?.host?.trim() ? t('state.spunOffClosed', { name: info.origin.host.trim() }) : t('state.spunOffClosedAnon')) : null;
   const waiting = pane.status === 'waiting_input';
   const elapsed = waiting && since ? formatElapsed(c.now - since) : null;
-  const stateLine = isAcp
+  // A far chat that ended while its PC was off is "Ended" in grey, never a red "Stopped".
+  const farEnded = host.ended === true;
+  const stateLine = farEnded
+    ? t('r21fn.ended.word')
+    : isAcp
     ? waiting && elapsed
-      ? `${acpStatusWords(pane.status)} · ${elapsed}`
-      : acpStatusWords(pane.status)
+      ? `${acpStatusWords(shownStatus)} · ${elapsed}`
+      : acpStatusWords(shownStatus)
     : waiting && elapsed
       ? t('pane.needsYouElapsed', { elapsed })
-      : stateText(pane.status);
-  const headLine = headerStateLine({
+      : stateText(shownStatus);
+  const headLine = farEnded ? stateLine : headerStateLine({
     waiting,
     headline: prompt?.risk?.headline,
     elapsed,
-    doing: activityText(pane.status, c.activities?.[paneId]),
+    // A chat's header and its side panel say the same word: an idle chat is "Done" in both (the backend's bare "Idle" phrase is for terminals).
+    doing: isAcp && shownStatus === 'idle' ? null : activityText(shownStatus, c.activities?.[paneId]),
     fallback: stateLine,
   });
-  const preview = mainPreview(c.previews, paneId);
+  const preview = mainPreview(c.previews, paneId) ?? mainPreview(hostPreviews, paneId);
 
   // What waits on the person, one card at a time inside the Terminal tab; the tab strip never moves.
   const asking = waiting && !!prompt && prompt.choices.length > 0;
@@ -595,8 +639,9 @@ export function PaneView({
 
   // With a file in front, Ctrl+1 (Cmd+1) and Esc go back to the agent's own view (the pinned first tab does the same by click).
   // Esc leaves alone what has its own Esc: a text box, the editor, a menu or a card.
+  const moreView = tab === 'transcript' || tab === 'receipt' || tab === 'history';
   const backToAgent = (e: ReactKeyboardEvent<HTMLDivElement>) => {
-    if (pathOfTab(tab) === null || e.defaultPrevented) return;
+    if ((pathOfTab(tab) === null && !moreView) || e.defaultPrevented) return;
     if (e.key === '1' && (e.ctrlKey || e.metaKey) && !e.altKey && !e.shiftKey) {
       e.preventDefault();
       setTab(home);
@@ -629,10 +674,14 @@ export function PaneView({
     });
   }
   if (fold >= 1 && preview) {
-    moreActions.push({ id: 'preview-browser', label: t('pane.previewBrowserTip'), onSelect: () => void openPreview(preview.url).catch(() => c.notify(t('pane.previewFailed'))) });
+    moreActions.push({ id: 'preview-browser', label: t('pane.previewBrowserTip'), onSelect: () => void openPreviewInBrowserOn(host, paneId, preview).catch(() => c.notify(t('pane.previewFailed'))) });
+  }
+  // The header's globe is the last thing to leave the row: when even that does not fit, it wraps to a second line, so it goes into the menu.
+  if (fold >= 3) {
+    moreActions.push({ id: 'open-browser', label: t('check.openBrowser'), title: t('check.openBrowserTip'), onSelect: () => void openBrowserWindow().catch((err: unknown) => c.notify(typeof err === 'string' ? err : t('check.openBrowserFailed'))) });
   }
   if (fold >= 2 && preview) {
-    moreActions.push({ id: 'preview', label: t('pane.preview'), onSelect: () => void pointApi.openPreview(paneId, preview.port).catch((e: unknown) => c.notify(typeof e === 'string' ? e : t('pane.previewFailed'))) });
+    moreActions.push({ id: 'preview', label: t('pane.preview'), onSelect: () => void openPreviewOn(host, paneId, preview.port).catch((e: unknown) => c.notify(typeof e === 'string' ? e : t('pane.previewFailed'))) });
   }
   if (fold >= 2 && canHandOver) {
     moreActions.push({ id: 'open-in-terminal', label: t('pane.openInTerminal'), title: terminalOff ?? t('pane.openInTerminalTip'), disabled: handOver.busy || terminalOff !== null, onSelect: () => handOver.start('toTerminal', acpState?.conversation ?? paneId) });
@@ -660,13 +709,18 @@ export function PaneView({
             onEditingChange={setRenaming}
             onSave={(title) => void c.rename(paneId, title)}
           />
-          <span className="ck-sub-inline" title={realFolderPath(info.cwd)}>
+          <span className="ck-sub-inline ck-pane-project" data-testid="pane-project" title={realFolderPath(info.cwd) ?? projectLine}>
             {projectLine}
           </span>
-          {info.account_label && <span className="ck-sub-inline" data-testid="pane-account">{info.account_label}</span>}
+          {info.account_label && !lentGrantOf(lend, paneId) && <span className="ck-sub-inline" data-testid="pane-account" title={info.account_label}>{info.account_label}</span>}
           {placeLabel(info.place) && (
             <span className="ck-sub-inline" data-testid="pane-place" title={placeTooltip(info.place)}>
               {placeLabel(info.place)}
+            </span>
+          )}
+          {where && (
+            <span className="ck-pane-where" data-testid="pane-where" role="img" aria-label={where} title={where}>
+              <IconFolder />
             </span>
           )}
           {spunOffClosed && (
@@ -728,9 +782,10 @@ export function PaneView({
         <LiveChip paneId={paneId} status={liveStatus} />
         <BudgetChip paneId={paneId} refreshKey={pane.status} onNotify={c.notify} />
         <BorrowedChip paneId={paneId} />
+        <LentChip paneId={paneId} lend={lend} />
         {chatAllowed && <ForceYesChip paneId={paneId} isAcp={isAcp} state={acpState} agent={info.agent_type} cwd={info.cwd} chatApi={acp} />}
         <div className="ck-pane-state" data-compact={fold >= 2 ? 'true' : undefined}>
-          <DotSpinner status={spinnerStatus(pane.status)} />
+          <DotSpinner status={farEnded ? 'idle' : spinnerStatus(shownStatus)} />
           <span className="ck-pane-doing" title={stateLine}>
             {headLine}
           </span>
@@ -741,7 +796,7 @@ export function PaneView({
             className="ck-preview-chip"
             title={t('pane.previewTip', { url: preview.url.replace(/^https?:\/\//, '').replace(/\/$/, '') })}
             onClick={() =>
-              void pointApi.openPreview(paneId, preview.port).catch((e: unknown) => c.notify(typeof e === 'string' ? e : t('pane.previewFailed')))
+              void openPreviewOn(host, paneId, preview.port).catch((e: unknown) => c.notify(typeof e === 'string' ? e : t('pane.previewFailed')))
             }
           >
             <IconGlobe />
@@ -759,7 +814,7 @@ export function PaneView({
             className="ck-icon-btn"
             aria-label={t('pane.previewBrowserAria')}
             title={t('pane.previewBrowserTip')}
-            onClick={() => void openPreview(preview.url).catch(() => c.notify(t('pane.previewFailed')))}
+            onClick={() => void openPreviewInBrowserOn(host, paneId, preview).catch(() => c.notify(t('pane.previewFailed')))}
           >
             <IconGlobe />
           </button>
@@ -776,27 +831,40 @@ export function PaneView({
             {handoff.busy ? t('pane.handingOff') : handoff.mode === 'file' ? handoffLabel(handoff.mode) : t('pane.handOff')}
           </button>
         )}
-        <PaneMoreMenu<'transcript' | 'receipt' | 'history'>
+        {moreView && chatAllowed && (
+          <button type="button" className="ck-handover-btn" data-testid="review-back-to-chat" onClick={() => setTab('chat')}>
+            ← {t('pane.backToChat')}
+          </button>
+        )}
+        <PaneMoreMenu<'chat' | 'transcript' | 'receipt' | 'history'>
           label={t('pane.more')}
           value={tab}
           onPick={setTab}
           actions={[...moreActions, ...bellActions]}
           items={[
+            // The way back: one of these views replaces the chat (and its message box) and has no tab of its own.
+            ...(moreView && chatAllowed ? [{ id: 'chat' as const, label: t('pane.tabChat') }] : []),
             { id: 'transcript', label: t('pane.moreTranscript') },
             { id: 'receipt', label: t('pane.moreReceipt') },
             { id: 'history', label: t('pane.moreHistory') },
           ]}
         />
+        {fold < 3 && (
         <button
           type="button"
           className="ck-icon-btn"
           data-testid="open-browser"
           aria-label={t('check.openBrowser')}
           title={t('check.openBrowserTip')}
-          onClick={() => void openBrowserWindow().catch((e: unknown) => c.notify(typeof e === 'string' ? e : t('check.openBrowserFailed')))}
+          onClick={(e) => {
+            // The window opens over the app and the button keeps its pressed look after it closes (no mouse-leave arrives): let go of the focus.
+            e.currentTarget.blur();
+            void openBrowserWindow().catch((err: unknown) => c.notify(typeof err === 'string' ? err : t('check.openBrowserFailed')));
+          }}
         >
           <IconGlobe />
         </button>
+        )}
         {rail.fits && (
           <button
             type="button"
@@ -850,6 +918,8 @@ export function PaneView({
             <div className="ck-scroll ck-fade-in" key="chat" data-pane-id={paneId}>
               <SessionChatPanel
                 paneId={paneId}
+                chatTitle={name}
+                onUseLend={onUseLend}
                 dock={chatDock}
                 screenAsk={screenAsk}
                 headerSlot={chatSlot ? { el: chatSlot, compact: fold >= 3 } : undefined}
@@ -966,7 +1036,8 @@ export function PaneView({
                 agentName={name}
                 // An isolated pane has its own Changes tab, which holds the second opinion.
                 secondOpinion={!worktree && !remote ? <SecondOpinion paneId={paneId} status={pane?.status ?? ''} /> : null}
-                review={!worktree && !remote ? <TurnFiles paneId={paneId} status={pane?.status ?? ''} /> : null}
+                reviewFiles={reviewFiles}
+                review={!worktree && !remote ? <TurnFiles paneId={paneId} status={pane?.status ?? ''} onCount={setReviewFiles} whenNone={lastTurn ? <></> : <NoTurnsYet agentName={name} />} /> : null}
               />
             </div>
           )}
@@ -979,6 +1050,7 @@ export function PaneView({
             cwd={info.cwd}
             agentType={info.agent_type}
             agentName={name}
+            title={info.title?.trim() || undefined}
             accountLabel={info.account_label}
             runsOn={placeLabel(info.place) || null}
             readsChat={chatAllowed}
@@ -989,7 +1061,7 @@ export function PaneView({
             copy={copyKind ? { kind: copyKind } : null}
             canCreatePr={!!worktree}
             worktree={worktree}
-            ask={pane.status === 'waiting_input' ? (acpState?.permissions[0]?.title ?? (asking ? dockHeadline : t('pane.question'))) : null}
+            ask={pane.status === 'waiting_input' ? (acpState?.permissions?.[0]?.title ?? (asking ? dockHeadline : t('pane.question'))) : null}
             onAnswer={() => {
               setTab('chat');
               window.setTimeout(() => {
@@ -1130,10 +1202,10 @@ export function PaneView({
             <h2 className="ck-section" id="ck-close-t">
               {t('pane.closeAsk', { name })}
             </h2>
-            <p className="ck-sub">{t('pane.closeBody', { name })}</p>
+            <p className="ck-sub">{confirm === 'draft' ? t('pane.closeDraftBody', { name }) : t('pane.closeBody', { name })}</p>
             <div className="ck-sheet-actions">
               <button type="button" className="ck-btn ck-btn--secondary" autoFocus onClick={() => setConfirm(false)}>
-                {t('pane.keepRunning')}
+                {confirm === 'draft' ? t('pane.keepOpen') : t('pane.keepRunning')}
               </button>
               <button
                 type="button"
@@ -1143,7 +1215,7 @@ export function PaneView({
                   void c.closePane(paneId);
                 }}
               >
-                {t('pane.closeAgent')}
+                {confirm === 'draft' ? t('pane.closeAnyway') : t('pane.closeAgent')}
               </button>
             </div>
         </Sheet>

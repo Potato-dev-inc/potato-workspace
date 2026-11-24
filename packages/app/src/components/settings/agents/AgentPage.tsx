@@ -25,7 +25,10 @@ import { openAddAgentWith } from './agentTarget';
 import { CapChips } from './CapChips';
 import { LogoRow } from './LogoRow';
 import { ChatAdapterRow, type ChatAdapterApi } from './ChatAdapterRow';
-import { standingWords, type AgentRow } from './useAgentRows';
+import { rowReadiness, type AgentRow } from './useAgentRows';
+import { ownLoginApiFor, type OwnLogin } from './ownSignIn';
+import { useHost } from '../../../lib/host/context';
+import { useTestMemory } from '../../../lib/useAgentReadiness';
 
 /** Only an agent the person added themselves can be removed here; a built-in one or one from a project folder shows no Remove row at all. */
 function removable(def: DefinitionRow | undefined, loaded: boolean): def is DefinitionRow {
@@ -159,6 +162,19 @@ function CheckNow({ row, onCheck }: { row: AgentRow; onCheck?: () => Promise<voi
 export function AgentPage({ row, env, onBack, onCheck, apis = defaultPageApis }: { row: AgentRow; env: SettingsEnv; onBack: () => void; onCheck?: () => Promise<void>; apis?: AgentPageApis }) {
   const t = useT();
   const cli = row.caps !== null && terminalOnly(row.caps);
+  const host = useHost();
+  const tests = useTestMemory();
+  const [logins, setLogins] = useState<OwnLogin[] | null>(null);
+  useEffect(() => {
+    let live = true;
+    Promise.resolve()
+      .then(() => ownLoginApiFor(host).states())
+      .then((l) => live && setLogins(l), () => undefined);
+    return () => {
+      live = false;
+    };
+  }, [host, row.state]);
+  const standing = rowReadiness(row, logins, tests);
   return (
     // A <section>: the Settings list hides a row wrapper that has no direct .st-row child, and this page holds several.
     <section className="ag-page" data-testid="agent-page" data-agent={row.id}>
@@ -167,10 +183,10 @@ export function AgentPage({ row, env, onBack, onCheck, apis = defaultPageApis }:
           <AgentLogo id={row.id} name={row.label} size={28} decorative />
         </span>
         <h3 className="ag-title">{row.label}</h3>
-        <span className="ag-standing" data-state={row.state}>
-          {standingWords(row)}
+        <span className="ag-standing" data-state={standing.state}>
+          {standing.label}
         </span>
-        {row.state === 'needs_login' && (
+        {standing.state === 'needs_sign_in' && (
           <Btn small data-testid="agent-sign-in" onClick={() => openSignInAgain({ agentId: row.id, label: row.label })}>
             {SIGN_IN.action}
           </Btn>

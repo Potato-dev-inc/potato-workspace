@@ -1,6 +1,5 @@
 {
   "components/acp/SignInCard.tsx": 1,
-  "components/chat/ChatComposer.tsx": 1,
   "components/chat/KeepGoingBanner.tsx": 1,
   "components/cockpit/Changes.tsx": 1,
   "components/cockpit/companion/AgentRow.tsx": 1,
@@ -15,7 +14,6 @@
   "components/cockpit/companion/WakeOnSheet.tsx": 1,
   "components/cockpit/crews/SaveCrewSheet.tsx": 1,
   "components/cockpit/model.ts": 1,
-  "components/cockpit/newagent/NewAgentPage.tsx": 2,
   "components/cockpit/newagent/start.ts": 1,
   "components/cockpit/NewAgentMenu.tsx": 2,
   "components/cockpit/Palette.tsx": 1,

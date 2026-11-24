@@ -1,6 +1,6 @@
 import { useEffect, useRef } from 'react';
 import { invoke } from '@tauri-apps/api/core';
-import { listen } from '@tauri-apps/api/event';
+import { listen } from '../../lib/events';
 import '../../styles/switch-overlay.css';
 import { loadSettings } from '../../lib/settings';
 import { runSwitch, type Running } from '../../lib/mode-switch/animate';

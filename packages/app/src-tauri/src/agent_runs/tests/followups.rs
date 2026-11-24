@@ -21,9 +21,7 @@ fn headless_cursor_resumes_one_conversation_across_followups() {
     let (op, _) = operations::create_operation(first).unwrap();
     // The first turn's JSON result carries the chat id; the exit path stores it on the worker.
     let session = crate::tui::profile_for("cursor_agent")
-        .extract_provider_session(include_str!(
-            "../../tui/cursor/fixtures/headless_result.json"
-        ))
+        .extract_provider_session(include_str!("../../../crates/pm-core/src/tui/cursor/fixtures/headless_result.json"))
         .unwrap();
     operations::set_provider_session(&project_path, &op.operation_id, &session).unwrap();
     let stored = operations::get_operation(&project_path, &op.operation_id).unwrap();

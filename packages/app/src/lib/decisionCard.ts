@@ -1,6 +1,7 @@
 // Words and rules for the chat's permission card ("Decision card") and for the one line it leaves in the conversation.
 // Pure. Decided by the option kind and the tool kind the agent sent, never by which agent it is.
 import type { AcpPermission } from './acpChat';
+import { getLanguage, t } from '../i18n';
 import type { Question } from './questions';
 
 /** Tool kinds a person may stop being asked about in one chat (the backend refuses any other). */
@@ -21,7 +22,30 @@ const KIND_WORDS: Record<string, string> = {
 };
 
 export function kindWords(kind: string | null | undefined): string | null {
-  return kind ? (KIND_WORDS[kind] ?? null) : null;
+  if (!kind || !KIND_WORDS[kind]) return null;
+  return getLanguage() === 'en' ? KIND_WORDS[kind] : t(`decision.kind.${kind}` as never);
+}
+
+const OPTION_WORDS: Record<string, string> = { allow_once: 'risk.choice.allowOnce', allow_always: 'risk.choice.allowSession', reject_once: 'risk.choice.deny' };
+
+/** The button's words: in another language than English the standard option kinds get the app's own translated labels (the agent's names are English); a label that says more than the kind (a command in backticks) stays as the agent wrote it. English keeps the agent's own names. */
+export function optionWords(kind: string | null | undefined, name: string): string {
+  if (getLanguage() === 'en' || name.includes('`')) return name;
+  // A far chat sends the agent's option id (`allow`, `allow_session`, `proceed_once`), not its kind: read id and label together, "always" wins over "once".
+  const exact = kind ? OPTION_WORDS[kind] : undefined;
+  if (exact) return t(exact as never);
+  const kinds = [wordKind(kind), wordKind(name)];
+  const hit = ['allow_always', 'reject_once', 'allow_once'].find((k) => kinds.includes(k));
+  return hit ? t(OPTION_WORDS[hit] as never) : name;
+}
+
+/** The standard kind a loose id or English label stands for, or null. */
+function wordKind(w: string | null | undefined): string | null {
+  const s = (w ?? '').trim().toLowerCase().replace(/[_-]+/g, ' ');
+  if (/^(no|deny|reject|cancel|decline)(?![a-z])|^reject/.test(s) || /^no[,.!]/.test(s)) return 'reject_once';
+  if (/always|all edits|session|allow all|remember|don't ask/.test(s)) return 'allow_always';
+  if (/^(yes|allow|approve|proceed|ok|accept)(?![a-z])/.test(s)) return 'allow_once';
+  return null;
 }
 
 export function isRisky(kind: string | null | undefined): boolean {
@@ -57,7 +81,7 @@ export interface DecisionOption {
 export function decisionOptions(q: Question, permission: AcpPermission | null): DecisionOption[] {
   return q.choices.map((c) => {
     const kind = permission?.options?.find((o) => o.id === c.id)?.kind ?? c.id;
-    return { id: c.id, label: c.label, tone: toneOf(kind) };
+    return { id: c.id, label: optionWords(kind, c.label), tone: toneOf(kind) };
   });
 }
 
@@ -67,6 +91,12 @@ export function whatIsAsked(q: Question, permission: AcpPermission | null): stri
   if (title) return title;
   const at = q.question.indexOf(': ');
   return at >= 0 ? q.question.slice(at + 2).trim() : '';
+}
+
+/** Why Force yes left this question to the person: the code the app put in the card's context (`Force yes asked: <code>`), else null. */
+export function forceYesLeft(q: Question): string | null {
+  const m = /^Force yes asked: (\w+)$/m.exec(q.context ?? '');
+  return m?.[1] ?? null;
 }
 
 /** Whether a title needs the "Show full" toggle. */

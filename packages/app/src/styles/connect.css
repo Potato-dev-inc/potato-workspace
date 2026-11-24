@@ -43,7 +43,7 @@
 }
 .cn-qr {
   padding: 8px;
-  background: #fff; /* a QR code needs a white quiet zone to scan */
+  background: var(--paper); /* a QR code needs a white quiet zone to scan */
   border: 1px solid var(--sep);
   border-radius: 12px;
 }

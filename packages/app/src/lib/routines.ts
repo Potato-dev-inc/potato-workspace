@@ -4,7 +4,8 @@
 // `NewWorkflow` shape below is the same JSON the engine stores, so a node editor can build it later.
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { invoke } from '@tauri-apps/api/core';
-import { listen, type UnlistenFn } from '@tauri-apps/api/event';
+import { type UnlistenFn } from '@tauri-apps/api/event';
+import { listen } from './events';
 import { sayError } from './sayError';
 
 export const ROUTINES_CHANGED = 'routines://changed';

@@ -76,7 +76,7 @@ export const settingsGeneral: Partial<Record<EnglishKey, string>> = {
   'labsPage.line.lend-labs': '把你的 AI 助理登入借給另一台電腦，或借用別人的。',
   'labsPage.line.devices-labs': '配對另一台電腦，在它上面執行對話或終端機。',
   'labsPage.line.far-pcs-labs': '把另一個網路上的電腦透過你的中繼配對（需要先開啟「裝置」）。',
-  'labsPage.line.ssh-chat-labs': '透過 SSH 和另一台電腦上的代理程式聊天。實驗功能。',
+  'labsPage.line.ssh-chat-labs': '透過 SSH 和另一台電腦上的 AI 助理聊天。實驗功能。',
   'labsPage.line.pcdoor-labs': '讓已配對的電腦透過你的網址發出已簽署的唯讀呼叫。實驗功能。',
   'labsPage.line.desktop-potato-labs': '桌面上的小 Potato，AI 助理需要你時會揮手。',
   'labsPage.line.agent-browser-labs': 'AI 助理可以打開並點擊它所建立的 App 頁面。',

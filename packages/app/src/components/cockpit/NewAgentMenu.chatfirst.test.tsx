@@ -44,21 +44,13 @@ const labels = () => [...host.querySelectorAll('button.ck-menu-item')].map((b) =
 const row = (label: string) => [...host.querySelectorAll<HTMLButtonElement>('button.ck-menu-item')].find((b) => b.textContent?.includes(label))!;
 
 describe('the + menu with terminals hidden', () => {
-  it('lists only agents that can chat plus the plain shells, and no Chat | Terminal switch', async () => {
+  it('lists only agents that can chat (no shell), and no Chat | Terminal switch', async () => {
     forceShowTerminals(false);
     await mount();
     expect(host.querySelector('[data-testid="start-mode"]')).toBeNull();
     expect(labels().some((l) => l.includes('Claude'))).toBe(true);
     expect(labels().some((l) => l.includes('Aider'))).toBe(false);
-    expect(labels().some((l) => l.includes('PowerShell'))).toBe(true);
-  });
-
-  it('a shell row opens a terminal, never a chat, while terminals are hidden', async () => {
-    forceShowTerminals(false);
-    const { onStart, onChatStart } = await mount();
-    await act(async () => row('PowerShell').click());
-    expect(onStart).toHaveBeenCalledWith('powershell', undefined);
-    expect(onChatStart).not.toHaveBeenCalled();
+    expect(labels().some((l) => l.includes('PowerShell'))).toBe(false);
   });
 
   it('says once how many agents need terminals (the shell is not an agent)', async () => {

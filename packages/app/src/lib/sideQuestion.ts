@@ -4,6 +4,7 @@
 import { invoke } from '@tauri-apps/api/core';
 import type { AskResult } from './askbar';
 import type { ChatTurn } from './sessionChatModel';
+import type { Host } from './host/host';
 
 /** The transcript sent is at most this many characters (the backend cuts to the same number). */
 export const SIDE_CONTEXT_LIMIT = 12_000;
@@ -22,6 +23,12 @@ export interface SideQuestionApi {
   target: (paneId: string) => Promise<SideTarget | null>;
   ask: (paneId: string, request: { ask_id: string; question: string; context: string }) => Promise<AskResult>;
 }
+
+/** The side question of the place `host` shows: this PC's own agent, or the far PC's (its text never leaves it). */
+export const sideQuestionApi = (host: Host): SideQuestionApi => ({
+  target: (paneId) => host.invoke<SideTarget | null>('side_question_target', { paneId }),
+  ask: (paneId, request) => host.invoke<AskResult>('side_question_ask', { paneId, request }),
+});
 
 export const tauriSideQuestionApi: SideQuestionApi = {
   target: (paneId) => invoke<SideTarget | null>('side_question_target', { paneId }),

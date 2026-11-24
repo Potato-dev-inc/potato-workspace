@@ -4,7 +4,8 @@
 // this file is the typed command surface and the small rules the screen shares. The window never gets the session
 // token, the ticket or the sign-in secret: only "signed in as X" and the device list.
 import { invoke } from '@tauri-apps/api/core';
-import { listen, type UnlistenFn } from '@tauri-apps/api/event';
+import { type UnlistenFn } from '@tauri-apps/api/event';
+import { listen } from './events';
 
 export interface AccountInfo {
   id: string;
@@ -74,6 +75,20 @@ export interface AccountPc {
   node: string | null;
 }
 
+/**
+ * One answer to "is this PC on" for a row of My PCs. The live link is the truth for a paired PC: the account's word ("seen in the last two
+ * minutes") only says that PC has internet, not that this PC can reach it. `cant_reach`: it is on, but the link here is down (the row says so
+ * and shows no Open). With no live word (the list not read yet, or never asked) the account's word stands.
+ */
+export type PcReach = 'online' | 'cant_reach' | 'offline';
+export function pcReach(pc: Pick<AccountPc, 'status' | 'online'>, linkState: string | undefined): PcReach {
+  if (pc.status === 'allow_there') return 'offline';
+  if (pc.status === 'online' || linkState === 'online') return 'online';
+  const linkDown = pc.status !== 'new' && (linkState === 'offline' || linkState === 'asleep' || linkState === 'closed');
+  if (linkDown) return pc.online ? 'cant_reach' : 'offline';
+  return pc.online ? 'online' : 'offline';
+}
+
 export interface AccountPcsReply {
   available: boolean;
   signed_in: boolean;
@@ -110,6 +125,8 @@ export interface AccountApi {
   setOpenHere?: (on: boolean) => Promise<void>;
   /** Dismiss the note that a PC was removed. */
   dismissRemoved?: (id: string) => Promise<void>;
+  /** Answers a screen-less machine's join code ("Add <machine> to your account?"); `allow` false is "Not me". */
+  approveDevice?: (code: string, allow: boolean) => Promise<void>;
   /** Called when the sign-in state changed (a sign-in finished in the browser). Returns the stop function. */
   onChanged: (cb: () => void) => Promise<UnlistenFn>;
 }
@@ -127,6 +144,7 @@ export const accountApi: AccountApi = {
   openPc: (id) => invoke<OpenedPc>('devices_open_account_pc', { id }),
   setOpenHere: (on) => invoke<void>('devices_set_open_from_account', { on }),
   dismissRemoved: (id) => invoke<void>('devices_dismiss_removed_pc', { id }),
+  approveDevice: (code, allow) => invoke<void>('account_approve_device', { code, allow }),
   onChanged: (cb) => listen(ACCOUNT_CHANGED_EVENT, () => cb()),
 };
 

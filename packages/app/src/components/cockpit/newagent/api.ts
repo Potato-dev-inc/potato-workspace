@@ -1,7 +1,7 @@
 // What the New agent page reads and writes, behind one small interface so a test can hand it fakes. The real one
 // calls the same commands the "+" menu, Settings and the chat tab already use; it adds no command of its own.
 import { invoke } from '@tauri-apps/api/core';
-import { listen } from '@tauri-apps/api/event';
+import { listen } from '../../../lib/events';
 import { pickFiles } from '../../../lib/attachFiles';
 import { sendPaneMessage } from '../../../lib/paneOutbox';
 import { pickableAccounts, tauriAccountsApi, type Account } from '../../../lib/accounts';

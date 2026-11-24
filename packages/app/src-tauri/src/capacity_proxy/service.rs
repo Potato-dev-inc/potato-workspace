@@ -44,19 +44,22 @@ pub trait OfferGate: Send + Sync {
     fn claim(&self, offer_ref: &str, member_id: &str, device_id: &str, profile_id: Option<&str>, secs: u64) -> bool;
 }
 
+pub mod own_far;
+pub use own_far::FarOffer;
+
 pub const HOUR: u64 = 3600;
 pub const CAP_SECS: u64 = 7 * 24 * HOUR;
 pub const CAP_OTHER_SECS: u64 = 24 * HOUR;
 /// The shortest lend (one minute; one second in tests, so expiry can be watched).
 pub const MIN_SECS: u64 = if cfg!(test) { 1 } else { 60 };
 /// A borrowed sign-in's account id: `lend:<grant id>`.
-pub const ACCOUNT_PREFIX: &str = "lend:";
+pub use pm_core::capacity_proxy::ACCOUNT_PREFIX;
 pub const MODE: &str = "proxy";
 pub const NOT_IN_THIS_MODE: &str = "Not available in this mode";
 pub const ENDED: &str = "This lend ended";
 /// Why a chat cannot start on a borrowed sign-in of an agent whose spec has no `[chat]` hookup. The chat lane gives it its own
 /// code (`LEND_CHAT_UNSUPPORTED`), not "sign-in not found".
-pub const NO_CHAT: &str = "Chat can't be borrowed through a PC for this agent yet. Open it in a terminal.";
+pub use pm_core::capacity_proxy::NO_CHAT;
 /// What both PCs show on a grant whose lend sign-in can't be used.
 pub const SIGNIN_PROBLEM: &str = "The lender's sign-in expired. Ask them to sign in again.";
 /// What the borrower shows on a grant whose lending PC does not answer (asleep or offline).
@@ -253,9 +256,15 @@ pub struct Grant {
     /// When it ended (any reason). None while it runs, and for a grant saved by an older build (then `ends_ms` is used).
     #[serde(default)]
     pub ended_ms: Option<u64>,
+    /// Why it ended when the reason is worth a line of its own: only ever `RESTARTED` (a PC of the pair restarted). Never text from the other PC.
+    #[serde(default)]
+    pub end_note: Option<String>,
     /// Lender only: which of my profiles this lend comes from (so the screen can say a profile is lent right now).
     #[serde(default)]
     pub profile_id: String,
+    /// The other PC's device-link node (64 hex) when it is one of my own PCs, else empty. Connect matches a PC row by it.
+    #[serde(default)]
+    pub peer_node: String,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
@@ -310,15 +319,7 @@ struct PendingOffers {
     got: HashMap<String, Vec<Offer>>,
 }
 
-/// What a chat on a borrowed sign-in is started with.
-#[derive(Debug, Clone, Default, PartialEq, Eq)]
-pub struct BorrowedChat {
-    pub env: LaunchEnv,
-    /// Added to the adapter's arguments.
-    pub args: Vec<String>,
-    /// The adapter's `authenticate` method to call before a session opens.
-    pub authenticate: Option<String>,
-}
+pub use pm_core::capacity_proxy::BorrowedChat;
 
 /// A grant id as a folder name (letters, digits, `-` and `_` only).
 fn safe_name(id: &str) -> String {
@@ -406,12 +407,21 @@ struct Saved {
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 struct PendingRevoke {
     grant_id: String,
-    /// The borrower's device.
+    /// The borrower's device (or, when `give_back`, the lender's).
     device: String,
+    /// A borrower that restarted tells its lender with a `Return` instead of a `Revoke`.
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    give_back: bool,
 }
 
 /// The reason the borrower sees when this PC lost its lends by restarting.
 pub const RESTARTED: &str = "lender restarted";
+/// The note on a lend the borrower no longer holds (it said so when the lender checked).
+pub const NOT_HELD: &str = "not held";
+/// The reason a borrower gives back a lend it lost by restarting (the lender keeps only this constant, never other text).
+pub const BORROWER_RESTARTED: &str = "borrower restarted";
+/// A lend must be this old before the lender checks it with the borrower (the grant may still be on its way).
+const CHECK_AFTER_MS: u64 = if cfg!(test) { 0 } else { 60_000 };
 /// How often a revoke that could not go out yet is tried again (the team may not be connected right after launch).
 const REVOKE_RETRY: Duration = if cfg!(test) { Duration::from_millis(200) } else { Duration::from_secs(15) };
 const REVOKE_TRIES: u32 = 80;
@@ -474,6 +484,10 @@ pub trait OwnPort: Send + Sync {
     /// This PC's node id on the device link, when it is up.
     fn my_node(&self) -> Option<String>;
     fn my_name(&self) -> String;
+    /// Whether `node` is a PC signed in to THIS account (not only paired): my own sign-in is lent to those only ("Use my own agents").
+    fn same_account(&self, node: &str) -> bool {
+        self.peers().iter().any(|(n, _)| n == node)
+    }
 }
 
 /// No device link: lending between my own PCs is not available (the Team path is unchanged).
@@ -615,6 +629,8 @@ pub struct Lend {
     /// Offers I asked for and have not finished collecting (nonce -> who and what came back).
     offers_wait: Mutex<HashMap<String, PendingOffers>>,
     offer_gate: Mutex<Option<Arc<dyn OfferGate>>>,
+    /// "Use my own agents": the lends this PC's own click has promised to one of my PCs, not yet asked for (`own_far.rs`).
+    promises: Mutex<Vec<own_far::Promise>>,
     me: Weak<Lend>,
 }
 
@@ -655,6 +671,7 @@ impl Lend {
             awake_on: Mutex::new(false),
             offers_wait: Mutex::new(HashMap::new()),
             offer_gate: Mutex::new(None),
+            promises: Mutex::new(Vec::new()),
             me: me.clone(),
         });
         let book: Weak<dyn LenderBook> = svc.me.clone();
@@ -758,6 +775,12 @@ impl Lend {
 
     /// Ask one of my own PCs (a paired device with Borrow switched on there) to lend an agent. No Team needed.
     pub fn request_own(&self, node_hex: &str, agent_id: &str, secs: u64, reason: &str, profile_id: Option<&str>, profile_name: Option<&str>) -> Result<LendRequest, String> {
+        self.request_own_ref(node_hex, agent_id, secs, reason, profile_id, profile_name, None)
+    }
+
+    /// `request_own`, naming the promise (`own_far.rs`) the lender's own click made, so the lender can say yes by itself.
+    #[allow(clippy::too_many_arguments)]
+    pub(super) fn request_own_ref(&self, node_hex: &str, agent_id: &str, secs: u64, reason: &str, profile_id: Option<&str>, profile_name: Option<&str>, offer_ref: Option<&str>) -> Result<LendRequest, String> {
         if self.spec(agent_id).is_none() {
             return Err(format!("{agent_id} can't be borrowed through a PC."));
         }
@@ -785,7 +808,7 @@ impl Lend {
             device_name: self.deps.own.my_name(),
             node_hint: node.clone(),
             profile_id: profile_id.map(str::to_string),
-            offer_ref: None,
+            offer_ref: offer_ref.map(str::to_string),
         };
         let view = LendRequest {
             id: request_id,
@@ -916,7 +939,10 @@ impl Lend {
         inner.saved.grants.retain(|g| {
             g.view.state != GrantState::Ended || now.saturating_sub(g.view.ended_ms.unwrap_or(g.view.ends_ms)) < Self::PAST_KEEP_MS
         });
-        let gone = inner.saved.grants.len() != before;
+        // Asks of either side, answered or not, go with them: an old "Ready" or "Waiting" row is not news.
+        let asks = inner.saved.requests.len();
+        inner.saved.requests.retain(|r| now.saturating_sub(r.view.at_ms) < Self::PAST_KEEP_MS);
+        let gone = inner.saved.grants.len() != before || inner.saved.requests.len() != asks;
         if gone {
             self.save(&inner);
         }
@@ -1430,6 +1456,14 @@ impl Lend {
     /// profile, no more time, not used yet), say yes now. Everything else about the lend is the normal `answer`.
     fn answer_if_promised(&self, request_id: &str, offer_ref: Option<&str>, member_id: &str, device_id: &str, profile_id: Option<&str>, secs: u64) {
         let Some(offer_ref) = offer_ref.filter(|r| !r.is_empty() && r.len() <= 64) else { return };
+        // My own PC asking for what my own click promised it (`own_far.rs`): the one lend this PC answers without a card.
+        if member_id == OWN_MEMBER {
+            let agent = lock(&self.inner).saved.requests.iter().find(|r| r.view.id == request_id).map(|r| r.view.agent_id.clone()).unwrap_or_default();
+            if let Some(p) = self.claim_own_promise(offer_ref, device_id, &agent, profile_id, secs) {
+                self.answer_promised_own(request_id, p, secs);
+            }
+            return;
+        }
         let Some(gate) = lock(&self.offer_gate).clone() else { return };
         if !gate.claim(offer_ref, member_id, device_id, profile_id, secs) {
             return;
@@ -1519,7 +1553,9 @@ impl Lend {
             problem_kind: None,
             profile_name: profile.name.clone(),
             ended_ms: None,
+            end_note: None,
             profile_id: profile.id.clone(),
+            peer_node: own_node(&to).unwrap_or_default().to_string(),
         };
         let body = Body::Grant {
             request_id: request_id.into(),
@@ -1672,6 +1708,7 @@ impl Lend {
         let rec = self.grant_rec(grant_id).filter(|g| g.view.direction == Direction::Out).ok_or("That lend is gone.")?;
         if rec.view.state == GrantState::Active {
             self.finish_out(grant_id, EndReason::Revoked);
+            self.audit_own_lend("lend.own.stop", &rec.view);
         }
         let session = self.session_for(&[rec.borrower_device.as_str()])?;
         self.send_to(session.as_ref(), &rec.borrower_device, Body::Revoke { grant_id: grant_id.into(), reason: String::new() })
@@ -1682,7 +1719,7 @@ impl Lend {
         let rec = self.grant_rec(grant_id).filter(|g| g.view.direction == Direction::In).ok_or("That lend is gone.")?;
         self.finish_in(grant_id, Some(GrantEnd::Returned));
         let session = self.session_for(&[rec.lender_device.as_str()])?;
-        self.send_to(session.as_ref(), &rec.lender_device, Body::Return { grant_id: grant_id.into() })
+        self.send_to(session.as_ref(), &rec.lender_device, Body::Return { grant_id: grant_id.into(), reason: String::new() })
     }
 
     fn grant_rec(&self, grant_id: &str) -> Option<GrantRec> {
@@ -1732,6 +1769,45 @@ impl Lend {
         self.changed();
     }
 
+    fn note_borrower_restart(&self, grant_id: &str) {
+        let mut inner = lock(&self.inner);
+        if let Some(g) = inner.saved.grants.iter_mut().find(|g| g.view.id == grant_id && g.view.direction == Direction::In) {
+            g.view.end_note = Some(BORROWER_RESTARTED.into());
+        }
+    }
+
+    /// Marks a borrowed lend as ended by the lender's restart (the screen says so in one line).
+    fn note_end(&self, grant_id: &str) {
+        let mut inner = lock(&self.inner);
+        if let Some(g) = inner.saved.grants.iter_mut().find(|g| g.view.id == grant_id && g.view.direction == Direction::In) {
+            g.view.end_note = Some(RESTARTED.into());
+        }
+        self.save(&inner);
+    }
+
+    /// Asks each lender whether a lend I borrow is still theirs; one that says it is gone ends here at once (a lender that restarted
+    /// and could not tell me, or a revoke that never arrived). An unreachable lender changes nothing: it may only be asleep.
+    pub async fn recheck_borrows(&self) {
+        let now = self.now();
+        let targets: Vec<(String, NodeHint, Vec<u8>)> = {
+            let inner = lock(&self.inner);
+            inner
+                .saved
+                .grants
+                .iter()
+                .filter(|g| g.view.direction == Direction::In && g.view.state == GrantState::Active && g.view.ends_ms > now)
+                .filter_map(|g| Some((g.view.id.clone(), g.node.clone()?, self.deps.secrets.get(&link_slot(&g.view.id)).ok().flatten().and_then(|s| unb64(&s))?)))
+                .collect()
+        };
+        for (id, hint, secret) in targets {
+            let probe = tokio::time::timeout(Duration::from_secs(10), self.deps.net.probe(&hint, &id, &secret)).await;
+            if matches!(probe, Ok(Err(ConnectError::Ended))) {
+                self.note_end(&id);
+                self.finish_in(&id, Some(GrantEnd::Revoked));
+            }
+        }
+    }
+
     /// Starts the shim of an incoming grant (on the async runtime).
     fn start_shim(&self, grant_id: &str, hint: NodeHint, secret: Vec<u8>, ends_ms: u64) {
         let g = Arc::new(InGrant { svc: self.me.clone(), grant_id: grant_id.to_string(), hint, secret, ended: AtomicBool::new(false) });
@@ -1760,8 +1836,16 @@ impl Lend {
                 svc.changed();
             }
             tokio::time::sleep(Duration::from_millis(left)).await;
-            if let Some(svc) = me.upgrade() {
-                svc.finish_in(&id, Some(GrantEnd::Expired));
+            // A lend the lender keeps rolling (`Extend`) has a later end by now: look again until it is really over.
+            loop {
+                let Some(svc) = me.upgrade() else { return };
+                let more = svc.grant_rec(&id).filter(|r| r.view.state == GrantState::Active).map(|r| r.view.ends_ms.saturating_sub(svc.now())).unwrap_or(0);
+                if more == 0 {
+                    svc.finish_in(&id, Some(GrantEnd::Expired));
+                    return;
+                }
+                drop(svc);
+                tokio::time::sleep(Duration::from_millis(more)).await;
             }
         }));
     }
@@ -1791,7 +1875,7 @@ impl Lend {
         let spec = self.spec(agent_id).ok_or("This agent can't be borrowed through a PC.")?;
         let hookup = if chat { spec.chat.as_ref().ok_or(NO_CHAT)? } else { &spec.hookup };
         let base_url = live.shim.base_url();
-        let mut env = hookup_env(hookup, &base_url, &(self.deps.env_names)());
+        let mut env = hookup_env(hookup, &base_url, &live.shim.token(), &(self.deps.env_names)());
         // The agent's own config folder for THIS lend (a fresh one, never the borrower's real one).
         let folder = self.deps.dir.join("lend-homes").join(safe_name(grant_id)).join(if chat { "chat" } else { "terminal" });
         set_home(&mut env, write_home(hookup, &base_url, &folder)?);
@@ -1813,11 +1897,13 @@ impl Lend {
     /// Active borrowed grants as extra sign-ins for the pickers.
     pub fn borrowed_rows(&self) -> Vec<serde_json::Value> {
         let now = self.now();
-        lock(&self.inner)
+        let inner = lock(&self.inner);
+        // Only a borrow whose shim is up can serve: never list one that is still starting or lost its shim.
+        inner
             .saved
             .grants
             .iter()
-            .filter(|g| g.view.direction == Direction::In && g.view.state == GrantState::Active && g.view.ends_ms > now)
+            .filter(|g| g.view.direction == Direction::In && g.view.state == GrantState::Active && g.view.ends_ms > now && inner.inn.contains_key(&g.view.id))
             .map(|g| {
                 serde_json::json!({
                     "id": format!("{ACCOUNT_PREFIX}{}", g.view.id),
@@ -2048,7 +2134,9 @@ impl Lend {
                             problem_kind: None,
                             profile_name: clean_profile_name(&profile_name),
                             ended_ms: None,
+                            end_note: None,
                             profile_id: String::new(),
+                            peer_node: own_node(&item.from_device).unwrap_or_default().to_string(),
                         },
                         lender_device: item.from_device.clone(),
                         borrower_device: my_device,
@@ -2077,19 +2165,59 @@ impl Lend {
                 self.set_request_state(&request_id, Direction::Out, RequestState::Declined);
                 return Ok(());
             }
-            Body::Revoke { grant_id, .. } => {
+            Body::Revoke { grant_id, reason } => {
                 let rec = self.grant_rec(&grant_id).filter(|g| g.view.direction == Direction::In).ok_or(WireReject::BadItem)?;
                 if !wire::rules::revoke_allowed(&rec.lender_device, &item.from_device) {
                     return Err(WireReject::Impersonation);
                 }
+                if reason == RESTARTED {
+                    self.note_end(&grant_id);
+                }
                 self.finish_in(&grant_id, Some(GrantEnd::Revoked));
             }
-            Body::Return { grant_id } => {
+            Body::Extend { grant_id, not_after_ms } => {
+                let rec = self.grant_rec(&grant_id).filter(|g| g.view.direction == Direction::In && g.view.state == GrantState::Active).ok_or(WireReject::BadItem)?;
+                if !wire::rules::revoke_allowed(&rec.lender_device, &item.from_device) {
+                    return Err(WireReject::Impersonation);
+                }
+                // Read like a grant: from arrival, never more than my own rolling cap, never earlier than now.
+                let left = not_after_ms.saturating_sub(item.sent_ms).min(own_far::ROLL_SECS * 1000);
+                let ends_ms = now + left;
+                let mut inner = lock(&self.inner);
+                if let Some(g) = inner.saved.grants.iter_mut().find(|g| g.view.id == grant_id && g.view.direction == Direction::In) {
+                    if ends_ms > g.view.ends_ms {
+                        g.view.ends_ms = ends_ms;
+                    }
+                }
+                self.save(&inner);
+            }
+            Body::Return { grant_id, reason } => {
                 let rec = self.grant_rec(&grant_id).filter(|g| g.view.direction == Direction::Out).ok_or(WireReject::BadItem)?;
                 if !wire::rules::return_allowed(&rec.borrower_device, &item.from_device) {
                     return Err(WireReject::Impersonation);
                 }
+                // The one reason that is kept is my own constant; any other text from the other PC is dropped.
+                if reason == NOT_HELD || reason == BORROWER_RESTARTED {
+                    let mut inner = lock(&self.inner);
+                    if let Some(g) = inner.saved.grants.iter_mut().find(|g| g.view.id == grant_id && g.view.direction == Direction::Out && g.view.state == GrantState::Active) {
+                        g.view.end_note = Some(reason);
+                    }
+                }
                 self.finish_out(&grant_id, EndReason::Returned);
+            }
+            Body::Check { grant_id } => {
+                // Only the lender of a grant I hold may ask. A grant I do not hold (unknown, ended, past its time) is answered with a
+                // return, so the lender's screen stops showing a lend I do not have.
+                let held = self.grant_rec(&grant_id).filter(|g| g.view.direction == Direction::In);
+                if let Some(rec) = &held {
+                    if !wire::rules::revoke_allowed(&rec.lender_device, &item.from_device) {
+                        return Err(WireReject::Impersonation);
+                    }
+                }
+                if !held.is_some_and(|g| g.view.state == GrantState::Active && g.view.ends_ms > now) {
+                    let _ = self.send_to(session, &item.from_device, Body::Return { grant_id, reason: NOT_HELD.into() });
+                }
+                return Ok(());
             }
             Body::Usage { grant_id, plan, windows } => {
                 let rec = self.grant_rec(&grant_id).filter(|g| g.view.direction == Direction::In && g.view.state == GrantState::Active).ok_or(WireReject::BadItem)?;
@@ -2152,7 +2280,7 @@ impl Lend {
     }
 
     /// After a restart: grants I lend can't be served again, so they end and the borrower is told (a revoke with the
-    /// reason "lender restarted"); grants I borrow get their shim back until their time is up.
+    /// reason "lender restarted"); grants I borrow end too (note "borrower restarted") and the lender is told with a return.
     ///
     /// Why not resume serving them: the forwarder, the gate and its usage counts, and the refresh job live in
     /// memory only. Serving again after a restart would restart the request and token counts from zero, so a limit
@@ -2160,45 +2288,100 @@ impl Lend {
     /// state has already; nothing secret is added to the disk.
     pub fn resume(&self) {
         let now = self.now();
-        let (ended_out, live_in): (Vec<String>, Vec<GrantRec>) = {
+        let live_in: Vec<GrantRec> = {
             let inner = lock(&self.inner);
-            let out = inner.saved.grants.iter().filter(|g| g.view.direction == Direction::Out && g.view.state == GrantState::Active).map(|g| g.view.id.clone()).collect();
-            let inn = inner.saved.grants.iter().filter(|g| g.view.direction == Direction::In && g.view.state == GrantState::Active).cloned().collect();
-            (out, inn)
+            inner.saved.grants.iter().filter(|g| g.view.direction == Direction::In && g.view.state == GrantState::Active).cloned().collect()
         };
-        {
-            let mut inner = lock(&self.inner);
-            let mut told = Vec::new();
-            for g in inner.saved.grants.iter_mut().filter(|g| ended_out.contains(&g.view.id)) {
-                g.view.state = GrantState::Ended;
-                g.view.end_reason = Some(if now >= g.view.ends_ms { GrantEnd::Expired } else { GrantEnd::Revoked });
-                // The borrower knows an expired lend ended by itself; one cut short needs telling.
-                if now < g.view.ends_ms {
-                    told.push(PendingRevoke { grant_id: g.view.id.clone(), device: g.borrower_device.clone() });
-                }
-            }
-            for p in told {
-                if !inner.saved.pending_revokes.iter().any(|x| x.grant_id == p.grant_id) {
-                    inner.saved.pending_revokes.push(p);
-                }
-            }
-            self.save(&inner);
-        }
-        for id in &ended_out {
-            let _ = self.deps.secrets.delete(&link_slot(id));
-        }
+        // Nothing is served yet, so every saved active lend of mine is one this PC cannot honour.
+        self.end_orphans();
         self.send_pending_revokes();
+        // A borrow cannot be proven after a restart (the shim, its token and the link are new, and a lend that looks active
+        // but does not serve is worse than none): it ends here, the lender is told, and no trace is left in the pickers.
+        let mut told = Vec::new();
         for g in live_in {
-            let secret = self.deps.secrets.get(&link_slot(&g.view.id)).ok().flatten().and_then(|s| unb64(&s));
-            match (g.node.clone(), secret) {
-                (Some(node), Some(secret)) if g.view.ends_ms > now => self.start_shim(&g.view.id, node, secret, g.view.ends_ms),
-                _ => self.finish_in(&g.view.id, Some(GrantEnd::Expired)),
+            self.note_borrower_restart(&g.view.id);
+            self.finish_in(&g.view.id, Some(GrantEnd::Revoked));
+            if g.view.ends_ms > now {
+                told.push(PendingRevoke { grant_id: g.view.id.clone(), device: g.lender_device.clone(), give_back: true });
             }
+        }
+        if !told.is_empty() {
+            let mut inner = lock(&self.inner);
+            inner.saved.pending_revokes.extend(told);
+            self.save(&inner);
+            drop(inner);
+            self.send_pending_revokes();
         }
     }
 }
 
 impl Lend {
+    /// Ends every lend I lend that is saved as active but that nothing here serves (its gate, forwarder and counts live in memory
+    /// only, so a restart lost them): recorded as ended with the note `RESTARTED`, the borrower told by a revoke. A lend being served
+    /// is always in `inner.out`, so this never touches a live one. Returns how many ended.
+    pub fn end_orphans(&self) -> usize {
+        let now = self.now();
+        let mut ended = Vec::new();
+        {
+            let mut inner = lock(&self.inner);
+            let Inner { saved, out, .. } = &mut *inner;
+            let mut told = Vec::new();
+            for g in saved.grants.iter_mut().filter(|g| g.view.direction == Direction::Out && g.view.state == GrantState::Active && !out.contains_key(&g.view.id)) {
+                g.view.state = GrantState::Ended;
+                g.view.ended_ms = Some(now);
+                g.view.problem = None;
+                g.view.end_reason = Some(if now >= g.view.ends_ms { GrantEnd::Expired } else { GrantEnd::Revoked });
+                // The borrower knows an expired lend ended by itself; one cut short needs telling.
+                if now < g.view.ends_ms {
+                    g.view.end_note = Some(RESTARTED.into());
+                    told.push(PendingRevoke { grant_id: g.view.id.clone(), device: g.borrower_device.clone(), give_back: false });
+                }
+                ended.push(g.view.id.clone());
+            }
+            for p in told {
+                if !saved.pending_revokes.iter().any(|x| x.grant_id == p.grant_id) {
+                    saved.pending_revokes.push(p);
+                }
+            }
+            if !ended.is_empty() {
+                self.save(&inner);
+            }
+        }
+        for id in &ended {
+            let _ = self.deps.secrets.delete(&link_slot(id));
+        }
+        if !ended.is_empty() {
+            self.send_pending_revokes();
+            self.changed();
+        }
+        ended.len()
+    }
+
+    /// Lender: asks the borrower of each running lend (older than a minute) whether it still holds it. A borrower that does not
+    /// answers with a return (`NOT_HELD`), which ends the lend here with that note. Silence changes nothing: it may only be asleep.
+    pub fn recheck_lent(&self) -> usize {
+        self.end_orphans();
+        let now = self.now();
+        let targets: Vec<(String, String)> = {
+            let inner = lock(&self.inner);
+            inner
+                .saved
+                .grants
+                .iter()
+                .filter(|g| g.view.direction == Direction::Out && g.view.state == GrantState::Active && g.view.ends_ms > now && now.saturating_sub(g.view.started_ms) >= CHECK_AFTER_MS)
+                .map(|g| (g.view.id.clone(), g.borrower_device.clone()))
+                .collect()
+        };
+        let mut sent = 0;
+        for (id, device) in targets {
+            let session = self.session_for(&[device.as_str()]).ok().flatten();
+            if self.send_to(session.as_ref(), &device, Body::Check { grant_id: id }).is_ok() {
+                sent += 1;
+            }
+        }
+        sent
+    }
+
     /// Sends the revokes saved by `resume` off the calling thread, and tries again while the team is not reachable.
     fn send_pending_revokes(&self) {
         if lock(&self.inner).saved.pending_revokes.is_empty() {
@@ -2228,7 +2411,11 @@ impl Lend {
         let team = self.deps.team.session().ok();
         let mut done = Vec::new();
         for p in &pending {
-            let body = Body::Revoke { grant_id: p.grant_id.clone(), reason: RESTARTED.into() };
+            let body = if p.give_back {
+                Body::Return { grant_id: p.grant_id.clone(), reason: BORROWER_RESTARTED.into() }
+            } else {
+                Body::Revoke { grant_id: p.grant_id.clone(), reason: RESTARTED.into() }
+            };
             if own_node(&p.device).is_some() {
                 if self.send_to(None, &p.device, body).is_ok() {
                     done.push(p.grant_id.clone());
@@ -2289,8 +2476,12 @@ impl Lend {
                 if let Err(e) = self.deps.net.start().await {
                     return fail(&format!("The PC link could not start: {e}"));
                 }
-                let r = self.deps.pinger.ping_device(&rec.borrower_device).await;
+                let r = ping_until_answered(PING_TRIES, || self.deps.pinger.ping_device(&rec.borrower_device)).await;
                 let Some(ms) = r.ms.filter(|_| r.ok) else {
+                    // A link the borrower has open right now is an answer: the mailbox ping is only the slow way to ask.
+                    if links > 0 {
+                        return Ok(LinkTest { ok: true, ms: None, via: None, message: "OK. The borrower's PC has a link open right now.".to_string() });
+                    }
                     return fail("The borrower's PC isn't answering (is the app open?)");
                 };
                 let link = if links > 0 { "a link is open" } else { "no link open yet" };
@@ -2332,6 +2523,25 @@ impl Lend {
         }
         out
     }
+}
+
+/// How many times the lender's check asks the borrower's PC before it says "not answering": the mailbox ping rides the
+/// borrower's poll, so one missed ping on a PC that is online is normal.
+pub(super) const PING_TRIES: u32 = 2;
+
+pub(super) async fn ping_until_answered<F, Fut>(tries: u32, mut ask: F) -> super::ping::DevicePing
+where
+    F: FnMut() -> Fut,
+    Fut: std::future::Future<Output = super::ping::DevicePing>,
+{
+    let mut last = ask().await;
+    for _ in 1..tries {
+        if last.ok {
+            break;
+        }
+        last = ask().await;
+    }
+    last
 }
 
 fn link_ok(p: Probe) -> LinkTest {
@@ -2378,5 +2588,67 @@ impl LenderBook for Lend {
 impl crate::own_lend::Inbox for Lend {
     fn deliver(&self, from_node: &str, body: serde_json::Value) -> Result<serde_json::Value, String> {
         self.on_own_item(from_node, body)
+    }
+}
+
+/// Lending is off, so no service runs, but a lend that already ended is still news (its Inbox row shows whatever the switch says).
+/// Only the ended grants of the saved state are read: no profile, request or key, and nothing is changed.
+pub fn ended_grants_saved(dir: &std::path::Path) -> Vec<Grant> {
+    std::fs::read_to_string(dir.join("state.json"))
+        .ok()
+        .and_then(|t| serde_json::from_str::<Saved>(&t).ok())
+        .map(|s| s.grants.into_iter().map(|g| g.view).filter(|g| g.state == GrantState::Ended).collect())
+        .unwrap_or_default()
+}
+
+#[cfg(test)]
+mod ended_saved_tests {
+    use super::*;
+
+    fn rec(id: &str, state: GrantState) -> GrantRec {
+        GrantRec {
+            view: Grant {
+                id: id.into(),
+                direction: Direction::In,
+                agent_id: "claude".into(),
+                peer_member_id: String::new(),
+                peer_name: String::new(),
+                peer_device_name: "REN".into(),
+                started_ms: 1,
+                ends_ms: 2,
+                state,
+                end_reason: None,
+                for_other_person: false,
+                pane_ids: vec![],
+                requests: 0,
+                input_tokens: 0,
+                output_tokens: 0,
+                problem: None,
+                problem_kind: None,
+                profile_name: String::new(),
+                ended_ms: Some(2),
+                end_note: None,
+                profile_id: String::new(),
+                peer_node: String::new(),
+            },
+            lender_device: String::new(),
+            borrower_device: String::new(),
+            borrower_node: String::new(),
+            node: None,
+            profile_id: None,
+            limits: Limits::default(),
+        }
+    }
+
+    #[test]
+    fn lending_off_still_reads_the_ended_grants_and_only_those() {
+        let dir = std::env::temp_dir().join(format!("pm-ended-saved-{}", std::process::id()));
+        std::fs::create_dir_all(&dir).unwrap();
+        let saved = Saved { grants: vec![rec("a", GrantState::Ended), rec("b", GrantState::Active)], ..Saved::default() };
+        std::fs::write(dir.join("state.json"), serde_json::to_string(&saved).unwrap()).unwrap();
+        let ids: Vec<String> = ended_grants_saved(&dir).into_iter().map(|g| g.id).collect();
+        assert_eq!(ids, vec!["a".to_string()]);
+        assert!(ended_grants_saved(&dir.join("nope")).is_empty());
+        let _ = std::fs::remove_dir_all(&dir);
     }
 }

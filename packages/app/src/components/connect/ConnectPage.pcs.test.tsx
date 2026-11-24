@@ -47,6 +47,14 @@ describe('My PCs: the list', () => {
     expect(q('[data-testid="connect-pc-group"]')!.textContent).not.toMatch(/phone/i);
   });
 
+  it('a stale "Press Allow" row of a PC that is already paired is not listed twice (same node or same name)', async () => {
+    const account = fakeAccount({ pcs: [pc({ id: 'real', name: 'REN', node: NODE_MAC }), pc({ id: 'stale', name: 'REN', status: 'allow_there', node: 'e1'.repeat(32) }), pc({ id: 'stale2', name: 'Other', status: 'allow_there', node: NODE_MAC })] });
+    await h.mount(makeApi({ tunnel: linked(), account, devices: new DevicesFake({ enabled: true, name: 'REN-DESK', devices: [MAC_MINI] }) }));
+    expect(q('[data-testid="account-pc-line-real"]')).not.toBeNull();
+    expect(q('[data-testid="account-pc-line-stale"]')).toBeNull();
+    expect(q('[data-testid="account-pc-line-stale2"]')).toBeNull();
+  });
+
   it('Open on an account PC asks the account, then jumps to that PC through the sidebar hook', async () => {
     const opened: string[] = [];
     const base = fakeAccount({ pcs: [pc({ id: 'a' })] });
@@ -123,6 +131,29 @@ describe('My PCs: Add a PC', () => {
 describe("A PC's own sheet: one switch, off until you say yes", () => {
   const devices = () => new DevicesFake({ enabled: true, name: 'REN-DESK', devices: [{ ...MAC_MINI, lets_run: true, level: 'watch' }, WORK_LAPTOP] });
 
+  it('the PC sheet has an Activity button and Connect a Device activity link: newest first, with a failed dial', async () => {
+    const at = Math.floor(Date.now() / 1000);
+    const d = new DevicesFake({
+      enabled: true,
+      name: 'REN-DESK',
+      devices: [MAC_MINI, WORK_LAPTOP],
+      activity: [
+        { at: at - 600, node: MAC_MINI.node, name: MAC_MINI.name, dir: 'in', kind: 'connected' },
+        { at: at - 60, node: MAC_MINI.node, name: MAC_MINI.name, dir: 'out', kind: 'could_not_connect' },
+      ],
+    });
+    await h.mount(makeApi({ tunnel: linked(), devices: d }));
+    await click(q('[data-testid="connect-activity-link"]'));
+    await settle(4);
+    expect(q('[data-testid="connect-activity-sheet"]')!.querySelectorAll('[data-testid="device-activity"] li')).toHaveLength(2);
+    await click(q('[data-testid="connect-activity-sheet"] button[aria-label="Close"]'));
+    await click(q(`[data-testid="connect-pc-name-${MAC_MINI.node}"]`));
+    await click(q('[data-testid="connect-pc-activity"]'));
+    await settle(4);
+    const rows = [...document.querySelectorAll('[data-testid="connect-pc-sheet"] [data-testid="device-activity"] li')].map((li) => li.getAttribute('data-dir'));
+    expect(rows).toEqual(['out', 'in']);
+  });
+
   it('Can work on this PC is off; turning it on asks first; Yes sets Full, Keep it off changes nothing', async () => {
     const d = devices();
     const set = vi.spyOn(d, 'setPermission');
@@ -195,14 +226,35 @@ describe("A PC's own sheet: only Can work on this PC", () => {
     await h.mount(makeApi({ tunnel: linked(), devices: d }));
     await click(q(`[data-testid="connect-pc-name-${MAC_MINI.node}"]`));
     const sheet = text('[data-testid="connect-pc-sheet"]');
-    expect(sheet).toContain('It can watch and answer on this PC.');
+    expect(sheet).toContain('It can watch, answer and work on this PC.');
     expect(sheet).toContain('Can work on this PC');
-    expect(sheet).not.toMatch(/browse and copy|borrow my agent|send work/i);
-    expect(document.querySelectorAll('[data-testid="connect-pc-sheet"] [role="switch"]')).toHaveLength(1);
+    expect(sheet).not.toMatch(/browse and copy|send work/i);
+    // A PC that may work here also shows "borrow my sign-ins" (off), so it can be turned on from the sheet.
+    expect(document.querySelectorAll('[data-testid="connect-pc-sheet"] [role="switch"]')).toHaveLength(2);
     await click(q('[data-testid="connect-pc-work"]'));
     await settle(6);
     expect(set).toHaveBeenCalledWith(MAC_MINI.node, false, 'watch');
     expect(files).toHaveBeenCalledWith(MAC_MINI.node, false);
+  });
+
+  it('a granted "borrow my sign-ins" has its switch in the sheet (and none while it is off)', async () => {
+    const d = new DevicesFake({ enabled: true, name: 'REN-DESK', devices: [{ ...MAC_MINI, lets_lend: true }] });
+    const lend = vi.spyOn(d, 'setLend');
+    await h.mount(makeApi({ tunnel: linked(), devices: d }));
+    await click(q(`[data-testid="connect-pc-name-${MAC_MINI.node}"]`));
+    await click(q('[data-testid="connect-pc-lend"]'));
+    await settle(6);
+    expect(lend).toHaveBeenCalledWith(MAC_MINI.node, false);
+  });
+
+  it('a PC that may work here keeps the borrow switch (off), and it turns on from the sheet', async () => {
+    const d = new DevicesFake({ enabled: true, name: 'REN-DESK', devices: [{ ...MAC_MINI, lets_run: true, level: 'full', lets_lend: false }] });
+    const lend = vi.spyOn(d, 'setLend');
+    await h.mount(makeApi({ tunnel: linked(), devices: d }));
+    await click(q(`[data-testid="connect-pc-name-${MAC_MINI.node}"]`));
+    await click(q('[data-testid="connect-pc-lend"]'));
+    await settle(6);
+    expect(lend).toHaveBeenCalledWith(MAC_MINI.node, true);
   });
 
   it('Open: a hook that has no section for the PC answers false and the PC\'s own sheet opens', async () => {
@@ -301,5 +353,38 @@ describe('My PCs: old rows and the key note', () => {
     damaged.view = { ...damaged.view, tampered: true };
     await h.mount(makeApi({ tunnel: linked(), devices: damaged }));
     expect(text('[data-testid="connect-pc-tampered"]')).toBe('The list of PCs could not be trusted. Add your PCs again.');
+  });
+});
+
+describe('My PCs: the dot, the words and Open say the same thing', () => {
+  it('a PC the account saw a minute ago (online) is not "Offline, seen 1 min ago" beside a green dot', async () => {
+    const account = fakeAccount({ pcs: [pc({ id: 'a', status: 'away', online: true, last_seen_at: NOW - 90 })] });
+    await h.mount(makeApi({ tunnel: linked(), account }));
+    expect(text('[data-testid="account-pc-line-a"]')).toBe('PC · Online');
+    expect(q('[data-testid="account-pc-a"] .cx-dot.ok')).not.toBeNull();
+    expect(q('[data-testid="account-pc-open-a"]')).not.toBeNull();
+  });
+
+  it('a PC the account lists as away but whose live link is up is online everywhere in the row', async () => {
+    const account = fakeAccount({ pcs: [pc({ id: 'a', status: 'away', online: false, last_seen_at: NOW - 600, node: NODE_MAC })] });
+    await h.mount(makeApi({ tunnel: linked(), account, devices: new DevicesFake({ enabled: true, name: 'REN-DESK', devices: [MAC_MINI] }) }));
+    expect(text('[data-testid="account-pc-line-a"]')).toBe('PC · Online');
+    expect(q('[data-testid="account-pc-a"] .cx-dot.ok')).not.toBeNull();
+  });
+
+  it('a PC the account saw a minute ago whose live link is down says so, with a grey dot and no Open', async () => {
+    const account = fakeAccount({ pcs: [pc({ id: 'a', status: 'away', online: true, last_seen_at: NOW - 60, node: NODE_MAC })] });
+    await h.mount(makeApi({ tunnel: linked(), account, devices: new DevicesFake({ enabled: true, name: 'REN-DESK', devices: [{ ...MAC_MINI, state: 'offline' }] }) }));
+    expect(text('[data-testid="account-pc-line-a"]')).toBe("PC · On, but this PC can't connect to it. Trying again.");
+    expect(q('[data-testid="account-pc-a"] .cx-dot.ok')).toBeNull();
+    expect(q('[data-testid="account-pc-open-a"]')).toBeNull();
+  });
+
+  it('a PC that is really away keeps the offline words, a grey dot and no Open', async () => {
+    const account = fakeAccount({ pcs: [pc({ id: 'a', status: 'away', online: false, last_seen_at: NOW - 600, node: 'd4'.repeat(32) })] });
+    await h.mount(makeApi({ tunnel: linked(), account }));
+    expect(text('[data-testid="account-pc-line-a"]')).toBe('PC · Offline, seen 10 min ago');
+    expect(q('[data-testid="account-pc-a"] .cx-dot.ok')).toBeNull();
+    expect(q('[data-testid="account-pc-open-a"]')).toBeNull();
   });
 });

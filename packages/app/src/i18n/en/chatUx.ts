@@ -80,4 +80,5 @@ export const chatUx = {
   'copyOffer.always': 'Always offer',
   'copyOffer.never': 'Never offer',
   'chat.readyIdle': 'Ready. Type to use it yourself.',
+  'chat.loadingChat': 'Loading…',
 } as const;

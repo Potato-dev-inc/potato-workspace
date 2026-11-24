@@ -124,6 +124,7 @@ const PATCHABLE_KEYS: &[&str] = &[
     "desktop_pet_quiet",
     "desktop_pet_hidden_until_ms",
     "keep_awake_while_working",
+    "jump_out_cards_enabled",
     "helper_answers_enabled",
     "helper_default_models",
     "agent_default_models",
@@ -204,6 +205,8 @@ pub fn default_public_settings() -> Value {
         "desktop_pet_hidden_until_ms": 0,
         // Keep the PC awake (the screen may still turn off) while an agent works, so locking with Win+L does not stop it.
         "keep_awake_while_working": true,
+        // A small card jumps out when an agent is blocked on a question only the Inbox shows (Settings > General).
+        "jump_out_cards_enabled": true,
         // The agent that started a helper may answer its safe questions (allow once, any no). Rust: acp::chat::helper_answers.
         "helper_answers_enabled": true,
         // Settings > Agents that agents start: the model a helper runs on per agent id when the request names none.
@@ -488,6 +491,17 @@ mod tests {
         assert_eq!(missions_only["night_shift_enabled"], false);
         let from_file = public_settings_from_store_file(&json!({"settings": {"night_shift_enabled": true}}));
         assert_eq!(from_file["night_shift_enabled"], true);
+    }
+
+    #[test]
+    fn jump_out_cards_are_on_by_default_patchable_and_a_saved_off_stays_off() {
+        let defaults = default_public_settings();
+        assert_eq!(defaults["jump_out_cards_enabled"], true);
+        assert!(PATCHABLE_KEYS.contains(&"jump_out_cards_enabled"), "a key missing here is silently dropped from a patch");
+        let off = merge_public_settings(&defaults, &json!({"jump_out_cards_enabled": false}));
+        assert_eq!(off["jump_out_cards_enabled"], false);
+        // Not a Labs switch: a development build leaves it as saved.
+        assert_eq!(with_dev_labs(&off, true)["jump_out_cards_enabled"], false);
     }
 
     #[test]

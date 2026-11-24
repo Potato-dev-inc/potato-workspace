@@ -165,7 +165,7 @@ impl Host for RealHost {
                         return Err(format!("{} did not finish (exit {})", step.label, status.code().unwrap_or(-1)));
                     }
                 }
-                Action::Script { .. } => return Err("this one needs the vendor's own uninstaller; remove it in Settings > Apps".into()),
+                Action::Script { .. } | Action::ShellScript { .. } => return Err("this one needs the vendor's own uninstaller; remove it in Settings > Apps".into()),
             }
         }
         Ok(())

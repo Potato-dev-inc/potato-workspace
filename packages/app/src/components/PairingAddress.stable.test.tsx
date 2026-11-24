@@ -17,6 +17,7 @@ const QUICK = 'https://quiet-lake-1234.trycloudflare.com';
 
 const mocks = vi.hoisted(() => ({ tunnelUrl: 'https://quiet-lake-1234.trycloudflare.com' as string | null, status: null as unknown, opened: [] as string[], relay: '' }));
 
+vi.mock('@tauri-apps/api/event', () => ({ listen: async () => () => undefined, emit: async () => undefined }));
 vi.mock('qrcode', () => ({ default: { toCanvas: vi.fn(async () => undefined) } }));
 vi.mock('../lib/load-tunnel-dev-info', () => ({
   watchTunnelDevInfo: vi.fn((cb: (info: unknown) => void) => {
@@ -24,7 +25,10 @@ vi.mock('../lib/load-tunnel-dev-info', () => ({
     return () => undefined;
   }),
 }));
-vi.mock('../lib/team', () => ({ teamApi: { configGet: vi.fn(async () => ({ relay: mocks.relay })) } }));
+vi.mock('../lib/team', async (importOriginal) => {
+  const real = await importOriginal<typeof import('../lib/team')>();
+  return { ...real, teamApi: { ...real.teamApi, configGet: vi.fn(async () => ({ relay: mocks.relay })) } };
+});
 vi.mock('../lib/tauri', () => ({
   tauri: {
     createMobilePairingSession: vi.fn(),
@@ -209,20 +213,17 @@ describe('Settings screen (real catalog): Connect page', () => {
     subscribe: () => () => {},
   };
 
-  it('shows the phone address with "Keep one address" on the Connect page, and the sheet opens', async () => {
+  it('shows the phone code and the permanent / temporary link choice, with no "Keep one address" card (that sheet lives in the old Phone panel)', async () => {
     mocks.status = quick;
     host = document.createElement('div');
     document.body.appendChild(host);
     root = createRoot(host);
     await act(async () => root.render(<SettingsPanel open withConnect api={settingsApi} initialTab="connect" />));
     await settle(8);
-    // Connect > Phone: "Pair a phone" opens the pairing panel, which carries "Keep one address".
-    await click(host.querySelector('[data-testid="connect-main-phone"]'));
-    await settle(30);
-    const offer = host.querySelector<HTMLElement>('[data-testid="keep-one-address"]');
-    expect(offer).not.toBeNull();
-    await click(offer);
-    expect(host.querySelector('[data-testid="stable-sheet"]')).not.toBeNull();
+    expect(host.querySelector('[data-testid="connect-qr"]')).not.toBeNull();
+    expect(host.querySelector('[data-testid="connect-link-permanent"]')).not.toBeNull();
+    expect(host.querySelector('[data-testid="connect-link-temporary"]')).not.toBeNull();
+    expect(host.querySelector('[data-testid="keep-one-address"]')).toBeNull();
   });
 });
 

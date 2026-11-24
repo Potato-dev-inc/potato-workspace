@@ -4,14 +4,14 @@ mod test_manifest;
 mod account;
 mod accounts;
 mod acp;
-mod actors;
+use pm_core::actors;
 mod agent_authority;
 mod agent_terminals;
-mod agent_rules;
+pub use pm_core::agent_rules;
 mod agent_run_mode;
 mod audit;
 mod ambient;
-mod agent_adapters;
+pub use pm_core::agent_adapters;
 mod agent_contexts;
 pub mod agent_runs;
 mod agent_health;
@@ -21,7 +21,7 @@ mod agent_caps;
 pub mod agent_hooks;
 pub mod app_lifecycle;
 mod autostart;
-pub mod app_paths;
+pub use pm_core::app_paths;
 mod bridge;
 pub use bridge::identity as bridge_identity;
 mod budgets;
@@ -33,14 +33,14 @@ mod commands;
 mod context_pack;
 mod crash;
 mod event_log;
-mod git_exclude;
+use pm_core::git_exclude;
 mod handoff;
 mod handover;
 mod task_sidebar;
 mod issue_intake;
 mod routines;
 mod ci_fix;
-mod events;
+use pm_core::events;
 mod mcp_hints;
 mod mcp_install;
 mod mcp_drift;
@@ -57,7 +57,7 @@ mod domain_book;
 mod own_domain;
 mod phone_port;
 mod worker_origins;
-mod tools_home;
+pub use pm_core::tools_home;
 mod uninstall;
 mod one_brain;
 mod companion;
@@ -67,7 +67,7 @@ mod discord_alerts;
 mod discord_bot;
 mod opencode;
 pub mod operations;
-pub mod wait_reasons;
+pub use pm_core::wait_reasons;
 #[cfg(test)]
 mod sleep_budget_tests;
 #[cfg(test)]
@@ -84,10 +84,10 @@ mod panic;
 mod askbar;
 mod hidden_runs;
 mod side_question;
-mod attach;
+use pm_core::attach;
 mod attention;
 mod second_opinion;
-pub mod pane_outbox;
+pub use pm_core::pane_outbox;
 mod pane_prompt;
 mod first_run;
 mod plain_mode;
@@ -95,11 +95,16 @@ mod plans_report;
 mod usage;
 mod prompt_risk;
 mod package_check;
-pub mod questions;
+pub use pm_core::questions;
+#[cfg(test)]
+mod questions_router_tests;
 mod push;
 pub mod redact;
+#[cfg(test)]
+mod redact_sink_tests;
+mod redact_sources;
 mod flight;
-mod secure_file;
+use pm_core::secure_file;
 mod app_windows;
 mod cockpit;
 mod mini_bar;
@@ -112,19 +117,21 @@ mod desktop_toast;
 mod tray;
 mod pane_wait;
 mod phone_log;
-mod pane_wait_notify;
-mod platform;
+use pm_core::pane_wait_notify;
+pub use pm_core::platform;
 pub mod redirection_trust;
 mod project_ir;
 #[cfg(windows)]
-pub mod proc_job;
-pub mod proc_util;
-mod path_limit;
+pub use pm_core::proc_job;
+pub use pm_core::proc_util;
+#[cfg(test)]
+mod proc_util_guard;
+pub use pm_core::path_limit;
 mod project_path;
 mod project_location;
-mod project_budget;
+pub use pm_core::project_budget;
 mod projections;
-mod pty;
+pub use pm_core::pty;
 #[cfg(test)]
 mod replay;
 #[cfg(feature = "dev-fake-tui")]
@@ -135,37 +142,41 @@ mod pwa_server;
 mod tunnel_auth_tests;
 #[cfg(test)]
 mod device_caps_tests;
-mod session_context;
-mod chat_index;
+use pm_core::session_context;
+pub use pm_core::chat_index;
 mod chat_move;
 mod import_orca;
-mod session_chat;
+pub use pm_core::session_chat;
 mod scores;
-mod secrets;
-#[cfg(target_os = "linux")]
-mod secrets_file;
+use pm_core::secrets;
 mod settings_store;
 mod show_terminals;
 mod settings_patch;
 mod settings_safety;
 mod global_shortcuts;
-mod shell_env;
+pub use pm_core::shell_env;
 mod startup_chores;
-mod startup_timing;
+use pm_core::startup_timing;
 mod startup_trace;
 mod review_desk;
 mod spaces;
-mod secure_core;
+use pm_core::secure_core;
+mod tauri_host;
+mod engine_hooks;
+#[cfg(test)]
+mod pty_app_tests;
+mod wizard_registry_host;
+mod wizard_ladder;
+#[cfg(test)]
+mod wizard_ladder_tests;
 mod tamper;
 pub mod shell_exec;
 mod standby;
 mod team;
-#[allow(dead_code)]
-mod keys;
-#[allow(dead_code)]
-mod p2p;
+use pm_core::keys;
+use pm_core::p2p;
 // Devices: pair another PC and run agents on it (Labs `devices_enabled`).
-mod device_identity;
+use pm_core::device_identity;
 mod agent_dispatch;
 mod own_lend;
 mod device_link;
@@ -174,25 +185,25 @@ pub mod tool_registry;
 mod toolbelt;
 mod agent_pack;
 mod timeline;
-mod tui;
+pub use pm_core::tui;
 pub mod turn_summary;
 mod worker_launch;
 pub mod worktrees;
 pub mod watch_command;
-pub mod env_probe;
+pub use pm_core::env_probe;
 mod webview_service_worker;
 mod live_room;
 mod model_bridge;
 // Share an agent: Lend through my PC (Labs `lend_enabled`).
 mod capacity_proxy;
 mod keep_awake;
-mod wsl;
+pub use pm_core::wsl;
 mod ssh;
 mod collision;
 mod notify_levels;
 mod artifacts;
 mod project_guide;
-mod files;
+use pm_core::files;
 // Open in my editor (desk review).
 mod editor;
 // Desktop Potato (Labs `desktop_pet_enabled`): a small pet window. Reserved lines at the end.
@@ -200,7 +211,7 @@ mod pet;
 #[cfg(test)]
 mod conformance_suite;
 #[cfg(test)]
-mod test_support;
+use pm_core::test_support;
 
 use commands::AppState;
 use std::path::{Path, PathBuf};
@@ -210,6 +221,7 @@ use tauri::{Listener, Manager};
 /// adapter for an agent that has no ACP). `Some(exit code)` when one ran; `main` exits with it. `None`:
 /// start the app as usual.
 pub fn run_cli_subcommand() -> Option<i32> {
+    redact_sources::install();
     let args = std::env::args().skip(1).collect::<Vec<_>>();
     if args.first().map(String::as_str) == Some(uninstall::HELPER_FLAG) {
         return uninstall::helper::run_cli(&args);
@@ -219,6 +231,7 @@ pub fn run_cli_subcommand() -> Option<i32> {
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
+    redact_sources::install(); // before anything is masked: pm-core cannot list the app's own secrets
     // Before anything is spawned and before the single-instance lock: an app the installer started
     // inherits a policy that stops its panes following links; start a fresh copy and exit.
     let redirection = redirection_trust::guard_at_startup();
@@ -280,12 +293,13 @@ pub fn run() {
         .manage(AppState::new())
         .manage(deep_link::PendingJoinLink::default())
         .register_asynchronous_uri_scheme_protocol("pmfile", commands::files_stream_protocol)
+        .register_asynchronous_uri_scheme_protocol("pmfar", device_link::far_preview::serve)
         .register_asynchronous_uri_scheme_protocol("potato-artifact", commands::artifact_serve_protocol)
         .register_asynchronous_uri_scheme_protocol("potato-start", commands::start_page_protocol)
         .manage(commands::SessionChatState::default())
         .manage(live_room::service::LiveRoomState::default())
         .manage(commands::ChatImportState::default())
-        .invoke_handler(tauri::generate_handler![
+        .invoke_handler(device_link::far_preview::guarded(tauri::generate_handler![
             deep_link::take_pending_join_link,
             commands::list_panes,
             spaces::commands::spaces_view,
@@ -379,6 +393,7 @@ pub fn run() {
             commands::account_cancel_sign_in,
             commands::account_devices,
             commands::account_revoke_device,
+            commands::account_approve_device,
             commands::account_sign_out_here,
             commands::devices_state,
             commands::devices_show_code,
@@ -407,9 +422,11 @@ pub fn run() {
             commands::devices_set_device_route,
             commands::devices_disconnect,
             commands::devices_request,
+            commands::devices_chat_export,
             commands::devices_subscribe,
             commands::devices_unsubscribe,
             commands::devices_set_files,
+            commands::far_preview_open,
             commands::devices_files_folders,
             commands::devices_files_set_folders,
             commands::devices_files_roots,
@@ -421,6 +438,7 @@ pub fn run() {
             commands::devices_transfers_clear,
             commands::lend_state,
             commands::lend_test_link,
+            commands::lend_recheck_lent,
             commands::lend_profile_save,
             commands::lend_profile_delete,
             commands::lend_key_set,
@@ -430,6 +448,11 @@ pub fn run() {
             commands::lend_signin_stop,
             commands::lend_request,
             commands::lend_request_own,
+            commands::lend_far_offer,
+            commands::lend_far_note_pane,
+            commands::lend_far_renew,
+            commands::own_borrow_ask,
+            commands::own_borrow_plan,
             commands::lend_offers,
             commands::lend_answer,
             commands::lend_revoke,
@@ -459,6 +482,7 @@ pub fn run() {
             commands::pane_messages_list,
             commands::attachments::attachment_prepare,
             commands::attachments::attachment_save_pasted,
+            commands::attachments::attachment_read_local,
             commands::attachments::attachment_preview,
             commands::attachments::project_files_search,
             commands::attachments::clipboard_file_paths,
@@ -548,6 +572,8 @@ pub fn run() {
             commands::ssh_check,
             commands::ssh_add,
             commands::ssh_check_saved,
+            commands::ssh_setup,
+            commands::ssh_update,
             commands::ssh_remove,
             commands::ssh_open,
             commands::ssh_chat_start,
@@ -1157,9 +1183,13 @@ pub fn run() {
             commands::checkpoint_file_patch,
             commands::editors_found,
             commands::open_in_editor,
-        ])
+        ]))
         .setup(|app| {
             startup_trace::mark("setup_begin");
+            // The engine's seam to this app: window events and the runtime (`pm_core::host`) and the app's answers (`pm_core::hooks`). First of all, so no
+            // pane started later in setup runs without them.
+            tauri_host::install(app.handle().clone());
+            engine_hooks::install();
             deep_link::setup(app.handle());
             desktop_toast::init(app.handle());
             commands::startup_probe(app.handle().clone());
@@ -1323,6 +1353,8 @@ pub fn run() {
             let registry_for_panes = app.state::<AppState>().registry.clone();
             pane_windows::init(app.handle(), registry_for_panes.clone());
             secrets::migrate_on_startup();
+            opencode::keys::migrate_profiles_to_secret_store();
+            toolbelt::store::migrate_on_startup();
             startup_trace::mark("pane_windows_secrets");
             settings_store::load_saved_public_settings(app.handle());
             agent_run_mode::migrate_legacy_defaults_once(app.handle());
@@ -1377,7 +1409,7 @@ pub fn run() {
             // host is installed here, not referenced from the wizard module, so the Tauri window code stays out
             // of the unit-test executables.
             tui::declarative::wizard::visible::host::install(std::sync::Arc::new(
-                tui::declarative::wizard::visible::registry_host::RegistryHost::new(registry_for_panes.clone(), app.handle().clone()),
+                wizard_registry_host::RegistryHost::new(registry_for_panes.clone(), app.handle().clone()),
             ));
             pane_activity::init(registry_for_panes.clone(), app.handle().clone());
             loop_guard::init(app.handle().clone());
@@ -1390,8 +1422,6 @@ pub fn run() {
             // The mode-switch overlay is built hidden now and reused, so the first switch has no startup lag.
             switch_anim::glue::init(app.handle());
             team::init(app.handle().clone(), registry_for_panes.clone());
-            // Share an agent keeps only the handle here; nothing is built until its Labs switch is on.
-            capacity_proxy::init(app.handle().clone());
             team::direct::init(app.handle().clone());
             device_link::app::init(app.handle().clone());
             issue_intake::live::start(registry_for_panes.clone(), app.handle().clone());

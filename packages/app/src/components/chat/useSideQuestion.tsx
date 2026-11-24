@@ -1,10 +1,10 @@
 // The side question's two parts for one chat: the "Ask aside" button for the header and the box laid over the chat.
 // Ctrl+; opens the box (Esc closes it). The shortcut is ignored while this chat is not on screen, so a hidden chat
 // never answers it.
-import { useCallback, useEffect, useRef, useState, type ReactNode } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { useHost } from '../../lib/host/context';
 import type { ChatTurn } from '../../lib/sessionChatModel';
-import { tauriSideQuestionApi, type SideQuestionApi } from '../../lib/sideQuestion';
+import { sideQuestionApi, type SideQuestionApi } from '../../lib/sideQuestion';
 import { bindingHint, matchesAction } from '../../lib/shortcuts';
 import { SideQuestionBox } from './SideQuestionBox';
 import { useT } from '../../i18n';
@@ -49,10 +49,12 @@ function isShown(el: Element | null): boolean {
   return el !== null;
 }
 
-export function useSideQuestion(paneId: string, turns: readonly ChatTurn[], api: SideQuestionApi = tauriSideQuestionApi): { button: ReactNode; box: ReactNode } {
+export function useSideQuestion(paneId: string, turns: readonly ChatTurn[], given?: SideQuestionApi): { button: ReactNode; box: ReactNode } {
   const t = useT();
   // A place that cannot run a side question yet draws the same button, off, with its one reason.
   const host = useHost();
+  // The question runs where the chat lives: this PC's agent, or the far PC's own.
+  const api = useMemo(() => given ?? sideQuestionApi(host), [given, host]);
   const off = host.can?.('side_question_ask') === false ? (host.notYet ?? null) : null;
   const [open, setOpen] = useState(false);
   // Bumped when an answer is kept, so the box re-reads the pane's list.

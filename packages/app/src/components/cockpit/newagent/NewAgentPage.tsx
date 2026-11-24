@@ -4,6 +4,8 @@
 // backing for (a permission mode, a model, an effort) are not drawn: nothing here is a stand-in.
 import { useEffect, useMemo, useRef, useState, type KeyboardEvent, type ReactNode } from 'react';
 import { errorSentence } from '../../../lib/sayError';
+import { growBox, refusePaste } from '../../../lib/bigText';
+import { registerFileDrop } from '../../../lib/fileDrop';
 import type { Account } from '../../../lib/accounts';
 import type { AgentDescriptor } from '../../../lib/agentRegistry';
 import type { RecentProject } from '../../../lib/ship-api';
@@ -13,6 +15,7 @@ import { useDismissable } from '../../../hooks/useDismissable';
 import { Menu as SharedMenu, useLayerHost } from '../../common/Floating';
 import { AddonPrompt } from '../../acp/AddonPrompt';
 import { SignInCard } from '../../acp/SignInCard';
+import { useFarPlan, type FarPlanOf } from './useFarPlan';
 import { useCopyOffered } from '../../../lib/copyOffer';
 import { lastRealFolder, projectOfCwd, readStoredCopyPreference, supportsCopies, supportsChatCopy, isPlainCopyFolder, writeCopyPreference, copyDefault } from '../../../lib/ship-model';
 import { folderName, pathKey, useSidebarProjects } from '../../../lib/sidebarProjects';
@@ -24,6 +27,10 @@ import { NeedTerminalsLine } from '../NeedTerminalsLine';
 import type { ProjectChoice } from '../NewAgentMenu';
 import { gitStateOf, remotePathOf } from '../../../lib/runtime/remoteNewAgent';
 import { useHost } from '../../../lib/host/context';
+import { ownLoginApiFor, type OwnLogin } from '../../settings/agents/ownSignIn';
+import { agentReadiness } from '../../../lib/agentReadiness';
+import { useTestMemory } from '../../../lib/useAgentReadiness';
+import { LEND_MINE } from '../../../lib/host/ownAgents';
 import { hostNewAgentSources, useHostAgents } from '../../../lib/host/newAgentSources';
 import { tauriNewAgentApi, type HomeSettings, type NewAgentApi, type WorkflowChoice } from './api';
 import { prettyModel } from '../../crews/modelNames';
@@ -139,10 +146,16 @@ export interface RemoteInfo {
   terminals: boolean;
   /** Why Start is off for this PC before anything is typed (it lets this PC only watch), or null. */
   blocked: string | null;
+  /** This far PC starts a chat on a separate copy (its `acp_chat_start` row), so "Work on a copy" is offered. */
+  copy?: boolean;
   /** The agent and folder are picked: the far PC may warm that agent's chat program. */
   onWarm?: (agentId: string, folder: string) => void;
+  /** What a plain start of an agent there runs on (its own sign-in, or the lend this PC made). */
+  plan?: FarPlanOf;
   /** The far PC has not let this PC work on it: in place of Start, one line, and a button that really asks the person there (`ask`). */
   agentsOff?: { line: string; ask?: AgentsAsk };
+  /** "Use my own agents": this PC's name and the agents of this PC that can be lent to that PC (their chats run there, on my sign-in here). */
+  mine?: { thisName: string; agents: { agentId: string; label: string; chat: boolean }[] };
 }
 
 /** "Ask <PC> to allow agents": a card is put on the far PC; nothing is granted until its person says yes. */
@@ -251,12 +264,25 @@ export function NewAgentPage({ agents: agentsGiven, panes, needs, selectedCwd = 
   const defaultsApi = defaultsGiven ?? own?.defaultsApi ?? tauriAgentDefaultsApi;
   const rulesApi = rulesGiven ?? own?.rulesApi ?? tauriAgentRulesApi;
   const [prompt, setPrompt] = useState('');
+  const [pasteNote, setPasteNote] = useState<string | null>(null);
   const [exampleIdx, setExampleIdx] = useState(0);
   const [menu, setMenu] = useState<Menu>(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [home, setHome] = useState<HomeSettings>({ name: '', cards: [] });
   const [accounts, setAccounts] = useState<Account[]>([]);
+  // This PC's own logins (the same read Overview and Settings > Agents use): a signed-out one is never called "ready".
+  const [ownLogins, setOwnLogins] = useState<OwnLogin[] | null>(null);
+  useEffect(() => {
+    let live = true;
+    void Promise.resolve()
+      .then(() => ownLoginApiFor(host).states(false))
+      .then((rows) => live && setOwnLogins(rows))
+      .catch(() => undefined);
+    return () => {
+      live = false;
+    };
+  }, [host]);
   const [lanes, setLanes] = useState<LaneView | null>(null);
   const [recent, setRecent] = useState<RecentProject[] | null>(null);
   const [defaultFolder, setDefaultFolder] = useState<string | null>(null);
@@ -307,6 +333,21 @@ export function NewAgentPage({ agents: agentsGiven, panes, needs, selectedCwd = 
     setFromTask(d.from);
     if (d.folder) setChosenFolder({ path: d.folder, name: folderName(d.folder) });
   }, []);
+
+  // Another PC's folders can become (or stop being) a Git repo while this page is open: read them again when the window is back and every 30 s.
+  const isFar = remote !== null;
+  useEffect(() => {
+    if (!isFar) return undefined;
+    let live = true;
+    const again = () => void api.recent().then((list) => live && setRecent(list)).catch(() => undefined);
+    const timer = setInterval(again, 30_000);
+    window.addEventListener('focus', again);
+    return () => {
+      live = false;
+      clearInterval(timer);
+      window.removeEventListener('focus', again);
+    };
+  }, [api, isFar]);
 
   // What the page reads once. Every read may fail (a browser preview, an older build): the page still works.
   useEffect(() => {
@@ -373,7 +414,9 @@ export function NewAgentPage({ agents: agentsGiven, panes, needs, selectedCwd = 
       live = false;
     };
   }, [api, base?.path, base?.state]); // eslint-disable-line react-hooks/exhaustive-deps
-  const folder: ProjectChoice | null = base ? { ...base, state: base.state ?? (looked?.path === base.path ? looked.state : undefined) } : null;
+  // A far project's state comes from the far PC's list, which is read again (above): its newest word beats the one the folder was picked with.
+  const freshState = remote && base ? (recent ?? []).find((r) => r.path === base.path)?.state : undefined;
+  const folder: ProjectChoice | null = base ? { ...base, state: freshState ?? base.state ?? (looked?.path === base.path ? looked.state : undefined) } : null;
   const folderKey = folder?.path ?? null;
   const [storedCopy, setStoredCopy] = useState(() => readStoredCopyPreference(folderKey));
   useEffect(() => setStoredCopy(readStoredCopyPreference(folderKey)), [folderKey]);
@@ -382,20 +425,33 @@ export function NewAgentPage({ agents: agentsGiven, panes, needs, selectedCwd = 
   // ----- the agent -----
   // Terminals hidden: only agents that can chat are listed (the rest are counted in one quiet line), and every start is a chat.
   const terminals = useShowTerminals();
-  const chatFirst = place ? false : remote ? !remote.terminals : !terminals;
+  // Another PC's terminal is offered only when this PC shows terminals too AND that PC does (its own setting guards the start).
+  const chatFirst = place ? false : remote ? !(terminals && remote.terminals) : !terminals;
   const chatIds = useMemo(() => (lanes?.labsEnabled ? new Set(lanes.agents.filter((a) => !a.disabled).map((a) => a.id.toLowerCase())) : null), [lanes]);
   const needTerminals = useMemo(
     () => (chatFirst ? splitByChat(agents.map((a) => ({ type: a.id, shell: a.kind === 'shell', disabled: !a.modes.visible })), chatIds).needTerminals : 0),
     [chatFirst, agents, chatIds],
   );
+  // "Use my own agents" (another PC's page only): this PC's agents that can be lent, one more sign-in each. They can start even when the far PC does not
+  // have the agent yet (Start then asks to install it there first).
+  const mineAccounts = useMemo<Account[]>(() => (remote?.mine ? remote.mine.agents.map((a) => ({ id: LEND_MINE, agent_id: a.agentId, label: t('myAgents.account', { name: remote.mine!.thisName }), home: '', borrowed: true, chat: a.chat })) : []), [remote?.mine, t]);
+  const tests = useTestMemory();
   const choices = useMemo(() => {
-    const all = agentChoices(agents, place ? [] : accounts).map((c) => {
+    const all = agentChoices(agents, place ? [] : remote ? [...accounts, ...mineAccounts] : accounts).map((c) => {
       const why = place?.whyNot(c.agentId) ?? null;
-      return why ? { ...c, state: 'unavailable' as const, hint: why } : c;
+      if (c.accountId === LEND_MINE) return { ...c, state: 'ready' as const, hint: t('myAgents.rowHint') };
+      if (why) return { ...c, state: 'unavailable' as const, hint: why };
+      // A plain start runs on this PC's own login; when that is signed out it runs on a lend this PC holds, else it cannot work.
+      if (!c.accountId && c.state === 'ready' && ownLogins && agentReadiness(c.agentId, { logins: ownLogins, tests }).state === 'needs_sign_in') {
+        return { ...c, note: accounts.some((a) => a.borrowed && a.agent_id === c.agentId) ? t('myAgents.hintBorrowed') : t('myAgents.hintSignedOut') };
+      }
+      return c;
     });
     // A lent sign-in of an agent with no chat on one cannot start a chat either.
     return chatFirst && chatIds ? all.filter((c) => chatIds.has(c.agentId.toLowerCase()) && !c.noChat) : all;
-  }, [agents, accounts, chatFirst, chatIds, place]);
+  }, [agents, accounts, mineAccounts, remote, chatFirst, chatIds, place, t, ownLogins, tests]);
+  const plainChoices = useMemo(() => choices.filter((c) => c.accountId !== LEND_MINE), [choices]);
+  const myChoices = useMemo(() => choices.filter((c) => c.accountId === LEND_MINE), [choices]);
   // The remembered agent and sign-in (the key holds both). A key that is gone, or not ready, falls back to the first ready one.
   // A picked workflow decides the agent and the model: the front's. The pickers stay on the page, locked.
   // Linux places start a plain terminal: no workflow, no sign-in choice, no copy, no attachments (nothing is dropped silently, none is offered).
@@ -408,13 +464,13 @@ export function NewAgentPage({ agents: agentsGiven, panes, needs, selectedCwd = 
   const canChat = chatLane && !lendNoChat && !place;
   // Chat is the default when the agent's chat add-on is in place; otherwise the page starts a terminal.
   const chatAddon = addonFor(addons.byAgent, choice?.agentId);
-  // Another PC's start is always a chat when its agent has one: its terminal is only a plain text screen, so the Chat/Terminal switch is not offered there. With
-  // terminals hidden it is the only way.
-  const runAs: RunAs = canChat ? (chatFirst || remote ? 'chat' : (runPick ?? defaultRunAs(lanes, choice?.agentId ?? null))) : 'terminal';
+  // Another PC starts a chat unless the person picked Terminal (switch shown only when both PCs show terminals). With terminals hidden, chat is the only way.
+  const runAs: RunAs = canChat ? (chatFirst ? 'chat' : remote ? (runPick === 'terminal' ? 'terminal' : 'chat') : (runPick ?? defaultRunAs(lanes, choice?.agentId ?? null))) : 'terminal';
   // "Work on a copy": a terminal needs Git; a chat also works on a plain trial copy of a folder without Git.
-  const canCopy = runAs === 'chat' ? supportsChatCopy(folder?.state) : copiesOk;
+  const canCopy = runAs === 'chat' ? supportsChatCopy(folder?.state) : !remote && copiesOk;
   // Settings > Agents can hide the option (all projects, or one). Hidden means off: a remembered "on" never starts a copy.
-  const copyOffered = useCopyOffered(folderKey) && !remote && !place;
+  // Another PC offers it when it has the row that starts a chat on a copy (`remote.copy`); its Add files stays off (a path on this PC means nothing there).
+  const copyOffered = useCopyOffered(folderKey) && (!remote || remote.copy === true) && !place;
   const isolated = copyOffered && copyDefault(storedCopy) && canCopy;
 
   // ----- the model: the last pick per agent and sign-in (this page only), else the agent's Default model from Settings -----
@@ -434,17 +490,48 @@ export function NewAgentPage({ agents: agentsGiven, panes, needs, selectedCwd = 
   const addon = runAs === 'chat' ? chatAddon : undefined;
   const installFirst = needsInstall(addon);
   const placeWhy = place && choice ? place.whyNot(choice.agentId) : null;
-  const block = remote?.blocked ?? (placeWhy ? `${choice?.label}: ${placeWhy}` : null) ?? sendBlock({ prompt, choice, runAs, folder: folder?.path ?? null, busy }) ?? (chatFirst && choice && !canChat ? t('newAgent.blockNoAgent') : null) ?? (installFirst ? t('newAgent.installFirst') : null);
+  // Another PC, a plain start: what it will run on. A chat that cannot answer (its login is out and nothing is lent) is not started.
+  const farPlan = useFarPlan(remote?.plan, remote && choice && !choice.accountId ? choice.agentId : null);
+  const farNoSignIn = !!remote && !!choice && !choice.accountId && runAs === 'chat' && farPlan?.signedOut === true && !farPlan.lend;
+  const block = remote?.blocked ?? (placeWhy ? `${choice?.label}: ${placeWhy}` : null) ?? sendBlock({ prompt, choice, runAs, folder: folder?.path ?? null, busy }) ?? (chatFirst && choice && !canChat ? t('newAgent.blockNoAgent') : null) ?? (installFirst ? t('newAgent.installFirst') : null) ?? (farNoSignIn ? t('newAgent.remote.notSignedIn', { name: remote!.deviceName, agent: choice!.agentLabel ?? choice!.label }) : null);
   const signInCard = runAs === 'chat' && choice && signInFor !== null && signInFor.toLowerCase() === choice.agentId.toLowerCase();
   const example = exampleAt(exampleIdx);
 
   // Another PC: once an agent and a folder are picked for a chat, that PC warms the agent up so Start finds it ready.
-  const warmAgent = remote && runAs === 'chat' && !remote.blocked && choice && folder ? `${choice.agentId}|${folder.path}` : null;
+  const warmAgent = remote && runAs === 'chat' && !remote.blocked && choice && choice.accountId !== LEND_MINE && folder ? `${choice.agentId}|${folder.path}` : null;
   useEffect(() => {
     if (!warmAgent || !remote?.onWarm || !choice || !folder) return;
     remote.onWarm(choice.agentId, folder.path);
     // Only a change of agent or folder asks again.
   }, [warmAgent]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // One row of the agent picker (a plain agent or one under a sign-in). The same row is used in "Use my own agents".
+  const renderChoice = (c: AgentChoice, mine = false) => (
+      <button
+        key={c.key}
+        type="button"
+        role="menuitemradio"
+        aria-checked={choice?.key === c.key}
+        className="ck-na-item"
+        disabled={c.state === 'unavailable'}
+        title={c.state === 'ready' ? undefined : (place?.whyNot(c.agentId) ?? hintOf(c.state))}
+        onClick={() => {
+          setPickKey(c.key);
+          if (!remote) remember(c.key);
+          setMenu(null);
+          area.current?.focus();
+        }}
+      >
+        <span className="ck-na-item-main">
+          <span className="ck-na-item-row">
+            <span className={`ck-na-dot is-${c.state}`} aria-hidden="true" />
+            <AgentLogo id={c.agentId} name={c.label} size={13} decorative className="ck-na-logo" />
+            <span>{mine ? t('myAgents.row', { agent: c.agentLabel ?? c.label }) : c.label}</span>
+          </span>
+        </span>
+        <span className="ck-na-item-hint">{place?.whyNot(c.agentId) ?? (mine ? c.hint : (c.note ?? hintOf(c.state)))}</span>
+      </button>
+  );
 
   const send = async () => {
     if (block || !choice) return;
@@ -488,7 +575,7 @@ export function NewAgentPage({ agents: agentsGiven, panes, needs, selectedCwd = 
         setSignInFor(null);
       }
     } catch (e) {
-      if (alive.current) setError(e instanceof Error ? e.message : t('newAgent.errStart'));
+      if (alive.current) setError(errorSentence(e, t('newAgent.errStart')));
     } finally {
       if (alive.current) setBusy(false);
     }
@@ -507,13 +594,21 @@ export function NewAgentPage({ agents: agentsGiven, panes, needs, selectedCwd = 
     }
   };
 
-  const grow = (el: HTMLTextAreaElement) => {
-    el.style.height = 'auto';
-    el.style.height = `${Math.min(el.scrollHeight, 220)}px`;
-  };
+  const grow = (el: HTMLTextAreaElement) => growBox(el, 220);
   useEffect(() => {
     if (area.current) grow(area.current);
   }, [prompt]);
+
+  // Files dragged in from Explorer become paths in the message, like the + menu's "Add files" (desktop app, this PC only).
+  const canDrop = !remote && !place;
+  useEffect(() => {
+    if (!canDrop) return;
+    return registerFileDrop({
+      id: 'newagent-composer',
+      getRect: () => menuRoot.current?.getBoundingClientRect() ?? null,
+      onDrop: (paths) => setPrompt((text) => withPaths(text, paths)),
+    });
+  }, [canDrop]);
 
   const addFiles = async () => {
     setMenu(null);
@@ -548,7 +643,7 @@ export function NewAgentPage({ agents: agentsGiven, panes, needs, selectedCwd = 
         chooseProject(pick);
       } else chooseFolder(pick);
     } catch (e) {
-      setError(e instanceof Error ? e.message : t('newAgent.errFolderDialog'));
+      setError(errorSentence(e, t('newAgent.errFolderDialog')));
     }
   };
   // Folders agents run in now that are not saved projects yet (copies count as their project).
@@ -612,9 +707,20 @@ export function NewAgentPage({ agents: agentsGiven, panes, needs, selectedCwd = 
                 autoFocus
                 value={prompt}
                 disabled={busy}
-                onChange={(e) => setPrompt(e.target.value)}
+                onChange={(e) => {
+                  setPrompt(e.target.value);
+                  setPasteNote(null);
+                }}
+                onPaste={(e) => {
+                  if (refusePaste(e)) setPasteNote(t('r12ui.paste.tooBig'));
+                }}
                 onKeyDown={onKey}
               />
+              {pasteNote && (
+                <p className="ck-na-note" role="alert" data-testid="na-paste-note">
+                  {pasteNote}
+                </p>
+              )}
               {!prompt && (
                 <span className="ck-na-tabhint" aria-hidden="true">
                   <kbd className="ck-chip-key">Tab</kbd> {t('newAgent.tabHint')} {/* i18n-ok: key name */}
@@ -623,7 +729,7 @@ export function NewAgentPage({ agents: agentsGiven, panes, needs, selectedCwd = 
             </div>
 
             <div className="ck-na-row">
-              {!remote && !place && (
+              {((!remote && !place) || (remote && copyOffered)) && (
               <Pop
                 id="plus"
                 open={menu === 'plus'}
@@ -633,10 +739,12 @@ export function NewAgentPage({ agents: agentsGiven, panes, needs, selectedCwd = 
                 trigger={<IconPlus />}
                 iconOnly
               >
-                <button type="button" role="menuitem" className="ck-na-item" onClick={() => void addFiles()}>
-                  <span>{t('newAgent.addFiles')}</span>
-                  <span className="ck-na-item-hint">{t('newAgent.addFilesHint')}</span>
-                </button>
+                {!remote && (
+                  <button type="button" role="menuitem" className="ck-na-item" onClick={() => void addFiles()}>
+                    <span>{t('newAgent.addFiles')}</span>
+                    <span className="ck-na-item-hint">{t('newAgent.addFilesHint')}</span>
+                  </button>
+                )}
                 {copyOffered && (
                   <>
                     <div className="ck-na-toggle" title={t('newAgent.copyTip')}>
@@ -732,7 +840,7 @@ export function NewAgentPage({ agents: agentsGiven, panes, needs, selectedCwd = 
                         if (save) saved.add(found.path);
                         devices.onPickLocal({ path: found.path, name: found.name, state: found.state });
                       } catch (e) {
-                        setError(e instanceof Error ? e.message : t('newAgent.errFolderDialog'));
+                        setError(errorSentence(e, t('newAgent.errFolderDialog')));
                       }
                     }}
                   />
@@ -783,32 +891,16 @@ export function NewAgentPage({ agents: agentsGiven, panes, needs, selectedCwd = 
                   </>
                 }
               >
-                {choices.map((c) => (
-                  <button
-                    key={c.key}
-                    type="button"
-                    role="menuitemradio"
-                    aria-checked={choice?.key === c.key}
-                    className="ck-na-item"
-                    disabled={c.state === 'unavailable'}
-                    title={c.state === 'ready' ? undefined : (place?.whyNot(c.agentId) ?? hintOf(c.state))}
-                    onClick={() => {
-                      setPickKey(c.key);
-                      if (!remote) remember(c.key);
-                      setMenu(null);
-                      area.current?.focus();
-                    }}
-                  >
-                    <span className="ck-na-item-main">
-                      <span className="ck-na-item-row">
-                        <span className={`ck-na-dot is-${c.state}`} aria-hidden="true" />
-                        <AgentLogo id={c.agentId} name={c.label} size={13} decorative className="ck-na-logo" />
-                        <span>{c.label}</span>
-                      </span>
-                    </span>
-                    <span className="ck-na-item-hint">{place?.whyNot(c.agentId) ?? hintOf(c.state)}</span>
-                  </button>
-                ))}
+                {plainChoices.map((c) => renderChoice(c))}
+                {myChoices.length > 0 && (
+                  <div role="group" aria-label={t('myAgents.title')} data-testid="na-my-agents">
+                    <div className="ck-na-note" data-testid="na-my-agents-head">
+                      {t('myAgents.title')}
+                    </div>
+                    {myChoices.map((c) => renderChoice(c, true))}
+                    <div className="ck-na-note">{t('myAgents.note', { name: remote?.deviceName ?? '' })}</div>
+                  </div>
+                )}
                 <NeedTerminalsLine count={needTerminals} className="ck-na-note" onOpen={() => setMenu(null)} />
                 {onSetUp && (
                   <button
@@ -826,7 +918,7 @@ export function NewAgentPage({ agents: agentsGiven, panes, needs, selectedCwd = 
               </Pop>
               )}
 
-              {chatLane && !chatFirst && !remote && (
+              {chatLane && !chatFirst && (
                 <div className="ck-na-seg" role="radiogroup" aria-label={t('newAgent.runAs')}>
                   {(['terminal', 'chat'] as const).map((mode) => (
                     <button
@@ -945,7 +1037,13 @@ export function NewAgentPage({ agents: agentsGiven, panes, needs, selectedCwd = 
                 </span>
               ) : null}
               <span className="ck-na-ask-line" data-testid="na-runs-on">
-                {t('newAgent.remote.runsOn', { name: remote.deviceName, agent: choice?.label ?? '' })}
+                {choice?.accountId === LEND_MINE
+                  ? t('myAgents.runsOn', { name: remote.deviceName, agent: choice.agentLabel ?? choice.label, pc: remote.mine?.thisName ?? '' })
+                  : farPlan?.signedOut && farPlan.lend
+                    ? t('newAgent.remote.runsOnLend', { name: remote.deviceName, borrowed: farPlan.lend.name })
+                    : farNoSignIn
+                      ? t('newAgent.remote.notSignedInHelp', { name: remote.deviceName, agent: choice?.agentLabel ?? choice?.label ?? '' }) + (remote.mine?.agents.some((a) => a.agentId === choice?.agentId) ? ' ' + t('newAgent.remote.orLendYours', { account: t('myAgents.account', { name: remote.mine.thisName }) }) : '')
+                      : t('newAgent.remote.runsOn', { name: remote.deviceName, agent: choice?.label ?? '' })}
               </span>
             </div>
           )}

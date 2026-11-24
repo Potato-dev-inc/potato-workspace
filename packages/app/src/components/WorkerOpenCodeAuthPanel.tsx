@@ -1,6 +1,7 @@
 import { errorSentence } from '../lib/sayError';
 import { useCallback, useEffect, useState } from 'react';
 import { tauri, type OpenCodeKeyStatus } from '../lib/tauri';
+import { t } from '../i18n';
 
 function profileLine(status: OpenCodeKeyStatus | null, id: string): string {
   const profile = status?.profiles.find((entry) => entry.id === id);
@@ -82,7 +83,7 @@ export function WorkerOpenCodeAuthPanel({
   };
 
   return (
-    <div className="pm-worker-auth-panel" role="dialog" aria-label="OpenCode API key setup">
+    <div className="pm-worker-auth-panel" role="dialog" aria-label={t('r21.sw.opencodeApiKeySetup')}>
       <div className="pm-worker-auth-panel-head">
         <div>
           <p className="pm-worker-auth-eyebrow">Worker setup</p>
@@ -106,7 +107,7 @@ export function WorkerOpenCodeAuthPanel({
             type="password"
             value={keyA}
             onChange={(event) => setKeyA(event.target.value)}
-            placeholder="Leave blank to keep existing"
+            placeholder={t('r21.sw.leaveBlankToKeep')}
             autoComplete="off"
             className="pm-worker-auth-input"
           />
@@ -117,7 +118,7 @@ export function WorkerOpenCodeAuthPanel({
             type="password"
             value={keyB}
             onChange={(event) => setKeyB(event.target.value)}
-            placeholder="Leave blank to keep existing"
+            placeholder={t('r21.sw.leaveBlankToKeep')}
             autoComplete="off"
             className="pm-worker-auth-input"
           />

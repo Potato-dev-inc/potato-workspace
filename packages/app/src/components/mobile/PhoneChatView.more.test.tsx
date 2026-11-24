@@ -15,7 +15,10 @@ import { PhoneChatView } from './PhoneChatView';
 let host: HTMLDivElement;
 let root: Root;
 
+import { earlierTuning, forgetKnownMore } from '../../hooks/useEarlier';
 beforeEach(() => {
+  earlierTuning.probeMs = 0;
+  forgetKnownMore();
   localStorage.clear();
   clearPictureCache();
   vi.useFakeTimers();

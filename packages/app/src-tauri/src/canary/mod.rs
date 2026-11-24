@@ -37,9 +37,9 @@ mod live;
 pub mod model;
 pub mod run;
 pub mod state;
-pub mod strict;
+pub use pm_core::canary::strict;
 pub mod unknown;
-pub mod version;
+pub use pm_core::canary::version;
 
 #[cfg(test)]
 mod tests;

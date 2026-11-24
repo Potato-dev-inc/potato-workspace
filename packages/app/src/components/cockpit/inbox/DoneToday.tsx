@@ -9,6 +9,9 @@ import { rowOpenProps } from './row-open';
 
 const num = (n: number) => n.toLocaleString('en-US');
 
+/** The last name each chat had while it was open: a row of a closed chat keeps it instead of falling back to the bare agent name. */
+const lastNames = new Map<string, string>();
+
 export function DoneToday({
   summaries,
   names,
@@ -17,6 +20,7 @@ export function DoneToday({
   onMorning,
   hasPane,
   onClosed,
+  onSignIn,
 }: {
   summaries: ReadonlyMap<string, TurnSummary>;
   names: ReadonlyMap<string, string>;
@@ -28,6 +32,8 @@ export function DoneToday({
   hasPane?: (paneId: string) => boolean;
   /** A row of a closed chat was picked: the page says so in plain words. */
   onClosed?: (paneId: string) => void;
+  /** Sign in for a chat that needs setup (absent: Open). */
+  onSignIn?: () => void;
 }) {
   const t = useT();
   const [cleared, setCleared] = useState(() => doneClearedToday(now));
@@ -42,7 +48,7 @@ export function DoneToday({
   };
 
   const second = (r: DoneRow) =>
-    r.files > 0 ? (
+    r.kind === 'setup' ? t('inbox.doneSetup') : r.files > 0 ? (
       <>
         {t('inbox.doneFiles', { count: r.files })} <span className="ib-add">+{num(r.added)}</span> <span className="ib-del">−{num(r.deleted)}</span>
         {r.checks ? ` · ${r.checks}` : ''}
@@ -75,16 +81,18 @@ export function DoneToday({
       ) : (
         <ul className="ib-rows">
           {shown.map((r) => {
-            const title = names.get(r.paneId) ?? r.agent;
-            const label = r.kind === 'night' ? t('inbox.doneMorning') : r.kind === 'review' ? t('inbox.doneReview') : t('inbox.doneOpen');
+            const known = names.get(r.paneId);
+            if (known) lastNames.set(r.paneId, known);
+            const title = known ?? lastNames.get(r.paneId) ?? r.agent;
+            const label = r.kind === 'setup' && onSignIn ? t('inbox.doneSignIn') : r.kind === 'night' ? t('inbox.doneMorning') : r.kind === 'review' ? t('inbox.doneReview') : t('inbox.doneOpen');
             return (
-              <li key={r.paneId} className="ib-row" data-done-row={r.paneId} data-kind={r.kind} tabIndex={0} {...rowOpenProps(go(r))}>
+              <li key={r.paneId} className="ib-row" data-done-row={r.paneId} data-kind={r.kind} {...rowOpenProps(go(r))}>
                 <AgentLogo id={r.agent} size={16} decorative />
                 <div className="ib-row-tx">
                   <span className="ib-row-tt">{title}</span>
                   <span className="ib-row-sb">{second(r)}</span>
                 </div>
-                <button type="button" className="ib-row-go ck-btn ck-btn--sm ck-btn--secondary" aria-label={`${label}: ${title}`} onClick={go(r)}>
+                <button type="button" className="ib-row-go ck-btn ck-btn--sm ck-btn--secondary" aria-label={`${label}: ${title}`} onClick={r.kind === 'setup' && onSignIn ? onSignIn : go(r)}>
                   {label}
                 </button>
                 <time className="ib-when" dateTime={new Date(r.endedAtMs).toISOString()}>

@@ -2,9 +2,10 @@
 // Rust holds the close (pane_windows::on_close_requested) and emits CONFIRM_CLOSE_EVENT.
 import { useEffect, useState } from 'react';
 import { invoke } from '@tauri-apps/api/core';
-import { listen } from '@tauri-apps/api/event';
+import { listen } from '../lib/events';
 import { CONFIRM_CLOSE_EVENT } from '../lib/close-policy';
 import '../styles/close-confirm.css';
+import { t } from '../i18n';
 
 export interface ClosePaneApi {
   onConfirmRequest(cb: (paneId: string) => void): Promise<() => void>;
@@ -68,7 +69,7 @@ export function ClosePaneConfirm({
         onMouseDown={(e) => e.stopPropagation()}
       >
         <h2 id="pm-close-title">{agentLabel} is still working.</h2>
-        <p>Close and stop it?</p>
+        <p>{t('r21.sw.closeAndStopIt')}</p>
         <div className="pm-close-actions">
           <button type="button" className="pm-close-btn" autoFocus onClick={() => setOpen(false)}>
             Keep open

@@ -1,6 +1,6 @@
 import { errorSentence } from '../../../lib/sayError';
 import { useEffect, useState } from 'react';
-import { useT } from '../../../i18n';
+import { t, useT } from '../../../i18n';
 import type { MergePlan, TeamApi, TeamCard } from '../../../lib/team';
 import { Sheet } from '../Sheet';
 
@@ -73,7 +73,7 @@ export function MergeSheet({
           )}
         </>
       ) : (
-        !error && <p className="ck-team-meta">Checking with GitHub…</p>
+        !error && <p className="ck-team-meta">{t('r21.sw.checkingWithGithub')}</p>
       )}
       {error && (
         <p className="ck-team-error" role="alert">

@@ -19,17 +19,7 @@ pub struct AppInstallInfo {
     pub data_dir: String,
 }
 
-/// The shipped app version. It lives in `tauri.conf.json` (what the installer and updater use);
-/// `CARGO_PKG_VERSION` is a stale crate number. Read from the embedded config so it needs no app handle.
-pub fn app_version() -> &'static str {
-    static VERSION: std::sync::OnceLock<String> = std::sync::OnceLock::new();
-    VERSION.get_or_init(|| {
-        serde_json::from_str::<serde_json::Value>(include_str!("../tauri.conf.json"))
-            .ok()
-            .and_then(|v| v.get("version").and_then(|v| v.as_str()).map(str::to_string))
-            .unwrap_or_else(|| env!("CARGO_PKG_VERSION").to_string())
-    })
-}
+pub use pm_core::app_version::app_version;
 
 #[tauri::command]
 pub fn get_app_install_info() -> AppInstallInfo {
@@ -285,6 +275,8 @@ mod tests {
     fn app_version_comes_from_tauri_conf() {
         assert_ne!(app_version(), "0.2.2");
         assert_eq!(app_version().split('.').count(), 3);
+        // pm-core embeds the same file the app does, so the value cannot drift.
+        assert!(include_str!("../tauri.conf.json").contains(&format!("\"version\": \"{}\"", app_version())));
     }
 
     #[test]

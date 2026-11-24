@@ -14,8 +14,8 @@ use super::tool_names::bridge_tool_name;
 fn a_trust_dialog_on_screen_blocks_startup_dispatch_whatever_the_status_says() {
     // Real captures of a visible cursor_agent pane. Right after the dialog is drawn the pane
     // status still reads `running`; typing the task then hits the dialog's hotkeys.
-    let pending = include_str!("../tui/cursor/fixtures/workspace_trust_visible_pending.txt");
-    let resolved = include_str!("../tui/cursor/fixtures/workspace_trust_visible_resolved.txt");
+    let pending = include_str!("../../crates/pm-core/src/tui/cursor/fixtures/workspace_trust_visible_pending.txt");
+    let resolved = include_str!("../../crates/pm-core/src/tui/cursor/fixtures/workspace_trust_visible_resolved.txt");
     assert!(startup_manual_approval_required(
         "cursor_agent",
         Some("running"),

@@ -37,11 +37,11 @@ pub async fn chat_signin_start(app: AppHandle, state: State<'_, AppState>, pane_
 
 // The `start_for_*` / `status_for_*` / `stop_for_*` functions below are the bodies of the commands; a paired PC's call runs the same ones
 // (`device_link::pclink::calls_signin`), so the far PC signs in exactly as its own window would.
-pub(crate) fn start_for_chat(app: AppHandle, registry: &Registry, pane_id: &str) -> Result<Value, String> {
+pub(crate) fn start_for_chat(_app: AppHandle, registry: &Registry, pane_id: &str) -> Result<Value, String> {
     let chat = waiting_chat(pane_id)?;
     let agent = chat.agent_id().to_string();
     let cwd = registry.lock().get(pane_id).map(|pane| pane.info.cwd.clone()).ok_or_else(|| format!("unknown pane: {pane_id}"))?;
-    let ports = Arc::new(AppPorts { registry: registry.clone(), app });
+    let ports = Arc::new(AppPorts { registry: registry.clone() });
     let hidden = app_panes().start_for_agent(ports, &key_of(&agent), &agent, std::path::PathBuf::from(cwd))?;
     Ok(json!({ "pane_id": hidden }))
 }
@@ -92,9 +92,9 @@ pub async fn agent_signin_start(app: AppHandle, state: State<'_, AppState>, agen
     start_for_agent(app, &state.registry, &agent_id, account_id)
 }
 
-pub(crate) fn start_for_agent(app: AppHandle, registry: &Registry, agent_id: &str, account_id: Option<String>) -> Result<Value, String> {
+pub(crate) fn start_for_agent(_app: AppHandle, registry: &Registry, agent_id: &str, account_id: Option<String>) -> Result<Value, String> {
     let key = standalone(agent_id, &account_id)?;
-    let ports = Arc::new(AppPorts { registry: registry.clone(), app });
+    let ports = Arc::new(AppPorts { registry: registry.clone() });
     let cwd = crate::app_paths::app_data_dir().join("lend").join("signin");
     let hidden = app_panes().start_for_agent_account(ports, &key, agent_id, account_id.filter(|a| !a.is_empty()), cwd)?;
     Ok(json!({ "pane_id": hidden }))

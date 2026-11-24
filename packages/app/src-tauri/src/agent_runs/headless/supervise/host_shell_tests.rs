@@ -7,8 +7,8 @@
 use super::super::pane_turn::{fail_if_agent_exited, ExitCheck, HostShellWatch, ProcessExit, EXIT_SETTLE_MAX};
 use crate::operations::{self, OperationSnapshot, OperationStatus};
 
-const CODEX_WORKING: &str = include_str!("../../../tui/codex/fixtures/working_live.txt");
-const CLAUDE_EDIT: &str = include_str!("../../../tui/claude/fixtures/result_footer_edit_live.txt");
+const CODEX_WORKING: &str = include_str!("../../../../crates/pm-core/src/tui/codex/fixtures/working_live.txt");
+const CLAUDE_EDIT: &str = include_str!("../../../../crates/pm-core/src/tui/claude/fixtures/result_footer_edit_live.txt");
 
 fn running_run(agent: &str) -> OperationSnapshot {
     let project = std::env::temp_dir().join(format!("pm-host-shell-{}", uuid::Uuid::new_v4()));

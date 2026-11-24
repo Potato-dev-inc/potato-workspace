@@ -2,7 +2,8 @@
 // Backend: `src-tauri/src/collision/` and `commands/collision.rs`. The list is re-read whenever
 // the `collision://changed` event fires. Nothing here can pause, stop or steer an agent.
 import { invoke } from '@tauri-apps/api/core';
-import { listen } from '@tauri-apps/api/event';
+import { listen } from './events';
+import type { UnlistenFn } from '@tauri-apps/api/event';
 
 /** "clash" is the loudest; "same_file" is quiet; "shared_folder" means two agents worked in one folder. */
 export type CollisionLevel = 'clash' | 'same_file' | 'shared_folder';

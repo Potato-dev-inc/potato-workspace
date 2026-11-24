@@ -6,7 +6,10 @@
 // (`blob`). When the agent edits the file again its id changes, so a Keep goes back to "left" and a tick turns into
 // "Changed since you looked".
 import { invoke } from '@tauri-apps/api/core';
-import { useCallback, useEffect, useState, useSyncExternalStore } from 'react';
+import type { Host } from './host/host';
+import { forHost } from './host/hostApi';
+import { useHost } from './host/context';
+import { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore } from 'react';
 import { errorSentence } from './sayError';
 
 export interface ReviewFile {
@@ -50,6 +53,26 @@ export const turnReviewApi: TurnReviewApi = {
   putBack: (paneId, beforeId, path) => invoke<PutBackReport>('checkpoint_put_back', { paneId, beforeId, path }),
 };
 
+const farTurnReviewApi = (host: Host): TurnReviewApi => ({
+  review: (paneId) => host.invoke<TurnReviewData | null>('checkpoint_turn_review', { paneId }),
+  patch: (paneId, fromId, toId, path) => host.invoke<string>('checkpoint_file_patch', { paneId, fromId, toId, path }),
+  putBack: (paneId, beforeId, path) => host.invoke<PutBackReport>('checkpoint_put_back', { paneId, beforeId, path }),
+});
+
+export const turnReviewApiFor = (host: Host): TurnReviewApi => forHost(host, turnReviewApi, farTurnReviewApi);
+
+/** The last turn's patch of one file, from the checkpoints ('' when that turn did not touch it). The file view falls back to this when git
+ * has no diff (a folder that is not a git repo, on this PC or another): the Changes list is made from the same checkpoints, so both agree. */
+export async function lastTurnPatch(api: TurnReviewApi, paneId: string, path: string): Promise<string> {
+  const norm = (a: string) => a.split('\\').join('/').replace(/^\.\//, '');
+  // A tab opened with the file's full path (not the project-relative one the review uses) still finds its file.
+  const full = /^([a-zA-Z]:)?\//.test(norm(path));
+  const same = (a: string) => norm(a) === norm(path) || (full && norm(path).toLowerCase().endsWith(`/${norm(a).toLowerCase()}`));
+  const review = await api.review(paneId);
+  const file = review && Array.isArray(review.files) ? review.files.find((f) => same(f.path)) : undefined;
+  return review && file && !file.binary ? api.patch(paneId, review.beforeId, review.afterId, file.path) : '';
+}
+
 // ---------- decisions and ticks ----------
 
 export type Decision = 'kept' | 'back';
@@ -65,6 +88,7 @@ interface Mark {
 }
 
 const marks = new Map<string, Map<string, Mark>>();
+const reverted = new Map<string, Map<string, number>>();
 const listeners = new Set<() => void>();
 let version = 0;
 
@@ -84,6 +108,14 @@ function patchMark(paneId: string, path: string, change: Partial<Mark>): void {
   emit();
 }
 
+const touched = new Map<string, number>();
+
+/** The files of a chat changed outside a turn (a Put back, its Undo): the panels that list them read again. */
+export function paneFilesTouched(paneId: string): void {
+  touched.set(paneId, (touched.get(paneId) ?? 0) + 1);
+  emit();
+}
+
 /** Re-renders when any decision or tick changes. */
 export function useReviewMarks(): number {
   return useSyncExternalStore(
@@ -94,6 +126,12 @@ export function useReviewMarks(): number {
     () => version,
     () => version,
   );
+}
+
+/** How many times `paneFilesTouched` ran for the chat (a key for panels that list its files). */
+export function usePaneFilesVersion(paneId: string): number {
+  useReviewMarks();
+  return touched.get(paneId) ?? 0;
 }
 
 export function keepFile(paneId: string, file: ReviewFile): void {
@@ -107,6 +145,45 @@ export function putBackMark(paneId: string, file: ReviewFile, safetyId: string |
 /** Take a decision back (the Undo of a put back). */
 export function clearDecision(paneId: string, path: string): void {
   patchMark(paneId, path, { decision: undefined, decidedBlob: undefined, safetyId: null });
+}
+
+/** "Undo last turn" (or a restore) put these files back: they are no longer changes or outputs of the chat, and the chat's past write events still name them. */
+export function markReverted(paneId: string, paths: readonly string[]): void {
+  let forPane = reverted.get(paneId);
+  if (!forPane) reverted.set(paneId, (forPane = new Map()));
+  const now = Date.now();
+  paths.forEach((p) => forPane.set(p, now));
+  emit();
+}
+
+/** Take `markReverted` back (the Undo of an undo). */
+export function clearReverted(paneId: string, paths: readonly string[]): void {
+  paths.forEach((p) => reverted.get(paneId)?.delete(p));
+  emit();
+}
+
+/** The person put this file back (and the agent has not changed it since): it is no longer a change or an output of the chat. */
+// The review names a file project-relative ("r11.txt"); the chat's write events use the host's full path ("/home/x/work/r11.txt"), and a far
+// chat's cwd is not the one those events used. So a path matches a mark when it is the same or ends with "/<marked path>".
+/** `wroteAt`: when the chat's last write to the file ran. A file the agent writes again after the undo is listed again. */
+export const isPutBack = (paneId: string, path: string, wroteAt?: string | null): boolean => {
+  const norm = (a: string) => a.split('\\').join('/').replace(/^\.\//, '').toLowerCase();
+  const p = norm(path);
+  for (const [marked, m] of marks.get(paneId) ?? []) if (m.decision === 'back' && (p === norm(marked) || p.endsWith(`/${norm(marked)}`))) return true;
+  for (const [marked, at] of reverted.get(paneId) ?? []) {
+    if (!(p === norm(marked) || p.endsWith(`/${norm(marked)}`))) continue;
+    const wrote = wroteAt ? Date.parse(wroteAt) : NaN;
+    if (wroteAt === undefined || !(wrote > at)) return true;
+  }
+  return false;
+};
+
+/** A later turn changed a file again: its old Keep / Put back no longer applies. */
+export function dropStaleDecisions(paneId: string, files: readonly ReviewFile[]): void {
+  for (const f of files) {
+    const m = markOf(paneId, f.path);
+    if (m.decision && m.decidedBlob !== f.blob) clearDecision(paneId, f.path);
+  }
 }
 
 export function lookedAt(paneId: string, file: ReviewFile): void {
@@ -156,6 +233,7 @@ export function countsFor(paneId: string, files: readonly ReviewFile[]): ReviewC
 /** For tests: forget every decision. */
 export function resetReviewMarks(): void {
   marks.clear();
+  reverted.clear();
   emit();
 }
 
@@ -167,24 +245,46 @@ export type ReviewLoad =
   | { state: 'error'; message: string }
   | { state: 'ready'; review: TurnReviewData };
 
-/** The last turn's files, read again whenever the pane's status changes (a turn starting or ending makes save points). */
-export function useTurnReview(paneId: string, status: string, api: TurnReviewApi = turnReviewApi): { load: ReviewLoad; reload: () => void } {
+/** When a read after a turn change still shows the old turn, read again after these waits (ms): the host writes a turn's end save point after the turn closes (a short turn right after another waits out the host's 10 s snapshot debounce). */
+export const SETTLE_WAITS = [1500, 3500, 7000, 10000];
+
+/** The last turn's files, read again whenever the pane's status changes (a turn starting or ending makes save points).
+ * `settle`: a change of `status` that leaves the newest turn's end save point as it was is read again a few times, because the
+ * host (a far PC above all) closes the turn in the chat before it has written that save point. */
+export function useTurnReview(paneId: string, status: string, given?: TurnReviewApi, settle = false): { load: ReviewLoad; reload: () => void } {
+  const host = useHost();
+  const api = useMemo(() => given ?? turnReviewApiFor(host), [given, host]);
   const [load, setLoad] = useState<ReviewLoad>({ state: 'loading' });
   const [tick, setTick] = useState(0);
+  const filesTouched = usePaneFilesVersion(paneId);
+  // The end save point last shown ('' = no review); undefined until the first read.
+  const seen = useRef<string | undefined>(undefined);
   useEffect(() => {
     let cancelled = false;
-    api.review(paneId).then(
-      (review) => {
-        if (!cancelled) setLoad(review ? { state: 'ready', review } : { state: 'none' });
-      },
-      (err: unknown) => {
-        if (!cancelled) setLoad({ state: 'error', message: errorSentence(err) });
-      },
-    );
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    const shown = seen.current;
+    const read = (attempt: number) => {
+      api.review(paneId).then(
+        (review) => {
+          if (cancelled) return;
+          // A far PC answers "no review" with an empty object (pclink turns null into {}): only a real file list counts.
+          const ready = !!review && Array.isArray(review.files);
+          setLoad(ready ? { state: 'ready', review } : { state: 'none' });
+          const now = ready ? review.afterId : '';
+          seen.current = now;
+          if (settle && shown !== undefined && now === shown && attempt < SETTLE_WAITS.length) timer = setTimeout(() => read(attempt + 1), SETTLE_WAITS[attempt]);
+        },
+        (err: unknown) => {
+          if (!cancelled) setLoad({ state: 'error', message: errorSentence(err) });
+        },
+      );
+    };
+    read(0);
     return () => {
       cancelled = true;
+      if (timer) clearTimeout(timer);
     };
-  }, [api, paneId, status, tick]);
+  }, [api, paneId, status, tick, settle, filesTouched]);
   const reload = useCallback(() => setTick((n) => n + 1), []);
   return { load, reload };
 }

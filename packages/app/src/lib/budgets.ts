@@ -2,7 +2,8 @@
 // and its popover read `budget_for_pane`; "Add 10 turns" and "Stop here" use `budget_adjust`.
 // Shape mirrors the Rust `budgets::view` (src-tauri/src/budgets/view.rs). Off by default: a pane
 // whose run has no budget reads `null` and shows nothing.
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
+import { readUnlessCancelled } from './pane-read';
 import { invoke } from '@tauri-apps/api/core';
 
 export type BudgetState = 'ok' | 'nearly' | 'used_up' | 'stopped';
@@ -69,8 +70,19 @@ export function helperLine(helper: BudgetHelper): string {
  *  every few seconds while shown. `null` while loading and when the pane has no budget. */
 export function useBudget(paneId: string, refreshKey: unknown, api: BudgetApi = tauriBudgetApi) {
   const [view, setView] = useState<BudgetView | null>(null);
+  const current = useRef(paneId);
+  current.current = paneId;
+  // Another chat has another budget: the old one is not shown while the new one loads.
+  useEffect(() => setView(null), [paneId]);
   const refresh = useCallback(() => {
-    void api.forPane(paneId).then(setView).catch(() => setView(null));
+    const asked = paneId;
+    readUnlessCancelled(() => api.forPane(paneId), () => current.current === asked)
+      .then((next) => {
+        if (current.current === asked && next !== undefined) setView(next);
+      })
+      .catch(() => {
+        if (current.current === asked) setView(null);
+      });
   }, [api, paneId]);
   useEffect(() => {
     refresh();

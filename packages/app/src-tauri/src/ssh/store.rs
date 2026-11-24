@@ -25,6 +25,9 @@ pub struct Saved {
     pub found: Vec<String>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub checked_at: Option<u64>,
+    /// The link id (64 hex) of the program this PC set up on the machine; present once "Set it up" has paired with it.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub node: Option<String>,
 }
 
 #[derive(Serialize, Deserialize, Default)]
@@ -91,6 +94,15 @@ impl Store {
             self.write(&all)?;
         }
         Ok(removed)
+    }
+
+    /// Remembers which link id the machine answers to (after the one-button setup paired with it).
+    pub fn set_node(&self, id: &str, node: &str) -> Result<(), String> {
+        let _g = WRITE_LOCK.lock().unwrap_or_else(|p| p.into_inner());
+        let mut all = self.list();
+        let Some(s) = all.iter_mut().find(|s| s.host.id == id) else { return Ok(()) };
+        s.node = Some(node.to_string());
+        self.write(&all)
     }
 
     /// Keeps what a check found (only names the caller already validated).
